@@ -10,18 +10,17 @@ class DFPlayer : private DFPlayerMiniFast {
 public:
 
   DFPlayer(uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, 
-    bool debug = false, uint32_t threshold = 10) : swSerial(RXpin, TXpin) {
+    bool debug = false, uint32_t threshold = 10) {
 
     this->RXpin = RXpin;
     this->TXpin = TXpin;  
     this->ENpin = ENpin;
     this->INTpin = INTpin;
-    //swSerial = new SoftwareSerial(this->RXpin, this->TXpin);
-    //swSerial(this->RXpin, this->TXpin);
-    swSerial.begin(9600);
+    swSerial = new SoftwareSerial(this->RXpin, this->TXpin);
+    swSerial->begin(9600);
     pinMode(this->ENpin, OUTPUT);
     pinMode(this->INTpin, INPUT_PULLUP);
-    DFPlayerMiniFast::begin(swSerial, debug, threshold);
+    DFPlayerMiniFast::begin(*swSerial, debug, threshold);
   }
 
   ~DFPlayer() {
@@ -160,8 +159,7 @@ private:
     TURN_OFF,               // Turn hardware off.
   };
 
-  //SoftwareSerial* swSerial = NULL;
-  SoftwareSerial swSerial;
+  SoftwareSerial* swSerial = NULL;
   uint8_t RXpin = 0;
   uint8_t TXpin = 0;
   uint8_t ENpin = 0;
