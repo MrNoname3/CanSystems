@@ -16,8 +16,6 @@ public:
     this->TXpin = TXpin_;  
     this->ENpin = ENpin;
     this->INTpin = INTpin;
-    //swSerial = new SoftwareSerial(this->RXpin, this->TXpin);
-    //swSerial(this->RXpin, this->TXpin);
     swSerial.begin(9600);
     pinMode(this->ENpin, OUTPUT);
     pinMode(this->INTpin, INPUT_PULLUP);
@@ -25,7 +23,7 @@ public:
   }
 
   ~DFPlayer() {
-    //delete swSerial;
+    
   }
 
   void volume(uint8_t vol) {
@@ -64,7 +62,6 @@ public:
 
       case PlayingStates::SET_VOLUME: {
         Serial.println("SET_VOLUME");
-        //this->volume(vol);
         DFPlayerMiniFast::volume(vol);
         setVolumeTimer = millis();
         playingState = PlayingStates::WAIT_FOR_SET_VOLUME;
@@ -133,7 +130,6 @@ private:
 
   static void irqHandler(void) {
     enablePlay = true;
-    Serial.println("!");
   }
 
   void attachInt(void) {
@@ -146,8 +142,6 @@ private:
   }
 
   enum class PlayingStates : uint8_t {
-    //IDLE,                   // Check playing queue.
-    //WAIT_INTERRUPT,         // Waiting for interrupt
     CHECK_QUEUE_TO_BEGIN,   // Check playing queue.    
     TURN_ON,                // Turn hardware on.
     WAIT_FOR_BOOT,          // Wait a little for hardware boot.
@@ -160,7 +154,6 @@ private:
     TURN_OFF,               // Turn hardware off.
   };
 
-  //SoftwareSerial* swSerial = NULL;
   SoftwareSerial swSerial;
   uint8_t RXpin = 0;
   uint8_t TXpin = 0;
