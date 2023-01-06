@@ -1,23 +1,26 @@
 #include "main.hpp"
 
 ///// Constants /////
-#define SW_VERSION "V1.0.0"					                                        // Actual software version.
-#define EEPROM_VALID 231							                                      // EEPROM validity check.
+#define SW_VERSION "V1.0.0"                                                 // Actual software version.
+#define EEPROM_VALID 231                                                    // EEPROM validity check.
 #define DEFAULT_LOCAL_ADDRESS 444                                           // Node default address if no saved available.
 #define DEFAULT_MASTER_ADDRESS 10                                           // Default CAN master address.
 #define CAN_MASK 0x1FF80000                                                 // CAN extended ID mask.
-#define OK_STATE " [ OK ]"					                                        // OK status.
-#define ERR_STATE " [ ERR ]"          				                              // Error status.
+#define OK_STATE " [ OK ]"                                                  // OK status.
+#define ERR_STATE " [ ERR ]"                                                // Error status.
 #define SAVED_STATE "[S] "                                                  // Saved data mark.
 #define DEFAULT_STATE "[D] "                                                // Default data mark.
 
 ///// Variables /////
-volatile uint8_t canProcess = 0;							                              // On CAN interrupt, it counts incoming packets.
-uint32_t pingTimer = 0;								                                      // It stores the last ping time.
-const uint16_t pingTime = 1500;						                                  // Ping timeot time in ms.
-struct Settings settings;							                                      // Struct of settings.
+volatile uint8_t canProcess = 0;                                            // On CAN interrupt, it counts incoming packets.
+uint32_t pingTimer = 0;                                                     // It stores the last ping time.
+const uint16_t pingTime = 1500;                                             // Ping timeot time in ms.
+struct Settings settings;                                                   // Struct of settings.
 CircularBuffer<canCmd, 10> canCommandBuffer;                                // State machine execution queue.
 CircularBuffer<canCb, 10> canCallbackBuffer;                                // Callback message buffer for master.
+
+///// Maintenance variables /////
+uint8_t cycleCostMax = 0;                                                   // Calculate and store max loop cost.
 
 ///// WS2812 RGB LED /////
 CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
@@ -28,23 +31,21 @@ bool updateRgbLed = false;                                                  // S
 PushButton Button(200, 500, 70);                                            // Object to handle pushbutton events.
 CircularBuffer<uint8_t, 10> buttonEventBuffer;                              // Store button events.
 
-////////////////////////////////////////////////////
-DFPlayer myMP3(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
-
-////////////////////////////////////////////////////
+///// MP3 player /////
+DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // Object to handle MP3 player device.
 
 ///// Setup section /////
 void setup() {
-  wdt_disable();              						                                  // Disable WDT (Watchdog timer).
-  Serial.begin(115200);								                                      // Open serial port with the given baudrate.
+  wdt_disable();                                                            // Disable WDT (Watchdog timer).
+  Serial.begin(115200);                                                     // Open serial port with the given baudrate.
 
-  pinMode(LED, OUTPUT); 							                                      // LED pin -> output.
-  pinMode(CAN_INT, INPUT_PULLUP); 					                                // CAN_INT pin -> input with pullup.
+  pinMode(LED, OUTPUT);                                                     // LED pin -> output.
+  pinMode(CAN_INT, INPUT_PULLUP);                                           // CAN_INT pin -> input with pullup.
   pinMode(BUTTON, INPUT_PULLUP);                                            // Button pin -> input with pullup.
 
-  LED_H;											                                              // Turn on LED.
+  LED_H;                                                                    // Turn on LED.
   Serial.println(F("*************************"));
-  Serial.println(F("Starting..."));					                                // Serial debug print.
+  Serial.println(F("Starting..."));                                         // Serial debug print.
   Serial.print(F("FW: "));
   Serial.println(SW_VERSION);
 
@@ -52,45 +53,46 @@ void setup() {
   FastLED.clear();                                                          // Clear LEDs
   FastLED.show();                                                           // and show it.
 
-  LoadFromEEPROM();									                                        // Loads stored data from EEPROM.
+  LoadFromEEPROM();                                                         // Loads stored data from EEPROM.
 
-  Serial.print(F("CAN"));							                                      // Serial debug print.
-  CAN.setClockFrequency(8e6);						                                    // SPI CAN controller runs from 8MHz crystal.
-  if(CAN.begin(500E3) == false) {		  			                                // Set CAN speed to 500Kb/s.
-    Serial.println(ERR_STATE);    				                                  // If can't init CAN controller, print ERROR.
+  Serial.print(F("CAN"));                                                   // Serial debug print.
+  CAN.setClockFrequency(8e6);                                               // SPI CAN controller runs from 8MHz crystal.
+  if(CAN.begin(500E3) == false) {                                           // Set CAN speed to 500Kb/s.
+    Serial.println(ERR_STATE);                                              // If can't init CAN controller, print ERROR.
   }
   else {
-    Serial.println(OK_STATE);						                                    // If init ok, print OK.
+    Serial.println(OK_STATE);                                               // If init ok, print OK.
   }
   CAN.filter(2023);                                                         // Filter standard CAN IDs.
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   ////////////////////////////////////////////////////
-  myMP3.volume(15);
-  myMP3.play(1);
-  myMP3.play(1);
-  myMP3.play(1);
-  myMP3.play(2);
-  myMP3.play(1);
-  myMP3.play(3);
-  myMP3.play(1);  
+  MP3Player.volume(15);
+  MP3Player.play(1);
+  MP3Player.play(1);
+  MP3Player.play(1);
+  MP3Player.play(2);
+  MP3Player.play(1);
+  MP3Player.play(3);
+  MP3Player.play(1);
   ////////////////////////////////////////////////////
 
-  analogReference(DEFAULT);		  				                                    // Setup analog reference to 5V.
+  analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
-  wdt_enable(WDTO_250MS);  							                                    // Enable WDT with a timeout of 1 seconds.
+  wdt_enable(WDTO_30MS);                                                    // Enable WDT with a timeout of 1 seconds.
 
   canCommandBuffer.put(canCmd::NODE_CMD_IDLE);                              // Set state machine default command.
   canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                          // Set callback state as restarted.
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println("Loop starting...");
-  LED_L;											                                              // Turn off LED.
+  LED_L;                                                                    // Turn off LED.
 }
 
 void loop() {
 
-  myMP3.looping();
-  
+  ///// Maintenance /////
+  uint32_t cycleTimer = millis();                                           // Save millis value for loop cost calculation.
+
   ///// Button press handling /////
   uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));  // Check button actual state.
   if( buttonState > 0 ) {                                                   // Filter unvalid states.
@@ -102,21 +104,21 @@ void loop() {
   }
 
   ///// Processing CAN messages /////
-  uint8_t recvData[8] = { 0 };					                                    // We will store the message in this variable.
+  uint8_t recvData[8] = { 0 };                                              // We will store the message in this variable.
   uint8_t canMsg[ 8 ] = { 0 };                                              // Response message data.
   uint16_t masterAddress = DEFAULT_MASTER_ADDRESS;                          // Master CAN address.
   canCmd cmdExec = canCmd::NODE_CMD_IDLE;                                   // Execution command for the state machine.
   uint32_t extendedIdOut = 0;                                               // Extended CAN ID to send.
 
-  if(canProcess > 0) {     						                                      // If the CAN controller interrupted.
-    canProcess--;							                                              // Lower value.
-    uint8_t recvSize = CAN.parsePacket();					                          // Process CAN message length.
+  if(canProcess > 0) {                                                      // If the CAN controller interrupted.
+    canProcess--;                                                           // Lower value.
+    uint8_t recvSize = CAN.parsePacket();                                   // Process CAN message length.
     uint32_t extendedIdIn = 0;                                              // Received CAN packet extended ID.
     uint16_t localAddress = 0;                                              // Local CAN address.
     uint16_t cmd = 0;                                                       // CAN command.
 
     if((CAN.available() > 0) && (recvSize > 0)) {
-      CAN.readBytes(recvData, sizeof(recvData));			                      // Read the message.
+      CAN.readBytes(recvData, sizeof(recvData));                            // Read the message.
     }
     if(CAN.packetExtended() == false) {                                     // Drop invalid packets.
       Serial.println(F("Packet dropped!"));                                 // Debug print of dropped package.
@@ -140,17 +142,17 @@ void loop() {
 
   if(canCommandBuffer.isEmpty() == false) {                                 // If available, get next state from
     cmdExec = canCommandBuffer.pop();                                       // execution queue.
-    extendedIdOut = dataToExtId(settings.canAddress, 
+    extendedIdOut = dataToExtId(settings.canAddress,
       static_cast<uint8_t>(cmdExec), masterAddress);                        // Make extended CAN ID to send.
   }
 
-  switch(cmdExec) {				  					                                      // Send the command in the switch.
+  switch(cmdExec) {                                                         // Send the command in the switch.
 
     case canCmd::NODE_CMD_IDLE: {                                           // Idle state.
 
     } break;
 
-    case canCmd::NODE_CMD_PING: {			                                      // Ping command.
+    case canCmd::NODE_CMD_PING: {                                           // Ping command.
       if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = static_cast<uint8_t>(canCallbackBuffer.pop());          // Send the callback type to the master.
       }
@@ -159,21 +161,21 @@ void loop() {
       CAN.endPacket();
     } break;
 
-    case canCmd::NODE_CMD_RESET: {    					                            // Reset MCU.
+    case canCmd::NODE_CMD_RESET: {                                          // Reset MCU.
       CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
       CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
       CAN.endPacket();
-      resetCMD();									                                          // Call reset function.
+      resetCMD();                                                           // Call reset function.
     } break;
 
-    case canCmd::NODE_CMD_GET_FW_VERSION: {       		                      // Send firmware version to master.
+    case canCmd::NODE_CMD_GET_FW_VERSION: {                                 // Send firmware version to master.
       CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
       memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
       CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
       CAN.endPacket();
     } break;
 
-    case canCmd::NODE_CMD_SETADDRESS: {    				                          // Set new CAN address. Response: used address.
+    case canCmd::NODE_CMD_SETADDRESS: {                                     // Set new CAN address. Response: used address.
       uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
       newAddress &= 0x3FF;                                                  // Can't be more than 1023.
       if(newAddress != settings.canAddress) {                               // Check if new address is equal to old or not.
@@ -223,18 +225,28 @@ void loop() {
     FastLED.show();                                                     // Send updated color values to the RGB LED.
   }
 
-  ///// Handling timers and irrigation states /////
-	if((millis() - pingTimer ) >= pingTime) {                             // Check if ping timer is expired.
+  ///// Handling timers /////
+  if((millis() - pingTimer ) >= pingTime) {                             // Check if ping timer is expired.
     LED_H;                                                              // If yes, turn on the LED.
-	}
-  
+  }
+
+  ///// Handling MP3 player /////
+  MP3Player.spin();                                                     // Take care of playing queue.
+
+  ///// Maintenance /////
+  uint8_t cycleCost = millis() - cycleTimer;
+  if(cycleCost > cycleCostMax) {
+    cycleCostMax = cycleCost;
+    Serial.print(F("Max cost: "));
+    Serial.println(cycleCostMax);
+  }
   wdt_reset();                                                          // Reset the watchdog timer.
 }
 
 void resetCMD(void) {
   Serial.println("Restarting...");
   Serial.flush();                                                       // Sends out data from serial buffer, before reset.
-	resetFunc();                                                          // Call reset function.
+  resetFunc();                                                          // Call reset function.
 }
 
 void LoadFromEEPROM(void) {
@@ -243,7 +255,7 @@ void LoadFromEEPROM(void) {
     Serial.print(SAVED_STATE);                            // Print saved mark.
   }
   else {
-    settings.canAddress = DEFAULT_LOCAL_ADDRESS;            // If not, use default CAN address.
+    settings.canAddress = DEFAULT_LOCAL_ADDRESS;          // If not, use default CAN address.
     Serial.print(DEFAULT_STATE);                          // Print default mark.
   }
   Serial.print(F("CAN address: "));                       // Print CAN address.

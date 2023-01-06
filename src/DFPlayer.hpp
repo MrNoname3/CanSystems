@@ -1,180 +1,225 @@
 #ifndef __DFPLAYER_HPP__
 #define __DFPLAYER_HPP__
-#include <SoftwareSerial.h>
-#include "DFPlayerMiniFast.h"
+#include <SoftwareSerial.h>                 /// Arduino software serial lib.
+#include "DFPlayerMiniFast.h"               /// DFPlayerMini driver lib.
 #include "CircularBuffer.hpp"               /// Circular buffer class.
 
-
+/// @brief Derived class for interacting with DFPlayerMini MP3 player with
+/// playing queue and external turn on/off possibility with a PFET.
 class DFPlayer : private DFPlayerMiniFast {
 
 public:
 
-  DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, 
-    bool debug = false, uint32_t threshold = 10) : swSerial(RXpin_, TXpin_) {
+  /// @brief Constructor of DFPlayerMini derived class.
+  /// @param RXpin_ Software serial RX pin.
+  /// @param TXpin_ Software serial TX pin.
+  /// @param ENpin Device turn on/off switch pin.
+  /// @param INTpin Device playing interrupt pin: LOW->playing.
+  /// @param debug Enable debug prints.
+  /// @param timeout Set device answer timeout in ms.
+  DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
+    bool debug = false, uint32_t timeout = 10);
 
-    this->RXpin = RXpin_;
-    this->TXpin = TXpin_;  
-    this->ENpin = ENpin;
-    this->INTpin = INTpin;
-    swSerial.begin(9600);
-    pinMode(this->ENpin, OUTPUT);
-    pinMode(this->INTpin, INPUT_PULLUP);
-    DFPlayerMiniFast::begin(swSerial, debug, threshold);
-  }
+  /// @brief Destructor of the object.
+  virtual ~DFPlayer();
 
-  ~DFPlayer() {
-    
-  }
+  /// @brief Set MP3 player volume.
+  /// @param volume_ Volume, value: 0-30.
+  void volume(uint8_t volume_);
 
-  void volume(uint8_t vol) {
-    this->vol = vol;
-  }
+  /// @brief Put song number in the play queue.
+  /// @param song Number of the song.
+  void play(uint16_t song);
 
-  void play(uint16_t song) {
-    playingQueue.put(song);
-  }
-
-  void looping(void) {
-
-    switch(playingState) {
-      
-      case PlayingStates::CHECK_QUEUE_TO_BEGIN: {
-        if(playingQueue.isEmpty() == false) {   
-          Serial.println("CHECK_QUEUE_TO_BEGIN");
-          playingState = PlayingStates::TURN_ON;          
-        }
-      } break;
-
-      case PlayingStates::TURN_ON: {
-        Serial.println("TURN_ON");
-        digitalWrite(this->ENpin, HIGH);
-        digitalWrite(this->TXpin, HIGH);
-        bootTimer = millis();
-        playingState = PlayingStates::WAIT_FOR_BOOT;
-      } break;
-
-      case PlayingStates::WAIT_FOR_BOOT: {
-        if(millis()- bootTimer >= bootTime) {
-          Serial.println("WAIT_FOR_BOOT");
-          playingState = PlayingStates::SET_VOLUME;
-        }
-      } break;
-
-      case PlayingStates::SET_VOLUME: {
-        Serial.println("SET_VOLUME");
-        DFPlayerMiniFast::volume(vol);
-        setVolumeTimer = millis();
-        playingState = PlayingStates::WAIT_FOR_SET_VOLUME;
-      } break;
-
-      case PlayingStates::WAIT_FOR_SET_VOLUME: {
-        if(millis() - setVolumeTimer >= setVolumeTime) {
-          Serial.println("WAIT_FOR_SET_VOLUME");
-          playingState = PlayingStates::PLAY;
-        }
-      } break;
-
-      case PlayingStates::PLAY: {
-        Serial.println("PLAY");
-        this->attachInt();      
-        DFPlayerMiniFast::play(playingQueue.pop());
-        playTimeoutTimer = millis();
-        playingState = PlayingStates::WAIT_FOR_PLAY;
-      } break;
-
-      case PlayingStates::WAIT_FOR_PLAY: {        
-        if(enablePlay == true) {
-          Serial.println("WAIT_FOR_PLAY");
-          enablePlay = false;
-          playingState = PlayingStates::CHECK_QUEUE_TO_RESUME;
-        }
-        if(millis() - playTimeoutTimer >= playTimeoutTime) {
-          Serial.println("TIMEOUT");
-          DFPlayerMiniFast::stop();
-          playingState = PlayingStates::CHECK_QUEUE_TO_RESUME;
-        }
-      } break;
-
-      case PlayingStates::CHECK_QUEUE_TO_RESUME: {        
-        Serial.println("CHECK_QUEUE_TO_RESUME");
-        if(playingQueue.isEmpty() == false) {
-          playDelayTimer = millis();
-          playingState = PlayingStates::PLAYING_DELAY;          
-        }
-        else {
-          playingState = PlayingStates::TURN_OFF;
-        }
-      } break;
-
-      case PlayingStates::PLAYING_DELAY: {       
-        if(millis() - playDelayTimer >= playDelayTime) {
-          Serial.println("PLAYING_DELAY");
-          enablePlay = false;
-          playingState = PlayingStates::PLAY;
-        }
-      } break;
-
-      case PlayingStates::TURN_OFF: {
-        Serial.println("TURN_OFF");
-        digitalWrite(this->ENpin, LOW);
-        digitalWrite(this->TXpin, LOW);
-        detachInt();
-        enablePlay = false;
-        playingState = PlayingStates::CHECK_QUEUE_TO_BEGIN;
-      } break;      
-
-    }
-  }
+  /// @brief Handles the state machine for playing.
+  /// Need to be called periodically.
+  void spin(void);
 
 private:
 
-  static void irqHandler(void) {
-    enablePlay = true;
-  }
+  /// @brief Attach interrupt to the given interrupt pin.
+  void attachInt(void);
 
-  void attachInt(void) {
-    bitSet(EIFR, digitalPinToInterrupt(INTpin));
-    attachInterrupt(digitalPinToInterrupt(INTpin), irqHandler, RISING);
-  }
+  /// @brief Detach interrupt from the given interrupt pin.
+  void detachInt(void);
 
-  void detachInt(void) {
-    detachInterrupt(digitalPinToInterrupt(INTpin));
-  }
+  /// @brief Handles interrupt.
+  static void irqHandler(void);
 
+  /// @brief State machine states for playing.
   enum class PlayingStates : uint8_t {
-    CHECK_QUEUE_TO_BEGIN,   // Check playing queue.    
-    TURN_ON,                // Turn hardware on.
-    WAIT_FOR_BOOT,          // Wait a little for hardware boot.
-    SET_VOLUME,             // Set the device playing volume.
-    WAIT_FOR_SET_VOLUME,    // Waiting a bit for command execution.
-    PLAY,                   // Play a song.
-    WAIT_FOR_PLAY,
-    CHECK_QUEUE_TO_RESUME,
-    PLAYING_DELAY,
-    TURN_OFF,               // Turn hardware off.
+    IDLE,                           // Check playing queue to begin playing.
+    TURN_ON,                        // Turn hardware on.
+    WAIT_FOR_BOOT,                  // Wait a little for hardware boot.
+    SET_VOLUME,                     // Set the device playing volume.
+    WAIT_FOR_CMD,                   // Waiting a bit for command execution.
+    PLAY,                           // Play a song.
+    WAIT_FOR_PLAY,                  // Wait for end of playing.
+    CHECK_QUEUE,                    // Check play queue.
+    PLAYING_DELAY,                  // Delay between songs.
+    TURN_OFF,                       // Turn hardware off.
   };
 
-  SoftwareSerial swSerial;
-  uint8_t RXpin = 0;
-  uint8_t TXpin = 0;
-  uint8_t ENpin = 0;
-  uint8_t INTpin = 0;
-  uint8_t vol = 5;
-  
-  static volatile bool enablePlay;
-  PlayingStates playingState = PlayingStates::CHECK_QUEUE_TO_BEGIN;
-  const uint16_t bootTime = 1000;
-  uint32_t bootTimer = 0;
-  const uint8_t setVolumeTime = 10;
-  uint32_t setVolumeTimer = 0;
-  const uint16_t playDelayTime = 500;
-  uint32_t playDelayTimer = 0;
-  const uint16_t playTimeoutTime = 10000;
-  uint32_t playTimeoutTimer = 0;
-  CircularBuffer<uint16_t, 10> playingQueue;
+  const uint16_t bootTime = 1000;           // MP3 player boot time.
+  const uint8_t cmdExecTime = 10;           // Command execution time.
+  const uint16_t playDelayTime = 500;       // Time for delay between songs.
+  const uint16_t playTimeoutTime = 10000;   // Playing timeout time.
+  uint32_t bootTimer = 0;                   // MP3 player boot timer.
+  uint32_t cmdExecTimer = 0;                // Command execution timer.
+  uint32_t playDelayTimer = 0;              // Timer for delay between songs.
+  uint32_t playTimeoutTimer = 0;            // Playing timeout time.
 
-};
+  SoftwareSerial swSerial;                  // Software serial object.
+  uint8_t RXpin = 0;                        // Software serial RX pin.
+  uint8_t TXpin = 0;                        // Software serial TX pin.
+  uint8_t ENpin = 0;                        // Device turn on/off switch pin.
+  uint8_t INTpin = 0;                       // Device playing interrupt pin: LOW->playing.
+  uint8_t volume_ = 5;                      // Volume value. Default: 5.
+  bool debug = false;                       // Enable debug prints.
+  static volatile bool enablePlay;          // Interrupt flag. If true, device is ready to play.
 
-volatile bool DFPlayer::enablePlay = false;
+  PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.
+  CircularBuffer<uint16_t, 10> playingQueue;          // MP3 playing queue.
+
+};  // End of class definition.
+
+volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
+
+DFPlayer::DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
+  bool debug, uint32_t timeout) : swSerial(RXpin_, TXpin_) {
+
+  this->RXpin = RXpin_;                               // Save given pin numbers.
+  this->TXpin = TXpin_;
+  this->ENpin = ENpin;
+  this->INTpin = INTpin;
+  this->debug = debug;                                // Set debug value.
+  swSerial.begin(9600);                               // Open software serial port.
+  pinMode(this->ENpin, OUTPUT);                       // Set pin modes.
+  pinMode(this->INTpin, INPUT_PULLUP);
+  DFPlayerMiniFast::begin(swSerial, debug, timeout);  // Call base class constructor.
+}
+
+DFPlayer::~DFPlayer() {
+
+}
+
+void DFPlayer::volume(uint8_t volume_) {
+  volume_ &= 30;                                      // Protect variable from high value.
+  this->volume_ = volume_;                            // Save value.
+}
+
+void DFPlayer::play(uint16_t song) {
+  song &= 9999;                                       // Protect variable from high value.
+  playingQueue.put(song);                             // Put value to playing queue.
+}
+
+void DFPlayer::spin(void) {
+
+  switch(playingState) {
+
+    case PlayingStates::IDLE: {
+      if(playingQueue.isEmpty() == false) {                     // Check playing queue.
+        if(debug == true) { Serial.println(F("IDLE")); }        // Debug print.
+        playingState = PlayingStates::TURN_ON;                  // Set next state.
+      }
+    } break;
+
+    case PlayingStates::TURN_ON: {
+      if(debug == true) { Serial.println(F("TURN_ON")); }       // Debug print.
+      digitalWrite(this->ENpin, HIGH);                          // Turn on device.
+      digitalWrite(this->TXpin, HIGH);                          // Set TX line in HIGH state.
+      bootTimer = millis();                                     // Start timer.
+      playingState = PlayingStates::WAIT_FOR_BOOT;              // Set next state.
+    } break;
+
+    case PlayingStates::WAIT_FOR_BOOT: {
+      if(millis()- bootTimer >= bootTime) {                     // Check timer.
+        if(debug == true) { Serial.println(F("WAIT_FOR_BOOT")); }  // Debug print.
+        playingState = PlayingStates::SET_VOLUME;               // Set next state.
+      }
+    } break;
+
+    case PlayingStates::SET_VOLUME: {
+      if(debug == true) { Serial.println(F("SET_VOLUME")); }    // Debug print.
+      DFPlayerMiniFast::volume(volume_);                        // Set volume trough base class.
+      cmdExecTimer = millis();                                  // Start timer.
+      playingState = PlayingStates::WAIT_FOR_CMD;               // Set next state.
+    } break;
+
+    case PlayingStates::WAIT_FOR_CMD: {
+      if(millis() - cmdExecTimer >= cmdExecTime) {              // Check timer.
+        if(debug == true) { Serial.println(F("WAIT_FOR_CMD")); }  // Debug print.
+        playingState = PlayingStates::PLAY;                     // Set next state.
+      }
+    } break;
+
+    case PlayingStates::PLAY: {
+      if(debug == true) { Serial.println(F("PLAY")); }          // Debug print.
+      this->attachInt();                                        // Attach interrupt.
+      DFPlayerMiniFast::play(playingQueue.pop());               // Play next song from queue.
+      playTimeoutTimer = millis();                              // Start timer.
+      playingState = PlayingStates::WAIT_FOR_PLAY;              // Set next state.
+    } break;
+
+    case PlayingStates::WAIT_FOR_PLAY: {
+      if(enablePlay == true) {                                  // Wait for interrupt.
+        if(debug == true) { Serial.println(F("WAIT_FOR_PLAY")); }  // Debug print.
+        enablePlay = false;                                     // Disable interrupt flag.
+        playingState = PlayingStates::CHECK_QUEUE;              // Set next state.
+      }
+      if(millis() - playTimeoutTimer >= playTimeoutTime) {      // Check timeout timer.
+        if(debug == true) { Serial.println(F("TIMEOUT")); }     // Debug print.
+        DFPlayerMiniFast::stop();                               // Stop playing.
+        playingState = PlayingStates::CHECK_QUEUE;              // Set next state.
+      }
+    } break;
+
+    case PlayingStates::CHECK_QUEUE: {
+      if(debug == true) { Serial.println(F("CHECK_QUEUE")); }   // Debug print.
+      if(playingQueue.isEmpty() == false) {                     // Check playing queue.
+        playDelayTimer = millis();                              // Start timer.
+        playingState = PlayingStates::PLAYING_DELAY;            // Set next state.
+      }
+      else {
+        playingState = PlayingStates::TURN_OFF;                 // Set next state.
+      }
+    } break;
+
+    case PlayingStates::PLAYING_DELAY: {
+      if(millis() - playDelayTimer >= playDelayTime) {          // Check timer.
+        if(debug == true) { Serial.println(F("PLAYING_DELAY")); }  // Debug print.
+        enablePlay = false;                                     // Disable interrupt flag.
+        playingState = PlayingStates::PLAY;                     // Set next state.
+      }
+    } break;
+
+    case PlayingStates::TURN_OFF: {
+      if(debug == true) { Serial.println(F("TURN_OFF")); }      // Debug print.
+      digitalWrite(this->ENpin, LOW);                           // Turn on device.
+      digitalWrite(this->TXpin, LOW);                           // Set TX line in LOW state. (It's noisy.)
+      detachInt();                                              // Detach interrupt.
+      enablePlay = false;                                       // Disable interrupt flag.
+      playingState = PlayingStates::IDLE;                       // Set next state.
+    } break;
+
+  }
+}
+
+void DFPlayer::irqHandler(void) {
+  enablePlay = true;                                            // Set interrupt flag variable.
+}
+
+void DFPlayer::attachInt(void) {
+  // Clear interrupt flag, because it stores the interrupt event, even it is not attached.
+  bitSet(EIFR, digitalPinToInterrupt(INTpin));
+  // Attach interrupt to the given pin.
+  attachInterrupt(digitalPinToInterrupt(INTpin), irqHandler, RISING);
+}
+
+void DFPlayer::detachInt(void) {
+  // Detach interrupt from the given pin.
+  detachInterrupt(digitalPinToInterrupt(INTpin));
+}
+
 
 #endif
