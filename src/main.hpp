@@ -67,28 +67,28 @@ enum class canCb : uint8_t {
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
 
-/// MCU reset
-///
-/// @brief This command resets the MCU.
+/// @brief Color values for RGB LED.
+struct RGBValues {
+  uint8_t red = 0;
+  uint8_t green = 0;
+  uint8_t blue = 0;
+};
+
+/// @brief Put the given data to RGB LED queue.
+/// @param red Value of red color: 0-255.
+/// @param green Value of green color: 0-255.
+/// @param blue Value of blue color: 0-255.
+void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue);
+
+/// @brief Reset the MCU.
 void resetCMD(void);
 
-/// Analog readings.
-///
-/// @brief This function reads the analog sensors in the loop.
-void AnalogReads(void);
-
-/// Load data.
-///
-/// @brief Loads saved data from EEPROM to the above mentioned structure.
+/// @brief Load saved data from EEPROM to settings structure.
 void LoadFromEEPROM(void);
 
-/// Save data.
-///
-/// @brief Saves data to EEPROM from the above mentioned structure.
+/// @brief Save data to EEPROM from the settings structure.
 bool SaveToEEPROM(void);
 
-/// Extended ID converter.
-///
 /// @brief Converts the given data to extended CAN ID.
 /// @param from Sender address.
 /// @param cmd Command from sender.
@@ -96,8 +96,6 @@ bool SaveToEEPROM(void);
 /// @return Returns with the CAN address.
 uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to);
 
-/// Data converter.
-///
 /// @brief Converts the given extended CAN ID to addresses and command variable.
 /// @param extId Extended CAN ID.
 /// @param from Pointer to sender address variable.
@@ -105,8 +103,6 @@ uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to);
 /// @param to Pointer to target address variable.
 void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to);
 
-/// Interrupt handler.
-///
 /// @brief Handles the interrupts from the SPI CAN controller.
 void canIrqHandler(void);
 

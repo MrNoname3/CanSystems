@@ -1,6 +1,6 @@
 #include "main.hpp"
 
-///// Constants /////
+//--- Constants ---//
 #define SW_VERSION "V1.0.0"                                                 // Actual software version.
 #define EEPROM_VALID 231                                                    // EEPROM validity check.
 #define DEFAULT_LOCAL_ADDRESS 444                                           // Node default address if no saved available.
@@ -11,7 +11,7 @@
 #define SAVED_STATE "[S] "                                                  // Saved data mark.
 #define DEFAULT_STATE "[D] "                                                // Default data mark.
 
-///// Variables /////
+//--- Variables ---//
 volatile uint8_t canProcess = 0;                                            // On CAN interrupt, it counts incoming packets.
 uint32_t pingTimer = 0;                                                     // It stores the last ping time.
 const uint16_t pingTime = 1500;                                             // Ping timeot time in ms.
@@ -19,22 +19,21 @@ struct Settings settings;                                                   // S
 CircularBuffer<canCmd, 10> canCommandBuffer;                                // State machine execution queue.
 CircularBuffer<canCb, 10> canCallbackBuffer;                                // Callback message buffer for master.
 
-///// Maintenance variables /////
+//--- Maintenance variables ---//
 uint8_t cycleCostMax = 0;                                                   // Calculate and store max loop cost.
 
-///// WS2812 RGB LED /////
+//--- WS2812 RGB LED ---//
 CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
-CRGB* rgbled = &rgbLeds[0];                                                 // Make a pointer to 0. element. It is only 1pcs LED.
-bool updateRgbLed = false;                                                  // Show if wanted RGB values changed.
+CircularBuffer<RGBValues, 5> RGBColorBuffer;                                // Queue for RGB values.
 
-///// Button /////
+//--- Button ---//
 PushButton Button(200, 500, 70);                                            // Object to handle pushbutton events.
 CircularBuffer<uint8_t, 10> buttonEventBuffer;                              // Store button events.
 
-///// MP3 player /////
+//--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // Object to handle MP3 player device.
 
-///// Setup section /////
+//--- Setup section ---//
 void setup() {
   wdt_disable();                                                            // Disable WDT (Watchdog timer).
   Serial.begin(115200);                                                     // Open serial port with the given baudrate.
@@ -66,7 +65,7 @@ void setup() {
   CAN.filter(2023);                                                         // Filter standard CAN IDs.
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
-  ////////////////////////////////////////////////////
+  ///////////////////////////////////////////////
   MP3Player.volume(15);
   MP3Player.play(1);
   MP3Player.play(1);
@@ -75,7 +74,10 @@ void setup() {
   MP3Player.play(1);
   MP3Player.play(3);
   MP3Player.play(1);
-  ////////////////////////////////////////////////////
+
+  //addToRGBQueue(0, 0, 255);
+  MP3Player.attachRGBController(addToRGBQueue);
+  ///////////////////////////////////////////////
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
@@ -90,10 +92,10 @@ void setup() {
 
 void loop() {
 
-  ///// Maintenance /////
+  //--- Maintenance ---//
   uint32_t cycleTimer = millis();                                           // Save millis value for loop cost calculation.
 
-  ///// Button press handling /////
+  //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));  // Check button actual state.
   if( buttonState > 0 ) {                                                   // Filter unvalid states.
     canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
@@ -103,7 +105,7 @@ void loop() {
     Serial.println(buttonState);
   }
 
-  ///// Processing CAN messages /////
+  //--- Processing CAN messages ---//
   uint8_t recvData[8] = { 0 };                                              // We will store the message in this variable.
   uint8_t canMsg[ 8 ] = { 0 };                                              // Response message data.
   uint16_t masterAddress = DEFAULT_MASTER_ADDRESS;                          // Master CAN address.
@@ -197,8 +199,7 @@ void loop() {
     } break;
 
     case canCmd::NODE_CMD_RGB_LED: {
-      rgbled->setRGB(recvData[0], recvData[1], recvData[2]);                // Save color values.
-      updateRgbLed = true;                                                  // Mark LED as updateable.
+      addToRGBQueue(recvData[0], recvData[1], recvData[2]);                 // Add color values to queue.
       CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
       CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
       CAN.endPacket();
@@ -219,21 +220,24 @@ void loop() {
 
   }  // End of switch.
 
-  ///// Handling RGB LEDs /////
-  if(updateRgbLed == true) {                                            // Check if RGB LED needs color update or not.
-    updateRgbLed = false;                                               // Clear color update flag.
-    FastLED.show();                                                     // Send updated color values to the RGB LED.
+  //--- Handling RGB LEDs ---//
+  if(RGBColorBuffer.isEmpty() == false) {
+    RGBValues RGBColor = RGBColorBuffer.pop();
+    for(uint8_t i = 0; i < RGB_LED_NUM; i++) {
+      rgbLeds[i].setRGB(RGBColor.red, RGBColor.green, RGBColor.blue);
+    }
+    FastLED.show();
   }
 
-  ///// Handling timers /////
+  //--- Handling timers ---//
   if((millis() - pingTimer ) >= pingTime) {                             // Check if ping timer is expired.
     LED_H;                                                              // If yes, turn on the LED.
   }
 
-  ///// Handling MP3 player /////
+  //--- Handling MP3 player ---//
   MP3Player.spin();                                                     // Take care of playing queue.
 
-  ///// Maintenance /////
+  //--- Maintenance ---//
   uint8_t cycleCost = millis() - cycleTimer;
   if(cycleCost > cycleCostMax) {
     cycleCostMax = cycleCost;
@@ -241,6 +245,14 @@ void loop() {
     Serial.println(cycleCostMax);
   }
   wdt_reset();                                                          // Reset the watchdog timer.
+}
+
+void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
+  RGBValues RGBColor;
+  RGBColor.red = red;
+  RGBColor.green = green;
+  RGBColor.blue = blue;
+  RGBColorBuffer.put(RGBColor);
 }
 
 void resetCMD(void) {

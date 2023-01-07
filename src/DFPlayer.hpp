@@ -31,6 +31,13 @@ public:
   /// @param song Number of the song.
   void play(uint16_t song);
 
+  /// @brief Attach an RGB LED controller function to use with MP3 player.
+  /// @param RGBController Pointer of the RGB LED controller function.
+  void attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t));
+
+  /// @brief Detach the RGB LED controller function.
+  void detachRGBController(void);
+
   /// @brief Handles the state machine for playing.
   /// Need to be called periodically.
   void spin(void);
@@ -78,8 +85,9 @@ private:
   bool debug = false;                       // Enable debug prints.
   static volatile bool enablePlay;          // Interrupt flag. If true, device is ready to play.
 
-  PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.
-  CircularBuffer<uint16_t, 10> playingQueue;          // MP3 playing queue.
+  PlayingStates playingState = PlayingStates::IDLE;         // Set state for state machine.
+  CircularBuffer<uint16_t, 10> playingQueue;                // MP3 playing queue.
+  void (*RGBController)(uint8_t, uint8_t, uint8_t) = NULL;  // RGB LED controller function pointer.
 
 };  // End of class definition.
 
@@ -113,6 +121,14 @@ void DFPlayer::play(uint16_t song) {
   playingQueue.put(song);                             // Put value to playing queue.
 }
 
+void DFPlayer::attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t)) {
+  this->RGBController = RGBController;                // Store controller function pointer locally.
+}
+
+void DFPlayer::detachRGBController(void) {
+  this->RGBController = NULL;                         // Clear locally stored controller function pointer.
+}
+
 void DFPlayer::spin(void) {
 
   switch(playingState) {
@@ -120,6 +136,7 @@ void DFPlayer::spin(void) {
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
         if(debug == true) { Serial.println(F("IDLE")); }        // Debug print.
+        if(RGBController != NULL) { RGBController(0, 50, 200); }  // Set RGB LED color.
         playingState = PlayingStates::TURN_ON;                  // Set next state.
       }
     } break;
@@ -199,6 +216,7 @@ void DFPlayer::spin(void) {
       digitalWrite(this->TXpin, LOW);                           // Set TX line in LOW state. (It's noisy.)
       detachInt();                                              // Detach interrupt.
       enablePlay = false;                                       // Disable interrupt flag.
+      if(RGBController != NULL) { RGBController(0, 0, 0); }     // Set RGB LED color.
       playingState = PlayingStates::IDLE;                       // Set next state.
     } break;
 
