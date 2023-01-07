@@ -66,17 +66,13 @@ void setup() {
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   ///////////////////////////////////////////////
+  MP3Player.attachRGBController(addToRGBQueue);
   MP3Player.volume(15);
-  MP3Player.play(1);
-  MP3Player.play(1);
   MP3Player.play(1);
   MP3Player.play(2);
   MP3Player.play(1);
   MP3Player.play(3);
   MP3Player.play(1);
-
-  //addToRGBQueue(0, 0, 255);
-  MP3Player.attachRGBController(addToRGBQueue);
   ///////////////////////////////////////////////
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
@@ -111,6 +107,7 @@ void loop() {
   uint16_t masterAddress = DEFAULT_MASTER_ADDRESS;                          // Master CAN address.
   canCmd cmdExec = canCmd::NODE_CMD_IDLE;                                   // Execution command for the state machine.
   uint32_t extendedIdOut = 0;                                               // Extended CAN ID to send.
+  bool enableCanAnswer = true;                                              // Disable CAN answer, for standard addresses.
 
   if(canProcess > 0) {                                                      // If the CAN controller interrupted.
     canProcess--;                                                           // Lower value.
@@ -122,8 +119,10 @@ void loop() {
     if((CAN.available() > 0) && (recvSize > 0)) {
       CAN.readBytes(recvData, sizeof(recvData));                            // Read the message.
     }
-    if(CAN.packetExtended() == false) {                                     // Drop invalid packets.
-      Serial.println(F("Packet dropped!"));                                 // Debug print of dropped package.
+
+    if(CAN.packetExtended() == false) {                                     // Handle standard messages as broadcast messages.
+      canCommandBuffer.put(static_cast<canCmd>(CAN.packetId()));            // Put CAN ID in command buffer as command.
+      enableCanAnswer = false;                                              // Disable answer for broadcast messages.
       return;                                                               // Terminate processing.
     }
 
@@ -158,23 +157,32 @@ void loop() {
       if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = static_cast<uint8_t>(canCallbackBuffer.pop());          // Send the callback type to the master.
       }
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
     } break;
 
     case canCmd::NODE_CMD_RESET: {                                          // Reset MCU.
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
       resetCMD();                                                           // Call reset function.
     } break;
 
     case canCmd::NODE_CMD_GET_FW_VERSION: {                                 // Send firmware version to master.
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
       memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
     } break;
 
     case canCmd::NODE_CMD_SETADDRESS: {                                     // Set new CAN address. Response: used address.
@@ -193,25 +201,34 @@ void loop() {
       }
       canMsg[0] = lowByte(settings.canAddress);                             // Setup CAN address lowbyte to array.
       canMsg[1] = highByte(settings.canAddress);                            // Setup CAN address highbyte to array.
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
     } break;
 
     case canCmd::NODE_CMD_RGB_LED: {
       addToRGBQueue(recvData[0], recvData[1], recvData[2]);                 // Add color values to queue.
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
     } break;
 
     case canCmd::NODE_CMD_GET_BUTTON_EVENT: {
       if(buttonEventBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = buttonEventBuffer.pop();                                // Send button event.
       }
-      CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      CAN.endPacket();
+      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
+      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
+      //CAN.endPacket();
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
     } break;
 
     default: {                                                              // Default case.
@@ -221,12 +238,12 @@ void loop() {
   }  // End of switch.
 
   //--- Handling RGB LEDs ---//
-  if(RGBColorBuffer.isEmpty() == false) {
-    RGBValues RGBColor = RGBColorBuffer.pop();
-    for(uint8_t i = 0; i < RGB_LED_NUM; i++) {
+  if(RGBColorBuffer.isEmpty() == false) {                                   // Check RGB color buffer.
+    RGBValues RGBColor = RGBColorBuffer.pop();                              // Get a color set from the queue.
+    for(uint8_t i = 0; i < RGB_LED_NUM; i++) {                              // Set same color to all RGB LED.
       rgbLeds[i].setRGB(RGBColor.red, RGBColor.green, RGBColor.blue);
     }
-    FastLED.show();
+    FastLED.show();                                                         // Send color data to RGB LED strip.
   }
 
   //--- Handling timers ---//
@@ -253,6 +270,12 @@ void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBColor.green = green;
   RGBColor.blue = blue;
   RGBColorBuffer.put(RGBColor);
+}
+
+void sendCanResponse(uint32_t extId, uint8_t data[], uint8_t size) {
+  CAN.beginExtendedPacket(extId);                                       // Set extended ID.
+  CAN.write(data, size);                                                // Set data.
+  CAN.endPacket();                                                      // Send packet.
 }
 
 void resetCMD(void) {

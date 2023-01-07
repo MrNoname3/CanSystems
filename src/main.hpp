@@ -80,6 +80,13 @@ struct RGBValues {
 /// @param blue Value of blue color: 0-255.
 void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue);
 
+/// @brief Disable answer to standard CAN IDs,
+/// because it is a broadcast message for all nodes.
+/// @param extId Extended CAN ID.
+/// @param data Data array to be send.
+/// @param size Size of data array. Maximum 8 byte.
+void sendCanResponse(uint32_t extId, uint8_t data[], uint8_t size);
+
 /// @brief Reset the MCU.
 void resetCMD(void);
 
