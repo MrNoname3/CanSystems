@@ -21,6 +21,9 @@ CircularBuffer<canCb, 10> canCallbackBuffer;                                // C
 
 //--- Maintenance variables ---//
 uint8_t cycleCostMax = 0;                                                   // Calculate and store max loop cost.
+constexpr uint16_t canAddressSaveTime = 30 * 1000;                          // Save new CAN address timeout time.
+uint32_t canAddressSaveTimer = 0;                                           // Save new CAN address timeout timer.
+bool saveNewAddress = false;                                                // Enable saving new CAN address.
 
 //--- WS2812 RGB LED ---//
 CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
@@ -62,7 +65,7 @@ void setup() {
   else {
     Serial.println(OK_STATE);                                               // If init ok, print OK.
   }
-  CAN.filter(2023);                                                         // Filter standard CAN IDs.
+  //CAN.filter(2023);                                                         // Filter standard CAN IDs.
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   ///////////////////////////////////////////////
@@ -77,12 +80,12 @@ void setup() {
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
-  wdt_enable(WDTO_30MS);                                                    // Enable WDT with a timeout of 1 seconds.
-
+  
   canCommandBuffer.put(canCmd::NODE_CMD_IDLE);                              // Set state machine default command.
   canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                          // Set callback state as restarted.
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println("Loop starting...");
+  wdt_enable(WDTO_30MS);                                                    // Enable WDT with a timeout of 1 seconds.
   LED_L;                                                                    // Turn off LED.
 }
 
@@ -157,18 +160,12 @@ void loop() {
       if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = static_cast<uint8_t>(canCallbackBuffer.pop());          // Send the callback type to the master.
       }
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
     } break;
 
     case canCmd::NODE_CMD_RESET: {                                          // Reset MCU.
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -177,9 +174,6 @@ void loop() {
 
     case canCmd::NODE_CMD_GET_FW_VERSION: {                                 // Send firmware version to master.
       memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -189,21 +183,23 @@ void loop() {
       uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
       newAddress &= 0x3FF;                                                  // Can't be more than 1023.
       if(newAddress != settings.canAddress) {                               // Check if new address is equal to old or not.
+        saveNewAddress = true;                                              // Enable saving.
+        addToRGBQueue(0, 200, 0);                                           // Turn on RGB LED as green.
+        Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
+        /*
         settings.isValid = EEPROM_VALID;                                    // Setup validity flag to struct.
         settings.canAddress = newAddress;                                   // Setup new can address to struct.
         if(SaveToEEPROM() == false) {                                       // Save struct to EEPROM.
           LoadFromEEPROM();                                                 // If not success, load old settings.
         }
         CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK); // Setup filter for new CAN address.
+        */
       }
       else {
         Serial.println(F("Address already used!"));                         // Print if address is already used.
       }
-      canMsg[0] = lowByte(settings.canAddress);                             // Setup CAN address lowbyte to array.
-      canMsg[1] = highByte(settings.canAddress);                            // Setup CAN address highbyte to array.
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
+      //canMsg[0] = lowByte(settings.canAddress);                             // Setup CAN address lowbyte to array.
+      //canMsg[1] = highByte(settings.canAddress);
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -211,9 +207,6 @@ void loop() {
 
     case canCmd::NODE_CMD_RGB_LED: {
       addToRGBQueue(recvData[0], recvData[1], recvData[2]);                 // Add color values to queue.
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -223,9 +216,6 @@ void loop() {
       if(buttonEventBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = buttonEventBuffer.pop();                                // Send button event.
       }
-      //CAN.beginExtendedPacket(extendedIdOut);                               // Set extended ID.
-      //CAN.write(canMsg, sizeof(canMsg));                                    // Send message.
-      //CAN.endPacket();
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -247,29 +237,49 @@ void loop() {
   }
 
   //--- Handling timers ---//
-  if((millis() - pingTimer ) >= pingTime) {                             // Check if ping timer is expired.
-    LED_H;                                                              // If yes, turn on the LED.
+  if((millis() - pingTimer ) >= pingTime) {                                 // Check if ping timer is expired.
+    LED_H;                                                                  // If yes, turn on the LED.
   }
 
   //--- Handling MP3 player ---//
-  MP3Player.spin();                                                     // Take care of playing queue.
+  MP3Player.spin();                                                         // Take care of playing queue.
 
   //--- Maintenance ---//
-  uint8_t cycleCost = millis() - cycleTimer;
-  if(cycleCost > cycleCostMax) {
-    cycleCostMax = cycleCost;
-    Serial.print(F("Max cost: "));
+  if(saveNewAddress == true) {                                              // Check if saving is enabled.
+    if(millis() - canAddressSaveTimer >= canAddressSaveTime) {              // Check saving timeout timer.
+      saveNewAddress = false;                                               // Disable saving.
+      Serial.println(F("Address saving timeout!"));                         // Debug print.
+    }
+    if(buttonState == 3) {
+      uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
+      newAddress &= 0x3FF;                                                  // Can't be more than 1023.
+      settings.isValid = EEPROM_VALID;                                      // Setup validity flag to struct.
+      settings.canAddress = newAddress;                                     // Setup new can address to struct.
+      if(SaveToEEPROM() == false) {                                         // Save struct to EEPROM.
+        LoadFromEEPROM();                                                   // If not success, load old settings.
+      }
+      CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK); // Setup filter for new CAN address.
+      saveNewAddress = false;                                               // Disable saving.
+      addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
+    }
+  }
+  
+  uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cysle cost.
+  if(cycleCost > cycleCostMax) {                                            // If it is above max.
+    cycleCostMax = cycleCost;                                               // Save the new max.
+    Serial.print(F("Max cost: "));                                          // Debug print.
     Serial.println(cycleCostMax);
   }
-  wdt_reset();                                                          // Reset the watchdog timer.
+
+  wdt_reset();                                                              // Reset the watchdog timer.
 }
 
 void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBValues RGBColor;
-  RGBColor.red = red;
+  RGBColor.red = red;                                                   // Set color values.
   RGBColor.green = green;
   RGBColor.blue = blue;
-  RGBColorBuffer.put(RGBColor);
+  RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
 void sendCanResponse(uint32_t extId, uint8_t data[], uint8_t size) {
