@@ -65,7 +65,6 @@ void setup() {
   else {
     Serial.println(OK_STATE);                                               // If init ok, print OK.
   }
-  //CAN.filter(2023);                                                         // Filter standard CAN IDs.
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   ///////////////////////////////////////////////
@@ -80,7 +79,7 @@ void setup() {
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
-  
+
   canCommandBuffer.put(canCmd::NODE_CMD_IDLE);                              // Set state machine default command.
   canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                          // Set callback state as restarted.
   Serial.println(F("*************************"));                           // Debug prints.
@@ -99,7 +98,7 @@ void loop() {
   if( buttonState > 0 ) {                                                   // Filter unvalid states.
     canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
     buttonEventBuffer.put(buttonState);                                     // Store the button event.
-    canCommandBuffer.put(canCmd::NODE_CMD_GET_BUTTON_EVENT);
+    canCommandBuffer.put(canCmd::NODE_CMD_GET_BUTTON_EVENT);                // Put command to queue.
     Serial.print(F("Button event: "));                                      // Debug prints.
     Serial.println(buttonState);
   }
@@ -186,20 +185,10 @@ void loop() {
         saveNewAddress = true;                                              // Enable saving.
         addToRGBQueue(0, 200, 0);                                           // Turn on RGB LED as green.
         Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
-        /*
-        settings.isValid = EEPROM_VALID;                                    // Setup validity flag to struct.
-        settings.canAddress = newAddress;                                   // Setup new can address to struct.
-        if(SaveToEEPROM() == false) {                                       // Save struct to EEPROM.
-          LoadFromEEPROM();                                                 // If not success, load old settings.
-        }
-        CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK); // Setup filter for new CAN address.
-        */
       }
       else {
         Serial.println(F("Address already used!"));                         // Print if address is already used.
       }
-      //canMsg[0] = lowByte(settings.canAddress);                             // Setup CAN address lowbyte to array.
-      //canMsg[1] = highByte(settings.canAddress);
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
@@ -263,7 +252,7 @@ void loop() {
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
     }
   }
-  
+
   uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cysle cost.
   if(cycleCost > cycleCostMax) {                                            // If it is above max.
     cycleCostMax = cycleCost;                                               // Save the new max.
