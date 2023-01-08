@@ -210,6 +210,13 @@ void loop() {
       }
     } break;
 
+    case canCmd::NODE_CMD_PLAY_MP3: {
+      MP3Player.play(recvData[0]);                                          // Play selected song.
+      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
+        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
+      }
+    } break;
+
     default: {                                                              // Default case.
       Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
     } break;

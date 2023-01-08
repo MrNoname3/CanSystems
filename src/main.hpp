@@ -53,6 +53,7 @@ enum class canCmd : uint8_t {
   NODE_CMD_MOISTURE,                          // Get moisture data.
   NODE_CMD_LDR,                               // Get ldr data.
   NODE_CMD_IRRIGATION,                        // Plant irrigation.
+  NODE_CMD_PLAY_MP3,                          // Play MP3 file.
 
   NODE_CMD_LAST_ELEMENT                       // Last element of enum!
 };
