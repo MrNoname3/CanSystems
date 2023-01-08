@@ -42,7 +42,7 @@ struct Settings {                             // The struct of the settings in t
 void (*resetFunc)(void) = 0;                 // Declare reset function at address 0.
 
 /// @brief General command list for nodes.
-enum class canCmd : uint8_t {
+enum class canCmd : uint16_t {
   NODE_CMD_IDLE = 0,                          // Idle state.
   NODE_CMD_PING,                              // Ping command.
   NODE_CMD_RESET,                             // Node reset command.

@@ -16,7 +16,7 @@ volatile uint8_t canProcess = 0;                                            // O
 uint32_t pingTimer = 0;                                                     // It stores the last ping time.
 const uint16_t pingTime = 1500;                                             // Ping timeot time in ms.
 struct Settings settings;                                                   // Struct of settings.
-CircularBuffer<canCmd, 10> canCommandBuffer;                                // State machine execution queue.
+CircularBuffer<uint16_t, 10> canCommandBuffer;                                // State machine execution queue.
 CircularBuffer<canCb, 10> canCallbackBuffer;                                // Callback message buffer for master.
 
 //--- Maintenance variables ---//
@@ -67,20 +67,13 @@ void setup() {
   }
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
-  ///////////////////////////////////////////////
-  MP3Player.attachRGBController(addToRGBQueue);
-  MP3Player.volume(15);
-  MP3Player.play(1);
-  MP3Player.play(2);
-  MP3Player.play(1);
-  MP3Player.play(3);
-  MP3Player.play(1);
-  ///////////////////////////////////////////////
+  MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
+  MP3Player.volume(15);                                                     // Set MP3 player volume.
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
 
-  canCommandBuffer.put(canCmd::NODE_CMD_IDLE);                              // Set state machine default command.
+  canCommandBuffer.put(static_cast<uint16_t>(canCmd::NODE_CMD_IDLE));       // Set state machine default command.
   canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                          // Set callback state as restarted.
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println("Loop starting...");
@@ -98,7 +91,7 @@ void loop() {
   if( buttonState > 0 ) {                                                   // Filter unvalid states.
     canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
     buttonEventBuffer.put(buttonState);                                     // Store the button event.
-    canCommandBuffer.put(canCmd::NODE_CMD_GET_BUTTON_EVENT);                // Put command to queue.
+    canCommandBuffer.put(static_cast<uint16_t>(canCmd::NODE_CMD_GET_BUTTON_EVENT)); // Put command to queue.
     Serial.print(F("Button event: "));                                      // Debug prints.
     Serial.println(buttonState);
   }
@@ -107,7 +100,7 @@ void loop() {
   uint8_t recvData[8] = { 0 };                                              // We will store the message in this variable.
   uint8_t canMsg[ 8 ] = { 0 };                                              // Response message data.
   uint16_t masterAddress = DEFAULT_MASTER_ADDRESS;                          // Master CAN address.
-  canCmd cmdExec = canCmd::NODE_CMD_IDLE;                                   // Execution command for the state machine.
+  uint16_t cmdExec = static_cast<uint16_t>(canCmd::NODE_CMD_IDLE);          // Execution command for the state machine.
   uint32_t extendedIdOut = 0;                                               // Extended CAN ID to send.
   bool enableCanAnswer = true;                                              // Disable CAN answer, for standard addresses.
 
@@ -123,7 +116,7 @@ void loop() {
     }
 
     if(CAN.packetExtended() == false) {                                     // Handle standard messages as broadcast messages.
-      canCommandBuffer.put(static_cast<canCmd>(CAN.packetId()));            // Put CAN ID in command buffer as command.
+      canCommandBuffer.put(CAN.packetId());                                 // Put CAN ID in command buffer as command.
       enableCanAnswer = false;                                              // Disable answer for broadcast messages.
       return;                                                               // Terminate processing.
     }
@@ -137,7 +130,7 @@ void loop() {
       return;
     }
 
-    canCommandBuffer.put(static_cast<canCmd>(cmd));                         // Put received command to queue.
+    canCommandBuffer.put(cmd);                                              // Put received command to queue.
     pingTimer = millis();                                                   // Ping timer reload.
     LED_L;                                                                  // LED off.
   }  // End of if state (processing CAN).
@@ -151,11 +144,11 @@ void loop() {
 
   switch(cmdExec) {                                                         // Send the command in the switch.
 
-    case canCmd::NODE_CMD_IDLE: {                                           // Idle state.
+    case static_cast<uint16_t>(canCmd::NODE_CMD_IDLE): {                    // Idle state.
 
     } break;
 
-    case canCmd::NODE_CMD_PING: {                                           // Ping command.
+    case static_cast<uint16_t>(canCmd::NODE_CMD_PING): {                    // Ping command.
       if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = static_cast<uint8_t>(canCallbackBuffer.pop());          // Send the callback type to the master.
       }
@@ -164,21 +157,21 @@ void loop() {
       }
     } break;
 
-    case canCmd::NODE_CMD_RESET: {                                          // Reset MCU.
+    case static_cast<uint16_t>(canCmd::NODE_CMD_RESET): {                   // Reset MCU.
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
       resetCMD();                                                           // Call reset function.
     } break;
 
-    case canCmd::NODE_CMD_GET_FW_VERSION: {                                 // Send firmware version to master.
+    case static_cast<uint16_t>(canCmd::NODE_CMD_GET_FW_VERSION): {          // Send firmware version to master.
       memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
     } break;
 
-    case canCmd::NODE_CMD_SETADDRESS: {                                     // Set new CAN address. Response: used address.
+    case static_cast<uint16_t>(canCmd::NODE_CMD_SETADDRESS): {              // Set new CAN address. Response: used address.
       uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
       newAddress &= 0x3FF;                                                  // Can't be more than 1023.
       if(newAddress != settings.canAddress) {                               // Check if new address is equal to old or not.
@@ -194,14 +187,14 @@ void loop() {
       }
     } break;
 
-    case canCmd::NODE_CMD_RGB_LED: {
+    case static_cast<uint16_t>(canCmd::NODE_CMD_RGB_LED): {                 // Add RGB color values to queue.
       addToRGBQueue(recvData[0], recvData[1], recvData[2]);                 // Add color values to queue.
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
       }
     } break;
 
-    case canCmd::NODE_CMD_GET_BUTTON_EVENT: {
+    case static_cast<uint16_t>(canCmd::NODE_CMD_GET_BUTTON_EVENT): {        // Send button event.
       if(buttonEventBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = buttonEventBuffer.pop();                                // Send button event.
       }
@@ -210,7 +203,7 @@ void loop() {
       }
     } break;
 
-    case canCmd::NODE_CMD_PLAY_MP3: {
+    case static_cast<uint16_t>(canCmd::NODE_CMD_PLAY_MP3): {                // Play MP3 song.
       MP3Player.play(recvData[0]);                                          // Play selected song.
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.

@@ -42,6 +42,8 @@ public:
   /// Need to be called periodically.
   void spin(void);
 
+  using DFPlayerMiniFast::printError;
+
 private:
 
   /// @brief Attach interrupt to the given interrupt pin.
