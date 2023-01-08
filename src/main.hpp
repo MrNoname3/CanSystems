@@ -9,12 +9,7 @@
 #include <PushButtonClicks.h>               /// Pushbutton events library.
 #include "CircularBuffer.hpp"               /// Circular buffer class.
 #include "MillisTimer.hpp"                  /// Millisec timer class.
-
-////////////////////////////////////////////////////
-//#include "DFPlayerMiniFast.h"
-//#include <SoftwareSerial.h>
-#include "DFPlayer.hpp"
-////////////////////////////////////////////////////
+#include "DFPlayer.hpp"                     /// MP3 player driver library.
 
 #define RGB_LED_NUM   1                       // 1pcs LED.
 #define CHIP_SET      WS2812B                 // Types of RGB LEDs.

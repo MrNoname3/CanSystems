@@ -67,17 +67,18 @@ void setup() {
   }
   CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
-  MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
-  MP3Player.volume(15);                                                     // Set MP3 player volume.
-
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
 
   canCommandBuffer.put(static_cast<uint16_t>(canCmd::NODE_CMD_IDLE));       // Set state machine default command.
   canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                          // Set callback state as restarted.
+  
+  MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
+  MP3Player.volume(15);                                                     // Set MP3 player volume.
+  
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println("Loop starting...");
-  wdt_enable(WDTO_30MS);                                                    // Enable WDT with a timeout of 1 seconds.
+  wdt_enable(WDTO_30MS);                                                    // Enable WDT timer.
   LED_L;                                                                    // Turn off LED.
 }
 
