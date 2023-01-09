@@ -34,23 +34,26 @@ struct Settings {                             // The struct of the settings in t
   uint16_t canAddress;                        // Variable of CAN address.
 };
 
-void (*resetFunc)(void) = 0;                 // Declare reset function at address 0.
+void (*resetFunc)(void) = 0;                  // Declare reset function at address 0.
 
-/// @brief General command list for nodes.
-enum class canCmd : uint16_t {
-  NODE_CMD_IDLE = 0,                          // Idle state.
-  NODE_CMD_PING,                              // Ping command.
-  NODE_CMD_RESET,                             // Node reset command.
-  NODE_CMD_GET_FW_VERSION,                    // Firmware version command.
-  NODE_CMD_SETADDRESS,                        // CAN address setup.
-  NODE_CMD_RGB_LED,                           // Set WS2812 RGB LED color.
-  NODE_CMD_GET_BUTTON_EVENT,                  // Get button event type.
-  NODE_CMD_MOISTURE,                          // Get moisture data.
-  NODE_CMD_LDR,                               // Get ldr data.
-  NODE_CMD_IRRIGATION,                        // Plant irrigation.
-  NODE_CMD_PLAY_MP3,                          // Play MP3 file.
+/// @brief Base command list for nodes.
+enum class canCmdB : uint16_t {
+  BASE_CMD_IDLE = 0,                          // Idle state.
+  BASE_CMD_PING,                              // Ping command.
+  BASE_CMD_RESET,                             // Node reset command.
+  BASE_CMD_GET_FW_VERSION,                    // Firmware version command.
+  BASE_CMD_SETADDRESS,                        // CAN address setup.
+  BASE_CMD_RGB_LED,                           // Set WS2812 RGB LED color.
+  BASE_CMD_GET_BUTTON_EVENT,                  // Get button event type.
 
-  NODE_CMD_LAST_ELEMENT                       // Last element of enum!
+  BASE_CMD_LAST_ELEMENT                       // Last element of enum!
+};
+
+/// @brief Node type specific extended command list.
+enum class canCmdE : uint16_t {
+  EXT_CMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BASE_CMD_LAST_ELEMENT),   // Play MP3 file.
+
+  EXT_CMD_LAST_ELEMENT                        // Last element of enum!
 };
 
 /// @brief Callback types.
