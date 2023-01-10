@@ -241,6 +241,7 @@ void loop() {
     if(millis() - canAddressSaveTimer >= canAddressSaveTime) {              // Check saving timeout timer.
       saveNewAddress = false;                                               // Disable saving.
       Serial.println(F("Address saving timeout!"));                         // Debug print.
+      addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
     }
     if(buttonState == 3) {
       uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
