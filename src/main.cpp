@@ -75,6 +75,8 @@ void setup() {
 
   MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                     // Set MP3 player volume.
+  MP3Player.play(1);
+  MP3Player.play(1);
 
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println("Loop starting...");

@@ -106,6 +106,9 @@ DFPlayer::DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin
   swSerial.begin(9600);                               // Open software serial port.
   pinMode(this->ENpin, OUTPUT);                       // Set pin modes.
   pinMode(this->INTpin, INPUT_PULLUP);
+  digitalWrite(this->ENpin, LOW);                     // Set pin states.
+  digitalWrite(this->TXpin, LOW);
+  digitalWrite(this->RXpin, LOW);
   DFPlayerMiniFast::begin(swSerial, debug, timeout);  // Call base class constructor.
 }
 
@@ -144,9 +147,10 @@ void DFPlayer::spin(void) {
     } break;
 
     case PlayingStates::TURN_ON: {
-      if(debug == true) { Serial.println(F("TURN_ON")); }       // Debug print.
-      digitalWrite(this->ENpin, HIGH);                          // Turn on device.
+      if(debug == true) { Serial.println(F("TURN_ON")); }       // Debug print.      
       digitalWrite(this->TXpin, HIGH);                          // Set TX line in HIGH state.
+      digitalWrite(this->RXpin, HIGH);                          // Set RX line in HIGH state.
+      digitalWrite(this->ENpin, HIGH);                          // Turn on device.
       bootTimer = millis();                                     // Start timer.
       playingState = PlayingStates::WAIT_FOR_BOOT;              // Set next state.
     } break;
@@ -216,6 +220,7 @@ void DFPlayer::spin(void) {
       if(debug == true) { Serial.println(F("TURN_OFF")); }      // Debug print.
       digitalWrite(this->ENpin, LOW);                           // Turn on device.
       digitalWrite(this->TXpin, LOW);                           // Set TX line in LOW state. (It's noisy.)
+      digitalWrite(this->RXpin, LOW);                           // Set RX line in LOW state. (It's noisy.)
       detachInt();                                              // Detach interrupt.
       enablePlay = false;                                       // Disable interrupt flag.
       if(RGBController != NULL) { RGBController(0, 0, 0); }     // Set RGB LED color.
