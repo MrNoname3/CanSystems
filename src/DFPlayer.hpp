@@ -70,7 +70,7 @@ private:
   };
 
   const uint16_t bootTime = 1000;           // MP3 player boot time.
-  const uint8_t cmdExecTime = 10;           // Command execution time.
+  const uint8_t cmdExecTime = 50;           // Command execution time.
   const uint16_t playDelayTime = 500;       // Time for delay between songs.
   const uint16_t playTimeoutTime = 10000;   // Playing timeout time.
   uint32_t bootTimer = 0;                   // MP3 player boot timer.
