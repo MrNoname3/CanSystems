@@ -127,6 +127,10 @@ void loop() {
       }
     }
     else {
+      if(canID >= static_cast<uint16_t>(canCmdB::BASE_CMD_LAST_ELEMENT)) {  // Check if base commands contains the received one.
+        Serial.println("Unknown broadcast command!");                       // Debug print.
+        return;                                                             // Terminate packet processing.
+      }
       cmd = canID;                                                          // Use CAN ID as command.
       enableCanAnswer = false;                                              // Disable answer for broadcast messages.
     }
