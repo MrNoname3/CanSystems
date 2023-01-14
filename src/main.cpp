@@ -144,7 +144,7 @@ void loop() {
 
   switch(cmdExec) {                                                         // Send the command in the switch.
 
-    case static_cast<uint16_t>(canCmdB::BASE_CMD_IDLE): {                    // Idle state.
+    case static_cast<uint16_t>(canCmdB::BASE_CMD_IDLE): {                   // Idle state.
 
     } break;
 
