@@ -16,6 +16,7 @@ volatile uint8_t canProcess = 0;                                            // O
 uint32_t pingTimer = 0;                                                     // It stores the last ping time.
 const uint16_t pingTime = 1500;                                             // Ping timeot time in ms.
 struct Settings settings;                                                   // Struct of settings.
+uint16_t newCanAddress = 0;                                                 // Store arrived new local CAN address.
 CircularBuffer<uint16_t, 10> canCommandBuffer;                              // State machine execution queue.
 CircularBuffer<canCb, 10> canCallbackBuffer;                                // Callback message buffer for master.
 
@@ -65,7 +66,7 @@ void setup() {
   else {
     Serial.println(OK_STATE);                                               // If init ok, print OK.
   }
-  CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
+  //CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
@@ -108,7 +109,7 @@ void loop() {
   if(canProcess > 0) {                                                      // If the CAN controller interrupted.
     canProcess--;                                                           // Lower value.
     uint8_t recvSize = CAN.parsePacket();                                   // Process CAN message length.
-    uint32_t extendedIdIn = 0;                                              // Received CAN packet extended ID.
+    uint32_t canID = CAN.packetId();                                        // Received CAN packet ID.
     uint16_t localAddress = 0;                                              // Local CAN address.
     uint16_t cmd = 0;                                                       // CAN command.
 
@@ -116,19 +117,18 @@ void loop() {
       CAN.readBytes(recvData, sizeof(recvData));                            // Read the message.
     }
 
-    if(CAN.packetExtended() == false) {                                     // Handle standard messages as broadcast messages.
-      canCommandBuffer.put(CAN.packetId());                                 // Put CAN ID in command buffer as command.
-      enableCanAnswer = false;                                              // Disable answer for broadcast messages.
-      return;                                                               // Terminate processing.
+    if(CAN.packetExtended() == true) {                                      // Handle standard messages as broadcast messages.
+      extIdToData(canID, &masterAddress, &cmd, &localAddress);              // Extract data from ID.
+
+      if(settings.canAddress != localAddress) {                             // Software CAN ID filter. (HW doesn't work properly.)
+        Serial.print(F("SW filter rejected ID: "));                         // Debug print of dropped package.
+        Serial.println(canID);
+        return;
+      }
     }
-
-    extendedIdIn = CAN.packetId();                                          // Set CAN packet extended ID.
-    extIdToData(extendedIdIn, &masterAddress, &cmd, &localAddress);         // Extract data from ID.
-
-    if(settings.canAddress != localAddress) {                               // Software CAN ID filter. (HW doesn't work properly.)
-      Serial.print(F("SW filter rejected ID: "));                           // Debug print of dropped package.
-      Serial.println(extendedIdIn);
-      return;
+    else {
+      cmd = canID;                                                          // Use CAN ID as command.
+      enableCanAnswer = false;                                              // Disable answer for broadcast messages.
     }
 
     canCommandBuffer.put(cmd);                                              // Put received command to queue.
@@ -172,12 +172,13 @@ void loop() {
     } break;
 
     case static_cast<uint16_t>(canCmdB::BASE_CMD_SETADDRESS): {             // Set new CAN address. Response: used address.
-      uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
-      newAddress &= 0x3FF;                                                  // Can't be more than 1023.
-      if(newAddress != settings.canAddress) {                               // Check if new address is equal to old or not.
+      newCanAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));         // 0.->address lowbyte, 1.->address highbyte.
+      newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
+      if(newCanAddress != settings.canAddress) {                            // Check if new address is equal to old or not.
         saveNewAddress = true;                                              // Enable saving.
         addToRGBQueue(0, 200, 0);                                           // Turn on RGB LED as green.
         Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
+        canAddressSaveTimer = millis();                                     // Timer reload.
       }
       else {
         Serial.println(F("Address already used!"));                         // Print if address is already used.
@@ -242,10 +243,8 @@ void loop() {
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
     }
     if(buttonState == 3) {
-      uint16_t newAddress = (uint16_t)(recvData[0] | (recvData[1] << 8));   // 0.->address lowbyte, 1.->address highbyte.
-      newAddress &= 0x3FF;                                                  // Can't be more than 1023.
       settings.isValid = EEPROM_VALID;                                      // Setup validity flag to struct.
-      settings.canAddress = newAddress;                                     // Setup new can address to struct.
+      settings.canAddress = newCanAddress;                                  // Setup new can address to struct.
       if(SaveToEEPROM() == false) {                                         // Save struct to EEPROM.
         LoadFromEEPROM();                                                   // If not success, load old settings.
       }
