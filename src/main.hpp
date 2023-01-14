@@ -38,22 +38,22 @@ void (*resetFunc)(void) = 0;                  // Declare reset function at addre
 
 /// @brief Base command list for nodes.
 enum class canCmdB : uint16_t {
-  BASE_CMD_IDLE = 0,                          // Idle state.
-  BASE_CMD_PING,                              // Ping command.
-  BASE_CMD_RESET,                             // Node reset command.
-  BASE_CMD_GET_FW_VERSION,                    // Firmware version command.
-  BASE_CMD_SETADDRESS,                        // CAN address setup.
-  BASE_CMD_RGB_LED,                           // Set WS2812 RGB LED color.
-  BASE_CMD_GET_BUTTON_EVENT,                  // Get button event type.
+  BCMD_IDLE = 0,                              // Idle state.
+  BCMD_PING,                                  // Ping command.
+  BCMD_RESET,                                 // Node reset command.
+  BCMD_GET_FW_VERSION,                        // Firmware version command.
+  BCMD_SETADDRESS,                            // CAN address setup.
+  BCMD_RGB_LED,                               // Set WS2812 RGB LED color.
+  BCMD_GET_BUTTON_EVENT,                      // Get button event type.
 
-  BASE_CMD_LAST_ELEMENT                       // Last element of enum!
+  BCMD_LAST_ELEMENT                           // Last element of enum!
 };
 
 /// @brief Node type specific extended command list.
 enum class canCmdE : uint16_t {
-  EXT_CMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BASE_CMD_LAST_ELEMENT),   // Play MP3 file.
+  ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
 
-  EXT_CMD_LAST_ELEMENT                        // Last element of enum!
+  ECMD_LAST_ELEMENT                           // Last element of enum!
 };
 
 /// @brief Callback types.
