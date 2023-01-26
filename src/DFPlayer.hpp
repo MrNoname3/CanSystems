@@ -17,11 +17,11 @@ public:
   /// @param INTpin Device playing interrupt pin: LOW->playing.
   /// @param debug Enable debug prints.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
-    bool debug = false, uint32_t timeout = 10);
+  DFPlayer(const uint8_t RXpin_, const uint8_t TXpin_, const uint8_t ENpin, const uint8_t INTpin,
+    const bool debug = false, const uint32_t timeout = 10);
 
   /// @brief Destructor of the object.
-  virtual ~DFPlayer();
+  virtual ~DFPlayer() = default;
 
   /// @brief Set MP3 player volume.
   /// @param volume_ Volume, value: 0-30.
@@ -48,10 +48,10 @@ public:
 private:
 
   /// @brief Attach interrupt to the given interrupt pin.
-  void attachInt(void);
+  void attachInt(void) const ;
 
   /// @brief Detach interrupt from the given interrupt pin.
-  void detachInt(void);
+  void detachInt(void) const ;
 
   /// @brief Handles interrupt.
   static void irqHandler(void);
@@ -96,8 +96,8 @@ private:
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 
-DFPlayer::DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
-  bool debug, uint32_t timeout) : swSerial(RXpin_, TXpin_) {
+DFPlayer::DFPlayer(const uint8_t RXpin_, const uint8_t TXpin_, const uint8_t ENpin, const uint8_t INTpin,
+  const bool debug, const uint32_t timeout) : swSerial(RXpin_, TXpin_) {
 
   this->RXpin = RXpin_;                               // Save given pin numbers.
   this->TXpin = TXpin_;
@@ -111,10 +111,6 @@ DFPlayer::DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin
   digitalWrite(this->TXpin, LOW);
   digitalWrite(this->RXpin, LOW);
   DFPlayerMiniFast::begin(swSerial, debug, timeout);  // Call base class constructor.
-}
-
-DFPlayer::~DFPlayer() {
-
 }
 
 void DFPlayer::volume(uint8_t volume_) {
@@ -235,14 +231,14 @@ void DFPlayer::irqHandler(void) {
   enablePlay = true;                                            // Set interrupt flag variable.
 }
 
-void DFPlayer::attachInt(void) {
+void DFPlayer::attachInt(void) const {
   // Clear interrupt flag, because it stores the interrupt event, even it is not attached.
   bitSet(EIFR, digitalPinToInterrupt(INTpin));
   // Attach interrupt to the given pin.
   attachInterrupt(digitalPinToInterrupt(INTpin), irqHandler, RISING);
 }
 
-void DFPlayer::detachInt(void) {
+void DFPlayer::detachInt(void) const {
   // Detach interrupt from the given pin.
   detachInterrupt(digitalPinToInterrupt(INTpin));
 }

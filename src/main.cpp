@@ -91,7 +91,7 @@ void loop() {
   //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));  // Check button actual state.
   if( buttonState > 0 ) {                                                   // Filter unvalid states.
-    canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
+    //canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
     buttonEventBuffer.put(buttonState);                                     // Store the button event.
     canCommandBuffer.put(static_cast<uint16_t>(canCmdB::BCMD_GET_BUTTON_EVENT)); // Put command to queue.
     Serial.print(F("Button event: "));                                      // Debug prints.
@@ -154,7 +154,9 @@ void loop() {
 
     case static_cast<uint16_t>(canCmdB::BCMD_PING): {                       // Ping command.
       if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
-        canMsg[0] = static_cast<uint8_t>(canCallbackBuffer.pop());          // Send the callback type to the master.
+        uint16_t cbNum = static_cast<uint16_t>(canCallbackBuffer.pop());    // Get callback number.
+        canMsg[0] = lowByte(cbNum);                                         // Send the callback type to the master.
+        canMsg[1] = highByte(cbNum);
       }
       if(enableCanAnswer == true) {                                         // Check if answering is enabled.
         sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
@@ -268,7 +270,7 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
-void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
+void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBValues RGBColor;
   RGBColor.red = red;                                                   // Set color values.
   RGBColor.green = green;
@@ -276,7 +278,7 @@ void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
-void sendCanResponse(uint32_t extId, uint8_t data[], uint8_t size) {
+void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size) {
   CAN.beginExtendedPacket(extId);                                       // Set extended ID.
   CAN.write(data, size);                                                // Set data.
   CAN.endPacket();                                                      // Send packet.

@@ -57,11 +57,11 @@ enum class canCmdE : uint16_t {
 };
 
 /// @brief Callback types.
-enum class canCb : uint8_t {
+enum class canCb : uint16_t {
   NODE_CB_IDLE = 0,                           // No event state.
   NODE_CB_RESTARTED,                          // Node restarted.
   NODE_CB_ERROR,                              // Error type callback.
-  NODE_CB_BUTTON_EVENT,                       // Button pressed on node callback.
+  //NODE_CB_BUTTON_EVENT,                       // Button pressed on node callback.
 
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
@@ -77,14 +77,14 @@ struct RGBValues {
 /// @param red Value of red color: 0-255.
 /// @param green Value of green color: 0-255.
 /// @param blue Value of blue color: 0-255.
-void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue);
+void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
 
 /// @brief Disable answer to standard CAN IDs,
 /// because it is a broadcast message for all nodes.
 /// @param extId Extended CAN ID.
 /// @param data Data array to be send.
 /// @param size Size of data array. Maximum 8 byte.
-void sendCanResponse(uint32_t extId, uint8_t data[], uint8_t size);
+void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size);
 
 /// @brief Reset the MCU.
 void resetCMD(void);
