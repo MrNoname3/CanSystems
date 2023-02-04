@@ -1,5 +1,6 @@
-#ifndef __DFPLAYER_HPP__
-#define __DFPLAYER_HPP__
+#ifndef DFPLAYER_HPP
+#define DFPLAYER_HPP
+
 #include <SoftwareSerial.h>                 /// Arduino software serial lib.
 #include "DFPlayerMiniFast.h"               /// DFPlayerMini driver lib.
 #include "CircularBuffer.hpp"               /// Circular buffer class.
@@ -17,8 +18,8 @@ public:
   /// @param INTpin Device playing interrupt pin: LOW->playing.
   /// @param debug Enable debug prints.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(const uint8_t RXpin_, const uint8_t TXpin_, const uint8_t ENpin, const uint8_t INTpin,
-    const bool debug = false, const uint32_t timeout = 10);
+  DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
+    bool debug = false, uint32_t timeout = 10);
 
   /// @brief Destructor of the object.
   virtual ~DFPlayer() = default;
@@ -36,25 +37,30 @@ public:
   void attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t));
 
   /// @brief Detach the RGB LED controller function.
-  void detachRGBController(void);
+  void detachRGBController();
 
   /// @brief Handles the state machine for playing.
   /// Need to be called periodically.
-  void spin(void);
+  void spin();
 
   /// @brief Print occured errors.
   using DFPlayerMiniFast::printError;
 
+  DFPlayer(const DFPlayer&) = delete;                       // Define copy constructor.
+  DFPlayer& operator=(const DFPlayer&) = delete;            // Define copy assignment operator.
+  DFPlayer(DFPlayer&&) = delete;                            // Define move constructor.
+  DFPlayer& operator=(DFPlayer&&) = delete;                 // Define move assignment operator.
+
 private:
 
   /// @brief Attach interrupt to the given interrupt pin.
-  void attachInt(void) const ;
+  void attachInt() const ;
 
   /// @brief Detach interrupt from the given interrupt pin.
-  void detachInt(void) const ;
+  void detachInt() const ;
 
   /// @brief Handles interrupt.
-  static void irqHandler(void);
+  static void irqHandler();
 
   /// @brief State machine states for playing.
   enum class PlayingStates : uint8_t {
@@ -88,16 +94,16 @@ private:
   bool debug = false;                       // Enable debug prints.
   static volatile bool enablePlay;          // Interrupt flag. If true, device is ready to play.
 
-  PlayingStates playingState = PlayingStates::IDLE;         // Set state for state machine.
-  CircularBuffer<uint16_t, 10> playingQueue;                // MP3 playing queue.
-  void (*RGBController)(uint8_t, uint8_t, uint8_t) = NULL;  // RGB LED controller function pointer.
+  PlayingStates playingState = PlayingStates::IDLE;             // Set state for state machine.
+  CircularBuffer<uint16_t, 10> playingQueue;                    // MP3 playing queue.
+  void (*RGBController)(uint8_t, uint8_t, uint8_t) = nullptr;   // RGB LED controller function pointer.
 
 };  // End of class definition.
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 
-DFPlayer::DFPlayer(const uint8_t RXpin_, const uint8_t TXpin_, const uint8_t ENpin, const uint8_t INTpin,
-  const bool debug, const uint32_t timeout) : swSerial(RXpin_, TXpin_) {
+DFPlayer::DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
+  bool debug, uint32_t timeout) : swSerial(RXpin_, TXpin_) {
 
   this->RXpin = RXpin_;                               // Save given pin numbers.
   this->TXpin = TXpin_;
@@ -120,18 +126,18 @@ void DFPlayer::volume(uint8_t volume_) {
 
 void DFPlayer::play(uint16_t song) {
   song &= 9999;                                       // Protect variable from high value.
-  playingQueue.put(song);                             // Put value to playing queue.
+  this->playingQueue.put(song);                       // Put value to playing queue.
 }
 
 void DFPlayer::attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t)) {
   this->RGBController = RGBController;                // Store controller function pointer locally.
 }
 
-void DFPlayer::detachRGBController(void) {
+void DFPlayer::detachRGBController() {
   this->RGBController = NULL;                         // Clear locally stored controller function pointer.
 }
 
-void DFPlayer::spin(void) {
+void DFPlayer::spin() {
 
   switch(playingState) {
 
@@ -227,21 +233,21 @@ void DFPlayer::spin(void) {
   }
 }
 
-void DFPlayer::irqHandler(void) {
+void DFPlayer::irqHandler() {
   enablePlay = true;                                            // Set interrupt flag variable.
 }
 
-void DFPlayer::attachInt(void) const {
+void DFPlayer::attachInt() const {
   // Clear interrupt flag, because it stores the interrupt event, even it is not attached.
   bitSet(EIFR, digitalPinToInterrupt(INTpin));
   // Attach interrupt to the given pin.
   attachInterrupt(digitalPinToInterrupt(INTpin), irqHandler, RISING);
 }
 
-void DFPlayer::detachInt(void) const {
+void DFPlayer::detachInt() const {
   // Detach interrupt from the given pin.
   detachInterrupt(digitalPinToInterrupt(INTpin));
 }
 
 
-#endif
+#endif // DFPLAYER_HPP

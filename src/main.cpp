@@ -45,12 +45,13 @@ void setup() {
   pinMode(LED, OUTPUT);                                                     // LED pin -> output.
   pinMode(CAN_INT, INPUT_PULLUP);                                           // CAN_INT pin -> input with pullup.
   pinMode(BUTTON, INPUT_PULLUP);                                            // Button pin -> input with pullup.
+  pinMode(CHARGE, OUTPUT);                                                  // Charge enable pin -> output.
 
   LED_H;                                                                    // Turn on LED.
   Serial.println(F("*************************"));
   Serial.println(F("Starting..."));                                         // Serial debug print.
   Serial.print(F("FW: "));
-  Serial.println(SW_VERSION);
+  Serial.println(F(SW_VERSION));
 
   FastLED.addLeds<CHIP_SET, RGB_PIN, COLOR_CODE>(rgbLeds, RGB_LED_NUM);     // Setup LED strip.
   FastLED.clear();                                                          // Clear LEDs
@@ -60,13 +61,13 @@ void setup() {
 
   Serial.print(F("CAN"));                                                   // Serial debug print.
   CAN.setClockFrequency(8e6);                                               // SPI CAN controller runs from 8MHz crystal.
-  if(CAN.begin(500E3) == false) {                                           // Set CAN speed to 500Kb/s.
+  if(!static_cast<bool>(CAN.begin(500E3))) {                                // Set CAN speed to 500Kb/s.
     Serial.println(ERR_STATE);                                              // If can't init CAN controller, print ERROR.
   }
   else {
     Serial.println(OK_STATE);                                               // If init ok, print OK.
   }
-  //CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
+  CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK);     // Setup extended CAN ID filtering.
 
   analogReference(DEFAULT);                                                 // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);  // Setup interrupt pin for CAN controller.
@@ -78,7 +79,7 @@ void setup() {
   MP3Player.volume(15);                                                     // Set MP3 player volume.
 
   Serial.println(F("*************************"));                           // Debug prints.
-  Serial.println("Loop starting...");
+  Serial.println(F("Loop starting..."));
   wdt_enable(WDTO_30MS);                                                    // Enable WDT timer.
   LED_L;                                                                    // Turn off LED.
 }
@@ -90,8 +91,7 @@ void loop() {
 
   //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));  // Check button actual state.
-  if( buttonState > 0 ) {                                                   // Filter unvalid states.
-    //canCallbackBuffer.put(canCb::NODE_CB_BUTTON_EVENT);                     // Store the CAN callback.
+  if(buttonState > 0) {                                                     // Filter unvalid states.
     buttonEventBuffer.put(buttonState);                                     // Store the button event.
     canCommandBuffer.put(static_cast<uint16_t>(canCmdB::BCMD_GET_BUTTON_EVENT)); // Put command to queue.
     Serial.print(F("Button event: "));                                      // Debug prints.
@@ -100,11 +100,10 @@ void loop() {
 
   //--- Processing CAN messages ---//
   uint8_t recvData[8] = { 0 };                                              // We will store the message in this variable.
-  uint8_t canMsg[ 8 ] = { 0 };                                              // Response message data.
+  uint8_t canMsg[8] = { 0 };                                                // Response message data.
   uint16_t masterAddress = DEFAULT_MASTER_ADDRESS;                          // Master CAN address.
   uint16_t cmdExec = static_cast<uint16_t>(canCmdB::BCMD_IDLE);             // Execution command for the state machine.
   uint32_t extendedIdOut = 0;                                               // Extended CAN ID to send.
-  bool enableCanAnswer = true;                                              // Disable CAN answer, for standard addresses.
 
   if(canProcess > 0) {                                                      // If the CAN controller interrupted.
     canProcess--;                                                           // Lower value.
@@ -127,12 +126,7 @@ void loop() {
       }
     }
     else {
-      if(canID >= static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT)) {      // Check if base commands contains the received one.
-        Serial.println("Unknown broadcast command!");                       // Debug print.
-        return;                                                             // Terminate packet processing.
-      }
-      cmd = canID;                                                          // Use CAN ID as command.
-      enableCanAnswer = false;                                              // Disable answer for broadcast messages.
+      Serial.println(F("Standard CAN message dropped"));
     }
 
     canCommandBuffer.put(cmd);                                              // Put received command to queue.
@@ -158,23 +152,17 @@ void loop() {
         canMsg[0] = lowByte(cbNum);                                         // Send the callback type to the master.
         canMsg[1] = highByte(cbNum);
       }
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_RESET): {                      // Reset MCU.
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
       resetCMD();                                                           // Call reset function.
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_GET_FW_VERSION): {             // Send firmware version to master.
       memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_SETADDRESS): {                 // Set new CAN address. Response: used address.
@@ -189,33 +177,24 @@ void loop() {
       else {
         Serial.println(F("Address already used!"));                         // Print if address is already used.
       }
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_RGB_LED): {                    // Add RGB color values to queue.
       addToRGBQueue(recvData[0], recvData[1], recvData[2]);                 // Add color values to queue.
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_GET_BUTTON_EVENT): {           // Send button event.
       if(buttonEventBuffer.isEmpty() == false) {                            // Check if callback needed.
         canMsg[0] = buttonEventBuffer.pop();                                // Send button event.
       }
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
     case static_cast<uint16_t>(canCmdE::ECMD_PLAY_MP3): {                   // Play MP3 song.
       MP3Player.play((uint16_t)(recvData[0] | (recvData[1] << 8)));         // Add selected song to queue.
       MP3Player.volume(recvData[2]);                                        // Set volume.
-      if(enableCanAnswer == true) {                                         // Check if answering is enabled.
-        sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));             // Send answer.
-      }
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
     default: {                                                              // Default case.
@@ -234,7 +213,7 @@ void loop() {
   }
 
   //--- Handling timers ---//
-  if((millis() - pingTimer ) >= pingTime) {                                 // Check if ping timer is expired.
+  if(millis() - pingTimer >= pingTime) {                                    // Check if ping timer is expired.
     LED_H;                                                                  // If yes, turn on the LED.
   }
 
@@ -242,7 +221,7 @@ void loop() {
   MP3Player.spin();                                                         // Take care of playing queue.
 
   //--- Maintenance ---//
-  if(saveNewAddress == true) {                                              // Check if saving is enabled.
+  if(saveNewAddress) {                                                      // Check if saving is enabled.
     if(millis() - canAddressSaveTimer >= canAddressSaveTime) {              // Check saving timeout timer.
       saveNewAddress = false;                                               // Disable saving.
       Serial.println(F("Address saving timeout!"));                         // Debug print.
@@ -251,7 +230,7 @@ void loop() {
     if(buttonState == 3) {
       settings.isValid = EEPROM_VALID;                                      // Setup validity flag to struct.
       settings.canAddress = newCanAddress;                                  // Setup new can address to struct.
-      if(SaveToEEPROM() == false) {                                         // Save struct to EEPROM.
+      if(!SaveToEEPROM()) {                                                 // Save struct to EEPROM.
         LoadFromEEPROM();                                                   // If not success, load old settings.
       }
       CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK); // Setup filter for new CAN address.
@@ -270,7 +249,7 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
-void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
+void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBValues RGBColor;
   RGBColor.red = red;                                                   // Set color values.
   RGBColor.green = green;
@@ -278,19 +257,19 @@ void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
-void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size) {
+void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size) {
   CAN.beginExtendedPacket(extId);                                       // Set extended ID.
   CAN.write(data, size);                                                // Set data.
   CAN.endPacket();                                                      // Send packet.
 }
 
-void resetCMD(void) {
-  Serial.println("Restarting...");
+void resetCMD() {
+  Serial.println(F("Restarting..."));
   Serial.flush();                                                       // Sends out data from serial buffer, before reset.
   resetFunc();                                                          // Call reset function.
 }
 
-void LoadFromEEPROM(void) {
+void LoadFromEEPROM() {
   EEPROM.get(0, settings);                                // Reading data from EEPROM to settings struct.
   if(settings.isValid == EEPROM_VALID) {                  // If can address is valid, use it.
     Serial.print(SAVED_STATE);                            // Print saved mark.
@@ -303,37 +282,38 @@ void LoadFromEEPROM(void) {
   Serial.println(settings.canAddress);
 }
 
-bool SaveToEEPROM(void) {
+bool SaveToEEPROM() {
+  bool ret = false;                                       // Return value.
   const uint16_t cooldownTime = 10000;                    // EEPROM write cooldown time.
   static uint32_t cooldownTimer = 0;                      // Cooldown timer.
   static bool firstRun = true;                            // Allow first change without cooldown.
-  if((millis() - cooldownTimer > cooldownTime) || (firstRun == true)) {  // Timer expiration check.
+  if((millis() - cooldownTimer > cooldownTime) || firstRun) {  // Timer expiration check.
     cooldownTimer = millis();                             // Reload timer.
     EEPROM.put(0, settings);                              // Save settings struct to EEPROM.
     Serial.println(F("Saved!"));                          // Debug print.
     firstRun = false;
-    return true;                                          // Return true.
+    ret =  true;                                          // Set return value.
   }
   else {                                                  // If EEPROM write is on cooldown,
     Serial.println(F("Not saved! EEPROM cooldown!"));     // print it
-    return false;                                         // and return false.
   }
+  return ret;                                             // Return with the result.
 }
 
-uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to) {
+uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to_) {
   from &= 0x3FF;                                          // 10bit
   cmd &= 0x1FF;                                           // 9bit
-  to &= 0x3FF;                                            // 10bit
-  return (uint32_t)(((uint32_t)from << 0) | ((uint32_t)cmd << 10) | ((uint32_t)to << 19));
+  to_ &= 0x3FF;                                           // 10bit
+  return (uint32_t)(((uint32_t)from << 0) | ((uint32_t)cmd << 10) | ((uint32_t)to_ << 19));
 }
 
-void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to) {
+void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to_) {
   extId &= 0x1fffffff;                                    // 29bit
   *from = (uint16_t)((extId >> 0) & 0x3FF);               // 10bit
   *cmd = (uint16_t)((extId >> 10) & 0x1FF);               // 9bit
-  *to = (uint16_t)((extId >> 19) & 0x3FF);                // 10bit
+  *to_ = (uint16_t)((extId >> 19) & 0x3FF);               // 10bit
 }
 
-void canIrqHandler(void) {                                // CAN controller iterrupt rutin handler.
+void canIrqHandler() {                                    // CAN controller iterrupt rutin handler.
   canProcess++;                                           // Count incoming packets.
 }

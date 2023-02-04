@@ -1,5 +1,5 @@
-#ifndef __MAIN_HPP__
-#define __MAIN_HPP__
+#ifndef MAIN_HPP
+#define MAIN_HPP
 
 #include <Arduino.h>                        /// Arduino libraries header.
 #include <CAN.h>                            /// SPI CAN controller library.
@@ -8,7 +8,6 @@
 #include <FastLED.h>                        /// WS2812 LED driver library.
 #include <PushButtonClicks.h>               /// Pushbutton events library.
 #include "CircularBuffer.hpp"               /// Circular buffer class.
-#include "MillisTimer.hpp"                  /// Millisec timer class.
 #include "DFPlayer.hpp"                     /// MP3 player driver library.
 
 #define RGB_LED_NUM   1                       // 1pcs LED.
@@ -23,6 +22,7 @@
 #define DFP_BUSY  3                           // DFPlayer busy pin.
 #define DFP_TX    5                           // DFPlayer serial RX pin.
 #define DFP_RX    6                           // DFPlayer serial TX pin.
+#define CHARGE    17                          // Capacitor charge enable pin. (A3)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.
@@ -34,7 +34,7 @@ struct Settings {                             // The struct of the settings in t
   uint16_t canAddress;                        // Variable of CAN address.
 };
 
-void (*resetFunc)(void) = 0;                  // Declare reset function at address 0.
+void (*resetFunc)() = nullptr;                // Declare reset function at address 0.
 
 /// @brief Base command list for nodes.
 enum class canCmdB : uint16_t {
@@ -61,7 +61,6 @@ enum class canCb : uint16_t {
   NODE_CB_IDLE = 0,                           // No event state.
   NODE_CB_RESTARTED,                          // Node restarted.
   NODE_CB_ERROR,                              // Error type callback.
-  //NODE_CB_BUTTON_EVENT,                       // Button pressed on node callback.
 
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
@@ -77,40 +76,40 @@ struct RGBValues {
 /// @param red Value of red color: 0-255.
 /// @param green Value of green color: 0-255.
 /// @param blue Value of blue color: 0-255.
-void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
+void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue);
 
 /// @brief Disable answer to standard CAN IDs,
 /// because it is a broadcast message for all nodes.
 /// @param extId Extended CAN ID.
 /// @param data Data array to be send.
 /// @param size Size of data array. Maximum 8 byte.
-void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size);
+void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size);
 
 /// @brief Reset the MCU.
-void resetCMD(void);
+void resetCMD();
 
 /// @brief Load saved data from EEPROM to settings structure.
-void LoadFromEEPROM(void);
+void LoadFromEEPROM();
 
 /// @brief Save data to EEPROM from the settings structure.
-bool SaveToEEPROM(void);
+bool SaveToEEPROM();
 
 /// @brief Converts the given data to extended CAN ID.
 /// @param from Sender address.
 /// @param cmd Command from sender.
-/// @param to Target address.
+/// @param to_ Target address.
 /// @return Returns with the CAN address.
-uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to);
+uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to_);
 
 /// @brief Converts the given extended CAN ID to addresses and command variable.
 /// @param extId Extended CAN ID.
 /// @param from Pointer to sender address variable.
 /// @param cmd Pointer to command variable.
-/// @param to Pointer to target address variable.
-void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to);
+/// @param to_ Pointer to target address variable.
+void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to_);
 
 /// @brief Handles the interrupts from the SPI CAN controller.
-void canIrqHandler(void);
+void canIrqHandler();
 
 
-#endif
+#endif // MAIN_HPP
