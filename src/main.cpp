@@ -1,16 +1,5 @@
 #include "main.hpp"
 
-//--- Constants ---//
-#define SW_VERSION "V1.0.0"                                                 // Actual software version.
-#define EEPROM_VALID 231                                                    // EEPROM validity check.
-#define DEFAULT_LOCAL_ADDRESS 444                                           // Node default address if no saved available.
-#define DEFAULT_MASTER_ADDRESS 10                                           // Default CAN master address.
-#define CAN_MASK 0x1FF80000                                                 // CAN extended ID mask.
-#define OK_STATE " [ OK ]"                                                  // OK status.
-#define ERR_STATE " [ ERR ]"                                                // Error status.
-#define SAVED_STATE "[S] "                                                  // Saved data mark.
-#define DEFAULT_STATE "[D] "                                                // Default data mark.
-
 //--- Variables ---//
 volatile uint8_t canProcess = 0;                                            // On CAN interrupt, it counts incoming packets.
 uint32_t pingTimer = 0;                                                     // It stores the last ping time.
