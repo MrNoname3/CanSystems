@@ -21,10 +21,11 @@ CircularBuffer<uint16_t, 10> canCommandBuffer;                              // S
 CircularBuffer<canCb, 10> canCallbackBuffer;                                // Callback message buffer for master.
 
 //--- Maintenance variables ---//
-uint8_t cycleCostMax = 0;                                                   // Calculate and store max loop cost.
+uint8_t cycleCostMax = 2;                                                   // Calculate and store max loop cost.
 constexpr uint16_t canAddressSaveTime = 30 * 1000;                          // Save new CAN address timeout time.
 uint32_t canAddressSaveTimer = 0;                                           // Save new CAN address timeout timer.
 bool saveNewAddress = false;                                                // Enable saving new CAN address.
+uint16_t errorCode = 0;                                                     // Store occured error codes.
 
 //--- WS2812 RGB LED ---//
 CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
@@ -37,6 +38,11 @@ CircularBuffer<uint8_t, 10> buttonEventBuffer;                              // S
 //--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // Object to handle MP3 player device.
 
+//--- Temperature and humidity ---//
+SI7021 si7021;                                                              // I2C humidity and temperature sensor driver.
+int16_t temperature = 0;                                                    // Temperature value.
+uint16_t humidity = 0;                                                      // Humidity value.
+
 //--- Setup section ---//
 void setup() {
   wdt_disable();                                                            // Disable WDT (Watchdog timer).
@@ -45,7 +51,9 @@ void setup() {
   pinMode(LED, OUTPUT);                                                     // LED pin -> output.
   pinMode(CAN_INT, INPUT_PULLUP);                                           // CAN_INT pin -> input with pullup.
   pinMode(BUTTON, INPUT_PULLUP);                                            // Button pin -> input with pullup.
-  pinMode(CHARGE, OUTPUT);                                                  // Charge enable pin -> output.
+  pinMode(CHARGE_PIN, OUTPUT);                                              // Charge enable pin -> output.
+  NOP;
+  digitalWrite(CHARGE_PIN, HIGH);                                           // Turn ON charging.
 
   LED_H;                                                                    // Turn on LED.
   Serial.println(F("*************************"));
@@ -63,6 +71,7 @@ void setup() {
   CAN.setClockFrequency(8e6);                                               // SPI CAN controller runs from 8MHz crystal.
   if(!static_cast<bool>(CAN.begin(500E3))) {                                // Set CAN speed to 500Kb/s.
     Serial.println(ERR_STATE);                                              // If can't init CAN controller, print ERROR.
+    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_INIT));      // Set error flag.
   }
   else {
     Serial.println(OK_STATE);                                               // If init ok, print OK.
@@ -77,6 +86,18 @@ void setup() {
 
   MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                     // Set MP3 player volume.
+
+  Serial.print(F("HumTemp"));                                               // Serial debug print.
+  if(si7021.begin()) {                                                      // Initialize the I2C sensors and ping them.
+    Serial.println(OK_STATE);                                               // If init ok, print OK.
+  }
+  else {
+    Serial.println(ERR_STATE);                                              // If can't init, print ERROR.
+    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_SENSOR_INIT));  // Set error flag.
+  }
+  Wire.setClock(400000);                                                    // Set I2C bus speed.
+  Wire.setWireTimeout(10000, true);                                         // Set I2C timeout to 10ms.
+  si7021.setPrecision(0x81),                                                // Set humtemp sensor reading resolution.
 
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println(F("Loop starting..."));
@@ -170,6 +191,7 @@ void loop() {
       newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
       if(newCanAddress != settings.canAddress) {                            // Check if new address is equal to old or not.
         saveNewAddress = true;                                              // Enable saving.
+        MP3Player.detachRGBController();                                    // Prevent RGB state overwrite.
         addToRGBQueue(0, 200, 0);                                           // Turn on RGB LED as green.
         Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
         canAddressSaveTimer = millis();                                     // Timer reload.
@@ -199,6 +221,7 @@ void loop() {
 
     default: {                                                              // Default case.
       Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
+      bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
     } break;
 
   }  // End of switch.
@@ -214,9 +237,13 @@ void loop() {
 
   //--- Handling timers ---//
   if(millis() - pingTimer >= pingTime) {                                    // Check if ping timer is expired.
-    LED_H;                                                                  // If yes, turn on the LED.
+    LED_H;                                                                  // If yes, turn on the LED.  
   }
-
+  
+  //--- Handle temperature and humidity sensors ---//
+  handleHumTempSensor();                                                    // Call I2C sensor handler.    
+  handleCharging();                                                         // Call external sensor handler.
+  
   //--- Handling MP3 player ---//
   MP3Player.spin();                                                         // Take care of playing queue.
 
@@ -226,6 +253,7 @@ void loop() {
       saveNewAddress = false;                                               // Disable saving.
       Serial.println(F("Address saving timeout!"));                         // Debug print.
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
+      MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
     }
     if(buttonState == 3) {
       settings.isValid = EEPROM_VALID;                                      // Setup validity flag to struct.
@@ -236,6 +264,7 @@ void loop() {
       CAN.filterExtended(dataToExtId(0, 0, settings.canAddress), CAN_MASK); // Setup filter for new CAN address.
       saveNewAddress = false;                                               // Disable saving.
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
+      MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
     }
   }
 
@@ -249,6 +278,80 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
+void handleHumTempSensor() {
+  static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
+  static uint32_t sensorReadingTimer = 0;                                   // Sensor reading timer.
+  
+  switch(sensorState) {
+    case si7021States::IDLE : {
+      if(millis() - sensorReadingTimer >= 60000) {                          // Check timer.
+        sensorState = si7021States::READ_TEMPERATURE;                       // Set new state.
+        sensorReadingTimer = millis();                                      // Reload timer.
+      }
+    } break;
+
+    case si7021States::READ_TEMPERATURE: {        
+      temperature = si7021.getCelsiusHundredths();                          // Read temperature.
+      Serial.println(float(temperature) / 100); //TODO: delete this line after debug.
+      sensorState = si7021States::READ_HUMIDITY;                            // Set new state.
+    } break;
+
+    case si7021States::READ_HUMIDITY: {
+      humidity = si7021.getHumidityPercent();                               // Read humidity.
+      Serial.println(humidity); //TODO: delete this line after debug.
+      sensorState = si7021States::IDLE;                                     // Set new state.
+    } break;
+
+    default: {
+      sensorState = si7021States::IDLE;                                     // Set new state.
+    } break;
+  }
+
+  if(Wire.getWireTimeoutFlag()) {
+    temperature = 0;                                                        // Delete (possible) unvalid value.
+    humidity = 0;                                                           // Delete (possible) unvalid value.
+    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_READ_TIMEOUT));  // Set error flag.
+    Wire.clearWireTimeoutFlag();                                            // Clear I2C timeout flag.
+    Serial.println(F("I2C timeout occured!"));                              // Debug print.
+  }
+}
+
+void handleCharging() {
+  static Charging charging = Charging::START;                               // Capacitor charging state.
+  static uint32_t chargeControlTimer = millis();                            // Capacitor charge control timer.
+
+  switch(charging) {
+    case Charging::START: {                                                 // Capacitor initial charging state.
+      if(millis() - chargeControlTimer >= 300000) {                         // Check timer.
+        digitalWrite(CHARGE_PIN, LOW);                                      // Disable charging.
+        charging = Charging::DISCHARGE;                                     // Set next state.
+        chargeControlTimer = millis();                                      // Reload timer.
+      }
+    } break;
+    
+    case Charging::CHARGE: {                                                // Capacitor charging state.
+      if(millis() - chargeControlTimer >= 120000) {                         // Check timer.
+        digitalWrite(CHARGE_PIN, LOW);                                      // Disable charging.
+        charging = Charging::DISCHARGE;                                     // Set next state.
+        chargeControlTimer = millis();                                      // Reload timer.
+      }
+    } break;
+
+    case Charging::DISCHARGE: {                                             // Capacitor discharging state.
+      if(millis() - chargeControlTimer >= 900000) {                         // Check timer.
+        digitalWrite(CHARGE_PIN, HIGH);                                     // Enable charging.
+        charging = Charging::CHARGE;                                        // Set next state.
+        chargeControlTimer = millis();                                      // Reload timer.
+      }
+    } break;
+
+    default: {                                                              // Default state.
+      charging = Charging::START;                                           // Set next state.
+      chargeControlTimer = millis();                                        // Reload timer.
+    } break;
+  }
+}
+
 void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBValues RGBColor;
   RGBColor.red = red;                                                   // Set color values.
@@ -258,9 +361,12 @@ void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size) {
-  CAN.beginExtendedPacket(extId);                                       // Set extended ID.
-  CAN.write(data, size);                                                // Set data.
-  CAN.endPacket();                                                      // Send packet.
+  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET), 
+    !CAN.beginExtendedPacket(extId));                                   // Set extended ID.
+  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),
+    !CAN.write(data, size));                                            // Set data.
+  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ENDPACKET),
+    !CAN.endPacket());                                                  // Send packet.
 }
 
 void resetCMD() {

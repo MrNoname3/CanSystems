@@ -9,20 +9,21 @@
 #include <PushButtonClicks.h>               /// Pushbutton events library.
 #include "CircularBuffer.hpp"               /// Circular buffer class.
 #include "DFPlayer.hpp"                     /// MP3 player driver library.
+#include <SI7021.h>                         /// Temperature and humidity sensor driver.
 
 #define RGB_LED_NUM   1                       // 1pcs LED.
 #define CHIP_SET      WS2812B                 // Types of RGB LEDs.
 #define COLOR_CODE    GRB                     // Sequence of colors in data stream.
 
-#define RGB_PIN   7                           // LED DATA PIN
-#define LED       4                           // Pin of the LED.
-#define CAN_INT   2                           // Interrupt pin of the SPI CAN controller.
-#define BUTTON    8                           // Pushbutton pin.
-#define DFP_EN    9                           // DFPlayer switch pin.
-#define DFP_BUSY  3                           // DFPlayer busy pin.
-#define DFP_TX    5                           // DFPlayer serial RX pin.
-#define DFP_RX    6                           // DFPlayer serial TX pin.
-#define CHARGE    17                          // Capacitor charge enable pin. (A3)
+#define RGB_PIN     7                         // LED DATA PIN
+#define LED         4                         // Pin of the LED.
+#define CAN_INT     2                         // Interrupt pin of the SPI CAN controller.
+#define BUTTON      8                         // Pushbutton pin.
+#define DFP_EN      9                         // DFPlayer switch pin.
+#define DFP_BUSY    3                         // DFPlayer busy pin.
+#define DFP_TX      5                         // DFPlayer serial RX pin.
+#define DFP_RX      6                         // DFPlayer serial TX pin.
+#define CHARGE_PIN  17                        // Capacitor charge enable pin. (A3)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.
@@ -52,6 +53,8 @@ enum class canCmdB : uint16_t {
 /// @brief Node type specific extended command list.
 enum class canCmdE : uint16_t {
   ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
+  ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
+  ECMD_READ_HUMTEMP,                          // Read humidity and temperature. 
 
   ECMD_LAST_ELEMENT                           // Last element of enum!
 };
@@ -65,12 +68,50 @@ enum class canCb : uint16_t {
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
 
+/// @brief Error types.
+enum class errorTypes : uint8_t {
+  ERR_I2C_READ_TIMEOUT = 0,                   // I2C read timeout.
+  ERR_I2C_SENSOR_INIT,                        // I2C sensor init failed.
+  ERR_CAN_INIT,                               // CAN init failed.
+  ERR_CAN_ID_SET,                             // CAN ID setup method failed.
+  ERR_CAN_DATA_WRITE,                         // CAN data write method failed.
+  ERR_CAN_ENDPACKET,                          // CAN endpacket method failed.
+  ERR_UNHANDLED_COMMAND,                      // Unhandled command in state machine.
+
+  LAST_ELEMENT                                // Last element of enum!
+};
+
 /// @brief Color values for RGB LED.
 struct RGBValues {
   uint8_t red = 0;
   uint8_t green = 0;
   uint8_t blue = 0;
 };
+
+/// @brief Capacitor charging states.
+enum class Charging : uint8_t {
+  START = 1,                                  // Starting charge.
+  CHARGE,                                     // Charge capacitor.
+  DISCHARGE,                                  // Discharge capacitor.
+
+  LAST_ELEMENT                                // Last element of enum!
+};
+
+/// @brief States of SI7021 reads.
+enum class si7021States : uint8_t {
+  IDLE = 0,
+  READ_TEMPERATURE,
+  READ_HUMIDITY,
+
+  LAST_ELEMENT
+};
+
+/// @brief Handles the I2C humidity and temperature sensor. 
+void handleHumTempSensor();
+
+/// @brief Handles capacitor charging for external 
+/// temperature and humidity sensor with LCD screen.
+void handleCharging();
 
 /// @brief Put the given data to RGB LED queue.
 /// @param red Value of red color: 0-255.
