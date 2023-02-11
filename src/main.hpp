@@ -1,42 +1,61 @@
 #ifndef MAIN_HPP
 #define MAIN_HPP
 
-#include <Arduino.h>                        /// Arduino libraries header.
-#include <CAN.h>                            /// SPI CAN controller library.
-#include <EEPROM.h>	                        /// EEPROM access library.
-#include <avr/wdt.h>                        /// Watchdog timer library.
-#include <FastLED.h>                        /// WS2812 LED driver library.
-#include <PushButtonClicks.h>               /// Pushbutton events library.
-#include "CircularBuffer.hpp"               /// Circular buffer class.
-#include "DFPlayer.hpp"                     /// MP3 player driver library.
-#include <SI7021.h>                         /// Temperature and humidity sensor driver.
+//--- Headers ---//
+#include <Arduino.h>                          /// Arduino libraries header.
+#include <CAN.h>                              /// SPI CAN controller library.
+#include <EEPROM.h>                           /// EEPROM access library.
+#include <avr/wdt.h>                          /// Watchdog timer library.
+#include <FastLED.h>                          /// WS2812 LED driver library.
+#include <PushButtonClicks.h>                 /// Pushbutton events library.
+#include "CircularBuffer.hpp"                 /// Circular buffer class.
+#include "DFPlayer.hpp"                       /// MP3 player driver library.
+#include <SI7021.h>                           /// Temperature and humidity sensor driver.
+
+//--- Constants ---//
+#define SW_VERSION "V1.0.0"                   // Actual software version.
+#define EEPROM_VALID 231                      // EEPROM validity check.
+#define DEFAULT_LOCAL_ADDRESS 444             // Node default address if no saved available.
+#define DEFAULT_MASTER_ADDRESS 10             // Default CAN master address.
+#define CAN_MASK 0x1FF80000                   // CAN extended ID mask.
+#define OK_STATE " [ OK ]"                    // OK status.
+#define ERR_STATE " [ ERR ]"                  // Error status.
+#define SAVED_STATE "[S] "                    // Saved data mark.
+#define DEFAULT_STATE "[D] "                  // Default data mark.
 
 #define RGB_LED_NUM   1                       // 1pcs LED.
 #define CHIP_SET      WS2812B                 // Types of RGB LEDs.
 #define COLOR_CODE    GRB                     // Sequence of colors in data stream.
 
-#define RGB_PIN     7                         // LED DATA PIN
-#define LED         4                         // Pin of the LED.
-#define CAN_INT     2                         // Interrupt pin of the SPI CAN controller.
-#define BUTTON      8                         // Pushbutton pin.
-#define DFP_EN      9                         // DFPlayer switch pin.
-#define DFP_BUSY    3                         // DFPlayer busy pin.
-#define DFP_TX      5                         // DFPlayer serial RX pin.
-#define DFP_RX      6                         // DFPlayer serial TX pin.
-#define CHARGE_PIN  17                        // Capacitor charge enable pin. (A3)
+#define RGB_PIN       7                       // LED DATA PIN
+#define LED           4                       // Pin of the LED.
+#define CAN_INT       2                       // Interrupt pin of the SPI CAN controller.
+#define BUTTON        8                       // Pushbutton pin.
+#define DFP_EN        9                       // DFPlayer switch pin.
+#define DFP_BUSY      3                       // DFPlayer busy pin.
+#define DFP_TX        5                       // DFPlayer serial RX pin.
+#define DFP_RX        6                       // DFPlayer serial TX pin.
+#define CHARGE_PIN    17                      // Capacitor charge enable pin. (A3)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.
 #define LED_L (PORTD &= ~(1 << PORTD4))       // LED pin low.
 #define NOP   __asm__("nop\n\t");             // 1 CPU cycle delay.
 
+//--- Structs ---//
 struct Settings {                             // The struct of the settings in the EEPROM.
-  uint8_t isValid;                            // Variable of address data validity.
-  uint16_t canAddress;                        // Variable of CAN address.
+  uint8_t isValid = 0;                        // Variable of address data validity.
+  uint16_t canAddress = DEFAULT_LOCAL_ADDRESS;  // Variable of CAN address.
 };
 
-void (*resetFunc)() = nullptr;                // Declare reset function at address 0.
+/// @brief Color values for RGB LED.
+struct RGBValues {
+  uint8_t red = 0;
+  uint8_t green = 0;
+  uint8_t blue = 0;
+};
 
+//--- Enums ---//
 /// @brief Base command list for nodes.
 enum class canCmdB : uint16_t {
   BCMD_IDLE = 0,                              // Idle state.
@@ -54,7 +73,7 @@ enum class canCmdB : uint16_t {
 enum class canCmdE : uint16_t {
   ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
   ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
-  ECMD_READ_HUMTEMP,                          // Read humidity and temperature. 
+  ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
 
   ECMD_LAST_ELEMENT                           // Last element of enum!
 };
@@ -63,7 +82,7 @@ enum class canCmdE : uint16_t {
 enum class canCb : uint16_t {
   NODE_CB_IDLE = 0,                           // No event state.
   NODE_CB_RESTARTED,                          // Node restarted.
-  NODE_CB_ERROR,                              // Error type callback.
+  //NODE_CB_ERROR,                              // Error type callback.
 
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
@@ -79,13 +98,6 @@ enum class errorTypes : uint8_t {
   ERR_UNHANDLED_COMMAND,                      // Unhandled command in state machine.
 
   LAST_ELEMENT                                // Last element of enum!
-};
-
-/// @brief Color values for RGB LED.
-struct RGBValues {
-  uint8_t red = 0;
-  uint8_t green = 0;
-  uint8_t blue = 0;
 };
 
 /// @brief Capacitor charging states.
@@ -106,10 +118,11 @@ enum class si7021States : uint8_t {
   LAST_ELEMENT
 };
 
-/// @brief Handles the I2C humidity and temperature sensor. 
+//--- Functions ---//
+/// @brief Handles the I2C humidity and temperature sensor.
 void handleHumTempSensor();
 
-/// @brief Handles capacitor charging for external 
+/// @brief Handles capacitor charging for external
 /// temperature and humidity sensor with LCD screen.
 void handleCharging();
 
@@ -151,6 +164,9 @@ void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to_);
 
 /// @brief Handles the interrupts from the SPI CAN controller.
 void canIrqHandler();
+
+/// @brief Reset the microcontroller.
+void (*resetFunc)() = nullptr;
 
 
 #endif // MAIN_HPP
