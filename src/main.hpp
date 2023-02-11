@@ -2,15 +2,15 @@
 #define MAIN_HPP
 
 //--- Headers ---//
-#include <Arduino.h>                          /// Arduino libraries header.
-#include <CAN.h>                              /// SPI CAN controller library.
-#include <EEPROM.h>                           /// EEPROM access library.
-#include <avr/wdt.h>                          /// Watchdog timer library.
-#include <FastLED.h>                          /// WS2812 LED driver library.
-#include <PushButtonClicks.h>                 /// Pushbutton events library.
-#include "CircularBuffer.hpp"                 /// Circular buffer class.
-#include "DFPlayer.hpp"                       /// MP3 player driver library.
-#include <SI7021.h>                           /// Temperature and humidity sensor driver.
+#include <Arduino.h>                            /// Arduino libraries header.
+#include <CAN.h>                                /// SPI CAN controller library.
+#include <EEPROM.h>                             /// EEPROM access library.
+#include <avr/wdt.h>                            /// Watchdog timer library.
+#include <FastLED.h>                            /// WS2812 LED driver library.
+#include <PushButtonClicks.h>                   /// Pushbutton events library.
+#include "CircularBuffer.hpp"                   /// Circular buffer class.
+#include "DFPlayer.hpp"                         /// MP3 player driver library.
+#include <SI7021.h>                             /// Temperature and humidity sensor driver.
 
 //--- Constants ---//
 #define SW_VERSION "V1.0.0"                   // Actual software version.
