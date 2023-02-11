@@ -1,15 +1,5 @@
 #include "main.hpp"
 
-//--- Constants ---//
-#define SW_VERSION "V1.0.0"                                                 // Actual software version.
-#define EEPROM_VALID 231                                                    // EEPROM validity check.
-#define DEFAULT_LOCAL_ADDRESS 444                                           // Node default address if no saved available.
-#define DEFAULT_MASTER_ADDRESS 10                                           // Default CAN master address.
-#define CAN_MASK 0x1FF80000                                                 // CAN extended ID mask.
-#define OK_STATE " [ OK ]"                                                  // OK status.
-#define ERR_STATE " [ ERR ]"                                                // Error status.
-#define SAVED_STATE "[S] "                                                  // Saved data mark.
-#define DEFAULT_STATE "[D] "                                                // Default data mark.
 
 //--- Variables ---//
 volatile uint8_t canProcess = 0;                                            // On CAN interrupt, it counts incoming packets.
@@ -39,6 +29,7 @@ CircularBuffer<uint8_t, 10> buttonEventBuffer;                              // S
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // Object to handle MP3 player device.
 
 //--- Temperature and humidity ---//
+bool enableCharging = true;                                                 // Enable/disable charge for external sensor.
 SI7021 si7021;                                                              // I2C humidity and temperature sensor driver.
 int16_t temperature = 0;                                                    // Temperature value.
 uint16_t humidity = 0;                                                      // Humidity value.
@@ -52,7 +43,7 @@ void setup() {
   pinMode(CAN_INT, INPUT_PULLUP);                                           // CAN_INT pin -> input with pullup.
   pinMode(BUTTON, INPUT_PULLUP);                                            // Button pin -> input with pullup.
   pinMode(CHARGE_PIN, OUTPUT);                                              // Charge enable pin -> output.
-  NOP;
+  delay(1);
   digitalWrite(CHARGE_PIN, HIGH);                                           // Turn ON charging.
 
   LED_H;                                                                    // Turn on LED.
@@ -172,6 +163,10 @@ void loop() {
         uint16_t cbNum = static_cast<uint16_t>(canCallbackBuffer.pop());    // Get callback number.
         canMsg[0] = lowByte(cbNum);                                         // Send the callback type to the master.
         canMsg[1] = highByte(cbNum);
+        canMsg[2] = cycleCostMax;                                           // Send maximum cycle cost.
+        canMsg[3] = lowByte(errorCode);                                     // Send error code.
+        canMsg[4] = highByte(errorCode);
+        errorCode = 0;                                                      // Clear error code.
       }
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
@@ -219,6 +214,18 @@ void loop() {
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
+    case static_cast<uint16_t>(canCmdE::ECMD_CHARGE_DISPLAY): {             // Enable/disable external sensor charge.
+      enableCharging = static_cast<bool>(recvData[0]);                      // Save requested charging state.
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
+    } break;
+
+    case static_cast<uint16_t>(canCmdE::ECMD_READ_HUMTEMP): {               // Send humidity and temperature value.
+      canMsg[0] = lowByte(temperature);                                     // Set values for response.
+      canMsg[1] = highByte(temperature);
+      canMsg[2] = static_cast<uint8_t>(humidity);
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
+    } break;
+
     default: {                                                              // Default case.
       Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
       bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
@@ -237,13 +244,13 @@ void loop() {
 
   //--- Handling timers ---//
   if(millis() - pingTimer >= pingTime) {                                    // Check if ping timer is expired.
-    LED_H;                                                                  // If yes, turn on the LED.  
+    LED_H;                                                                  // If yes, turn on the LED.
   }
-  
+
   //--- Handle temperature and humidity sensors ---//
-  handleHumTempSensor();                                                    // Call I2C sensor handler.    
+  handleHumTempSensor();                                                    // Call I2C sensor handler.
   handleCharging();                                                         // Call external sensor handler.
-  
+
   //--- Handling MP3 player ---//
   MP3Player.spin();                                                         // Take care of playing queue.
 
@@ -280,17 +287,17 @@ void loop() {
 
 void handleHumTempSensor() {
   static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
-  static uint32_t sensorReadingTimer = 0;                                   // Sensor reading timer.
-  
+
   switch(sensorState) {
     case si7021States::IDLE : {
+      static uint32_t sensorReadingTimer = 0;                               // Sensor reading timer.
       if(millis() - sensorReadingTimer >= 60000) {                          // Check timer.
         sensorState = si7021States::READ_TEMPERATURE;                       // Set new state.
         sensorReadingTimer = millis();                                      // Reload timer.
       }
     } break;
 
-    case si7021States::READ_TEMPERATURE: {        
+    case si7021States::READ_TEMPERATURE: {
       temperature = si7021.getCelsiusHundredths();                          // Read temperature.
       Serial.println(float(temperature) / 100); //TODO: delete this line after debug.
       sensorState = si7021States::READ_HUMIDITY;                            // Set new state.
@@ -320,6 +327,8 @@ void handleCharging() {
   static Charging charging = Charging::START;                               // Capacitor charging state.
   static uint32_t chargeControlTimer = millis();                            // Capacitor charge control timer.
 
+  if(!enableCharging) { return; }                                           // Return if charging is not enabled.
+
   switch(charging) {
     case Charging::START: {                                                 // Capacitor initial charging state.
       if(millis() - chargeControlTimer >= 300000) {                         // Check timer.
@@ -328,7 +337,7 @@ void handleCharging() {
         chargeControlTimer = millis();                                      // Reload timer.
       }
     } break;
-    
+
     case Charging::CHARGE: {                                                // Capacitor charging state.
       if(millis() - chargeControlTimer >= 120000) {                         // Check timer.
         digitalWrite(CHARGE_PIN, LOW);                                      // Disable charging.
@@ -361,7 +370,7 @@ void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size) {
-  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET), 
+  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET),
     !CAN.beginExtendedPacket(extId));                                   // Set extended ID.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),
     !CAN.write(data, size));                                            // Set data.
@@ -381,7 +390,7 @@ void LoadFromEEPROM() {
     Serial.print(SAVED_STATE);                            // Print saved mark.
   }
   else {
-    settings.canAddress = DEFAULT_LOCAL_ADDRESS;          // If not, use default CAN address.
+    //settings.canAddress = DEFAULT_LOCAL_ADDRESS;          // If not, use default CAN address.
     Serial.print(DEFAULT_STATE);                          // Print default mark.
   }
   Serial.print(F("CAN address: "));                       // Print CAN address.
