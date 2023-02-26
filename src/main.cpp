@@ -33,6 +33,9 @@ SI7021 si7021;                                                              // I
 int16_t temperature = 0;                                                    // Temperature value.
 uint16_t humidity = 0;                                                      // Humidity value.
 
+//--- RF 433.92MHz ---//
+RFDriver rfDriver(RF_RX, RF_TX);
+
 //--- Setup section ---//
 void setup() {
   wdt_disable();                                                            // Disable WDT (Watchdog timer).
@@ -48,6 +51,8 @@ void setup() {
   LED_H;                                                                    // Turn on LED.
   Serial.println(F("*************************"));
   Serial.println(F("Starting..."));                                         // Serial debug print.
+  Serial.print(F("CPP: "));
+  Serial.println(__cplusplus);
   Serial.print(F("FW: "));
   Serial.println(F(SW_VERSION));
 
@@ -87,7 +92,7 @@ void setup() {
   }
   Wire.setClock(400000);                                                    // Set I2C bus speed.
   Wire.setWireTimeout(10000, true);                                         // Set I2C timeout to 10ms.
-  si7021.setPrecision(0x81),                                                // Set humtemp sensor reading resolution.
+  si7021.setPrecision(0x81);                                                // Set humtemp sensor reading resolution.
 
   Serial.println(F("*************************"));                           // Debug prints.
   Serial.println(F("Loop starting..."));
@@ -225,6 +230,36 @@ void loop() {
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
+    case static_cast<uint16_t>(canCmdE::ECMD_RF_OUT): {                     // RF data to send.
+      RFDriver::RFData rfData;
+      rfData.data |= static_cast<uint32_t>(canMsg[0]);                      // Make the message from parts.
+      rfData.data |= static_cast<uint32_t>(canMsg[1]) << 8;
+      rfData.data |= static_cast<uint32_t>(canMsg[2]) << 16;
+      rfData.data |= static_cast<uint32_t>(canMsg[3]) << 24;
+      rfData.bitLength = canMsg[4];
+      rfData.protocol = canMsg[5];
+      rfData.pulseLength |= canMsg[6];
+      rfData.pulseLength |= canMsg[7] << 8;
+      rfDriver.sendRfData(rfData);                                          // Send RF message data to TX queue.
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
+    } break;
+
+    case static_cast<uint16_t>(canCmdE::ECMD_RF_IN): {                      // Handle received RF data.
+      RFDriver::RFData rfData;
+      if(!rfDriver.getRfData(rfData)) {                                     // Check if data available.
+        break;                                                              // If not, stop execution.
+      }
+      canMsg[0] = rfData.data & 0xFF;                                       // Convert RF data struct to CAN message.
+      canMsg[1] = (rfData.data >> 8) & 0xFF;
+      canMsg[2] = (rfData.data >> 16) & 0xFF;
+      canMsg[3] = (rfData.data >> 24) & 0xFF;
+      canMsg[4] = rfData.bitLength;
+      canMsg[5] = rfData.protocol;
+      canMsg[6] = rfData.pulseLength & 0xFF;
+      canMsg[7] = (rfData.pulseLength >> 8) & 0xFF;
+      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
+    } break;
+
     default: {                                                              // Default case.
       Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
       bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
@@ -252,6 +287,11 @@ void loop() {
 
   //--- Handling MP3 player ---//
   MP3Player.spin();                                                         // Take care of playing queue.
+
+  //--- Handling RF modules ---//
+  if(rfDriver.spin()) {                                                     // Handle receive and transmit messages.
+    canCommandBuffer.put(static_cast<uint16_t>(canCmdE::ECMD_RF_IN));       // Put command to queue.
+  }
 
   //--- Maintenance ---//
   if(saveNewAddress) {                                                      // Check if saving is enabled.
@@ -284,7 +324,7 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
-void handleHumTempSensor() {
+inline void handleHumTempSensor() {
   static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
 
   switch(sensorState) {
@@ -298,13 +338,11 @@ void handleHumTempSensor() {
 
     case si7021States::READ_TEMPERATURE: {
       temperature = si7021.getCelsiusHundredths();                          // Read temperature.
-      Serial.println(float(temperature) / 100); //TODO: delete this line after debug.
       sensorState = si7021States::READ_HUMIDITY;                            // Set new state.
     } break;
 
     case si7021States::READ_HUMIDITY: {
       humidity = si7021.getHumidityPercent();                               // Read humidity.
-      Serial.println(humidity); //TODO: delete this line after debug.
       sensorState = si7021States::IDLE;                                     // Set new state.
     } break;
 
@@ -322,7 +360,7 @@ void handleHumTempSensor() {
   }
 }
 
-void handleCharging() {
+inline void handleCharging() {
   static Charging charging = Charging::START;                               // Capacitor charging state.
   static uint32_t chargeControlTimer = millis();                            // Capacitor charge control timer.
 
@@ -360,7 +398,7 @@ void handleCharging() {
   }
 }
 
-void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
+void addToRGBQueue(const uint8_t &red, const uint8_t &green, const uint8_t &blue) {
   RGBValues RGBColor;
   RGBColor.red = red;                                                   // Set color values.
   RGBColor.green = green;
@@ -368,7 +406,7 @@ void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue) {
   RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
-void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size) {
+void sendCanResponse(const uint32_t &extId, const uint8_t data[], const uint8_t &size) {
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET),
     !CAN.beginExtendedPacket(extId));                                   // Set extended ID.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),

@@ -11,6 +11,7 @@
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
+#include "RFDriver.hpp"                       /// RF modules driver.
 
 //--- Constants ---//
 #define SW_VERSION "V1.0.0"                   // Actual software version.
@@ -36,6 +37,8 @@
 #define DFP_TX        5                       // DFPlayer serial RX pin.
 #define DFP_RX        6                       // DFPlayer serial TX pin.
 #define CHARGE_PIN    17                      // Capacitor charge enable pin. (A3)
+#define RF_RX         16                      // RF serial RX pin. (A2)
+#define RF_TX         15                      // RF serial TX pin. (A1)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.
@@ -74,6 +77,8 @@ enum class canCmdE : uint16_t {
   ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
   ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
   ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
+  ECMD_RF_OUT,                                // Send RF data with TX module.
+  ECMD_RF_IN,                                 // Handle received data from RX module.
 
   ECMD_LAST_ELEMENT                           // Last element of enum!
 };
@@ -120,24 +125,24 @@ enum class si7021States : uint8_t {
 
 //--- Functions ---//
 /// @brief Handles the I2C humidity and temperature sensor.
-void handleHumTempSensor();
+inline void handleHumTempSensor();
 
 /// @brief Handles capacitor charging for external
 /// temperature and humidity sensor with LCD screen.
-void handleCharging();
+inline void handleCharging();
 
 /// @brief Put the given data to RGB LED queue.
 /// @param red Value of red color: 0-255.
 /// @param green Value of green color: 0-255.
 /// @param blue Value of blue color: 0-255.
-void addToRGBQueue(uint8_t red, uint8_t green, uint8_t blue);
+void addToRGBQueue(const uint8_t &red, const uint8_t &green, const uint8_t &blue);
 
 /// @brief Disable answer to standard CAN IDs,
 /// because it is a broadcast message for all nodes.
 /// @param extId Extended CAN ID.
 /// @param data Data array to be send.
 /// @param size Size of data array. Maximum 8 byte.
-void sendCanResponse(uint32_t extId, const uint8_t data[], uint8_t size);
+void sendCanResponse(const uint32_t &extId, const uint8_t data[], const uint8_t &size);
 
 /// @brief Reset the MCU.
 void resetCMD();

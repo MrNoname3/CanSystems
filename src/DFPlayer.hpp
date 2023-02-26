@@ -1,9 +1,10 @@
 #ifndef DFPLAYER_HPP
 #define DFPLAYER_HPP
 
-#include <SoftwareSerial.h>                 /// Arduino software serial lib.
-#include "DFPlayerMiniFast.h"               /// DFPlayerMini driver lib.
-#include "CircularBuffer.hpp"               /// Circular buffer class.
+#include <Arduino.h>                          /// Arduino libraries header.
+#include <SoftwareSerial.h>                   /// Arduino software serial lib.
+#include "DFPlayerMiniFast.h"                 /// DFPlayerMini driver lib.
+#include "CircularBuffer.hpp"                 /// Circular buffer class.
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
@@ -34,7 +35,7 @@ public:
 
   /// @brief Attach an RGB LED controller function to use with MP3 player.
   /// @param RGBController Pointer of the RGB LED controller function.
-  void attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t));
+  void attachRGBController(void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&));
 
   /// @brief Detach the RGB LED controller function.
   void detachRGBController();
@@ -96,7 +97,7 @@ private:
 
   PlayingStates playingState = PlayingStates::IDLE;             // Set state for state machine.
   CircularBuffer<uint16_t, 10> playingQueue;                    // MP3 playing queue.
-  void (*RGBController)(uint8_t, uint8_t, uint8_t) = nullptr;   // RGB LED controller function pointer.
+  void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&) = nullptr;   // RGB LED controller function pointer.
 
 };  // End of class definition.
 
@@ -129,7 +130,7 @@ void DFPlayer::play(uint16_t song) {
   this->playingQueue.put(song);                       // Put value to playing queue.
 }
 
-void DFPlayer::attachRGBController(void (*RGBController)(uint8_t, uint8_t, uint8_t)) {
+void DFPlayer::attachRGBController(void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&)) {
   this->RGBController = RGBController;                // Store controller function pointer locally.
 }
 
