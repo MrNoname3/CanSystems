@@ -18,6 +18,7 @@ public:
     uint8_t bitLength = 0;                    // RF data bit length.
     uint8_t protocol = 0;                     // RF protocol.
     uint16_t pulseLength = 0;                 // RF pulse length.
+    uint16_t crc = 0;                         // Data struct CRC value.
     char endFrame = '#';                      // Serial sync character.
   };
 
@@ -53,6 +54,7 @@ public:
   bool spin() {
     if(!serialTxbuffer.isEmpty()) {                                             // Check RF data TX buffer.
       RFData rfData = serialTxbuffer.pop();                                     // If data available, get it.
+      rfData.crc = calCrc(reinterpret_cast<const uint8_t*>(&rfData), sizeof(RFData)); // Add CRC to data struct.
       swSerial.write(reinterpret_cast<uint8_t*>(&rfData), sizeof(RFData));      // Send data.
     }
 
@@ -60,7 +62,12 @@ public:
       RFData rfData;
       swSerial.readBytes(reinterpret_cast<uint8_t*>(&rfData), sizeof(RFData));  // Read arrived bytes to struct.
       if((rfData.beginFrame == '*') && (rfData.endFrame == '#')) {              // Check if frame begin and end are ok.
-        serialRxbuffer.put(rfData);                                             // If yes, put the RF data struct to queue.
+        uint16_t receivedCrc = rfData.crc;                                      // Save received CRC value.
+        rfData.crc = 0;                                                         // Clear received CRC.
+        uint16_t calculatedCrc = calCrc(reinterpret_cast<const uint8_t*>(&rfData), sizeof(RFData)); // Calculate CRC.
+        if(receivedCrc == calculatedCrc) {
+          serialRxbuffer.put(rfData);                                           // If yes, put the RF data struct to queue.
+        }
       }
       else {                                                                    // If no, there is garbage in serial RX buffer.
         while(swSerial.available() > 0) {                                       // In this case: read all data from
@@ -77,6 +84,29 @@ public:
   RFDriver& operator=(RFDriver&&) = delete;                 // Define move assignment operator.
 
 private:
+
+  /// @brief Calculates the 16bit CRC (XModem) of the given data.
+  /// @param data Data whose CRC value should be calcilated.
+  /// @param size Given data size in bytes.
+  /// @return Returns with the calculated CRC value.
+  uint16_t calCrc(const uint8_t* data, uint16_t size) {
+    uint16_t crc = 0;                                         // Store CRC16 value.
+
+    while(--size > 0) {                                       // Calculating CRC value.
+      crc = crc ^ (uint16_t) *data++ << 8;
+      uint8_t i = 8;                                          // Cycle variable.
+      do {
+        if(crc & 0x8000) {
+          crc = crc << 1 ^ 0x1021;
+        }
+        else {
+          crc = crc << 1;
+        }
+      }
+      while(--i);
+    }
+    return (crc);                                             // Return with the calculated value.
+  }
 
   SoftwareSerial swSerial;                    // Software serial object.
   CircularBuffer<RFData, 5> serialTxbuffer;   // Transmittable RF data queue.

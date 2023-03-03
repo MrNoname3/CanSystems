@@ -258,6 +258,15 @@ void loop() {
       canMsg[6] = rfData.pulseLength & 0xFF;
       canMsg[7] = (rfData.pulseLength >> 8) & 0xFF;
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
+
+      Serial.print(F("R: "));                                                 // Debug prints.
+      Serial.print(rfData.data);
+      Serial.print(F(" | "));
+      Serial.print(rfData.bitLength);
+      Serial.print(F(" | "));
+      Serial.print(rfData.protocol);
+      Serial.print(F(" | "));
+      Serial.println(rfData.pulseLength);
     } break;
 
     default: {                                                              // Default case.
