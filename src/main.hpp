@@ -46,6 +46,7 @@
 #define NOP   __asm__("nop\n\t");             // 1 CPU cycle delay.
 
 //--- Structs ---//
+
 struct Settings {                             // The struct of the settings in the EEPROM.
   uint8_t isValid = 0;                        // Variable of address data validity.
   uint16_t canAddress = DEFAULT_LOCAL_ADDRESS;  // Variable of CAN address.
@@ -59,6 +60,7 @@ struct RGBValues {
 };
 
 //--- Enums ---//
+
 /// @brief Base command list for nodes.
 enum class canCmdB : uint16_t {
   BCMD_IDLE = 0,                              // Idle state.
@@ -84,10 +86,9 @@ enum class canCmdE : uint16_t {
 };
 
 /// @brief Callback types.
-enum class canCb : uint16_t {
+enum class canCb : uint8_t {
   NODE_CB_IDLE = 0,                           // No event state.
   NODE_CB_RESTARTED,                          // Node restarted.
-  //NODE_CB_ERROR,                              // Error type callback.
 
   NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
@@ -105,15 +106,6 @@ enum class errorTypes : uint8_t {
   LAST_ELEMENT                                // Last element of enum!
 };
 
-/// @brief Capacitor charging states.
-enum class Charging : uint8_t {
-  START = 1,                                  // Starting charge.
-  CHARGE,                                     // Charge capacitor.
-  DISCHARGE,                                  // Discharge capacitor.
-
-  LAST_ELEMENT                                // Last element of enum!
-};
-
 /// @brief States of SI7021 reads.
 enum class si7021States : uint8_t {
   IDLE = 0,
@@ -124,12 +116,13 @@ enum class si7021States : uint8_t {
 };
 
 //--- Functions ---//
-/// @brief Handles the I2C humidity and temperature sensor.
-inline void handleHumTempSensor();
 
-/// @brief Handles capacitor charging for external
+/// @brief Handles the I2C humidity and temperature sensor.
+inline void handleHumTempSensor() __attribute__((always_inline));
+
+/// @brief Turns on/off the external
 /// temperature and humidity sensor with LCD screen.
-inline void handleCharging();
+inline void handleExtSensors() __attribute__((always_inline));
 
 /// @brief Put the given data to RGB LED queue.
 /// @param red Value of red color: 0-255.

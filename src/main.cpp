@@ -18,11 +18,11 @@ uint16_t errorCode = 0;                                                     // S
 
 //--- WS2812 RGB LED ---//
 CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
-CircularBuffer<RGBValues, 5> RGBColorBuffer;                                // Queue for RGB values.
+CircularBuffer<RGBValues, 3> RGBColorBuffer;                                // Queue for RGB values.
 
 //--- Button ---//
 PushButton Button(200, 500, 70);                                            // Object to handle pushbutton events.
-CircularBuffer<uint8_t, 10> buttonEventBuffer;                              // Store button events.
+CircularBuffer<uint8_t, 5> buttonEventBuffer;                               // Store button events.
 
 //--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // Object to handle MP3 player device.
@@ -31,10 +31,11 @@ DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                       // O
 bool enableCharging = true;                                                 // Enable/disable charge for external sensor.
 SI7021 si7021;                                                              // I2C humidity and temperature sensor driver.
 int16_t temperature = 0;                                                    // Temperature value.
-uint16_t humidity = 0;                                                      // Humidity value.
+uint8_t humidity = 0;                                                       // Humidity value.
+uint8_t light = 0;                                                          // Light LDR value.
 
 //--- RF 433.92MHz ---//
-RFDriver rfDriver(RF_RX, RF_TX);
+RFDriver rfDriver(RF_RX, RF_TX);                                            // RF modules driver object.
 
 //--- Setup section ---//
 void setup() {
@@ -46,7 +47,6 @@ void setup() {
   pinMode(BUTTON, INPUT_PULLUP);                                            // Button pin -> input with pullup.
   pinMode(CHARGE_PIN, OUTPUT);                                              // Charge enable pin -> output.
   delay(1);                                                                 // Little delay.
-  digitalWrite(CHARGE_PIN, HIGH);                                           // Turn ON charging.
 
   LED_H;                                                                    // Turn on LED.
   Serial.println(F("*************************"));
@@ -163,7 +163,7 @@ void loop() {
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_PING): {                       // Ping command.
-      if(canCallbackBuffer.isEmpty() == false) {                            // Check if callback needed.
+      if(!canCallbackBuffer.isEmpty()) {                                    // Check if callback needed.
         uint16_t cbNum = static_cast<uint16_t>(canCallbackBuffer.pop());    // Get callback number.
         canMsg[0] = lowByte(cbNum);                                         // Send the callback type to the master.
         canMsg[1] = highByte(cbNum);
@@ -226,7 +226,7 @@ void loop() {
     case static_cast<uint16_t>(canCmdE::ECMD_READ_HUMTEMP): {               // Send humidity and temperature value.
       canMsg[0] = lowByte(temperature);                                     // Set values for response.
       canMsg[1] = highByte(temperature);
-      canMsg[2] = static_cast<uint8_t>(humidity);
+      canMsg[2] = humidity;
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
@@ -259,7 +259,7 @@ void loop() {
       canMsg[7] = (rfData.pulseLength >> 8) & 0xFF;
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
 
-      Serial.print(F("R: "));                                                 // Debug prints.
+      Serial.print(F("R: "));                                               // Debug prints.
       Serial.print(rfData.data);
       Serial.print(F(" | "));
       Serial.print(rfData.bitLength);
@@ -291,8 +291,10 @@ void loop() {
   }
 
   //--- Handle temperature and humidity sensors ---//
+  if(buttonState == 4) { enableCharging = true; }                           // Check button state to handle external sensor.
+  if(buttonState == 5) { enableCharging = false; }
   handleHumTempSensor();                                                    // Call I2C sensor handler.
-  handleCharging();                                                         // Call external sensor handler.
+  handleExtSensors();                                                       // Call external sensor handler.
 
   //--- Handling MP3 player ---//
   MP3Player.spin();                                                         // Take care of playing queue.
@@ -333,77 +335,57 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
-inline void handleHumTempSensor() {
+void handleHumTempSensor() {
   static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
 
   switch(sensorState) {
     case si7021States::IDLE : {
       static uint32_t sensorReadingTimer = 0;                               // Sensor reading timer.
       if(millis() - sensorReadingTimer >= 60000) {                          // Check timer.
-        sensorState = si7021States::READ_TEMPERATURE;                       // Set new state.
+        sensorState = si7021States::READ_TEMPERATURE;
         sensorReadingTimer = millis();                                      // Reload timer.
       }
     } break;
 
     case si7021States::READ_TEMPERATURE: {
       temperature = si7021.getCelsiusHundredths();                          // Read temperature.
-      sensorState = si7021States::READ_HUMIDITY;                            // Set new state.
+      sensorState = si7021States::READ_HUMIDITY;
     } break;
 
     case si7021States::READ_HUMIDITY: {
-      humidity = si7021.getHumidityPercent();                               // Read humidity.
-      sensorState = si7021States::IDLE;                                     // Set new state.
+      humidity = static_cast<uint8_t>(si7021.getHumidityPercent());         // Read humidity.
+      sensorState = si7021States::IDLE;
     } break;
 
     default: {
-      sensorState = si7021States::IDLE;                                     // Set new state.
+      sensorState = si7021States::IDLE;
     } break;
   }
 
   if(Wire.getWireTimeoutFlag()) {
-    temperature = 0;                                                        // Delete (possible) unvalid value.
-    humidity = 0;                                                           // Delete (possible) unvalid value.
+    temperature = humidity = 0;                                             // Delete (possible) unvalid values.
     bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_READ_TIMEOUT));  // Set error flag.
     Wire.clearWireTimeoutFlag();                                            // Clear I2C timeout flag.
-    Serial.println(F("I2C timeout occured!"));                              // Debug print.
+    Serial.println(F("I2C timeout occured!"));
   }
 }
 
-inline void handleCharging() {
-  static Charging charging = Charging::START;                               // Capacitor charging state.
-  static uint32_t chargeControlTimer = millis();                            // Capacitor charge control timer.
+void handleExtSensors() {
+  static const uint8_t adcInputFilterAlpha = 10;                        // Complementer filter ALPHA value.
+  static uint32_t sensorStartupTimer = 0;                               // Timer to delay the sensor activation.
+  uint8_t lightRaw = analogRead(A6) >> 2;                               // Analog read and map from 10bit to 8bit.
+  light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
 
-  if(!enableCharging) { return; }                                           // Return if charging is not enabled.
-
-  switch(charging) {
-    case Charging::START: {                                                 // Capacitor initial charging state.
-      if(millis() - chargeControlTimer >= 300000) {                         // Check timer.
-        digitalWrite(CHARGE_PIN, LOW);                                      // Disable charging.
-        charging = Charging::DISCHARGE;                                     // Set next state.
-        chargeControlTimer = millis();                                      // Reload timer.
+  if(millis() - sensorStartupTimer >= 8000) {                           // Without it the ext sensor sometimes become unstable due restarts.
+    if(light > 10 && enableCharging) {                                  // On daylight...
+      digitalWrite(CHARGE_PIN, HIGH);                                   // turn on the external sensor.
+    }
+    else {
+      if(light < 5 || !enableCharging) {                                // On night time...
+        digitalWrite(CHARGE_PIN, LOW);                                  // Turn off the ext sensor.
+        sensorStartupTimer = millis();                                  // Reload timer.
       }
-    } break;
-
-    case Charging::CHARGE: {                                                // Capacitor charging state.
-      if(millis() - chargeControlTimer >= 120000) {                         // Check timer.
-        digitalWrite(CHARGE_PIN, LOW);                                      // Disable charging.
-        charging = Charging::DISCHARGE;                                     // Set next state.
-        chargeControlTimer = millis();                                      // Reload timer.
-      }
-    } break;
-
-    case Charging::DISCHARGE: {                                             // Capacitor discharging state.
-      if(millis() - chargeControlTimer >= 900000) {                         // Check timer.
-        digitalWrite(CHARGE_PIN, HIGH);                                     // Enable charging.
-        charging = Charging::CHARGE;                                        // Set next state.
-        chargeControlTimer = millis();                                      // Reload timer.
-      }
-    } break;
-
-    default: {                                                              // Default state.
-      charging = Charging::START;                                           // Set next state.
-      chargeControlTimer = millis();                                        // Reload timer.
-    } break;
+    }     
   }
 }
 

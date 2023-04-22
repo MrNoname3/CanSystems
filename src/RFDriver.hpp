@@ -108,9 +108,10 @@ private:
     return (crc);                                             // Return with the calculated value.
   }
 
-  SoftwareSerial swSerial;                    // Software serial object.
-  CircularBuffer<RFData, 5> serialTxbuffer;   // Transmittable RF data queue.
-  CircularBuffer<RFData, 5> serialRxbuffer;   // Received RF data queue.
+  SoftwareSerial swSerial;                                    // Software serial object.
+  static const uint8_t rfBufferSize = 3;                      // RF data buffer sizes.
+  CircularBuffer<RFData, rfBufferSize> serialTxbuffer;        // Transmittable RF data queue.
+  CircularBuffer<RFData, rfBufferSize> serialRxbuffer;        // Received RF data queue.
 
 };
 
