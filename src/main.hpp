@@ -11,7 +11,6 @@
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
-#include "RFDriver.hpp"                       /// RF modules driver.
 
 //--- Constants ---//
 #define SW_VERSION "V1.0.0"                   // Actual software version.
@@ -79,8 +78,6 @@ enum class canCmdE : uint16_t {
   ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
   ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
   ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
-  ECMD_RF_OUT,                                // Send RF data with TX module.
-  ECMD_RF_IN,                                 // Handle received data from RX module.
 
   ECMD_LAST_ELEMENT                           // Last element of enum!
 };

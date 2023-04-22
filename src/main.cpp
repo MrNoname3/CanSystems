@@ -34,9 +34,6 @@ int16_t temperature = 0;                                                    // T
 uint8_t humidity = 0;                                                       // Humidity value.
 uint8_t light = 0;                                                          // Light LDR value.
 
-//--- RF 433.92MHz ---//
-RFDriver rfDriver(RF_RX, RF_TX);                                            // RF modules driver object.
-
 //--- Setup section ---//
 void setup() {
   wdt_disable();                                                            // Disable WDT (Watchdog timer).
@@ -81,6 +78,9 @@ void setup() {
 
   MP3Player.attachRGBController(addToRGBQueue);                             // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                     // Set MP3 player volume.
+
+  MP3Player.play(1);
+  MP3Player.play(2);
 
   Serial.print(F("HumTemp"));                                               // Serial debug print.
   if(si7021.begin()) {                                                      // Initialize the I2C sensors and ping them.
@@ -230,45 +230,6 @@ void loop() {
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
-    case static_cast<uint16_t>(canCmdE::ECMD_RF_OUT): {                     // RF data to send.
-      RFDriver::RFData rfData;
-      rfData.data |= static_cast<uint32_t>(canMsg[0]);                      // Make the message from parts.
-      rfData.data |= static_cast<uint32_t>(canMsg[1]) << 8;
-      rfData.data |= static_cast<uint32_t>(canMsg[2]) << 16;
-      rfData.data |= static_cast<uint32_t>(canMsg[3]) << 24;
-      rfData.bitLength = canMsg[4];
-      rfData.protocol = canMsg[5];
-      rfData.pulseLength |= canMsg[6];
-      rfData.pulseLength |= canMsg[7] << 8;
-      rfDriver.sendRfData(rfData);                                          // Send RF message data to TX queue.
-      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
-    } break;
-
-    case static_cast<uint16_t>(canCmdE::ECMD_RF_IN): {                      // Handle received RF data.
-      RFDriver::RFData rfData;
-      if(!rfDriver.getRfData(rfData)) {                                     // Check if data available.
-        break;                                                              // If not, stop execution.
-      }
-      canMsg[0] = rfData.data & 0xFF;                                       // Convert RF data struct to CAN message.
-      canMsg[1] = (rfData.data >> 8) & 0xFF;
-      canMsg[2] = (rfData.data >> 16) & 0xFF;
-      canMsg[3] = (rfData.data >> 24) & 0xFF;
-      canMsg[4] = rfData.bitLength;
-      canMsg[5] = rfData.protocol;
-      canMsg[6] = rfData.pulseLength & 0xFF;
-      canMsg[7] = (rfData.pulseLength >> 8) & 0xFF;
-      sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
-
-      Serial.print(F("R: "));                                               // Debug prints.
-      Serial.print(rfData.data);
-      Serial.print(F(" | "));
-      Serial.print(rfData.bitLength);
-      Serial.print(F(" | "));
-      Serial.print(rfData.protocol);
-      Serial.print(F(" | "));
-      Serial.println(rfData.pulseLength);
-    } break;
-
     default: {                                                              // Default case.
       Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
       bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
@@ -298,11 +259,6 @@ void loop() {
 
   //--- Handling MP3 player ---//
   MP3Player.spin();                                                         // Take care of playing queue.
-
-  //--- Handling RF modules ---//
-  if(rfDriver.spin()) {                                                     // Handle receive and transmit messages.
-    canCommandBuffer.put(static_cast<uint16_t>(canCmdE::ECMD_RF_IN));       // Put command to queue.
-  }
 
   //--- Maintenance ---//
   if(saveNewAddress) {                                                      // Check if saving is enabled.

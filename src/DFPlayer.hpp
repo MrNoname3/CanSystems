@@ -103,15 +103,8 @@ private:
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 
-DFPlayer::DFPlayer(uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, 
-  bool debug, uint32_t timeout) : 
-  swSerial(RXpin, TXpin), 
-  RXpin(RXpin),                                       // Save given pin numbers.
-  TXpin(TXpin), 
-  ENpin(ENpin), 
-  INTpin(INTpin), 
-  debug(debug) {                                      // Set debug value.
-
+DFPlayer::DFPlayer(uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, bool debug, uint32_t timeout) : 
+  swSerial(RXpin, TXpin), RXpin(RXpin), TXpin(TXpin), ENpin(ENpin), INTpin(INTpin), debug(debug) {
   swSerial.begin(9600);                               // Open software serial port.
   pinMode(this->ENpin, OUTPUT);                       // Set pin modes.
   pinMode(this->INTpin, INPUT_PULLUP);
