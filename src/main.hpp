@@ -13,29 +13,28 @@
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
 
 //--- Constants ---//
-#define SW_VERSION "V1.0.0"                   // Actual software version.
-#define EEPROM_VALID 231                      // EEPROM validity check.
-#define DEFAULT_LOCAL_ADDRESS 444             // Node default address if no saved available.
-#define DEFAULT_MASTER_ADDRESS 10             // Default CAN master address.
-#define CAN_MASK 0x1FF80000                   // CAN extended ID mask.
-#define OK_STATE " [ OK ]"                    // OK status.
-#define ERR_STATE " [ ERR ]"                  // Error status.
-#define SAVED_STATE "[S] "                    // Saved data mark.
-#define DEFAULT_STATE "[D] "                  // Default data mark.
-
-#define RGB_LED_NUM   19                      // Number of LED's.
-
-#define RGB_PIN       7                       // LED DATA PIN
-#define LED           4                       // Pin of the LED.
-#define CAN_INT       2                       // Interrupt pin of the SPI CAN controller.
-#define BUTTON        8                       // Pushbutton pin.
-#define DFP_EN        9                       // DFPlayer switch pin.
-#define DFP_BUSY      3                       // DFPlayer busy pin.
-#define DFP_TX        5                       // DFPlayer serial RX pin.
-#define DFP_RX        6                       // DFPlayer serial TX pin.
-#define CHARGE_PIN    17                      // Capacitor charge enable pin. (A3)
-#define RF_RX         16                      // RF serial RX pin. (A2)
-#define RF_TX         15                      // RF serial TX pin. (A1)
+static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
+static constexpr const char* OK_STATE               = " [ OK ]";    // OK status.
+static constexpr const char* ERR_STATE              = " [ ERR ]";   // Error status.
+static constexpr const char* SAVED_STATE            = "[S] ";       // Saved data mark.
+static constexpr const char* DEFAULT_STATE          = "[D] ";       // Default data mark.
+static constexpr uint8_t EEPROM_VALID               = 231;          // EEPROM validity check.
+static constexpr uint16_t DEFAULT_LOCAL_ADDRESS     = 444;          // Node default address if no saved available.
+static constexpr uint16_t DEFAULT_MASTER_ADDRESS    = 10;           // Default CAN master address.
+static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
+static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of LED's.
+  
+static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
+static constexpr uint8_t LED                        = 4;            // Pin of the LED.
+static constexpr uint8_t CAN_INT                    = 2;            // Interrupt pin of the SPI CAN controller.
+static constexpr uint8_t BUTTON                     = 8;            // Pushbutton pin.
+static constexpr uint8_t DFP_EN                     = 9;            // DFPlayer switch pin.
+static constexpr uint8_t DFP_BUSY                   = 3;            // DFPlayer busy pin.
+static constexpr uint8_t DFP_TX                     = 5;            // DFPlayer serial RX pin.
+static constexpr uint8_t DFP_RX                     = 6;            // DFPlayer serial TX pin.
+static constexpr uint8_t CHARGE_PIN                 = 17;           // Capacitor charge enable pin. (A3)
+static constexpr uint8_t RF_RX                      = 16;           // RF serial RX pin. (A2)
+static constexpr uint8_t RF_TX                      = 15;           // RF serial TX pin. (A1)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.

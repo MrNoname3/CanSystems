@@ -3,7 +3,7 @@
 //--- Variables ---//
 volatile uint8_t canProcess = 0;                                            // On CAN interrupt, it counts incoming packets.
 uint32_t pingTimer = 0;                                                     // It stores the last ping time.
-const uint16_t pingTime = 1500;                                             // Ping timeot time in ms.
+static constexpr uint16_t pingTime = 1500;                                  // Ping timeot time in ms.
 struct Settings settings;                                                   // Struct of settings.
 uint16_t newCanAddress = 0;                                                 // Store arrived new local CAN address.
 CircularBuffer<uint16_t, 10> canCommandBuffer;                              // State machine execution queue.
@@ -51,7 +51,7 @@ void setup() {
   Serial.print(F("CPP: "));
   Serial.println(__cplusplus);
   Serial.print(F("FW: "));
-  Serial.println(F(SW_VERSION));
+  Serial.println(SW_VERSION);
 
   ledStrip.Begin();                                                         // Clear LEDs
   ledStrip.Show();                                                          // and show it.
@@ -180,7 +180,7 @@ void loop() {
     } break;
 
     case static_cast<uint16_t>(canCmdB::BCMD_GET_FW_VERSION): {             // Send firmware version to master.
-      memcpy(canMsg, SW_VERSION, sizeof(SW_VERSION));
+      memcpy(canMsg, SW_VERSION, strlen(SW_VERSION) + 1);
       sendCanResponse(extendedIdOut, canMsg, sizeof(canMsg));               // Send answer.
     } break;
 
