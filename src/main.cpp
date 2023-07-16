@@ -17,7 +17,7 @@ bool saveNewAddress = false;                                                // E
 uint16_t errorCode = 0;                                                     // Store occured error codes.
 
 //--- WS2812 RGB LED ---//
-CRGB rgbLeds[RGB_LED_NUM];                                                  // Define LED struct.
+NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip(RGB_LED_NUM, RGB_PIN);  // Setup LED strip.
 CircularBuffer<RGBValues, 3> RGBColorBuffer;                                // Queue for RGB values.
 
 //--- Button ---//
@@ -53,9 +53,8 @@ void setup() {
   Serial.print(F("FW: "));
   Serial.println(F(SW_VERSION));
 
-  FastLED.addLeds<CHIP_SET, RGB_PIN, COLOR_CODE>(rgbLeds, RGB_LED_NUM);     // Setup LED strip.
-  FastLED.clear();                                                          // Clear LEDs
-  FastLED.show();                                                           // and show it.
+  ledStrip.Begin();                                                         // Clear LEDs
+  ledStrip.Show();                                                          // and show it.
 
   LoadFromEEPROM();                                                         // Loads stored data from EEPROM.
 
@@ -240,10 +239,8 @@ void loop() {
   //--- Handling RGB LEDs ---//
   if(RGBColorBuffer.isEmpty() == false) {                                   // Check RGB color buffer.
     RGBValues RGBColor = RGBColorBuffer.pop();                              // Get a color set from the queue.
-    for(uint8_t i = 0; i < RGB_LED_NUM; i++) {                              // Set same color to all RGB LED.
-      rgbLeds[i].setRGB(RGBColor.red, RGBColor.green, RGBColor.blue);
-    }
-    FastLED.show();                                                         // Send color data to RGB LED strip.
+    ledStrip.ClearTo(RgbColor(RGBColor.red, RGBColor.green, RGBColor.blue));  // Set same color to all RGB LED.
+    ledStrip.Show();                                                        // Send color data to RGB LED strip.
   }
 
   //--- Handling timers ---//
@@ -345,7 +342,7 @@ void handleExtSensors() {
   }
 }
 
-void addToRGBQueue(const uint8_t &red, const uint8_t &green, const uint8_t &blue) {
+void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBValues RGBColor;
   RGBColor.red = red;                                                   // Set color values.
   RGBColor.green = green;
@@ -353,7 +350,7 @@ void addToRGBQueue(const uint8_t &red, const uint8_t &green, const uint8_t &blue
   RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
-void sendCanResponse(const uint32_t &extId, const uint8_t data[], const uint8_t &size) {
+void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size) {
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET),
     !CAN.beginExtendedPacket(extId));                                   // Set extended ID.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),

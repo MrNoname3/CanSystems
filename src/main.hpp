@@ -6,7 +6,7 @@
 #include <CAN.h>                              /// SPI CAN controller library.
 #include <EEPROM.h>                           /// EEPROM access library.
 #include <avr/wdt.h>                          /// Watchdog timer library.
-#include <FastLED.h>                          /// WS2812 LED driver library.
+#include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
@@ -23,9 +23,7 @@
 #define SAVED_STATE "[S] "                    // Saved data mark.
 #define DEFAULT_STATE "[D] "                  // Default data mark.
 
-#define RGB_LED_NUM   1                       // 1pcs LED.
-#define CHIP_SET      WS2812B                 // Types of RGB LEDs.
-#define COLOR_CODE    GRB                     // Sequence of colors in data stream.
+#define RGB_LED_NUM   19                      // Number of LED's.
 
 #define RGB_PIN       7                       // LED DATA PIN
 #define LED           4                       // Pin of the LED.
@@ -125,14 +123,14 @@ inline void handleExtSensors() __attribute__((always_inline));
 /// @param red Value of red color: 0-255.
 /// @param green Value of green color: 0-255.
 /// @param blue Value of blue color: 0-255.
-void addToRGBQueue(const uint8_t &red, const uint8_t &green, const uint8_t &blue);
+void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
 
 /// @brief Disable answer to standard CAN IDs,
 /// because it is a broadcast message for all nodes.
 /// @param extId Extended CAN ID.
 /// @param data Data array to be send.
 /// @param size Size of data array. Maximum 8 byte.
-void sendCanResponse(const uint32_t &extId, const uint8_t data[], const uint8_t &size);
+void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size);
 
 /// @brief Reset the MCU.
 void resetCMD();

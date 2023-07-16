@@ -35,7 +35,7 @@ public:
 
   /// @brief Attach an RGB LED controller function to use with MP3 player.
   /// @param RGBController Pointer of the RGB LED controller function.
-  void attachRGBController(void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&));
+  void attachRGBController(void (*RGBController)(const uint8_t, const uint8_t, const uint8_t));
 
   /// @brief Detach the RGB LED controller function.
   void detachRGBController();
@@ -78,7 +78,7 @@ private:
   };
 
   static const uint16_t bootTime = 1000;            // MP3 player boot time.
-  static const uint8_t cmdExecTime = 60;            // Command execution time.
+  static const uint8_t cmdExecTime = 120;           // Command execution time.
   static const uint16_t playDelayTime = 500;        // Time for delay between songs.
   static const uint16_t playTimeoutTime = 10000;    // Playing timeout time.
   uint32_t bootTimer = 0;                           // MP3 player boot timer.
@@ -97,7 +97,7 @@ private:
 
   PlayingStates playingState = PlayingStates::IDLE; // Set state for state machine.
   CircularBuffer<uint16_t, 5> playingQueue;         // MP3 playing queue.
-  void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&) = nullptr;   // RGB LED controller function pointer.
+  void (*RGBController)(const uint8_t, const uint8_t, const uint8_t) = nullptr;   // RGB LED controller function pointer.
 
 };  // End of class definition.
 
@@ -124,7 +124,7 @@ void DFPlayer::play(uint16_t song) {
   this->playingQueue.put(song);                       // Put value to playing queue.
 }
 
-void DFPlayer::attachRGBController(void (*RGBController)(const uint8_t&, const uint8_t&, const uint8_t&)) {
+void DFPlayer::attachRGBController(void (*RGBController)(const uint8_t, const uint8_t, const uint8_t)) {
   this->RGBController = RGBController;                // Store controller function pointer locally.
 }
 
