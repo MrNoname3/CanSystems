@@ -48,6 +48,21 @@ struct Settings {                             // The struct of the settings in t
   uint16_t canAddress = DEFAULT_LOCAL_ADDRESS;  // Variable of CAN address.
 };
 
+union CanId{
+  uint32_t id;
+  struct {
+    uint16_t to_ : 10;                        // 10 bits for 'to_'
+    uint16_t cmd : 9;                         // 9 bits for 'cmd'
+    uint16_t from : 10;                       // 10 bits for 'from'
+    uint16_t padding : 3;                     // Padding to fill up to 32 bits
+  };
+};
+
+struct CanFrame {
+  CanId canId;
+  uint8_t data[8];
+};
+
 /// @brief Color values for RGB LED.
 struct RGBValues {
   uint8_t red = 0;
@@ -124,12 +139,7 @@ inline void handleExtSensors() __attribute__((always_inline));
 /// @param blue Value of blue color: 0-255.
 void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
 
-/// @brief Disable answer to standard CAN IDs,
-/// because it is a broadcast message for all nodes.
-/// @param extId Extended CAN ID.
-/// @param data Data array to be send.
-/// @param size Size of data array. Maximum 8 byte.
-void sendCanResponse(const uint32_t extId, const uint8_t data[], const uint8_t size);
+void sendCanResponse(const CanFrame canFrameOut);
 
 /// @brief Reset the MCU.
 void resetCMD();
@@ -139,20 +149,6 @@ void LoadFromEEPROM();
 
 /// @brief Save data to EEPROM from the settings structure.
 bool SaveToEEPROM();
-
-/// @brief Converts the given data to extended CAN ID.
-/// @param from Sender address.
-/// @param cmd Command from sender.
-/// @param to_ Target address.
-/// @return Returns with the CAN address.
-uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to_);
-
-/// @brief Converts the given extended CAN ID to addresses and command variable.
-/// @param extId Extended CAN ID.
-/// @param from Pointer to sender address variable.
-/// @param cmd Pointer to command variable.
-/// @param to_ Pointer to target address variable.
-void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to_);
 
 /// @brief Handles the interrupts from the SPI CAN controller.
 void canIrqHandler();
