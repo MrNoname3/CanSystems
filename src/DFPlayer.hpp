@@ -77,26 +77,29 @@ private:
     TURN_OFF,                       // Turn hardware off.
   };
 
-  static const uint16_t bootTime = 1000;            // MP3 player boot time.
-  static const uint8_t cmdExecTime = 120;           // Command execution time.
-  static const uint16_t playDelayTime = 500;        // Time for delay between songs.
-  static const uint16_t playTimeoutTime = 10000;    // Playing timeout time.
-  uint32_t bootTimer = 0;                           // MP3 player boot timer.
-  uint32_t cmdExecTimer = 0;                        // Command execution timer.
-  uint32_t playDelayTimer = 0;                      // Timer for delay between songs.
-  uint32_t playTimeoutTimer = 0;                    // Playing timeout time.
+  static constexpr uint8_t redValue = 0;              // If enabled, this color values are
+  static constexpr uint8_t greenValue = 50;           // set for RGB LED during sound playing.
+  static constexpr uint8_t blueValue = 200;
+  static constexpr uint16_t bootTime = 1000;          // MP3 player boot time.
+  static constexpr uint8_t cmdExecTime = 120;         // Command execution time.
+  static constexpr uint16_t playDelayTime = 500;      // Time for delay between songs.
+  static constexpr uint16_t playTimeoutTime = 10000;  // Playing timeout time.
+  uint32_t bootTimer = 0;                             // MP3 player boot timer.
+  uint32_t cmdExecTimer = 0;                          // Command execution timer.
+  uint32_t playDelayTimer = 0;                        // Timer for delay between songs.
+  uint32_t playTimeoutTimer = 0;                      // Playing timeout time.
 
-  SoftwareSerial swSerial;                          // Software serial object.
-  const uint8_t RXpin;                              // Software serial RX pin.
-  const uint8_t TXpin;                              // Software serial TX pin.
-  const uint8_t ENpin;                              // Device turn on/off switch pin.
-  const uint8_t INTpin;                             // Device playing interrupt pin: LOW->playing.
-  uint8_t volume_ = 5;                              // Volume value. Default: 5.
-  bool debug = false;                               // Enable debug prints.
-  static volatile bool enablePlay;                  // Interrupt flag. If true, device is ready to play.
+  SoftwareSerial swSerial;                            // Software serial object.
+  const uint8_t RXpin;                                // Software serial RX pin.
+  const uint8_t TXpin;                                // Software serial TX pin.
+  const uint8_t ENpin;                                // Device turn on/off switch pin.
+  const uint8_t INTpin;                               // Device playing interrupt pin: LOW->playing.
+  uint8_t volume_ = 5;                                // Volume value. Default: 5.
+  bool debug = false;                                 // Enable debug prints.
+  static volatile bool enablePlay;                    // Interrupt flag. If true, device is ready to play.
 
-  PlayingStates playingState = PlayingStates::IDLE; // Set state for state machine.
-  CircularBuffer<uint16_t, 5> playingQueue;         // MP3 playing queue.
+  PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.
+  CircularBuffer<uint16_t, 5> playingQueue;           // MP3 playing queue.
   void (*RGBController)(const uint8_t, const uint8_t, const uint8_t) = nullptr;   // RGB LED controller function pointer.
 
 };  // End of class definition.
@@ -139,7 +142,7 @@ void DFPlayer::spin() {
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
         if(debug) { Serial.println(F("IDLE")); }
-        if(RGBController != NULL) { RGBController(0, 50, 200); }  // Set RGB LED color.
+        if(RGBController != NULL) { RGBController(redValue, greenValue, blueValue); }
         playingState = PlayingStates::TURN_ON;
       }
     } break;

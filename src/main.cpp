@@ -6,7 +6,6 @@ uint32_t pingTimer = 0;                                                       //
 static constexpr uint16_t pingTime = 1500;                                    // Ping timeot time in ms.
 struct Settings settings;                                                     // Struct of settings.
 uint16_t newCanAddress = 0;                                                   // Store arrived new local CAN address.
-CircularBuffer<canCb, 10> canCallbackBuffer;                                  // Callback message buffer for master.
 CircularBuffer<CanFrame, 5> receivedCanFrames;
 
 //--- Maintenance variables ---//
@@ -35,7 +34,6 @@ uint8_t light = 0;                                                            //
 
 //--- Setup section ---//
 void setup() {
-  wdt_disable();                                                              // Disable WDT (Watchdog timer).
   Serial.begin(115200);                                                       // Open serial port with the given baudrate.
 
   pinMode(LED, OUTPUT);                                                       // LED pin -> output.
@@ -66,16 +64,19 @@ void setup() {
   else {
     Serial.println(OK_STATE);                                                 // If init ok, print OK.
   }
-  CanId canId;                                                                // Struct of CAN id.
-  canId.from = 0;                                                             // Assemble CAN ID.
-  canId.cmd = 0;
-  canId.to_ = settings.canAddress;
-  CAN.filterExtended(canId.id, CAN_MASK);                                     // Setup extended CAN ID filtering.
+
+  CanFrame canFrameOut;                                                       // CAN frame to send.
+  canFrameOut.canId.from = settings.canAddress;
+  canFrameOut.canId.cmd = static_cast<uint16_t>(canCmd::NODE_CB_RESTARTED);
+  canFrameOut.canId.to_ = settings.canAddress;
+
+  CAN.filterExtended(canFrameOut.canId.id, CAN_MASK);                         // Setup extended CAN ID filtering.
+
+  canFrameOut.canId.to_ = DEFAULT_MASTER_ADDRESS;
+  receivedCanFrames.put(canFrameOut);
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);    // Setup interrupt pin for CAN controller.
-
-  canCallbackBuffer.put(canCb::NODE_CB_RESTARTED);                            // Set callback state as restarted.
 
   MP3Player.attachRGBController(addToRGBQueue);                               // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                       // Set MP3 player volume.
@@ -89,7 +90,7 @@ void setup() {
   }
   else {
     Serial.println(ERR_STATE);                                                // If can't init, print ERROR.
-    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_SENSOR_INIT));  // Set error flag.
+    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_SENSOR_INIT)); // Set error flag.
   }
   Wire.setClock(400000);                                                      // Set I2C bus speed.
   Wire.setWireTimeout(10000, true);                                           // Set I2C timeout to 10ms.
@@ -111,13 +112,13 @@ void loop() {
   if(buttonState > 0) {                                                       // Filter unvalid states.
     CanFrame canFrameOut;                                                     // CAN frame to send.
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
-    canFrameOut.canId.cmd = static_cast<uint16_t>(canCmdB::BCMD_GET_BUTTON_EVENT);
+    canFrameOut.canId.cmd = static_cast<uint16_t>(canCmd::BCMD_GET_BUTTON_EVENT);
     canFrameOut.canId.to_ = DEFAULT_MASTER_ADDRESS;
 
     Serial.print(F("Button event: "));                                        // Debug prints.
     Serial.println(buttonState);
 
-    sendCanResponse(canFrameOut);                                             // Send answer.
+    sendCanResponse(&canFrameOut);                                            // Send answer.
   }
 
   //--- Handle received CAN messages ---//
@@ -155,42 +156,36 @@ void loop() {
     canFrameOut.canId.cmd = canFrameOut.canId.cmd;
     canFrameOut.canId.to_ = canFrameIn.canId.from;
     
-    switch(canFrameIn.canId.cmd) {                                            // Send the command in the switch.
-
-      case static_cast<uint16_t>(canCmdB::BCMD_IDLE): {                       // Idle state.
-
-      } break;
+    switch(static_cast<canCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
       
-      case static_cast<uint16_t>(canCmdB::BCMD_PING): {                       // Ping command.
-        if(!canCallbackBuffer.isEmpty()) {                                    // Check if callback needed.
-          uint16_t cbNum = static_cast<uint16_t>(canCallbackBuffer.pop());    // Get callback number.
-          canFrameOut.data[0] = lowByte(cbNum);                               // Send the callback type to the master.
-          canFrameOut.data[1] = highByte(cbNum);
-          canFrameOut.data[2] = cycleCostMax;                                 // Send maximum cycle cost.
-          canFrameOut.data[3] = lowByte(errorCode);                           // Send error code.
-          canFrameOut.data[4] = highByte(errorCode);
-          errorCode = 0;                                                      // Clear error code.
-        }
-        sendCanResponse(canFrameOut);                                         // Send answer.
+      case canCmd::BCMD_PING: {                                               // Ping command.
+        canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
+        canFrameOut.data[1] = lowByte(errorCode);                             // Send error code.
+        canFrameOut.data[2] = highByte(errorCode);
+        errorCode = 0;                                                        // Clear error code.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
-        case static_cast<uint16_t>(canCmdB::BCMD_RESET): {                    // Reset MCU.
-        sendCanResponse(canFrameOut);                                         // Send answer.
+        case canCmd::BCMD_RESET: {                                            // Reset MCU.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
         resetCMD();                                                           // Call reset function.
       } break;
 
-      case static_cast<uint16_t>(canCmdB::BCMD_GET_FW_VERSION): {             // Send firmware version to master.
+      case canCmd::BCMD_GET_FW_VERSION: {                                     // Send firmware version to master.
         memcpy(canFrameOut.data, SW_VERSION, strlen(SW_VERSION) + 1);
-        sendCanResponse(canFrameOut);                                         // Send answer.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
-      case static_cast<uint16_t>(canCmdB::BCMD_SETADDRESS): {                 // Set new CAN address. Response: used address.
-        newCanAddress = (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));         // 0.->address lowbyte, 1.->address highbyte.
+      case canCmd::BCMD_SETADDRESS: {                                         // Set new CAN address. Response: used address.
+        newCanAddress = (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8)); // 0.->address lowbyte, 1.->address highbyte.
         newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
+        
         if(newCanAddress != settings.canAddress) {                            // Check if new address is equal to old or not.
+          constexpr uint8_t ledColor = 200;
+          
           saveNewAddress = true;                                              // Enable saving.
           MP3Player.detachRGBController();                                    // Prevent RGB state overwrite.
-          addToRGBQueue(0, 200, 0);                                           // Turn on RGB LED as green.
+          addToRGBQueue(0, ledColor, 0);                                      // Turn on RGB LED as green.
           Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
           canAddressSaveTimer = millis();                                     // Timer reload.
         }
@@ -199,31 +194,27 @@ void loop() {
         }
       } break;
 
-      case static_cast<uint16_t>(canCmdB::BCMD_RGB_LED): {                    // Add RGB color values to queue.
-        addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);                 // Add color values to queue.
-        sendCanResponse(canFrameOut);                                         // Send answer.
+      case canCmd::BCMD_RGB_LED: {                                            // Add RGB color values to queue.
+        addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
-      case static_cast<uint16_t>(canCmdB::BCMD_GET_BUTTON_EVENT): {           // Send button event.
-        
+      case canCmd::ECMD_PLAY_MP3: {                                           // Play MP3 song.
+        MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
+        MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
-      case static_cast<uint16_t>(canCmdE::ECMD_PLAY_MP3): {                   // Play MP3 song.
-        MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8)));         // Add selected song to queue.
-        MP3Player.volume(canFrameIn.data[2]);                                        // Set volume.
-        sendCanResponse(canFrameOut);                                         // Send answer.
+      case canCmd::ECMD_CHARGE_DISPLAY: {                                     // Enable/disable external sensor charge.
+        enableCharging = static_cast<bool>(canFrameOut.data[0]);              // Save requested charging state.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
-      case static_cast<uint16_t>(canCmdE::ECMD_CHARGE_DISPLAY): {             // Enable/disable external sensor charge.
-        enableCharging = static_cast<bool>(canFrameOut.data[0]);                      // Save requested charging state.
-        sendCanResponse(canFrameOut);                                         // Send answer.
-      } break;
-
-      case static_cast<uint16_t>(canCmdE::ECMD_READ_HUMTEMP): {               // Send humidity and temperature value.
+      case canCmd::ECMD_READ_HUMTEMP: {                                       // Send humidity and temperature value.
         canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
         canFrameOut.data[1] = highByte(temperature);
         canFrameOut.data[2] = humidity;
-        sendCanResponse(canFrameOut);                                         // Send answer.
+        sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
       default: {                                                              // Default case.
@@ -295,8 +286,10 @@ void handleHumTempSensor() {
 
   switch(sensorState) {
     case si7021States::IDLE : {
+      constexpr uint16_t sensorReadingTime = 60000;
       static uint32_t sensorReadingTimer = 0;                               // Sensor reading timer.
-      if(millis() - sensorReadingTimer >= 60000) {                          // Check timer.
+      
+      if(millis() - sensorReadingTimer >= sensorReadingTime) {              // Check timer.
         sensorState = si7021States::READ_TEMPERATURE;
         sensorReadingTimer = millis();                                      // Reload timer.
       }
@@ -326,17 +319,21 @@ void handleHumTempSensor() {
 }
 
 void handleExtSensors() {
-  static const uint8_t adcInputFilterAlpha = 10;                        // Complementer filter ALPHA value.
+  constexpr uint8_t sensorOnLightValue = 10;                            // Light value to turn on the ext sensor.
+  constexpr uint8_t sensorOffLightValue = 5;                            // Light value to turn off the ext sensor.
+  constexpr uint16_t sensorStartDelay = 8000;                           // Startup delay value in ms for ext sensor.
+  constexpr uint8_t adcInputFilterAlpha = 10;                           // Complementer filter ALPHA value.
   static uint32_t sensorStartupTimer = 0;                               // Timer to delay the sensor activation.
+  
   uint8_t lightRaw = analogRead(A6) >> 2;                               // Analog read and map from 10bit to 8bit.
   light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
 
-  if(millis() - sensorStartupTimer >= 8000) {                           // Without it the ext sensor sometimes become unstable due restarts.
-    if(light > 10 && enableCharging) {                                  // On daylight...
+  if(millis() - sensorStartupTimer >= sensorStartDelay) {               // Without it the ext sensor sometimes become unstable due restarts.
+    if(light > sensorOnLightValue && enableCharging) {                  // On daylight...
       digitalWrite(CHARGE_PIN, HIGH);                                   // turn on the external sensor.
     }
     else {
-      if(light < 5 || !enableCharging) {                                // On night time...
+      if(light < sensorOffLightValue || !enableCharging) {              // On night time...
         digitalWrite(CHARGE_PIN, LOW);                                  // Turn off the ext sensor.
         sensorStartupTimer = millis();                                  // Reload timer.
       }
@@ -352,11 +349,11 @@ void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBColorBuffer.put(RGBColor);                                         // Add to queue.
 }
 
-void sendCanResponse(const CanFrame canFrameOut) {
+void sendCanResponse(CanFrame* canFrameOut) {
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET),
-    !CAN.beginExtendedPacket(canFrameOut.canId.id));                             // Set extended ID.
+    !CAN.beginExtendedPacket(canFrameOut->canId.id));                             // Set extended ID.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),
-    !CAN.write(canFrameOut.data, sizeof(canFrameOut.data)));                     // Set data.
+    !CAN.write(canFrameOut->data, sizeof(canFrameOut->data)));                    // Set data.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ENDPACKET),
     !CAN.endPacket());                                                  // Send packet.
 }
@@ -382,7 +379,7 @@ void LoadFromEEPROM() {
 
 bool SaveToEEPROM() {
   bool ret = false;                                       // Return value.
-  const uint16_t cooldownTime = 10000;                    // EEPROM write cooldown time.
+  constexpr uint16_t cooldownTime = 10000;                // EEPROM write cooldown time.
   static uint32_t cooldownTimer = 0;                      // Cooldown timer.
   static bool firstRun = true;                            // Allow first change without cooldown.
   if((millis() - cooldownTimer > cooldownTime) || firstRun) {  // Timer expiration check.
@@ -397,21 +394,7 @@ bool SaveToEEPROM() {
   }
   return ret;                                             // Return with the result.
 }
-/*
-uint32_t dataToExtId(uint16_t from, uint16_t cmd, uint16_t to_) {
-  from &= 0x3FF;                                          // 10bit
-  cmd &= 0x1FF;                                           // 9bit
-  to_ &= 0x3FF;                                           // 10bit
-  return (uint32_t)(((uint32_t)from << 0) | ((uint32_t)cmd << 10) | ((uint32_t)to_ << 19));
-}
 
-void extIdToData(uint32_t extId, uint16_t* from, uint16_t* cmd, uint16_t* to_) {
-  extId &= 0x1fffffff;                                    // 29bit
-  *from = (uint16_t)((extId >> 0) & 0x3FF);               // 10bit
-  *cmd = (uint16_t)((extId >> 10) & 0x1FF);               // 9bit
-  *to_ = (uint16_t)((extId >> 19) & 0x3FF);               // 10bit
-}
-*/
 void canIrqHandler() {                                    // CAN controller iterrupt rutin handler.
   canProcess++;                                           // Count incoming packets.
 }

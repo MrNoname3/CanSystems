@@ -73,7 +73,7 @@ struct RGBValues {
 //--- Enums ---//
 
 /// @brief Base command list for nodes.
-enum class canCmdB : uint16_t {
+enum class canCmd : uint16_t {
   BCMD_IDLE = 0,                              // Idle state.
   BCMD_PING,                                  // Ping command.
   BCMD_RESET,                                 // Node reset command.
@@ -81,25 +81,15 @@ enum class canCmdB : uint16_t {
   BCMD_SETADDRESS,                            // CAN address setup.
   BCMD_RGB_LED,                               // Set WS2812 RGB LED color.
   BCMD_GET_BUTTON_EVENT,                      // Get button event type.
+  BCMD_LAST_ELEMENT,                          // Last element of enum!
 
-  BCMD_LAST_ELEMENT                           // Last element of enum!
-};
+  NODE_CB_RESTARTED,                          // Node restarted.
+  NODE_CB_LAST_ELEMENT,                       // Last element of enum!
 
-/// @brief Node type specific extended command list.
-enum class canCmdE : uint16_t {
-  ECMD_PLAY_MP3 = static_cast<uint16_t>(canCmdB::BCMD_LAST_ELEMENT),   // Play MP3 file.
+  ECMD_PLAY_MP3,                              // Play MP3 file.
   ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
   ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
-
   ECMD_LAST_ELEMENT                           // Last element of enum!
-};
-
-/// @brief Callback types.
-enum class canCb : uint8_t {
-  NODE_CB_IDLE = 0,                           // No event state.
-  NODE_CB_RESTARTED,                          // Node restarted.
-
-  NODE_CB_LAST_ELEMENT                        // Last element of enum!
 };
 
 /// @brief Error types.
@@ -139,7 +129,7 @@ inline void handleExtSensors() __attribute__((always_inline));
 /// @param blue Value of blue color: 0-255.
 void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
 
-void sendCanResponse(const CanFrame canFrameOut);
+void sendCanResponse(CanFrame* canFrameOut);
 
 /// @brief Reset the MCU.
 void resetCMD();
