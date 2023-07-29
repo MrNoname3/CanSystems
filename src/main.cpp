@@ -72,7 +72,7 @@ void setup() {
 
   CAN.filterExtended(canFrameOut.canId.id, CAN_MASK);                         // Setup extended CAN ID filtering.
 
-  canFrameOut.canId.to_ = DEFAULT_MASTER_ADDRESS;
+  canFrameOut.canId.to_ = broadcastAddress;
   receivedCanFrames.put(canFrameOut);
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
@@ -113,7 +113,7 @@ void loop() {
     CanFrame canFrameOut;                                                     // CAN frame to send.
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
     canFrameOut.canId.cmd = static_cast<uint16_t>(canCmd::BCMD_GET_BUTTON_EVENT);
-    canFrameOut.canId.to_ = DEFAULT_MASTER_ADDRESS;
+    canFrameOut.canId.to_ = broadcastAddress;
 
     Serial.print(F("Button event: "));                                        // Debug prints.
     Serial.println(buttonState);
@@ -155,8 +155,23 @@ void loop() {
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
     canFrameOut.canId.cmd = canFrameOut.canId.cmd;
     canFrameOut.canId.to_ = canFrameIn.canId.from;
+
+#ifdef DEBUG_ON
+    Serial.println(F("Frame:"));
+    Serial.println(canFrameIn.canId.id);
+    Serial.println(canFrameIn.canId.from);
+    Serial.println(canFrameIn.canId.cmd);
+    Serial.println(canFrameIn.canId.to_);
+    for(uint8_t i = 0; i < sizeof(canFrameIn.data); i++) {
+      Serial.print(canFrameIn.data[i]);
+      Serial.print(F(" "));
+    }
+    Serial.println();
+#endif
     
     switch(static_cast<canCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
+
+      case canCmd::BCMD_IDLE: { } break;
       
       case canCmd::BCMD_PING: {                                               // Ping command.
         canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
@@ -199,6 +214,14 @@ void loop() {
         sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
 
+      case canCmd::BCMD_GET_BUTTON_EVENT: { } break;
+
+      case canCmd::BCMD_LAST_ELEMENT: { } break;
+
+      case canCmd::NODE_CB_RESTARTED: { } break;
+
+      case canCmd::NODE_CB_LAST_ELEMENT: { } break;
+
       case canCmd::ECMD_PLAY_MP3: {                                           // Play MP3 song.
         MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
         MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
@@ -216,6 +239,8 @@ void loop() {
         canFrameOut.data[2] = humidity;
         sendCanResponse(&canFrameOut);                                        // Send answer.
       } break;
+
+      case canCmd::ECMD_LAST_ELEMENT: { } break;
 
       default: {                                                              // Default case.
         Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
@@ -370,7 +395,7 @@ void LoadFromEEPROM() {
     Serial.print(SAVED_STATE);                            // Print saved mark.
   }
   else {
-    //settings.canAddress = DEFAULT_LOCAL_ADDRESS;          // If not, use default CAN address.
+    //settings.canAddress = defaultLocalAddress;          // If not, use default CAN address.
     Serial.print(DEFAULT_STATE);                          // Print default mark.
   }
   Serial.print(F("CAN address: "));                       // Print CAN address.
@@ -393,6 +418,21 @@ bool SaveToEEPROM() {
     Serial.println(F("Not saved! EEPROM cooldown!"));     // print it
   }
   return ret;                                             // Return with the result.
+}
+
+uint16_t calCrc(uint8_t* data, uint16_t length) {
+  uint16_t crc = 0x0000;
+  for (uint16_t i = 0; i < length; i++) {
+    crc ^= ((uint16_t)data[i] << 8);
+    for (uint8_t j = 0; j < 8; j++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc <<= 1;
+      }
+    }
+  }
+  return crc;
 }
 
 void canIrqHandler() {                                    // CAN controller iterrupt rutin handler.

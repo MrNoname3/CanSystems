@@ -19,8 +19,8 @@ static constexpr const char* ERR_STATE              = " [ ERR ]";   // Error sta
 static constexpr const char* SAVED_STATE            = "[S] ";       // Saved data mark.
 static constexpr const char* DEFAULT_STATE          = "[D] ";       // Default data mark.
 static constexpr uint8_t EEPROM_VALID               = 231;          // EEPROM validity check.
-static constexpr uint16_t DEFAULT_LOCAL_ADDRESS     = 444;          // Node default address if no saved available.
-static constexpr uint16_t DEFAULT_MASTER_ADDRESS    = 10;           // Default CAN master address.
+static constexpr uint16_t defaultLocalAddress       = 444;          // Node default address if no saved available.
+static constexpr uint16_t broadcastAddress          = 10;           // Default CAN master address.
 static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of LED's.
   
@@ -43,13 +43,15 @@ static constexpr uint8_t RF_TX                      = 15;           // RF serial
 
 //--- Structs ---//
 
-struct Settings {                             // The struct of the settings in the EEPROM.
+struct __attribute__((packed)) 
+Settings {                                    // The struct of the settings in the EEPROM.
   uint8_t isValid = 0;                        // Variable of address data validity.
-  uint16_t canAddress = DEFAULT_LOCAL_ADDRESS;  // Variable of CAN address.
+  uint16_t canAddress = defaultLocalAddress;  // Variable of CAN address.
 };
 
-union CanId{
-  uint32_t id;
+union __attribute__((packed)) 
+CanId {
+  uint32_t id = 0;
   struct {
     uint16_t to_ : 10;                        // 10 bits for 'to_'
     uint16_t cmd : 9;                         // 9 bits for 'cmd'
@@ -58,13 +60,15 @@ union CanId{
   };
 };
 
-struct CanFrame {
+struct __attribute__((packed)) 
+CanFrame {
   CanId canId;
-  uint8_t data[8];
+  uint8_t data[8] = {};
 };
 
 /// @brief Color values for RGB LED.
-struct RGBValues {
+struct __attribute__((packed))
+RGBValues {
   uint8_t red = 0;
   uint8_t green = 0;
   uint8_t blue = 0;
@@ -139,6 +143,12 @@ void LoadFromEEPROM();
 
 /// @brief Save data to EEPROM from the settings structure.
 bool SaveToEEPROM();
+
+/// @brief Calculates the 16bit CRC (XModem) of the given data.
+/// @param data Data whose CRC value should be calcilated.
+/// @param size Given data size in bytes.
+/// @return Returns with the calculated CRC value.
+uint16_t calCrc(uint8_t* data, uint16_t length);
 
 /// @brief Handles the interrupts from the SPI CAN controller.
 void canIrqHandler();
