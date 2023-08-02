@@ -4,9 +4,10 @@
 volatile uint8_t canProcess = 0;                                              // On CAN interrupt, it counts incoming packets.
 uint32_t pingTimer = 0;                                                       // It stores the last ping time.
 static constexpr uint16_t pingTime = 1500;                                    // Ping timeot time in ms.
-struct Settings settings;                                                     // Struct of settings.
+Settings settings;                                                            // Struct of settings.
 uint16_t newCanAddress = 0;                                                   // Store arrived new local CAN address.
 CircularBuffer<CanFrame, 5> receivedCanFrames;
+EEPROMHandler<Settings, 0> eepromHandler(&settings);
 
 //--- Maintenance variables ---//
 uint8_t cycleCostMax = 2;                                                     // Calculate and store max loop cost.
@@ -53,7 +54,13 @@ void setup() {
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
 
-  LoadFromEEPROM();                                                           // Loads stored data from EEPROM.
+  Serial.print(F("EEPROM data"));
+  if(eepromHandler.load()) {
+    Serial.println(OK_STATE);                                                 // If init ok, print OK.
+  }
+  else {
+    Serial.println(ERR_STATE);                                                // If can't init CAN controller, print ERROR.
+  }
 
   Serial.print(F("CAN"));                                                     // Serial debug print.
   CAN.setClockFrequency(8e6);                                                 // SPI CAN controller runs from 8MHz crystal.
@@ -64,6 +71,8 @@ void setup() {
   else {
     Serial.println(OK_STATE);                                                 // If init ok, print OK.
   }
+  Serial.print(F("Address: "));                                               // Print CAN address.
+  Serial.println(settings.canAddress);
 
   CanFrame canFrameOut;                                                       // CAN frame to send.
   canFrameOut.canId.from = settings.canAddress;
@@ -82,7 +91,6 @@ void setup() {
   MP3Player.volume(15);                                                       // Set MP3 player volume.
 
   MP3Player.play(1);
-  //MP3Player.play(2);
 
   Serial.print(F("HumTemp"));                                                 // Serial debug print.
   if(si7021.begin()) {                                                        // Initialize the I2C sensors and ping them.
@@ -98,7 +106,7 @@ void setup() {
 
   Serial.println(F("*************************"));                             // Debug prints.
   Serial.println(F("Loop starting..."));
-  wdt_enable(WDTO_30MS);                                                      // Enable WDT timer.
+  wdt_enable(WDTO_120MS);                                                     // Enable WDT timer.
   LED_L;                                                                      // Turn off LED.
 }
 
@@ -280,16 +288,21 @@ void loop() {
       MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
     }
     if(buttonState == 3) {
-      settings.isValid = EEPROM_VALID;                                      // Setup validity flag to struct.
       settings.canAddress = newCanAddress;                                  // Setup new can address to struct.
-      if(!SaveToEEPROM()) {                                                 // Save struct to EEPROM.
-        LoadFromEEPROM();                                                   // If not success, load old settings.
+
+      Serial.print(F("Saving new CAN address"));
+      if(eepromHandler.save()) {
+        CanId canId;                                                        // Struct of CAN id.
+        canId.from = 0;                                                     // Assemble CAN ID.
+        canId.cmd = 0;
+        canId.to_ = settings.canAddress;
+        CAN.filterExtended(canId.id, CAN_MASK);                             // Setup filter for new CAN address.
+        Serial.println(OK_STATE);
       }
-      CanId canId;                                                          // Struct of CAN id.
-      canId.from = 0;                                                       // Assemble CAN ID.
-      canId.cmd = 0;
-      canId.to_ = settings.canAddress;
-      CAN.filterExtended(canId.id, CAN_MASK);                               // Setup filter for new CAN address.
+      else {
+        Serial.println(ERR_STATE);
+      }
+      
       saveNewAddress = false;                                               // Disable saving.
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
       MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
@@ -368,10 +381,10 @@ void handleExtSensors() {
 
 void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBValues RGBColor;
-  RGBColor.red = red;                                                   // Set color values.
+  RGBColor.red = red;                                     // Set color values.
   RGBColor.green = green;
   RGBColor.blue = blue;
-  RGBColorBuffer.put(RGBColor);                                         // Add to queue.
+  RGBColorBuffer.put(RGBColor);                           // Add to queue.
 }
 
 void sendCanResponse(CanFrame* canFrameOut) {
@@ -380,59 +393,13 @@ void sendCanResponse(CanFrame* canFrameOut) {
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),
     !CAN.write(canFrameOut->data, sizeof(canFrameOut->data)));                    // Set data.
   bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ENDPACKET),
-    !CAN.endPacket());                                                  // Send packet.
+    !CAN.endPacket());                                                            // Send packet.
 }
 
 void resetCMD() {
   Serial.println(F("Restarting..."));
-  Serial.flush();                                                       // Sends out data from serial buffer, before reset.
-  resetFunc();                                                          // Call reset function.
-}
-
-void LoadFromEEPROM() {
-  EEPROM.get(0, settings);                                // Reading data from EEPROM to settings struct.
-  if(settings.isValid == EEPROM_VALID) {                  // If can address is valid, use it.
-    Serial.print(SAVED_STATE);                            // Print saved mark.
-  }
-  else {
-    //settings.canAddress = defaultLocalAddress;          // If not, use default CAN address.
-    Serial.print(DEFAULT_STATE);                          // Print default mark.
-  }
-  Serial.print(F("CAN address: "));                       // Print CAN address.
-  Serial.println(settings.canAddress);
-}
-
-bool SaveToEEPROM() {
-  bool ret = false;                                       // Return value.
-  constexpr uint16_t cooldownTime = 10000;                // EEPROM write cooldown time.
-  static uint32_t cooldownTimer = 0;                      // Cooldown timer.
-  static bool firstRun = true;                            // Allow first change without cooldown.
-  if((millis() - cooldownTimer > cooldownTime) || firstRun) {  // Timer expiration check.
-    cooldownTimer = millis();                             // Reload timer.
-    EEPROM.put(0, settings);                              // Save settings struct to EEPROM.
-    Serial.println(F("Saved!"));                          // Debug print.
-    firstRun = false;
-    ret =  true;                                          // Set return value.
-  }
-  else {                                                  // If EEPROM write is on cooldown,
-    Serial.println(F("Not saved! EEPROM cooldown!"));     // print it
-  }
-  return ret;                                             // Return with the result.
-}
-
-uint16_t calCrc(uint8_t* data, uint16_t length) {
-  uint16_t crc = 0x0000;
-  for (uint16_t i = 0; i < length; i++) {
-    crc ^= ((uint16_t)data[i] << 8);
-    for (uint8_t j = 0; j < 8; j++) {
-      if (crc & 0x8000) {
-        crc = (crc << 1) ^ 0x1021;
-      } else {
-        crc <<= 1;
-      }
-    }
-  }
-  return crc;
+  Serial.flush();                                         // Sends out data from serial buffer, before reset.
+  resetFunc();                                            // Call reset function.
 }
 
 void canIrqHandler() {                                    // CAN controller iterrupt rutin handler.

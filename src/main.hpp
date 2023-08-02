@@ -4,21 +4,18 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <CAN.h>                              /// SPI CAN controller library.
-#include <EEPROM.h>                           /// EEPROM access library.
 #include <avr/wdt.h>                          /// Watchdog timer library.
 #include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
+#include "eepromHandler.hpp"
 
 //--- Constants ---//
 static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
-static constexpr const char* OK_STATE               = " [ OK ]";    // OK status.
-static constexpr const char* ERR_STATE              = " [ ERR ]";   // Error status.
-static constexpr const char* SAVED_STATE            = "[S] ";       // Saved data mark.
-static constexpr const char* DEFAULT_STATE          = "[D] ";       // Default data mark.
-static constexpr uint8_t EEPROM_VALID               = 231;          // EEPROM validity check.
+static constexpr const char* OK_STATE               = ": [ OK ]";   // OK status.
+static constexpr const char* ERR_STATE              = ": [ ERR ]";  // Error status.
 static constexpr uint16_t defaultLocalAddress       = 444;          // Node default address if no saved available.
 static constexpr uint16_t broadcastAddress          = 10;           // Default CAN master address.
 static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
@@ -45,7 +42,7 @@ static constexpr uint8_t RF_TX                      = 15;           // RF serial
 
 struct __attribute__((packed)) 
 Settings {                                    // The struct of the settings in the EEPROM.
-  uint8_t isValid = 0;                        // Variable of address data validity.
+  uint16_t crc = 0;                           // Variable of address data validity.
   uint16_t canAddress = defaultLocalAddress;  // Variable of CAN address.
 };
 
@@ -137,18 +134,6 @@ void sendCanResponse(CanFrame* canFrameOut);
 
 /// @brief Reset the MCU.
 void resetCMD();
-
-/// @brief Load saved data from EEPROM to settings structure.
-void LoadFromEEPROM();
-
-/// @brief Save data to EEPROM from the settings structure.
-bool SaveToEEPROM();
-
-/// @brief Calculates the 16bit CRC (XModem) of the given data.
-/// @param data Data whose CRC value should be calcilated.
-/// @param size Given data size in bytes.
-/// @return Returns with the calculated CRC value.
-uint16_t calCrc(uint8_t* data, uint16_t length);
 
 /// @brief Handles the interrupts from the SPI CAN controller.
 void canIrqHandler();
