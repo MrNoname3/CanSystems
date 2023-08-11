@@ -10,16 +10,16 @@
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
-#include "eepromHandler.hpp"
+#include "eepromHandler.hpp"                  /// EEPROM wrapper class.
 
 //--- Constants ---//
 static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
 static constexpr const char* OK_STATE               = ": [ OK ]";   // OK status.
 static constexpr const char* ERR_STATE              = ": [ ERR ]";  // Error status.
-static constexpr uint16_t defaultLocalAddress       = 444;          // Node default address if no saved available.
-static constexpr uint16_t broadcastAddress          = 10;           // Default CAN master address.
+static constexpr uint16_t defaultLocalAddress       = 444;          // Node default address.
+static constexpr uint16_t broadcastAddress          = 10;           // Default CAN broadcast address.
 static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
-static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of LED's.
+static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
   
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
 static constexpr uint8_t LED                        = 4;            // Pin of the LED.
@@ -29,9 +29,9 @@ static constexpr uint8_t DFP_EN                     = 9;            // DFPlayer 
 static constexpr uint8_t DFP_BUSY                   = 3;            // DFPlayer busy pin.
 static constexpr uint8_t DFP_TX                     = 5;            // DFPlayer serial RX pin.
 static constexpr uint8_t DFP_RX                     = 6;            // DFPlayer serial TX pin.
-static constexpr uint8_t CHARGE_PIN                 = 17;           // Capacitor charge enable pin. (A3)
-static constexpr uint8_t RF_RX                      = 16;           // RF serial RX pin. (A2)
-static constexpr uint8_t RF_TX                      = 15;           // RF serial TX pin. (A1)
+static constexpr uint8_t EXT_SENSOR_EN              = 17;           // External sensor enable pin. (A3)
+static constexpr uint8_t RS232_RX                   = 16;           // RS232 serial RX pin. (A2)
+static constexpr uint8_t RS232_TX                   = 15;           // RS232 serial TX pin. (A1)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.
@@ -41,26 +41,25 @@ static constexpr uint8_t RF_TX                      = 15;           // RF serial
 //--- Structs ---//
 
 struct __attribute__((packed)) 
-Settings {                                    // The struct of the settings in the EEPROM.
-  uint16_t crc = 0;                           // Variable of address data validity.
-  uint16_t canAddress = defaultLocalAddress;  // Variable of CAN address.
+Settings {                                    // The struct of the settings.
+  uint16_t canAddress = defaultLocalAddress;  // CAN address.
 };
 
 union __attribute__((packed)) 
-CanId {
-  uint32_t id = 0;
+CanId {                                       // CAN ID store / convert.
+  uint32_t id = 0;                            // Extended CAN ID.
   struct {
-    uint16_t to_ : 10;                        // 10 bits for 'to_'
-    uint16_t cmd : 9;                         // 9 bits for 'cmd'
-    uint16_t from : 10;                       // 10 bits for 'from'
-    uint16_t padding : 3;                     // Padding to fill up to 32 bits
+    uint16_t to_ : 10;                        // 10 bits for receiver address.
+    uint16_t cmd : 9;                         // 9 bits for command.
+    uint16_t from : 10;                       // 10 bits for sender address.
+    uint16_t padding : 3;                     // Padding to fill up to 32 bits.
   };
 };
 
 struct __attribute__((packed)) 
-CanFrame {
-  CanId canId;
-  uint8_t data[8] = {};
+CanFrame {                                    // CAN frame.
+  CanId canId;                                // CAN ID.
+  uint8_t data[8] = {};                       // CAN data.
 };
 
 /// @brief Color values for RGB LED.
@@ -82,15 +81,15 @@ enum class canCmd : uint16_t {
   BCMD_SETADDRESS,                            // CAN address setup.
   BCMD_RGB_LED,                               // Set WS2812 RGB LED color.
   BCMD_GET_BUTTON_EVENT,                      // Get button event type.
-  BCMD_LAST_ELEMENT,                          // Last element of enum!
+  BCMD_LAST_ELEMENT,                          // Last element of base commands.
 
   NODE_CB_RESTARTED,                          // Node restarted.
-  NODE_CB_LAST_ELEMENT,                       // Last element of enum!
+  NODE_CB_LAST_ELEMENT,                       // Last element of callbacks.
 
   ECMD_PLAY_MP3,                              // Play MP3 file.
-  ECMD_CHARGE_DISPLAY,                        // Enable/disable external sensor charging.
+  ECMD_EXT_SENSOR_STATE,                      // Enable/disable external sensor.
   ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
-  ECMD_LAST_ELEMENT                           // Last element of enum!
+  ECMD_LAST_ELEMENT                           // Last element of node specific commands.
 };
 
 /// @brief Error types.
@@ -130,6 +129,8 @@ inline void handleExtSensors() __attribute__((always_inline));
 /// @param blue Value of blue color: 0-255.
 void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
 
+/// @brief Sends out the given CAN frame.
+/// @param canFrameOut Pointer to a CAN frame.
 void sendCanResponse(CanFrame* canFrameOut);
 
 /// @brief Reset the MCU.

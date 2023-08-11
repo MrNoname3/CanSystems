@@ -5,3 +5,4 @@
 .vscode/ipch
 platformio-device-monitor-*
 logs/device-monitor-*
+notes.txt

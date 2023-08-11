@@ -6,8 +6,8 @@ uint32_t pingTimer = 0;                                                       //
 static constexpr uint16_t pingTime = 1500;                                    // Ping timeot time in ms.
 Settings settings;                                                            // Struct of settings.
 uint16_t newCanAddress = 0;                                                   // Store arrived new local CAN address.
-CircularBuffer<CanFrame, 5> receivedCanFrames;
-EEPROMHandler<Settings, 0> eepromHandler(&settings);
+CircularBuffer<CanFrame, 5> receivedCanFrames;                                // Ringbuffer of received CAN frames.
+EEPROMHandler<Settings, 0> eepromHandler(&settings);                          // EEPROM store/load handler object.
 
 //--- Maintenance variables ---//
 uint8_t cycleCostMax = 2;                                                     // Calculate and store max loop cost.
@@ -26,12 +26,12 @@ PushButton Button(200, 500, 70);                                              //
 //--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
 
-//--- Temperature and humidity ---//
-bool enableCharging = true;                                                   // Enable/disable charge for external sensor.
+//--- Temperature, humidity and light ---//
+bool enableExtSensor = true;                                                  // Enable/disable external sensor.
 SI7021 si7021;                                                                // I2C humidity and temperature sensor driver.
 int16_t temperature = 0;                                                      // Temperature value.
 uint8_t humidity = 0;                                                         // Humidity value.
-uint8_t light = 0;                                                            // Light LDR value.
+uint8_t light = 0;                                                            // Light value.
 
 //--- Setup section ---//
 void setup() {
@@ -40,8 +40,8 @@ void setup() {
   pinMode(LED, OUTPUT);                                                       // LED pin -> output.
   pinMode(CAN_INT, INPUT_PULLUP);                                             // CAN_INT pin -> input with pullup.
   pinMode(BUTTON, INPUT_PULLUP);                                              // Button pin -> input with pullup.
-  pinMode(CHARGE_PIN, OUTPUT);                                                // Charge enable pin -> output.
-  delay(1);                                                                   // Little delay.
+  pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
+  delay(1);
 
   LED_H;                                                                      // Turn on LED.
   Serial.println(F("*************************"));
@@ -55,11 +55,11 @@ void setup() {
   ledStrip.Show();                                                            // and show it.
 
   Serial.print(F("EEPROM data"));
-  if(eepromHandler.load()) {
-    Serial.println(OK_STATE);                                                 // If init ok, print OK.
+  if(eepromHandler.load()) {                                                  // Load data from EEPROM.
+    Serial.println(OK_STATE);
   }
   else {
-    Serial.println(ERR_STATE);                                                // If can't init CAN controller, print ERROR.
+    Serial.println(ERR_STATE);
   }
 
   Serial.print(F("CAN"));                                                     // Serial debug print.
@@ -92,16 +92,16 @@ void setup() {
 
   MP3Player.play(1);
 
+  Wire.setClock(400000);                                                      // Set I2C bus speed.
+  Wire.setWireTimeout(10000, true);                                           // Set I2C timeout to 10ms.
   Serial.print(F("HumTemp"));                                                 // Serial debug print.
-  if(si7021.begin()) {                                                        // Initialize the I2C sensors and ping them.
+  if(si7021.begin()) {                                                        // Initialize the I2C sensor and ping it.
     Serial.println(OK_STATE);                                                 // If init ok, print OK.
   }
   else {
     Serial.println(ERR_STATE);                                                // If can't init, print ERROR.
     bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_SENSOR_INIT)); // Set error flag.
   }
-  Wire.setClock(400000);                                                      // Set I2C bus speed.
-  Wire.setWireTimeout(10000, true);                                           // Set I2C timeout to 10ms.
   si7021.setPrecision(0x81);                                                  // Set humtemp sensor reading resolution.
 
   Serial.println(F("*************************"));                             // Debug prints.
@@ -131,7 +131,7 @@ void loop() {
 
   //--- Handle received CAN messages ---//
   if(canProcess > 0) {                                                        // If the CAN controller interrupted.
-    canProcess--;                                                             // Lower value.
+    canProcess--;                                                             // Decrement value.
     uint8_t recvSize = CAN.parsePacket();                                     // Process CAN message.
     CanFrame canFrame;                                                        // CAN frame for received message.
     canFrame.canId.id = CAN.packetId();                                       // ID of received CAN packet.
@@ -181,25 +181,25 @@ void loop() {
 
       case canCmd::BCMD_IDLE: { } break;
       
-      case canCmd::BCMD_PING: {                                               // Ping command.
+      case canCmd::BCMD_PING: {
         canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
         canFrameOut.data[1] = lowByte(errorCode);                             // Send error code.
         canFrameOut.data[2] = highByte(errorCode);
         errorCode = 0;                                                        // Clear error code.
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+        sendCanResponse(&canFrameOut);
       } break;
 
-        case canCmd::BCMD_RESET: {                                            // Reset MCU.
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+      case canCmd::BCMD_RESET: {
+        sendCanResponse(&canFrameOut);
         resetCMD();                                                           // Call reset function.
       } break;
 
       case canCmd::BCMD_GET_FW_VERSION: {                                     // Send firmware version to master.
         memcpy(canFrameOut.data, SW_VERSION, strlen(SW_VERSION) + 1);
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+        sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::BCMD_SETADDRESS: {                                         // Set new CAN address. Response: used address.
+      case canCmd::BCMD_SETADDRESS: {
         newCanAddress = (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8)); // 0.->address lowbyte, 1.->address highbyte.
         newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
         
@@ -217,9 +217,9 @@ void loop() {
         }
       } break;
 
-      case canCmd::BCMD_RGB_LED: {                                            // Add RGB color values to queue.
+      case canCmd::BCMD_RGB_LED: {
         addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+        sendCanResponse(&canFrameOut);
       } break;
 
       case canCmd::BCMD_GET_BUTTON_EVENT: { } break;
@@ -230,27 +230,27 @@ void loop() {
 
       case canCmd::NODE_CB_LAST_ELEMENT: { } break;
 
-      case canCmd::ECMD_PLAY_MP3: {                                           // Play MP3 song.
+      case canCmd::ECMD_PLAY_MP3: {
         MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
         MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+        sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::ECMD_CHARGE_DISPLAY: {                                     // Enable/disable external sensor charge.
-        enableCharging = static_cast<bool>(canFrameOut.data[0]);              // Save requested charging state.
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+      case canCmd::ECMD_EXT_SENSOR_STATE: {
+        enableExtSensor = static_cast<bool>(canFrameOut.data[0]);             // Save requested state.
+        sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::ECMD_READ_HUMTEMP: {                                       // Send humidity and temperature value.
+      case canCmd::ECMD_READ_HUMTEMP: {
         canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
         canFrameOut.data[1] = highByte(temperature);
         canFrameOut.data[2] = humidity;
-        sendCanResponse(&canFrameOut);                                        // Send answer.
+        sendCanResponse(&canFrameOut);
       } break;
 
       case canCmd::ECMD_LAST_ELEMENT: { } break;
 
-      default: {                                                              // Default case.
+      default: {
         Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
         bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
       } break;
@@ -261,7 +261,7 @@ void loop() {
   //--- Handling RGB LEDs ---//
   if(RGBColorBuffer.isEmpty() == false) {                                   // Check RGB color buffer.
     RGBValues RGBColor = RGBColorBuffer.pop();                              // Get a color set from the queue.
-    ledStrip.ClearTo(RgbColor(RGBColor.red, RGBColor.green, RGBColor.blue));  // Set same color to all RGB LED.
+    ledStrip.ClearTo(RgbColor(RGBColor.red, RGBColor.green, RGBColor.blue));  // Set the same color for all RGB LED.
     ledStrip.Show();                                                        // Send color data to RGB LED strip.
   }
 
@@ -271,13 +271,13 @@ void loop() {
   }
 
   //--- Handle temperature and humidity sensors ---//
-  if(buttonState == 4) { enableCharging = true; }                           // Check button state to handle external sensor.
-  if(buttonState == 5) { enableCharging = false; }
-  handleHumTempSensor();                                                    // Call I2C sensor handler.
-  handleExtSensors();                                                       // Call external sensor handler.
+  if(buttonState == 4) { enableExtSensor = true; }                          // Check button state to handle external sensor.
+  if(buttonState == 5) { enableExtSensor = false; }
+  handleHumTempSensor();
+  handleExtSensors();
 
   //--- Handling MP3 player ---//
-  MP3Player.spin();                                                         // Take care of playing queue.
+  MP3Player.spin();
 
   //--- Maintenance ---//
   if(saveNewAddress) {                                                      // Check if saving is enabled.
@@ -288,11 +288,11 @@ void loop() {
       MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
     }
     if(buttonState == 3) {
-      settings.canAddress = newCanAddress;                                  // Setup new can address to struct.
+      settings.canAddress = newCanAddress;                                  // Setup new can address.
 
       Serial.print(F("Saving new CAN address"));
-      if(eepromHandler.save()) {
-        CanId canId;                                                        // Struct of CAN id.
+      if(eepromHandler.save()) {                                            // Save new CAN address to EEPROM.
+        CanId canId;                                                        // Struct of CAN ID.
         canId.from = 0;                                                     // Assemble CAN ID.
         canId.cmd = 0;
         canId.to_ = settings.canAddress;
@@ -309,9 +309,9 @@ void loop() {
     }
   }
 
-  uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cysle cost.
-  if(cycleCost > cycleCostMax) {                                            // If it is above max.
-    cycleCostMax = cycleCost;                                               // Save the new max.
+  uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cycle cost.
+  if(cycleCost > cycleCostMax) {                                            // If it is above max,
+    cycleCostMax = cycleCost;                                               // save the new max.
     Serial.print(F("Max cost: "));                                          // Debug print.
     Serial.println(cycleCostMax);
   }
@@ -367,12 +367,12 @@ void handleExtSensors() {
   light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
 
   if(millis() - sensorStartupTimer >= sensorStartDelay) {               // Without it the ext sensor sometimes become unstable due restarts.
-    if(light > sensorOnLightValue && enableCharging) {                  // On daylight...
-      digitalWrite(CHARGE_PIN, HIGH);                                   // turn on the external sensor.
+    if(light > sensorOnLightValue && enableExtSensor) {                 // On daylight...
+      digitalWrite(EXT_SENSOR_EN, HIGH);                                // turn on the external sensor.
     }
     else {
-      if(light < sensorOffLightValue || !enableCharging) {              // On night time...
-        digitalWrite(CHARGE_PIN, LOW);                                  // Turn off the ext sensor.
+      if(light < sensorOffLightValue || !enableExtSensor) {             // On night time...
+        digitalWrite(EXT_SENSOR_EN, LOW);                               // Turn off the ext sensor.
         sensorStartupTimer = millis();                                  // Reload timer.
       }
     }     
@@ -399,9 +399,9 @@ void sendCanResponse(CanFrame* canFrameOut) {
 void resetCMD() {
   Serial.println(F("Restarting..."));
   Serial.flush();                                         // Sends out data from serial buffer, before reset.
-  resetFunc();                                            // Call reset function.
+  resetFunc();
 }
 
-void canIrqHandler() {                                    // CAN controller iterrupt rutin handler.
+void canIrqHandler() {                                    // CAN controller interrupt rutin handler.
   canProcess++;                                           // Count incoming packets.
 }
