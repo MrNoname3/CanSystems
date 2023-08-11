@@ -27,7 +27,6 @@ PushButton Button(200, 500, 70);                                              //
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
 
 //--- Temperature, humidity and light ---//
-bool enableExtSensor = true;                                                  // Enable/disable external sensor.
 SI7021 si7021;                                                                // I2C humidity and temperature sensor driver.
 int16_t temperature = 0;                                                      // Temperature value.
 uint8_t humidity = 0;                                                         // Humidity value.
@@ -140,7 +139,7 @@ void loop() {
       CAN.readBytes(canFrame.data, sizeof(canFrame.data));                    // read and store it.
     }
 
-    if(CAN.packetExtended() == true) {                                        // Handle standard messages as broadcast messages.                           
+    if(CAN.packetExtended() == true) {                                        // Handle standard messages as broadcast messages.
       if(settings.canAddress != canFrame.canId.to_) {                         // Software CAN ID filter. (HW doesn't work properly.)
         Serial.print(F("SW filter rejected ID: "));                           // Debug print of dropped package.
         Serial.println(canFrame.canId.id);
@@ -176,11 +175,11 @@ void loop() {
     }
     Serial.println();
 #endif
-    
+
     switch(static_cast<canCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
 
       case canCmd::BCMD_IDLE: { } break;
-      
+
       case canCmd::BCMD_PING: {
         canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
         canFrameOut.data[1] = lowByte(errorCode);                             // Send error code.
@@ -202,10 +201,10 @@ void loop() {
       case canCmd::BCMD_SETADDRESS: {
         newCanAddress = (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8)); // 0.->address lowbyte, 1.->address highbyte.
         newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
-        
+
         if(newCanAddress != settings.canAddress) {                            // Check if new address is equal to old or not.
           constexpr uint8_t ledColor = 200;
-          
+
           saveNewAddress = true;                                              // Enable saving.
           MP3Player.detachRGBController();                                    // Prevent RGB state overwrite.
           addToRGBQueue(0, ledColor, 0);                                      // Turn on RGB LED as green.
@@ -237,14 +236,15 @@ void loop() {
       } break;
 
       case canCmd::ECMD_EXT_SENSOR_STATE: {
-        enableExtSensor = static_cast<bool>(canFrameOut.data[0]);             // Save requested state.
+        digitalWrite(EXT_SENSOR_EN, canFrameOut.data[0]);
         sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::ECMD_READ_HUMTEMP: {
+      case canCmd::ECMD_READ_HUM_TEMP_LDR: {
         canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
         canFrameOut.data[1] = highByte(temperature);
         canFrameOut.data[2] = humidity;
+        canFrameOut.data[3] = light;
         sendCanResponse(&canFrameOut);
       } break;
 
@@ -271,10 +271,9 @@ void loop() {
   }
 
   //--- Handle temperature and humidity sensors ---//
-  if(buttonState == 4) { enableExtSensor = true; }                          // Check button state to handle external sensor.
-  if(buttonState == 5) { enableExtSensor = false; }
-  handleHumTempSensor();
-  handleExtSensors();
+  if(buttonState == 4) { digitalWrite(EXT_SENSOR_EN, HIGH); }               // Handle external sensor.
+  if(buttonState == 5) { digitalWrite(EXT_SENSOR_EN, LOW); }
+  handleSensors();
 
   //--- Handling MP3 player ---//
   MP3Player.spin();
@@ -302,7 +301,7 @@ void loop() {
       else {
         Serial.println(ERR_STATE);
       }
-      
+
       saveNewAddress = false;                                               // Disable saving.
       addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
       MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
@@ -319,14 +318,17 @@ void loop() {
   wdt_reset();                                                              // Reset the watchdog timer.
 }
 
-void handleHumTempSensor() {
+void handleSensors() {
   static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
+  constexpr uint8_t adcInputFilterAlpha = 10;                               // Complementer filter ALPHA value.
+  uint8_t lightRaw = analogRead(A6) >> 2;                                   // Analog read and map from 10bit to 8bit.
+  light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
 
   switch(sensorState) {
     case si7021States::IDLE : {
       constexpr uint16_t sensorReadingTime = 60000;
       static uint32_t sensorReadingTimer = 0;                               // Sensor reading timer.
-      
+
       if(millis() - sensorReadingTimer >= sensorReadingTime) {              // Check timer.
         sensorState = si7021States::READ_TEMPERATURE;
         sensorReadingTimer = millis();                                      // Reload timer.
@@ -353,29 +355,6 @@ void handleHumTempSensor() {
     bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_READ_TIMEOUT));  // Set error flag.
     Wire.clearWireTimeoutFlag();                                            // Clear I2C timeout flag.
     Serial.println(F("I2C timeout occured!"));
-  }
-}
-
-void handleExtSensors() {
-  constexpr uint8_t sensorOnLightValue = 10;                            // Light value to turn on the ext sensor.
-  constexpr uint8_t sensorOffLightValue = 5;                            // Light value to turn off the ext sensor.
-  constexpr uint16_t sensorStartDelay = 8000;                           // Startup delay value in ms for ext sensor.
-  constexpr uint8_t adcInputFilterAlpha = 10;                           // Complementer filter ALPHA value.
-  static uint32_t sensorStartupTimer = 0;                               // Timer to delay the sensor activation.
-  
-  uint8_t lightRaw = analogRead(A6) >> 2;                               // Analog read and map from 10bit to 8bit.
-  light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
-
-  if(millis() - sensorStartupTimer >= sensorStartDelay) {               // Without it the ext sensor sometimes become unstable due restarts.
-    if(light > sensorOnLightValue && enableExtSensor) {                 // On daylight...
-      digitalWrite(EXT_SENSOR_EN, HIGH);                                // turn on the external sensor.
-    }
-    else {
-      if(light < sensorOffLightValue || !enableExtSensor) {             // On night time...
-        digitalWrite(EXT_SENSOR_EN, LOW);                               // Turn off the ext sensor.
-        sensorStartupTimer = millis();                                  // Reload timer.
-      }
-    }     
   }
 }
 

@@ -20,7 +20,7 @@ static constexpr uint16_t defaultLocalAddress       = 444;          // Node defa
 static constexpr uint16_t broadcastAddress          = 10;           // Default CAN broadcast address.
 static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
-  
+
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
 static constexpr uint8_t LED                        = 4;            // Pin of the LED.
 static constexpr uint8_t CAN_INT                    = 2;            // Interrupt pin of the SPI CAN controller.
@@ -40,12 +40,12 @@ static constexpr uint8_t RS232_TX                   = 15;           // RS232 ser
 
 //--- Structs ---//
 
-struct __attribute__((packed)) 
+struct __attribute__((packed))
 Settings {                                    // The struct of the settings.
   uint16_t canAddress = defaultLocalAddress;  // CAN address.
 };
 
-union __attribute__((packed)) 
+union __attribute__((packed))
 CanId {                                       // CAN ID store / convert.
   uint32_t id = 0;                            // Extended CAN ID.
   struct {
@@ -56,7 +56,7 @@ CanId {                                       // CAN ID store / convert.
   };
 };
 
-struct __attribute__((packed)) 
+struct __attribute__((packed))
 CanFrame {                                    // CAN frame.
   CanId canId;                                // CAN ID.
   uint8_t data[8] = {};                       // CAN data.
@@ -88,7 +88,7 @@ enum class canCmd : uint16_t {
 
   ECMD_PLAY_MP3,                              // Play MP3 file.
   ECMD_EXT_SENSOR_STATE,                      // Enable/disable external sensor.
-  ECMD_READ_HUMTEMP,                          // Read humidity and temperature.
+  ECMD_READ_HUM_TEMP_LDR,                     // Read humidity, temperature and light value.
   ECMD_LAST_ELEMENT                           // Last element of node specific commands.
 };
 
@@ -116,12 +116,8 @@ enum class si7021States : uint8_t {
 
 //--- Functions ---//
 
-/// @brief Handles the I2C humidity and temperature sensor.
-inline void handleHumTempSensor() __attribute__((always_inline));
-
-/// @brief Turns on/off the external
-/// temperature and humidity sensor with LCD screen.
-inline void handleExtSensors() __attribute__((always_inline));
+/// @brief Handles the I2C humidity&temperature sensor and the analog light sensor.
+inline void handleSensors() __attribute__((always_inline));
 
 /// @brief Put the given data to RGB LED queue.
 /// @param red Value of red color: 0-255.
