@@ -11,6 +11,7 @@
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
 #include "eepromHandler.hpp"                  /// EEPROM wrapper class.
+#include "serialIR.hpp"
 
 //--- Constants ---//
 static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
@@ -29,9 +30,10 @@ static constexpr uint8_t DFP_EN                     = 9;            // DFPlayer 
 static constexpr uint8_t DFP_BUSY                   = 3;            // DFPlayer busy pin.
 static constexpr uint8_t DFP_TX                     = 5;            // DFPlayer serial RX pin.
 static constexpr uint8_t DFP_RX                     = 6;            // DFPlayer serial TX pin.
+static constexpr uint8_t LDR_PIN                    = 21;           // Analog light sensor pin. (A7)
 static constexpr uint8_t EXT_SENSOR_EN              = 17;           // External sensor enable pin. (A3)
-static constexpr uint8_t RS232_RX                   = 16;           // RS232 serial RX pin. (A2)
-static constexpr uint8_t RS232_TX                   = 15;           // RS232 serial TX pin. (A1)
+static constexpr uint8_t RS232_RX                   = 15;           // RS232 serial RX pin. (A2)
+static constexpr uint8_t RS232_TX                   = 16;           // RS232 serial TX pin. (A1)
 
 #define LED_T (PORTD ^=  (1 << PORTD4))       // LED pin toggle.
 #define LED_H (PORTD |=  (1 << PORTD4))       // LED pin high.

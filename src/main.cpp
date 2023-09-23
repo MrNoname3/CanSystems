@@ -32,6 +32,8 @@ int16_t temperature = 0;                                                      //
 uint8_t humidity = 0;                                                         // Humidity value.
 uint8_t light = 0;                                                            // Light value.
 
+SerialIR swSerial(RS232_RX, RS232_TX);
+
 //--- Setup section ---//
 void setup() {
   Serial.begin(115200);                                                       // Open serial port with the given baudrate.
@@ -41,8 +43,10 @@ void setup() {
   pinMode(BUTTON, INPUT_PULLUP);                                              // Button pin -> input with pullup.
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
-
   LED_H;                                                                      // Turn on LED.
+  //delay(100);
+  digitalWrite(EXT_SENSOR_EN, HIGH);
+
   Serial.println(F("*************************"));
   Serial.println(F("Starting..."));                                           // Serial debug print.
   Serial.print(F("CPP: "));
@@ -113,6 +117,10 @@ void loop() {
 
   //--- Maintenance ---//
   uint32_t cycleTimer = millis();                                             // Save millis value for loop cost calculation.
+
+  while(swSerial.available() > 0) {
+    Serial.println(swSerial.read());
+  }
 
   //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));    // Check button actual state.
@@ -321,7 +329,7 @@ void loop() {
 void handleSensors() {
   static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
   constexpr uint8_t adcInputFilterAlpha = 10;                               // Complementer filter ALPHA value.
-  uint8_t lightRaw = analogRead(A6) >> 2;                                   // Analog read and map from 10bit to 8bit.
+  uint8_t lightRaw = analogRead(LDR_PIN) >> 2;                              // Analog read and map from 10bit to 8bit.
   light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
 
   switch(sensorState) {
