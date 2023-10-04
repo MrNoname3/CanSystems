@@ -23,6 +23,12 @@ CircularBuffer<RGBValues, 3> RGBColorBuffer;                                  //
 //--- Button ---//
 PushButton Button(200, 500, 70);                                              // Object to handle pushbutton events.
 
+//--- SPI and OTA ---//
+static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
+static constexpr uint8_t otaFwPiece = 4;                                      // Size of FW chunks in bytes.
+SPIFlash flash(FLASH_CS, 0xEF40);                                             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
+OTA<otaFlashBegin, otaFwPiece> ota(&flash, calculateCRC16);                   // OTA handler.
+
 //--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
 
@@ -53,17 +59,23 @@ void setup() {
   Serial.println(__cplusplus);
   Serial.print(F("FW: "));
   Serial.println(SW_VERSION);
+  Serial.print(F("Fuses: "));
+  Serial.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
+  Serial.print(SPACER);
+  Serial.print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
+  Serial.print(SPACER);
+  Serial.print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
+  Serial.print(SPACER);
+  Serial.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
 
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
 
   Serial.print(F("EEPROM data"));
-  if(eepromHandler.load()) {                                                  // Load data from EEPROM.
-    Serial.println(OK_STATE);
-  }
-  else {
-    Serial.println(ERR_STATE);
-  }
+  eepromHandler.load() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);  // Load data from EEPROM.
+
+  Serial.print(F("FLASH"));
+  flash.initialize() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);    // Initialise SPI FLASH.
 
   Serial.print(F("CAN"));                                                     // Serial debug print.
   CAN.setClockFrequency(8e6);                                                 // SPI CAN controller runs from 8MHz crystal.
@@ -123,7 +135,7 @@ void loop() {
   }
 
   //--- Button press handling ---//
-  uint8_t buttonState = Button.buttonCheck(millis(), digitalRead(BUTTON));    // Check button actual state.
+  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? true : false);  // Check button actual state.
   if(buttonState > 0) {                                                       // Filter unvalid states.
     CanFrame canFrameOut;                                                     // CAN frame to send.
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
@@ -230,6 +242,20 @@ void loop() {
       } break;
 
       case canCmd::BCMD_GET_BUTTON_EVENT: { } break;
+
+      case canCmd::BCMD_OTA_START: {
+        const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
+
+
+      } break;
+
+      case canCmd::BCMD_OTA_SEND: {
+
+      } break;
+
+      case canCmd::BCMD_OTA_END: {
+
+      } break;
 
       case canCmd::BCMD_LAST_ELEMENT: { } break;
 
@@ -391,4 +417,21 @@ void resetCMD() {
 
 void canIrqHandler() {                                    // CAN controller interrupt rutin handler.
   canProcess++;                                           // Count incoming packets.
+}
+
+uint16_t calculateCRC16(const uint8_t* data, uint16_t length) {
+  constexpr uint16_t polynomial = 0x1021;
+  uint16_t crc = 0;
+  for(uint16_t i = 0; i < length; i++) {
+    crc ^= ((uint16_t)data[i] << 8);
+    for(uint8_t j = 0; j < 8; j++) {
+      if(crc & 0x8000) {
+        crc = (crc << 1) ^ polynomial;
+      }
+      else {
+        crc <<= 1;
+      }
+    }
+  }
+  return crc;
 }

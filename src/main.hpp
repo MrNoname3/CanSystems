@@ -5,18 +5,22 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <CAN.h>                              /// SPI CAN controller library.
 #include <avr/wdt.h>                          /// Watchdog timer library.
+#include <avr/boot.h>                         /// Reading fuses.
 #include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
 #include "eepromHandler.hpp"                  /// EEPROM wrapper class.
+#include <SPIFlash.h>                         /// SPI FLASH module driver.
+#include "ota.hpp"                            /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//
 static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
 static constexpr const char* OK_STATE               = ": [ OK ]";   // OK status.
 static constexpr const char* ERR_STATE              = ": [ ERR ]";  // Error status.
+static constexpr const char* SPACER                 = " | ";        // Spacer for listings.
 static constexpr uint16_t defaultLocalAddress       = 444;          // Node default address.
 static constexpr uint16_t broadcastAddress          = 10;           // Default CAN broadcast address.
 static constexpr uint32_t CAN_MASK                  = 0x1FF80000;   // CAN extended ID mask.
@@ -25,7 +29,8 @@ static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
 static constexpr uint8_t LED                        = 4;            // Pin of the LED.
 static constexpr uint8_t CAN_INT                    = 2;            // Interrupt pin of the SPI CAN controller.
-static constexpr uint8_t BUTTON                     = 8;            // Pushbutton pin.
+static constexpr uint8_t FLASH_CS                   = 8;            // SPI FLASH CS pin.
+static constexpr uint8_t BUTTON                     = 20;           // Pushbutton pin. (A6)
 static constexpr uint8_t DFP_EN                     = 9;            // DFPlayer switch pin.
 static constexpr uint8_t DFP_BUSY                   = 3;            // DFPlayer busy pin.
 static constexpr uint8_t DFP_TX                     = 5;            // DFPlayer serial RX pin.
@@ -61,7 +66,8 @@ CanId {                                       // CAN ID store / convert.
 struct __attribute__((packed))
 CanFrame {                                    // CAN frame.
   CanId canId;                                // CAN ID.
-  uint8_t data[8] = {};                       // CAN data.
+  uint8_t data[8];                            // CAN data.
+  CanFrame() : data{0} {}
 };
 
 /// @brief Color values for RGB LED.
@@ -83,6 +89,9 @@ enum class canCmd : uint16_t {
   BCMD_SETADDRESS,                            // CAN address setup.
   BCMD_RGB_LED,                               // Set WS2812 RGB LED color.
   BCMD_GET_BUTTON_EVENT,                      // Get button event type.
+  BCMD_OTA_START,                             // Init OTA process.
+  BCMD_OTA_SEND,                              // Stream FW bytes to OTA handler.
+  BCMD_OTA_END,                               // OTA process ended.
   BCMD_LAST_ELEMENT,                          // Last element of base commands.
 
   NODE_CB_RESTARTED,                          // Node restarted.
@@ -140,5 +149,10 @@ void canIrqHandler();
 /// @brief Reset the microcontroller.
 void (*resetFunc)() = nullptr;
 
+/// @brief Calculates the 16bit CRC (XModem) of the given data.
+/// @param data Data whose CRC value should be calculated.
+/// @param length Given data length in bytes.
+/// @return Returns with the calculated CRC value.
+uint16_t calculateCRC16(const uint8_t* data, uint16_t length);
 
 #endif // MAIN_HPP
