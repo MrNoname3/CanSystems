@@ -87,16 +87,18 @@ public:
 
   /// @brief Calculates the 16bit CRC (XModem) of the given data.
   /// @param data Data whose CRC value should be calculated.
-  /// @param size Given data size in bytes.
+  /// @param length Given data length in bytes.
   /// @return Returns with the calculated CRC value.
-  static uint16_t calCrc(uint8_t* data, uint16_t size) {
-    uint16_t crc = 0x0000;
-    for (uint16_t i = 0; i < size; i++) {
+  static uint16_t calCrc(const uint8_t* data, uint16_t length) {
+    constexpr uint16_t polynomial = 0x1021;
+    uint16_t crc = 0;
+    for(uint16_t i = 0; i < length; i++) {
       crc ^= ((uint16_t)data[i] << 8);
-      for (uint8_t j = 0; j < 8; j++) {
-        if (crc & 0x8000) {
-          crc = (crc << 1) ^ 0x1021;
-        } else {
+      for(uint8_t j = 0; j < 8; j++) {
+        if(crc & 0x8000) {
+          crc = (crc << 1) ^ polynomial;
+        }
+        else {
           crc <<= 1;
         }
       }
