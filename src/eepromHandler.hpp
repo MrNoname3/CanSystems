@@ -111,12 +111,13 @@ public:
 
 private:
 
-  T* data = nullptr;                            // Pointer of user datatype.
+  T* data;                                      // Pointer of user datatype.
 
   struct __attribute__((packed)) 
   EEPROMData {                                  // Data frame to stored in EEPROM.
-    uint16_t crc = 0;                           // Data struct CRC value.
+    uint16_t crc;                               // Data struct CRC value.
     T data;                                     // Data type template.
+    EEPROMData() : crc(0) { }
   };
 
 };
