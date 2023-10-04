@@ -12,10 +12,10 @@ class EEPROMHandler {
 
 public:
 
-  /// @brief Default constructor.
+  /// @brief Constructor of EEPROM handler class.
   EEPROMHandler() = default;
 
-  /// @brief Constructor with data pointer.
+  /// @brief Constructor of EEPROM handler class with pointer to the data.
   /// @param data The pointer of the data, which we want to 'save to' / 'load from' EEPROM.
   EEPROMHandler(T* data) : data(data) { }
 

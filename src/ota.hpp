@@ -22,7 +22,9 @@ public:
     FwPiece() : dataAddress(0), fwData{0}, crc(0) { }
   };
 
-  /// @brief Default constructor.
+  /// @brief Constructor of OTA handler class.
+  /// @param flash Pointer of the SPI FLASH handler object.
+  /// @param calCrc Pointer of the 16bit CRC calculator function.
   OTA(SPIFlash* flash, uint16_t (*calCrc)(const uint8_t*, uint16_t)) : flash(flash), fwAddressPointerW(0), fwAddressPointerR(0), calCrc(calCrc) { }
 
   /// @brief Default destructor.
