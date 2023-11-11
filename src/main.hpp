@@ -35,28 +35,10 @@ ADC_MODE(ADC_VCC);
 //--- Functions ---//
 
 /// @brief 
-/// @param host_p 
-/// @return 
-IPAddress DNS_Resolv(const char* host_p);
-
-/// @brief 
-/// @param  
-void ConnectionStatus();
-
-/// @brief 
 /// @param topic 
 /// @param payload 
 /// @param length 
 void onMqttPublish(const char* topic, uint8_t* payload, int length);
-
-/// @brief 
-/// @param  
-void setClock();
-
-/// @brief 
-/// @param  
-/// @return 
-const char* getClock();
 
 /// @brief 
 /// @param  
