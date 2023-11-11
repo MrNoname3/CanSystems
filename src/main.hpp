@@ -1,64 +1,73 @@
-#ifndef __MAIN_HPP__
-#define __MAIN_HPP__
+#ifndef MAIN_HPP
+#define MAIN_HPP
 
-#include <Arduino.h>
-#include <SPI.h>
-#include <ENC28J60lwIP.h>
-#include <WiFiClient.h>
-#include <WiFiClientSecure.h>     // WiFiClient (-> TCPClient)
-#include <ESP8266WiFi.h>
-#include "cert.hpp"
-#include <PubSubClient.h>
-#include "mqttSettings.hpp"
-#include <Ticker.h>                                       //For LED status
+//--- Headers ---//
+#include <Arduino.h>                          /// Arduino libraries header.
+#include <Ticker.h>                           /// Timer interrupt hadnler.
+#include <ESP8266WiFi.h>                      /// Wifi driver.
+#include <ENC28J60lwIP.h>                     /// Ethernet driver.
+#include <WiFiClientSecure.h>                 /// TCP client with SSL.
+#include <PubSubClient.h>                     /// MQTT client.
+#include "secrets.hpp"                        /// MQTT settings and cert for SSL communication.
 
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
+//--- Constants ---//
+static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
+static constexpr const char* OK_STATE               = " [ OK ]";    // OK status.
+static constexpr const char* ERR_STATE              = " [ ERR ]";   // Error status.
 
-#include <ESP8266HTTPClient.h>
+static constexpr const uint8_t LED                  = D8;           // Status LED.
+static constexpr const uint8_t SPI_CS               = D0;           // Ethernet shield SPI CS.
+static constexpr const uint8_t RAD                  = D2;           // Radiation meter.
 
-//////////////////////////////////////////////////
-#include <WiFiUdp.h>
-#include <WakeOnLan.h>
-//////////////////////////////////////////////////
+#define LED_T (GPO  ^=  (1 << LED))                 // LED pin toggle.
+#define LED_H (GPOS |=  (1 << LED))                 // LED pin high.
+#define LED_L (GPOC |=  (1 << LED))                 // LED pin low.
+#define NOP __asm__("nop\n\t");                     // 1 CPU cycle delay.
 
-#define NOP     asm("nop")                            //1 clock delay
-#define LED_H   (GPOS |=  (1 << LED))                 //LED ON
-#define LED_L   (GPOC |=  (1 << LED))                 //LED OFF
-#define LED_T   (GPO  ^=  (1 << LED))                 //LED Toggle
+// Monitor the internal VCC level, it varies with WiFi load.
+// Don't connect anything to the analog input pin!
+ADC_MODE(ADC_VCC);
 
-const uint8_t mac_size = 18;
-char MAC_Address[mac_size] = { '\0' };
+//--- Structs ---//
 
-const char OK_state[] = "OK";
-const char ERROR_state[] = "ERROR";
+//--- Enums ---//
 
-const char json_variables[] = {
-  "{"
-  "\"IP_P\":\"%s\","
-  "\"IP_L\":\"%s\","
-  "\"GW\":\"%s\","
-  "\"NM\":\"%s\","
-  "\"MAC\":\"%s\","
-  "\"SW_ver\":\"%s\","
-  "\"HW_ver\":\"%s\","  
-  "\"VCC_Core\":\"%1.2fV\","
-  "\"Started\":\"%s\""
-  "}"
-  };
+//--- Functions ---//
 
-// allows you to monitor the internal VCC level; it varies with WiFi load
-// don't connect anything to the analog input pin(s)!
-ADC_MODE(ADC_VCC); 
-
+/// @brief 
+/// @param host_p 
+/// @return 
 IPAddress DNS_Resolv(const char* host_p);
-void ConnectionStatus(void);
-void onMqttPublish(const char* topic, uint8_t* payload, int length);
-void setClock(void);
-const char* getClock(void);
-void tick(void);
-void RestartESP(void);
-IRAM_ATTR void Counter(void);
-float readVoltage(void);
 
-#endif
+/// @brief 
+/// @param  
+void ConnectionStatus();
+
+/// @brief 
+/// @param topic 
+/// @param payload 
+/// @param length 
+void onMqttPublish(const char* topic, uint8_t* payload, int length);
+
+/// @brief 
+/// @param  
+void setClock();
+
+/// @brief 
+/// @param  
+/// @return 
+const char* getClock();
+
+/// @brief 
+/// @param  
+void tick(void);
+
+/// @brief Reset the MCU.
+void RestartESP();
+
+/// @brief 
+/// @param  
+/// @return 
+IRAM_ATTR void Counter();
+
+#endif // MAIN_HPP
