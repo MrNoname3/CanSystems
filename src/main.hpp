@@ -11,9 +11,9 @@
 #include "secrets.hpp"                        /// MQTT settings and cert for SSL communication.
 
 //--- Constants ---//
-static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
-static constexpr const char* OK_STATE               = " [ OK ]";    // OK status.
-static constexpr const char* ERR_STATE              = " [ ERR ]";   // Error status.
+static const char SW_VERSION[] PROGMEM              = "V1.0.0";     // Actual software version.
+static const char OK_STATE[] PROGMEM                = " [ OK ]";    // OK status.
+static const char ERR_STATE[] PROGMEM               = " [ ERR ]";   // Error status.
 
 static constexpr const uint8_t LED                  = D8;           // Status LED.
 static constexpr const uint8_t SPI_CS               = D0;           // Ethernet shield SPI CS.

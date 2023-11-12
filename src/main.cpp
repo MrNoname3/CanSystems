@@ -25,10 +25,10 @@ void setup() {
   Serial.print(F("[INIT] CPP: "));
   Serial.println(__cplusplus);
   Serial.print(F("[INIT] FW: "));
-  Serial.println(SW_VERSION);
+  Serial.println(FPSTR(SW_VERSION));
   Serial.print(F("[INIT] Git hash: "));
   Serial.println(F(GIT_COMMIT_HASH));
-  Serial.printf("[INIT] Internal VCC: %humV\r\n", ESP.getVcc());
+  Serial.printf_P(PSTR("[INIT] Internal VCC: %humV\r\n"), ESP.getVcc());
 
   WiFi.mode(WIFI_OFF);
   eth.setDefault();         // default route set through this interface
@@ -39,28 +39,28 @@ void setup() {
 
   Serial.print(F("[ETH] Initialising ethernet modul:"));
   if(!eth.begin(mac)) {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
   else {
-    Serial.println(OK_STATE);
+    Serial.println(FPSTR(OK_STATE));
   }
 
   Serial.print(F("[ETH] Connecting to router"));
   while (!eth.connected()) {
-    Serial.print(".");
+    Serial.print(F("."));
     delay(500);
   }
 
   if(eth.connected() == true) {
-    Serial.println(OK_STATE);
-    Serial.printf("  IP: %s\r\n", eth.localIP().toString().c_str());
-    Serial.printf("  GW: %s\r\n", eth.gatewayIP().toString().c_str());
-    Serial.printf("  SNM: %s\r\n", eth.subnetMask().toString().c_str());
-    Serial.printf("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    Serial.println(FPSTR(OK_STATE));
+    Serial.printf_P(PSTR("  IP: %s\r\n"), eth.localIP().toString().c_str());
+    Serial.printf_P(PSTR("  GW: %s\r\n"), eth.gatewayIP().toString().c_str());
+    Serial.printf_P(PSTR("  SNM: %s\r\n"), eth.subnetMask().toString().c_str());
+    Serial.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     wdt_reset();
   }
   else {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
 
   // Set time via NTP, as required for x.509 validation.
@@ -74,18 +74,18 @@ void setup() {
   }
   tm timeinfo;
   gmtime_r(&nowSecs, &timeinfo);
-  Serial.printf("\r\n[NTP] Current UTC time: %s", asctime(&timeinfo));
+  Serial.printf_P(PSTR("\r\n[NTP] Current UTC time: %s"), asctime(&timeinfo));
 
   X509List cert(CACertificate);
   tcpClient.setTrustAnchors(&cert);
   tcpClient.setTimeout(5000);
 
   Serial.print("[TCP] Connecting to server:");
-  if(tcpClient.connect(mqttHost, mqttPort) == true) {
-    Serial.println(OK_STATE);
+  if(tcpClient.connect(FPSTR(mqttHost), mqttPort) == true) {
+    Serial.println(FPSTR(OK_STATE));
   }
   else {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
 
   // Setup MQTT topics.
@@ -99,43 +99,43 @@ void setup() {
   char clientName[clientNameMaxSize] = { '\0' };
   int32_t clientNameSize = snprintf(clientName, clientNameMaxSize, "%s_%s", device, macAddress);
   if(clientNameSize >= 0 && clientNameSize < clientNameMaxSize) {
-    Serial.println(OK_STATE);
+    Serial.println(FPSTR(OK_STATE));
   }
   else {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf("  %s Length: %d\r\n", clientName, clientNameSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), clientName, clientNameSize);
 
   Serial.print(F("[MQTT] Sender topic(s):"));
   constexpr const uint8_t senderTopicMaxSize = sizeof(base) + sizeof(device) + sizeof(macAddress) + sizeof(sender);
   char senderTopic[senderTopicMaxSize] = { '\0' };
   int32_t senderTopicSize = snprintf(senderTopic, senderTopicMaxSize, "%s/%s/%s/%s", base, device, macAddress, sender);
   if(senderTopicSize >= 0 && senderTopicSize < senderTopicMaxSize) {
-    Serial.println(OK_STATE);
+    Serial.println(FPSTR(OK_STATE));
   }
   else {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf("  %s Length: %d\r\n", senderTopic, senderTopicSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), senderTopic, senderTopicSize);
 
   Serial.print(F("[MQTT] Receiver topic(s):"));
   constexpr const uint8_t receiverTopicMaxSize = sizeof(base) + sizeof(device) + sizeof(macAddress) + sizeof(receiver);
   char receiverTopic[receiverTopicMaxSize] = { '\0' };
   int32_t receiverTopicSize = snprintf(receiverTopic, receiverTopicMaxSize, "%s/%s/%s/%s", base, device, macAddress, receiver);
   if(receiverTopicSize >= 0 && receiverTopicSize < receiverTopicMaxSize) {
-    Serial.println(OK_STATE);
+    Serial.println(FPSTR(OK_STATE));
   }
   else {
-    Serial.println(ERR_STATE);
+    Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf("  %s Length: %d\r\n", receiverTopic, receiverTopicSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), receiverTopic, receiverTopicSize);
 
-  Serial.printf("[MQTT] Connecting to MQTT broker:");
-  if(mqtt.connect(clientName, mqtt_user, mqtt_pass) == true) {
-    Serial.println(OK_STATE);
+  Serial.print("[MQTT] Connecting to MQTT broker:");
+  if(mqtt.connect(clientName, mqttUserName, mqttPassword) == true) {
+    Serial.println(FPSTR(OK_STATE));
   }
   else {
-    Serial.printf("ERROR State: %d\r\n", mqtt.state());
+    Serial.printf_P(PSTR(" [ ERR ] State: %d\r\n"), mqtt.state());
   }
 
   mqtt.setCallback(onMqttPublish);
@@ -187,10 +187,10 @@ void onMqttPublish(const char* topic, uint8_t* payload, int length) {
   const uint8_t payload_size = 30;
   char data_buff[payload_size] = { '\0' };
 
-  Serial.printf("[%lu] Received: %s %.*s\n", millis(), topic, length, payload);
+  Serial.printf_P(PSTR("[%lu] Received: %s %.*s\n"), millis(), topic, length, payload);
 
   if( length >= payload_size ) {
-    Serial.println("Payload is bigger than buffer size!");
+    Serial.println(F("Payload is bigger than buffer size!"));
     return;
   }
   else {
