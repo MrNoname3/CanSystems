@@ -30,6 +30,9 @@ void setup() {
   Serial.println(F(GIT_COMMIT_HASH));
   Serial.printf_P(PSTR("[INIT] Internal VCC: %humV\r\n"), ESP.getVcc());
 
+  Serial.print(F("[FS] Initialising filesystem:"));
+  LittleFS.begin() ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
   WiFi.mode(WIFI_OFF);
   eth.setDefault();         // default route set through this interface
   uint8_t mac[6] = { 0 };
@@ -76,9 +79,23 @@ void setup() {
   gmtime_r(&nowSecs, &timeinfo);
   Serial.printf_P(PSTR("\r\n[NTP] Current UTC time: %s"), asctime(&timeinfo));
 
-  X509List cert(CACertificate);
+  // Check certificates.
+  const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
+  const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
+  Serial.println(F("[FS] Check certification files:"));
+  Serial.printf_P(PSTR("  %s"), certFileLocation);
+  certFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+  Serial.printf_P(PSTR("  %s"), certBackupFileLocation);
+  certBackupFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  Serial.printf_P(PSTR("[FS] Opening: %s"), certFileLocation);
+  File certFile = LittleFS.open(FPSTR(certFileLocation), "r");
+  certFile ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  X509List cert(certFile);
   tcpClient.setTrustAnchors(&cert);
   tcpClient.setTimeout(5000);
+  certFile.close();
 
   Serial.print("[TCP] Connecting to server:");
   if(tcpClient.connect(FPSTR(mqttHost), mqttPort) == true) {

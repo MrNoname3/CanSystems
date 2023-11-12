@@ -8,12 +8,15 @@
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
+#include <LittleFS.h>                         /// Use FLASH filesystem.
 #include "secrets.hpp"                        /// MQTT settings and cert for SSL communication.
 
 //--- Constants ---//
-static const char SW_VERSION[] PROGMEM              = "V1.0.0";     // Actual software version.
-static const char OK_STATE[] PROGMEM                = " [ OK ]";    // OK status.
-static const char ERR_STATE[] PROGMEM               = " [ ERR ]";   // Error status.
+static const char SW_VERSION[] PROGMEM              = "V1.0.0";                     // Actual software version.
+static const char OK_STATE[] PROGMEM                = " [ OK ]";                    // OK status.
+static const char ERR_STATE[] PROGMEM               = " [ ERR ]";                   // Error status.
+static const char certFileLocation[] PROGMEM        = "/cert/mosq-ca.crt";          // Used cert location on FS.
+static const char certBackupFileLocation[] PROGMEM  = "/cert/mosq-ca.crt.bkp";      // Cert backup location on FS.
 
 static constexpr const uint8_t LED                  = D8;           // Status LED.
 static constexpr const uint8_t SPI_CS               = D0;           // Ethernet shield SPI CS.
