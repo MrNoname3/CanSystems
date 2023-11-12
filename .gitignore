@@ -6,5 +6,5 @@
 platformio-device-monitor-*
 logs/device-monitor-*
 notes.*
-data/cert*
-src/secrets.hpp
+data/cert/*
+data/config/*

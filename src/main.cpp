@@ -8,6 +8,7 @@ uint32_t cpm = 0;
 WiFiClientSecure tcpClient;
 ENC28J60lwIP eth(SPI_CS);
 PubSubClient mqtt(tcpClient);
+MqttCredentials mqttCredentials;
 
 //--- Debug LED ---//
 Ticker ticker;
@@ -20,7 +21,7 @@ void setup() {
   delay(1);
   ticker.attach(0.2, tick);
   Serial.println();
-  Serial.println(F("**************************************************"));
+  Serial.println(F("******************************************************"));
   Serial.println(F("Starting..."));
   Serial.print(F("[INIT] CPP: "));
   Serial.println(__cplusplus);
@@ -79,6 +80,34 @@ void setup() {
   gmtime_r(&nowSecs, &timeinfo);
   Serial.printf_P(PSTR("\r\n[NTP] Current UTC time: %s"), asctime(&timeinfo));
 
+  // Check for config.
+  const bool configFileExists = LittleFS.exists(FPSTR(configFileLocation));
+  const bool configBackupFileExists = LittleFS.exists(FPSTR(configBackupFileLocation));
+  Serial.println(F("[FS] Check config files:"));
+  Serial.printf_P(PSTR("  %s"), configFileLocation);
+  configFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+  Serial.printf_P(PSTR("  %s"), configBackupFileLocation);
+  configBackupFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  Serial.printf_P(PSTR("[FS] Opening: %s"), configFileLocation);
+  File configFile = LittleFS.open(FPSTR(configFileLocation), "r");
+  configFile ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  Serial.print(F("[JSON] Serialize file:"));
+  StaticJsonDocument<256> configJson;
+  DeserializationError deserializationError = deserializeJson(configJson, configFile);
+  if(deserializationError == DeserializationError::Code::Ok) {
+    Serial.println(FPSTR(OK_STATE));
+    strlcpy(mqttCredentials.userName, configJson["mqttUserName"], sizeof(mqttCredentials.userName));
+    strlcpy(mqttCredentials.password, configJson["mqttPassword"], sizeof(mqttCredentials.password));
+    strlcpy(mqttCredentials.serverName, configJson["mqttServerName"], sizeof(mqttCredentials.serverName));
+    mqttCredentials.serverPort = configJson["mqttServerPort"];
+  }
+  else {
+    Serial.println(FPSTR(ERR_STATE));
+  }
+  configFile.close();
+
   // Check certificates.
   const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
   const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
@@ -97,8 +126,8 @@ void setup() {
   tcpClient.setTimeout(5000);
   certFile.close();
 
-  Serial.print("[TCP] Connecting to server:");
-  if(tcpClient.connect(FPSTR(mqttHost), mqttPort) == true) {
+  Serial.printf_P(PSTR("[TCP] Connecting to: %s:%hu"), mqttCredentials.serverName, mqttCredentials.serverPort);
+  if(tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort) == true) {
     Serial.println(FPSTR(OK_STATE));
   }
   else {
@@ -148,7 +177,7 @@ void setup() {
   Serial.printf_P(PSTR("  %s Length: %d\r\n"), receiverTopic, receiverTopicSize);
 
   Serial.print("[MQTT] Connecting to MQTT broker:");
-  if(mqtt.connect(clientName, mqttUserName, mqttPassword) == true) {
+  if(mqtt.connect(clientName, mqttCredentials.userName, mqttCredentials.password) == true) {
     Serial.println(FPSTR(OK_STATE));
   }
   else {
@@ -160,7 +189,7 @@ void setup() {
 
   attachInterrupt(RAD, Counter, FALLING);
 
-  Serial.println(F("**************************************************"));
+  Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
   ticker.detach();
   wdt_reset();
