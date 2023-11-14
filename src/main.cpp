@@ -108,84 +108,41 @@ void setup() {
   }
   configFile.close();
 
-  // Check certificates.
-  const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
-  const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
-  Serial.println(F("[FS] Check certification files:"));
-  Serial.printf_P(PSTR("  %s"), certFileLocation);
-  certFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
-  Serial.printf_P(PSTR("  %s"), certBackupFileLocation);
-  certBackupFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
-
-  Serial.printf_P(PSTR("[FS] Opening: %s"), certFileLocation);
-  File certFile = LittleFS.open(FPSTR(certFileLocation), "r");
-  certFile ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
-
-  X509List cert(certFile);
-  tcpClient.setTrustAnchors(&cert);
-  tcpClient.setTimeout(5000);
-  certFile.close();
-
-  Serial.printf_P(PSTR("[TCP] Connecting to: %s:%hu"), mqttCredentials.serverName, mqttCredentials.serverPort);
-  if(tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort) == true) {
-    Serial.println(FPSTR(OK_STATE));
-  }
-  else {
-    Serial.println(FPSTR(ERR_STATE));
-  }
-
   // Setup MQTT topics.
-  constexpr const char base[]     = "iot";
-  constexpr const char device[]   = "test";
-  constexpr const char sender[]   = "dtos";
-  constexpr const char receiver[] = "stod";
-
   Serial.print(F("[MQTT] Client name:"));
-  constexpr const uint8_t clientNameMaxSize = sizeof(device) + sizeof(macAddress);
-  char clientName[clientNameMaxSize] = { '\0' };
-  int32_t clientNameSize = snprintf(clientName, clientNameMaxSize, "%s_%s", device, macAddress);
-  if(clientNameSize >= 0 && clientNameSize < clientNameMaxSize) {
+  int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceTopic, macAddress);
+  if(clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName))) {
     Serial.println(FPSTR(OK_STATE));
   }
   else {
     Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf_P(PSTR("  %s Length: %d\r\n"), clientName, clientNameSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize);
 
   Serial.print(F("[MQTT] Sender topic(s):"));
-  constexpr const uint8_t senderTopicMaxSize = sizeof(base) + sizeof(device) + sizeof(macAddress) + sizeof(sender);
-  char senderTopic[senderTopicMaxSize] = { '\0' };
-  int32_t senderTopicSize = snprintf(senderTopic, senderTopicMaxSize, "%s/%s/%s/%s", base, device, macAddress, sender);
-  if(senderTopicSize >= 0 && senderTopicSize < senderTopicMaxSize) {
+  int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s/%s", baseTopic, deviceTopic, macAddress, senderTopic);
+  if(senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic))) {
     Serial.println(FPSTR(OK_STATE));
   }
   else {
     Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf_P(PSTR("  %s Length: %d\r\n"), senderTopic, senderTopicSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize);
 
   Serial.print(F("[MQTT] Receiver topic(s):"));
-  constexpr const uint8_t receiverTopicMaxSize = sizeof(base) + sizeof(device) + sizeof(macAddress) + sizeof(receiver);
-  char receiverTopic[receiverTopicMaxSize] = { '\0' };
-  int32_t receiverTopicSize = snprintf(receiverTopic, receiverTopicMaxSize, "%s/%s/%s/%s", base, device, macAddress, receiver);
-  if(receiverTopicSize >= 0 && receiverTopicSize < receiverTopicMaxSize) {
+  int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/%s", baseTopic, deviceTopic, macAddress, receiverTopic);
+  if(receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic))) {
     Serial.println(FPSTR(OK_STATE));
   }
   else {
     Serial.println(FPSTR(ERR_STATE));
   }
-  Serial.printf_P(PSTR("  %s Length: %d\r\n"), receiverTopic, receiverTopicSize);
+  Serial.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize);
 
-  Serial.print("[MQTT] Connecting to MQTT broker:");
-  if(mqtt.connect(clientName, mqttCredentials.userName, mqttCredentials.password) == true) {
-    Serial.println(FPSTR(OK_STATE));
-  }
-  else {
-    Serial.printf_P(PSTR(" [ ERR ] State: %d\r\n"), mqtt.state());
-  }
+  connectToServer();
 
   mqtt.setCallback(onMqttPublish);
-  mqtt.subscribe(receiverTopic);
+  mqtt.subscribe(mqttCredentials.receiverTopic);
 
   attachInterrupt(RAD, Counter, FALLING);
 
@@ -197,6 +154,54 @@ void setup() {
 }
 
 void loop() {
+  if(!mqtt.loop()) {
+    static int8_t lastMqttState = 10;
+    const int8_t mqttState = mqtt.state();
+    if(lastMqttState != mqttState) {
+      Serial.print(F("MQTT status changed: "));
+      lastMqttState = mqttState;
+      switch(mqttState) {
+        case MQTT_CONNECTION_TIMEOUT: {
+          Serial.println(F("MQTT_CONNECTION_TIMEOUT"));
+        } break;
+        case MQTT_CONNECTION_LOST:{
+          Serial.println(F("MQTT_CONNECTION_LOST"));
+        } break;
+        case MQTT_CONNECT_FAILED: {
+          Serial.println(F("MQTT_CONNECT_FAILED"));
+        } break;
+        case MQTT_DISCONNECTED: {
+          Serial.println(F("MQTT_DISCONNECTED"));
+        } break;
+        case MQTT_CONNECTED: {
+          Serial.println(F("MQTT_CONNECTED"));
+        } break;
+        case MQTT_CONNECT_BAD_PROTOCOL: {
+          Serial.println(F("MQTT_CONNECT_BAD_PROTOCOL"));
+        } break;
+        case MQTT_CONNECT_BAD_CLIENT_ID: {
+          Serial.println(F("MQTT_CONNECT_BAD_CLIENT_ID"));
+        } break;
+        case MQTT_CONNECT_UNAVAILABLE: {
+          Serial.println(F("MQTT_CONNECT_UNAVAILABLE"));
+        } break;
+        case MQTT_CONNECT_BAD_CREDENTIALS: {
+          Serial.println(F("MQTT_CONNECT_BAD_CREDENTIALS"));
+        } break;
+        case MQTT_CONNECT_UNAUTHORIZED: {
+          Serial.println(F("MQTT_CONNECT_UNAUTHORIZED"));
+        } break;
+      }
+    }
+    if(mqttState < 0) {
+      static uint32_t reconnectTimer = millis();
+      if(millis() - reconnectTimer >= 3000) {
+        reconnectTimer = millis();
+        connectToServer();
+      }
+    }
+  }
+
   /*
   static uint32_t measure_timer = millis();
   static uint32_t dns_timer = millis();
@@ -212,6 +217,7 @@ void loop() {
 
   yield();
 */
+/*
   static uint32_t timer = millis();
 
   if(millis() - timer >= 200) {
@@ -221,10 +227,9 @@ void loop() {
       Serial.println("TCP connection lost!");
     }
     timer = millis();
-
   }
+*/
 
-  mqtt.loop();
   wdt_reset();
 }
 
@@ -243,6 +248,45 @@ void onMqttPublish(const char* topic, uint8_t* payload, int length) {
     memcpy(data_buff, payload, length);
   }
 
+}
+
+void connectToServer() {
+  // Check certificates.
+  const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
+  const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
+  Serial.println(F("[FS] Check certification files:"));
+  Serial.printf_P(PSTR("  %s"), certFileLocation);
+  certFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+  Serial.printf_P(PSTR("  %s"), certBackupFileLocation);
+  certBackupFileExists ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  Serial.printf_P(PSTR("[FS] Opening: %s"), certFileLocation);
+  File certFile = LittleFS.open(FPSTR(certFileLocation), "r");
+  certFile ? Serial.println(FPSTR(OK_STATE)) : Serial.println(FPSTR(ERR_STATE));
+
+  X509List cert(certFile);
+  tcpClient.setTrustAnchors(&cert);
+  tcpClient.setTimeout(5000);
+  certFile.close();
+  //tcpClient.getLastSSLError() == BR_ERR_OK ? 
+
+  Serial.printf_P(PSTR("[TCP] Connecting to: %s:%hu"), mqttCredentials.serverName, mqttCredentials.serverPort);
+  if(tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort) == true) {
+    Serial.println(FPSTR(OK_STATE));
+  }
+  else {
+    Serial.println(FPSTR(ERR_STATE));
+  }
+
+  mqtt.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
+
+  Serial.print("[MQTT] Connecting to MQTT broker:");
+  if(mqtt.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password) == true) {
+    Serial.println(FPSTR(OK_STATE));
+  }
+  else {
+    Serial.printf_P(PSTR(" [ ERR ] State: %d\r\n"), mqtt.state());
+  }
 }
 
 void tick() {                                         // Toggle state
