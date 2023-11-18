@@ -154,50 +154,53 @@ void setup() {
 }
 
 void loop() {
-  if(!mqtt.loop()) {
-    static int8_t lastMqttState = 10;
-    const int8_t mqttState = mqtt.state();
-    if(lastMqttState != mqttState) {
-      Serial.print(F("MQTT status changed: "));
-      lastMqttState = mqttState;
-      switch(mqttState) {
-        case MQTT_CONNECTION_TIMEOUT: {
-          Serial.println(F("MQTT_CONNECTION_TIMEOUT"));
-        } break;
-        case MQTT_CONNECTION_LOST:{
-          Serial.println(F("MQTT_CONNECTION_LOST"));
-        } break;
-        case MQTT_CONNECT_FAILED: {
-          Serial.println(F("MQTT_CONNECT_FAILED"));
-        } break;
-        case MQTT_DISCONNECTED: {
-          Serial.println(F("MQTT_DISCONNECTED"));
-        } break;
-        case MQTT_CONNECTED: {
-          Serial.println(F("MQTT_CONNECTED"));
-        } break;
-        case MQTT_CONNECT_BAD_PROTOCOL: {
-          Serial.println(F("MQTT_CONNECT_BAD_PROTOCOL"));
-        } break;
-        case MQTT_CONNECT_BAD_CLIENT_ID: {
-          Serial.println(F("MQTT_CONNECT_BAD_CLIENT_ID"));
-        } break;
-        case MQTT_CONNECT_UNAVAILABLE: {
-          Serial.println(F("MQTT_CONNECT_UNAVAILABLE"));
-        } break;
-        case MQTT_CONNECT_BAD_CREDENTIALS: {
-          Serial.println(F("MQTT_CONNECT_BAD_CREDENTIALS"));
-        } break;
-        case MQTT_CONNECT_UNAUTHORIZED: {
-          Serial.println(F("MQTT_CONNECT_UNAUTHORIZED"));
-        } break;
+  if(eth.status() == 3) {
+    if(!mqtt.loop()) {
+      static int8_t lastMqttState = 10;
+      const int8_t mqttState = mqtt.state();
+      if(lastMqttState != mqttState) {
+        Serial.print(F("MQTT status changed: "));
+        lastMqttState = mqttState;
+        switch(mqttState) {
+          case MQTT_CONNECTION_TIMEOUT: {
+            Serial.println(F("MQTT_CONNECTION_TIMEOUT"));
+          } break;
+          case MQTT_CONNECTION_LOST:{
+            Serial.println(F("MQTT_CONNECTION_LOST"));
+          } break;
+          case MQTT_CONNECT_FAILED: {
+            Serial.println(F("MQTT_CONNECT_FAILED"));
+          } break;
+          case MQTT_DISCONNECTED: {
+            Serial.println(F("MQTT_DISCONNECTED"));
+          } break;
+          case MQTT_CONNECTED: {
+            Serial.println(F("MQTT_CONNECTED"));
+          } break;
+          case MQTT_CONNECT_BAD_PROTOCOL: {
+            Serial.println(F("MQTT_CONNECT_BAD_PROTOCOL"));
+          } break;
+          case MQTT_CONNECT_BAD_CLIENT_ID: {
+            Serial.println(F("MQTT_CONNECT_BAD_CLIENT_ID"));
+          } break;
+          case MQTT_CONNECT_UNAVAILABLE: {
+            Serial.println(F("MQTT_CONNECT_UNAVAILABLE"));
+          } break;
+          case MQTT_CONNECT_BAD_CREDENTIALS: {
+            Serial.println(F("MQTT_CONNECT_BAD_CREDENTIALS"));
+          } break;
+          case MQTT_CONNECT_UNAUTHORIZED: {
+            Serial.println(F("MQTT_CONNECT_UNAUTHORIZED"));
+          } break;
+        }
       }
-    }
-    if(mqttState < 0) {
-      static uint32_t reconnectTimer = millis();
-      if(millis() - reconnectTimer >= 3000) {
-        reconnectTimer = millis();
-        connectToServer();
+      if(mqttState < 0) {
+        static uint32_t reconnectTimer = millis();
+        if(millis() - reconnectTimer >= 10000) {
+          reconnectTimer = millis();
+          Serial.printf("ETH status: %hu\r\n", static_cast<uint8_t>(eth.status()));
+          connectToServer();
+        }
       }
     }
   }
@@ -230,6 +233,7 @@ void loop() {
   }
 */
 
+  yield();
   wdt_reset();
 }
 
@@ -269,6 +273,7 @@ void connectToServer() {
   tcpClient.setTimeout(5000);
   certFile.close();
   //tcpClient.getLastSSLError() == BR_ERR_OK ? 
+  yield();
 
   Serial.printf_P(PSTR("[TCP] Connecting to: %s:%hu"), mqttCredentials.serverName, mqttCredentials.serverPort);
   if(tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort) == true) {
@@ -289,8 +294,8 @@ void connectToServer() {
   }
 }
 
-void tick() {                                         // Toggle state
-  LED_T;                                              // Set pin to the opposite state
+void tick() {
+  LED_T;                                              // Set pin to the opposite state.
 }
 
 void RestartESP() {
