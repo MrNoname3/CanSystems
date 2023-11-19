@@ -121,10 +121,10 @@ public:
     if(!senderTopicValid) { return false; }
     if(!receiverTopicValid) { return false; }
 
-    // Check files.
     if(!checkFiles()) { return false; }
     if(!loadConfig(ConfigFile::NORMAL)) { return false; }
     if(!connect(CertFile::NORMAL)) { return false; }
+    mqttClient.setCallback(&onMqttPublish);
     return true;
   }
 
@@ -235,12 +235,19 @@ public:
     const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %d\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, mqttClient.state()); }
     if(!mqttConResult) { return false; }
+    const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, MQTTQOS1);
+    if(serialPort) { serialPort->printf_P(PSTR("%sSubscribing to: %s%s\r\n"), MQTT_PREFIX, mqttCredentials.receiverTopic, subResult ? OK_STATE : ERR_STATE); }
+    if(!subResult) { return false; }
 
     return true;
   }
 
   bool loop() {
     return mqttClient.loop();
+  }
+
+  static void onMqttPublish(const char* topic, uint8_t* payload, int length) {
+  
   }
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.

@@ -32,10 +32,6 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
-/*
-  mqtt.setCallback(onMqttPublish);
-  mqtt.subscribe(mqttCredentials.receiverTopic);
-*/
   attachInterrupt(RAD, Counter, FALLING);
 
   Serial.println(F("******************************************************"));
@@ -129,23 +125,6 @@ void loop() {
 
   yield();
   wdt_reset();
-}
-
-void onMqttPublish(const char* topic, uint8_t* payload, int length) {
-
-  const uint8_t payload_size = 30;
-  char data_buff[payload_size] = { '\0' };
-
-  Serial.printf_P(PSTR("[%lu] Received: %s %.*s\n"), millis(), topic, length, payload);
-
-  if( length >= payload_size ) {
-    Serial.println(F("Payload is bigger than buffer size!"));
-    return;
-  }
-  else {
-    memcpy(data_buff, payload, length);
-  }
-
 }
 
 void tick() {
