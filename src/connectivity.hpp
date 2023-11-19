@@ -61,24 +61,36 @@ public:
       if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), ETH_PREFIX); }
       while(!ethInt.connected()) {
         if(serialPort) { serialPort->print(F(".")); }
-        delay(500);
+        delay(300);
       }
       if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE); }
       if(!ethInt.connected()) { return false; }
       if(serialPort) { serialPort->printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str()); }
       if(serialPort) { serialPort->printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str()); }
       if(serialPort) { serialPort->printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str()); }
-      if(serialPort) { serialPort->printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]); }
     }
     else if(interface == Interface::WIFI) {
-      WiFi.mode(WIFI_STA);
+      const bool wifiInit = WiFi.mode(WIFI_STA);
+      if(serialPort) { serialPort->printf_P(PSTR("%sInitialising wifi:%s\r\n"), WIFI_PREFIX, wifiInit ? OK_STATE : ERR_STATE); }
+      if(!wifiInit) { return false; }
+      if(!startWifi()) { return false; }
+      if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX); }
+      while(WiFi.status() != WL_CONNECTED) {
+        delay(300);
+        Serial.print(".");
+      }
+      if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE); }
+      if(WiFi.status() != WL_CONNECTED) { return false; }
+      if(serialPort) { serialPort->printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str()); }
+      if(serialPort) { serialPort->printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str()); }
+      if(serialPort) { serialPort->printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str()); }
     }
     else {
       return false;
     }
+    if(serialPort) { serialPort->printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]); }
 
     // Set time via NTP, as required for x.509 validation.
-    //wdt_reset();
     yield();
     if(serialPort) { serialPort->printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX); }
     configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
@@ -114,6 +126,35 @@ public:
     if(!loadConfig(ConfigFile::NORMAL)) { return false; }
     if(!connect(CertFile::NORMAL)) { return false; }
     return true;
+  }
+
+  bool startWifi() {
+    const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
+    if(serialPort) { serialPort->printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX); }
+    if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE); }
+    if(!wifiFileExists) { return false; }
+
+    File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
+    if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFile.fullName(), wifiFile ? OK_STATE : ERR_STATE); }
+    if(!wifiFile) { return false; }
+
+    StaticJsonDocument<256> wifiJson;
+    DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
+    const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
+    if(deSerResult) {
+      const char* ssid = wifiJson["ssid"];
+      const char* pass = wifiJson["password"];
+      const uint8_t channel = wifiJson["channel"];
+      JsonArray bssidArray = wifiJson["bssid"];
+      uint8_t bssid[6];
+      for(uint8_t i = 0; i < bssidArray.size(); i++) {
+        bssid[i] = bssidArray[i];
+      }
+      WiFi.begin(ssid, pass, channel, bssid);
+    }
+    if(serialPort) { serialPort->printf_P(PSTR("%sSerialize file:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
+    wifiFile.close();
+    return deSerResult;
   }
 
   bool checkFiles() {
@@ -184,7 +225,6 @@ public:
 
     // TCP connection.
     //tcpClient.getLastSSLError() == BR_ERR_OK ?
-    //wdt_reset();
     yield();
     const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE); }
@@ -229,6 +269,7 @@ private:
 
   MqttCredentials mqttCredentials;
 
+  static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM configFileLocation[];
   static const char PROGMEM configBackupFileLocation[];
   static const char PROGMEM certFileLocation[];
@@ -255,6 +296,7 @@ private:
 
 };
 
+const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::configFileLocation[] PROGMEM       = "/config/config.json";      // Config file location on FS.
 const char Connectivity::configBackupFileLocation[] PROGMEM = "/config/config.json.bkp";  // Config file backup location on FS.
 const char Connectivity::certFileLocation[] PROGMEM         = "/cert/mosq-ca.crt";        // Used cert location on FS.
