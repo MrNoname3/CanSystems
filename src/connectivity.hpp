@@ -16,7 +16,8 @@ public:
 
   enum class Interface : uint8_t {
     WIFI = 0,
-    ETHERNET
+    ETHERNET,
+    UNKNOWN
   };
 
   enum class ConfigFile : uint8_t {
@@ -30,14 +31,14 @@ public:
   };
 
   Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8) : 
-    serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient) {}
+    serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN) {}
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
 
   bool begin(Interface interface = Interface::ETHERNET) {
     if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
-    
+
     // Init filesystem.
     const bool initFS = LittleFS.begin();
     if(serialPort) { serialPort->printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE)); }
@@ -89,6 +90,7 @@ public:
       return false;
     }
     if(serialPort) { serialPort->printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]); }
+    usedInterface = interface;
 
     // Set time via NTP, as required for x.509 validation.
     yield();
@@ -103,6 +105,7 @@ public:
     tm timeinfo;
     gmtime_r(&nowSecs, &timeinfo);
     if(serialPort) { serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo)); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str()); }
 
     // Setup MQTT topics.
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", DEVICE_TOPIC, macAddress);
@@ -235,19 +238,34 @@ public:
     const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %d\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, mqttClient.state()); }
     if(!mqttConResult) { return false; }
-    const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, MQTTQOS1);
-    if(serialPort) { serialPort->printf_P(PSTR("%sSubscribing to: %s%s\r\n"), MQTT_PREFIX, mqttCredentials.receiverTopic, subResult ? OK_STATE : ERR_STATE); }
+    const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
+    if(serialPort) { serialPort->printf_P(PSTR("%sListening on: %s%s\r\n"), MQTT_PREFIX, mqttCredentials.receiverTopic, subResult ? OK_STATE : ERR_STATE); }
     if(!subResult) { return false; }
 
     return true;
   }
 
   bool loop() {
+    wl_status_t interfaceStatus = WL_DISCONNECTED;
+    if(usedInterface == Interface::ETHERNET) { interfaceStatus = ethInt.status(); }
+    else if(usedInterface == Interface::WIFI) { interfaceStatus = WiFi.status(); }
+    else { return false; }
+    if(interfaceStatus != WL_CONNECTED) { return false; }
+
     return mqttClient.loop();
   }
 
   static void onMqttPublish(const char* topic, uint8_t* payload, int length) {
   
+  }
+
+  String getISODateTime() {
+    const time_t time_ = time(nullptr);
+    char buffer[30];
+    struct tm * timeinfo;
+    timeinfo = gmtime(&time_); // Convert time to UTC time structure
+    strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
+    return String(buffer);
   }
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
@@ -273,6 +291,7 @@ private:
   ENC28J60lwIP ethInt;
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
+  Interface usedInterface;
 
   MqttCredentials mqttCredentials;
 
