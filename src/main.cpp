@@ -11,6 +11,33 @@ Connectivity iotConn(&Serial, SPI_CS);
 //--- Debug LED ---//
 Ticker ticker;
 
+class Radiation : public MqttComBase {
+
+public:
+
+  //Radiation() = default;
+  Radiation(const char* classID) : MqttComBase(classID) {}
+
+  /// @brief Destructor of the object.
+  virtual ~Radiation() = default;
+
+  virtual void messageReceived(uint8_t* payload, uint32_t length) const override {
+    Serial.printf("Class: %s\r\n", MqttComBase::getClassId());
+  }
+
+  virtual void messageSend(const uint8_t* payload, uint16_t length) const override {
+
+  }
+
+private:
+
+};
+
+Radiation radiation("radiation1");
+Radiation radiation2("radiation2");
+const MqttComBase* Connectivity::messageMap[] = { &radiation, &radiation2, nullptr };
+
+
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
@@ -32,6 +59,8 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
+  //iotConn.onMqttPublish(nullptr, nullptr, 0);
+
   attachInterrupt(RAD, Counter, FALLING);
 
   Serial.println(F("******************************************************"));
@@ -42,59 +71,7 @@ void setup() {
 }
 
 void loop() {
-  iotConn.loop();
-  /*
-  if(eth.status() == 3) {
-    if(!mqtt.loop()) {
-      static int8_t lastMqttState = 10;
-      const int8_t mqttState = mqtt.state();
-      if(lastMqttState != mqttState) {
-        Serial.print(F("MQTT status changed: "));
-        lastMqttState = mqttState;
-        switch(mqttState) {
-          case MQTT_CONNECTION_TIMEOUT: {
-            Serial.println(F("MQTT_CONNECTION_TIMEOUT"));
-          } break;
-          case MQTT_CONNECTION_LOST:{
-            Serial.println(F("MQTT_CONNECTION_LOST"));
-          } break;
-          case MQTT_CONNECT_FAILED: {
-            Serial.println(F("MQTT_CONNECT_FAILED"));
-          } break;
-          case MQTT_DISCONNECTED: {
-            Serial.println(F("MQTT_DISCONNECTED"));
-          } break;
-          case MQTT_CONNECTED: {
-            Serial.println(F("MQTT_CONNECTED"));
-          } break;
-          case MQTT_CONNECT_BAD_PROTOCOL: {
-            Serial.println(F("MQTT_CONNECT_BAD_PROTOCOL"));
-          } break;
-          case MQTT_CONNECT_BAD_CLIENT_ID: {
-            Serial.println(F("MQTT_CONNECT_BAD_CLIENT_ID"));
-          } break;
-          case MQTT_CONNECT_UNAVAILABLE: {
-            Serial.println(F("MQTT_CONNECT_UNAVAILABLE"));
-          } break;
-          case MQTT_CONNECT_BAD_CREDENTIALS: {
-            Serial.println(F("MQTT_CONNECT_BAD_CREDENTIALS"));
-          } break;
-          case MQTT_CONNECT_UNAUTHORIZED: {
-            Serial.println(F("MQTT_CONNECT_UNAUTHORIZED"));
-          } break;
-        }
-      }
-      if(mqttState < 0) {
-        static uint32_t reconnectTimer = millis();
-        if(millis() - reconnectTimer >= 10000) {
-          reconnectTimer = millis();
-          Serial.printf("ETH status: %hu\r\n", static_cast<uint8_t>(eth.status()));
-          connectToServer();
-        }
-      }
-    }
-  }
-*/
+
   /*
   static uint32_t measure_timer = millis();
   static uint32_t dns_timer = millis();
@@ -108,22 +85,10 @@ void loop() {
     cpm = 0;
   }
 
-  yield();
-*/
-/*
-  static uint32_t timer = millis();
-
-  if(millis() - timer >= 200) {
-    static bool once = true;
-    if(!mqtt.connected() && once) {
-      once = false;
-      Serial.println("TCP connection lost!");
-    }
-    timer = millis();
-  }
 */
 
   yield();
+  iotConn.loop();
   wdt_reset();
 }
 

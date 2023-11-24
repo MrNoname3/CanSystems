@@ -10,6 +10,26 @@
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 
+class MqttComBase {
+public:
+  MqttComBase(const char* classID) {
+    strlcpy(this->classId, classID, sizeof(this->classId));
+  }
+
+  virtual ~MqttComBase() = default;
+
+  virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
+
+  virtual void messageSend(const uint8_t* payload, uint16_t length) const = 0;
+
+  const char* getClassId() const {
+    return classId;
+  }
+
+private:
+  char classId[16];
+};
+
 class Connectivity {
 
 public:
@@ -31,7 +51,8 @@ public:
   };
 
   Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8) : 
-    serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN) {}
+    serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
+    interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {}
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -74,6 +95,7 @@ public:
       const bool wifiInit = WiFi.mode(WIFI_STA);
       if(serialPort) { serialPort->printf_P(PSTR("%sInitialising wifi:%s\r\n"), WIFI_PREFIX, wifiInit ? OK_STATE : ERR_STATE); }
       if(!wifiInit) { return false; }
+      WiFi.setAutoReconnect(true);
       if(!startWifi()) { return false; }
       if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX); }
       while(WiFi.status() != WL_CONNECTED) {
@@ -127,7 +149,13 @@ public:
     if(!checkFiles()) { return false; }
     if(!loadConfig(ConfigFile::NORMAL)) { return false; }
     if(!connect(CertFile::NORMAL)) { return false; }
-    mqttClient.setCallback(&onMqttPublish);
+
+    // Bind the member function to a std::function.
+    mqttCallback = [this](const char* topic, uint8_t* payload, uint32_t length) {
+      // Call your member function here.
+      onMqttPublish(topic, payload, length);
+    };
+    mqttClient.setCallback(mqttCallback);
     return true;
   }
 
@@ -229,6 +257,8 @@ public:
     // TCP connection.
     //tcpClient.getLastSSLError() == BR_ERR_OK ?
     yield();
+    const bool tcpStopResult = tcpClient.stop(2000);
+    if(serialPort) { serialPort->printf_P(PSTR("%sReset connection for fresh start%s\r\n"), TCP_PREFIX, tcpStopResult ? OK_STATE : ERR_STATE); }
     const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE); }
     if(!tcpConResult) { return false; }
@@ -246,17 +276,57 @@ public:
   }
 
   bool loop() {
-    wl_status_t interfaceStatus = WL_DISCONNECTED;
-    if(usedInterface == Interface::ETHERNET) { interfaceStatus = ethInt.status(); }
-    else if(usedInterface == Interface::WIFI) { interfaceStatus = WiFi.status(); }
+    static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
+    const char* intPrefix;
+    if(usedInterface == Interface::ETHERNET) { actualInterfaceStatus = ethInt.status(); intPrefix = ETH_PREFIX; }
+    else if(usedInterface == Interface::WIFI) { actualInterfaceStatus = WiFi.status();  intPrefix = WIFI_PREFIX; }
     else { return false; }
+    if(interfaceStatus != actualInterfaceStatus) {
+      if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
+      interfaceStatus = actualInterfaceStatus;
+    }
     if(interfaceStatus != WL_CONNECTED) { return false; }
 
-    return mqttClient.loop();
+    const int8_t actualMqttState = mqttClient.state();
+    if(mqttState != actualMqttState) {
+      if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
+      mqttState = actualMqttState;
+    }
+
+    if(!mqttClient.loop()) {
+      if(mqttState < MQTT_CONNECTED) {
+        static uint32_t reconnectTimer = millis();
+        if(millis() - reconnectTimer >= 10000) {
+          reconnectTimer = millis();
+          connect(CertFile::NORMAL);
+        }
+      }
+    }
+
+    return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
   }
 
-  static void onMqttPublish(const char* topic, uint8_t* payload, int length) {
-  
+  void onMqttPublish(const char* topic, uint8_t* payload, uint32_t length) {
+    const char* classID = nullptr;
+    {
+      StaticJsonDocument<MQTT_MAX_PACKET_SIZE> mqttMessageJson;
+      DeserializationError deserializationError = deserializeJson(mqttMessageJson, payload, length);
+      const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
+      if(deSerResult) { classID = mqttMessageJson["classID"] | "Unknown"; }
+      if(serialPort) { serialPort->printf_P(PSTR("%sSerialize received MQTT message:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
+      if(!deSerResult) { return; }
+    }
+
+    if(!classID) { return; }
+    for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+      const MqttComBase* currentObject = Connectivity::messageMap[i];
+      if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
+        if(serialPort) { serialPort->printf_P(PSTR("%sForward message to class with ID: %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
+        currentObject->messageReceived(payload, length);
+        return;
+      }
+    }
+    if(serialPort) { serialPort->printf_P(PSTR("%sNo class with ID: %s\r\n"), MQTT_PREFIX, classID); }
   }
 
   String getISODateTime() {
@@ -292,9 +362,16 @@ private:
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
   Interface usedInterface;
+  wl_status_t interfaceStatus;
 
   MqttCredentials mqttCredentials;
+  int8_t mqttState;
+  std::function<void(const char*, uint8_t*, uint32_t)> mqttCallback;
 
+public:
+  static const MqttComBase* messageMap[];
+
+private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM configFileLocation[];
   static const char PROGMEM configBackupFileLocation[];
