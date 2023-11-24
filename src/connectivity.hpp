@@ -150,12 +150,7 @@ public:
     if(!loadConfig(ConfigFile::NORMAL)) { return false; }
     if(!connect(CertFile::NORMAL)) { return false; }
 
-    // Bind the member function to a std::function.
-    mqttCallback = [this](const char* topic, uint8_t* payload, uint32_t length) {
-      // Call your member function here.
-      onMqttPublish(topic, payload, length);
-    };
-    mqttClient.setCallback(mqttCallback);
+    mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { onMqttPublish(topic, payload, length); });
     return true;
   }
 
@@ -363,10 +358,8 @@ private:
   PubSubClient mqttClient;
   Interface usedInterface;
   wl_status_t interfaceStatus;
-
   MqttCredentials mqttCredentials;
   int8_t mqttState;
-  std::function<void(const char*, uint8_t*, uint32_t)> mqttCallback;
 
 public:
   static const MqttComBase* messageMap[];

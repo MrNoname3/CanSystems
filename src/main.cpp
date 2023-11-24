@@ -59,8 +59,6 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
-  //iotConn.onMqttPublish(nullptr, nullptr, 0);
-
   attachInterrupt(RAD, Counter, FALLING);
 
   Serial.println(F("******************************************************"));
