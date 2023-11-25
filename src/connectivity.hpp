@@ -11,33 +11,26 @@
 #include <ArduinoJson.h>                      /// Handle JSON files.
 
 class MqttComBase {
-public:
+
+protected:
   MqttComBase(const char* classID) {
     strlcpy(this->classId, classID, sizeof(this->classId));
   }
 
   virtual ~MqttComBase() = default;
 
+  void messageSend(const char* payload) const {
+    if(mqttSender) { mqttSender(payload); }
+  }
+
+public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
-
-  virtual void messageSend() const = 0;
-
-  const char* getClassId() const {
-    return classId;
-  }
-
-  void setMqttSender(std::function<void(const uint8_t*, uint16_t)> senderFunction) {
-    mqttSender = senderFunction;
-  }
-
-protected:
-  void sendToMqtt(const uint8_t* payload, uint16_t length) const {
-    if(mqttSender) { mqttSender(payload, length); }
-  }
+  const char* getClassId() const { return classId; }
+  void setMqttSender(std::function<void(const char*)> senderFunction) { mqttSender = senderFunction; }
 
 private:
   char classId[16];
-  std::function<void(const uint8_t*, uint16_t)> mqttSender;
+  std::function<void(const char*)> mqttSender;
 };
 
 class Connectivity {
@@ -54,19 +47,19 @@ public:
     NORMAL = 0,
     BACKUP
   };
-  
+
   enum class CertFile : uint8_t {
     NORMAL = 0,
     BACKUP
   };
 
-  Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8) : 
+  Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8) :
     serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
     interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {
       for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
         MqttComBase* currentObject = const_cast<MqttComBase*>(Connectivity::messageMap[i]); // Remove constness for binding
         if(currentObject != nullptr) {
-          currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1, std::placeholders::_2));
+          currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1));
         }
       }
     }
@@ -340,8 +333,8 @@ public:
     if(serialPort) { serialPort->printf_P(PSTR("%sNo class with ID: %s\r\n"), MQTT_PREFIX, classID); }
   }
 
-  void sendMqttMessage(const uint8_t* payload, uint16_t length) {
-    mqttClient.publish(mqttCredentials.senderTopic, payload, length);
+  void sendMqttMessage(const char* payload) {
+    mqttClient.publish(mqttCredentials.senderTopic, payload);
   }
 
   String getISODateTime() {

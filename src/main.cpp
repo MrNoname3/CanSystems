@@ -21,9 +21,8 @@ public:
     Serial.printf("Class: %s\r\n", MqttComBase::getClassId());
   }
 
-  virtual void messageSend() const override {
-    const uint8_t* id = reinterpret_cast<const uint8_t*>(MqttComBase::getClassId());
-    MqttComBase::sendToMqtt(id, 16);
+  void messageSend(const char* message) const {
+    MqttComBase::messageSend(message);
   }
 
 private:
@@ -72,7 +71,7 @@ void loop() {
   static uint32_t testTimer = millis();
   if(millis() - testTimer >= 5000) {
     testTimer = millis();
-    radiation.messageSend();
+    radiation.messageSend(String(millis()).c_str());
   }
 
   /*
