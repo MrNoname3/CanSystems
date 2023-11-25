@@ -4,10 +4,6 @@
 const uint8_t measure_time = 60;  //sec
 uint32_t cpm = 0;
 
-//--- Networking ---//
-const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
-Connectivity iotConn(&Serial, SPI_CS);
-
 //--- Debug LED ---//
 Ticker ticker;
 
@@ -25,8 +21,9 @@ public:
     Serial.printf("Class: %s\r\n", MqttComBase::getClassId());
   }
 
-  virtual void messageSend(const uint8_t* payload, uint16_t length) const override {
-
+  virtual void messageSend() const override {
+    const uint8_t* id = reinterpret_cast<const uint8_t*>(MqttComBase::getClassId());
+    MqttComBase::sendToMqtt(id, 16);
   }
 
 private:
@@ -37,6 +34,9 @@ Radiation radiation("radiation1");
 Radiation radiation2("radiation2");
 const MqttComBase* Connectivity::messageMap[] = { &radiation, &radiation2, nullptr };
 
+//--- Networking ---//
+const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
+Connectivity iotConn(&Serial, SPI_CS);
 
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
@@ -69,6 +69,11 @@ void setup() {
 }
 
 void loop() {
+  static uint32_t testTimer = millis();
+  if(millis() - testTimer >= 5000) {
+    testTimer = millis();
+    radiation.messageSend();
+  }
 
   /*
   static uint32_t measure_timer = millis();

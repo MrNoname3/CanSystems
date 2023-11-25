@@ -34,11 +34,6 @@ ADC_MODE(ADC_VCC);
 
 //--- Functions ---//
 
-/// @brief 
-/// @param topic 
-/// @param payload 
-/// @param length 
-void onMqttPublish(const char* topic, uint8_t* payload, int length);
 
 /// @brief 
 /// @param  

@@ -20,14 +20,24 @@ public:
 
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
 
-  virtual void messageSend(const uint8_t* payload, uint16_t length) const = 0;
+  virtual void messageSend() const = 0;
 
   const char* getClassId() const {
     return classId;
   }
 
+  void setMqttSender(std::function<void(const uint8_t*, uint16_t)> senderFunction) {
+    mqttSender = senderFunction;
+  }
+
+protected:
+  void sendToMqtt(const uint8_t* payload, uint16_t length) const {
+    if(mqttSender) { mqttSender(payload, length); }
+  }
+
 private:
   char classId[16];
+  std::function<void(const uint8_t*, uint16_t)> mqttSender;
 };
 
 class Connectivity {
@@ -52,7 +62,14 @@ public:
 
   Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8) : 
     serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-    interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {}
+    interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {
+      for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+        MqttComBase* currentObject = const_cast<MqttComBase*>(Connectivity::messageMap[i]); // Remove constness for binding
+        if(currentObject != nullptr) {
+          currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1, std::placeholders::_2));
+        }
+      }
+    }
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -150,7 +167,7 @@ public:
     if(!loadConfig(ConfigFile::NORMAL)) { return false; }
     if(!connect(CertFile::NORMAL)) { return false; }
 
-    mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { onMqttPublish(topic, payload, length); });
+    mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
     return true;
   }
 
@@ -301,7 +318,7 @@ public:
     return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
   }
 
-  void onMqttPublish(const char* topic, uint8_t* payload, uint32_t length) {
+  void receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
     const char* classID = nullptr;
     {
       StaticJsonDocument<MQTT_MAX_PACKET_SIZE> mqttMessageJson;
@@ -311,7 +328,6 @@ public:
       if(serialPort) { serialPort->printf_P(PSTR("%sSerialize received MQTT message:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
       if(!deSerResult) { return; }
     }
-
     if(!classID) { return; }
     for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
       const MqttComBase* currentObject = Connectivity::messageMap[i];
@@ -322,6 +338,10 @@ public:
       }
     }
     if(serialPort) { serialPort->printf_P(PSTR("%sNo class with ID: %s\r\n"), MQTT_PREFIX, classID); }
+  }
+
+  void sendMqttMessage(const uint8_t* payload, uint16_t length) {
+    mqttClient.publish(mqttCredentials.senderTopic, payload, length);
   }
 
   String getISODateTime() {
