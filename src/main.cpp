@@ -11,7 +11,6 @@ class Radiation : public MqttComBase {
 
 public:
 
-  //Radiation() = default;
   Radiation(const char* classID) : MqttComBase(classID) {}
 
   /// @brief Destructor of the object.

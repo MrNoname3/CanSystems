@@ -18,10 +18,7 @@ protected:
   }
 
   virtual ~MqttComBase() = default;
-
-  void messageSend(const char* payload) const {
-    if(mqttSender) { mqttSender(payload); }
-  }
+  void messageSend(const char* payload) const { if(mqttSender) { mqttSender(payload); } }
 
 public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
@@ -59,7 +56,8 @@ public:
       for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
         MqttComBase* currentObject = const_cast<MqttComBase*>(Connectivity::messageMap[i]); // Remove constness for binding
         if(currentObject != nullptr) {
-          currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1));
+          //currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1));
+          currentObject->setMqttSender([this](const char* payload) { sendMqttMessage(payload); });
         }
       }
     }
