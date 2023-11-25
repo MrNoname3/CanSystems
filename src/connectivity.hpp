@@ -11,29 +11,21 @@
 #include <ArduinoJson.h>                      /// Handle JSON files.
 
 class MqttComBase {
-
 protected:
-  MqttComBase(const char* classID) {
-    strlcpy(this->classId, classID, sizeof(this->classId));
-  }
-
+  MqttComBase(const char* classID) { strlcpy(this->classId, classID, sizeof(this->classId)); }
   virtual ~MqttComBase() = default;
   void messageSend(const char* payload) const { if(mqttSender) { mqttSender(payload); } }
-
 public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
   const char* getClassId() const { return classId; }
   void setMqttSender(std::function<void(const char*)> senderFunction) { mqttSender = senderFunction; }
-
 private:
   char classId[16];
   std::function<void(const char*)> mqttSender;
 };
 
 class Connectivity {
-
 public:
-
   enum class Interface : uint8_t {
     WIFI = 0,
     ETHERNET,
@@ -56,7 +48,6 @@ public:
       for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
         MqttComBase* currentObject = const_cast<MqttComBase*>(Connectivity::messageMap[i]); // Remove constness for binding
         if(currentObject != nullptr) {
-          //currentObject->setMqttSender(std::bind(&Connectivity::sendMqttMessage, this, std::placeholders::_1));
           currentObject->setMqttSender([this](const char* payload) { sendMqttMessage(payload); });
         }
       }
@@ -350,7 +341,6 @@ public:
   Connectivity& operator=(Connectivity&&) = delete;                 // Define move assignment operator.
 
 private:
-
   struct __attribute__((packed))
   MqttCredentials {
     char userName[24];
@@ -374,23 +364,19 @@ private:
 
 public:
   static const MqttComBase* messageMap[];
-
 private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM configFileLocation[];
   static const char PROGMEM configBackupFileLocation[];
   static const char PROGMEM certFileLocation[];
   static const char PROGMEM certBackupFileLocation[];
-
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-
 public:
   static const char PROGMEM OK_STATE[];
   static const char PROGMEM ERR_STATE[];
   static const char PROGMEM DEVICE_TOPIC[];
-
 private:
   static const char PROGMEM INIT_PREFIX[];
   static const char PROGMEM FS_PREFIX[];
@@ -400,7 +386,6 @@ private:
   static const char PROGMEM JSON_PREFIX[];
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
-
 };
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
