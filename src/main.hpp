@@ -11,6 +11,7 @@
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 #include "connectivity.hpp"
+#include "radiation.hpp"
 
 //--- Constants ---//
 static const char SW_VERSION[] PROGMEM                = "V1.0.0";                     // Actual software version.

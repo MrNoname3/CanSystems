@@ -1,38 +1,16 @@
 #include "main.hpp"
 
 //--- Variables ---//
-const uint8_t measure_time = 60;  //sec
-uint32_t cpm = 0;
+//const uint8_t measure_time = 60;  //sec
+//uint32_t cpm = 0;
 
 //--- Debug LED ---//
 Ticker ticker;
 
-class Radiation : public MqttComBase {
-
-public:
-
-  Radiation(const char* classID) : MqttComBase(classID) {}
-
-  /// @brief Destructor of the object.
-  virtual ~Radiation() = default;
-
-  virtual void messageReceived(uint8_t* payload, uint32_t length) const override {
-    Serial.printf("Class: %s\r\n", MqttComBase::getClassId());
-  }
-
-  void messageSend(const char* message) const {
-    MqttComBase::messageSend(message);
-  }
-
-private:
-
-};
-
-Radiation radiation("radiation1");
-Radiation radiation2("radiation2");
-const MqttComBase* Connectivity::messageMap[] = { &radiation, &radiation2, nullptr };
+Radiation radiation("radiation", RAD);
 
 //--- Networking ---//
+const MqttComBase* Connectivity::messageMap[] = { &radiation, nullptr };
 const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
 Connectivity iotConn(&Serial, SPI_CS);
 
@@ -40,7 +18,7 @@ void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
   pinMode(LED, OUTPUT);
-  pinMode(RAD, INPUT);
+  //pinMode(RAD, INPUT);
   delay(1);
   ticker.attach(0.2, tick);
   Serial.println();
@@ -57,7 +35,8 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
-  attachInterrupt(RAD, Counter, FALLING);
+  //attachInterrupt(RAD, Counter, FALLING);
+  radiation.begin();
 
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
@@ -67,29 +46,11 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t testTimer = millis();
-  if(millis() - testTimer >= 5000) {
-    testTimer = millis();
-    radiation.messageSend(String(millis()).c_str());
-  }
-
-  /*
-  static uint32_t measure_timer = millis();
-  static uint32_t dns_timer = millis();
-
-  if( millis() - measure_timer >= measure_time * 1000 ) {
-    measure_timer = millis();
-    Serial.printf("[%lu] CPM: %u\r\n", millis(), cpm);
-    char cpm_str[12] = { '\0' };
-    sprintf(cpm_str, "%u", cpm);
-    mqtt.publish(mqtt_cpm, cpm_str);
-    cpm = 0;
-  }
-
-*/
-
   yield();
   iotConn.loop();
+
+  radiation.loop();
+
   wdt_reset();
 }
 
@@ -103,7 +64,8 @@ void RestartESP() {
   ESP.restart();
   delay(10000);                                       // Prevent doing anything before restart.
 }
-
+/*
 IRAM_ATTR void Counter() {
   cpm++;
 }
+*/

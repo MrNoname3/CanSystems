@@ -19,8 +19,9 @@ public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
   const char* getClassId() const { return classId; }
   void setMqttSender(std::function<void(const char*)> senderFunction) { mqttSender = senderFunction; }
-private:
+protected:
   char classId[16];
+private:
   std::function<void(const char*)> mqttSender;
 };
 
