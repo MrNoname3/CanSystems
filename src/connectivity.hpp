@@ -19,11 +19,15 @@ public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
   const char* getClassId() const { return classId; }
   void setMqttSender(std::function<void(const char*)> senderFunction) { mqttSender = senderFunction; }
+  static void setConState(bool state) { isOnline = state; }
 protected:
+  static bool getConState() { return isOnline; }
   char classId[16];
 private:
   std::function<void(const char*)> mqttSender;
+  static bool isOnline;
 };
+bool MqttComBase::isOnline = false;
 
 class Connectivity {
 public:
@@ -279,6 +283,7 @@ public:
     if(interfaceStatus != actualInterfaceStatus) {
       if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
       interfaceStatus = actualInterfaceStatus;
+      if(interfaceStatus != WL_CONNECTED) { MqttComBase::setConState(false); }
     }
     if(interfaceStatus != WL_CONNECTED) { return false; }
 
@@ -286,6 +291,7 @@ public:
     if(mqttState != actualMqttState) {
       if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
       mqttState = actualMqttState;
+      if(mqttState == MQTT_CONNECTED) { MqttComBase::setConState(true); }
     }
 
     if(!mqttClient.loop()) {
