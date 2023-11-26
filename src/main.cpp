@@ -1,8 +1,6 @@
 #include "main.hpp"
 
 //--- Variables ---//
-//const uint8_t measure_time = 60;  //sec
-//uint32_t cpm = 0;
 
 //--- Debug LED ---//
 Ticker ticker;
@@ -18,7 +16,6 @@ void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
   pinMode(LED, OUTPUT);
-  //pinMode(RAD, INPUT);
   delay(1);
   ticker.attach(0.2, tick);
   Serial.println();
@@ -35,28 +32,23 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
-  //attachInterrupt(RAD, Counter, FALLING);
   radiation.begin();
 
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
   ticker.detach();
-  wdt_reset();
   LED_L;
+  wdt_reset();
 }
 
 void loop() {
   yield();
   iotConn.loop();
-
   radiation.loop();
-
   wdt_reset();
 }
 
-void tick() {
-  LED_T;                                              // Set pin to the opposite state.
-}
+void tick() { LED_T; }
 
 void RestartESP() {
   Serial.println(F("Restarting..."));
@@ -64,8 +56,3 @@ void RestartESP() {
   ESP.restart();
   delay(10000);                                       // Prevent doing anything before restart.
 }
-/*
-IRAM_ATTR void Counter() {
-  cpm++;
-}
-*/

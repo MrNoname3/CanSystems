@@ -35,17 +35,11 @@ ADC_MODE(ADC_VCC);
 
 //--- Functions ---//
 
-
 /// @brief 
 /// @param  
 void tick(void);
 
 /// @brief Reset the MCU.
 void RestartESP();
-
-/// @brief 
-/// @param  
-/// @return 
-IRAM_ATTR void Counter();
 
 #endif // MAIN_HPP

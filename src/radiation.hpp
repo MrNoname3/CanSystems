@@ -8,8 +8,7 @@
 
 class Radiation : public MqttComBase {
 public:
-  Radiation(const char* classID, uint8_t sensorPin) :
-  MqttComBase(classID), measureTimer(), sensorPin(sensorPin), measureDone(false), cpmToSend(0) {
+  Radiation(const char* classID, uint8_t sensorPin) : MqttComBase(classID), measureTimer(), sensorPin(sensorPin) {
     pinMode(sensorPin, INPUT_PULLUP); // INPUT_PULLUP is only for test, for real sensor it should be only INPUT.
   }
 
@@ -19,7 +18,7 @@ public:
   void begin() {
     constexpr const uint8_t measureTime = 60;  //sec
     attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
-    measureTimer.attach(measureTime, [this]() { this->measure(); });
+    measureTimer.attach(measureTime, measure);
     cpm = 0;
   }
 
@@ -46,7 +45,7 @@ public:
 
 private:
   static IRAM_ATTR void counter() { cpm++; }
-  IRAM_ATTR void measure() {
+  static IRAM_ATTR void measure() {
     cpmToSend = cpm;
     cpm = 0;
     measureDone = true;
@@ -56,8 +55,12 @@ private:
   Ticker measureTimer;
   const uint8_t sensorPin;
   static volatile uint16_t cpm;
-  volatile bool measureDone;
-  volatile uint16_t cpmToSend;
+  static volatile bool measureDone;
+  static volatile uint16_t cpmToSend;
 };
+
 volatile uint16_t Radiation::cpm = 0;
+volatile bool Radiation::measureDone = false;
+volatile uint16_t Radiation::cpmToSend = 0;
+
 #endif // RADIATION_HPP
