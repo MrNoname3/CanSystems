@@ -5,7 +5,7 @@ bool MqttComBase::isOnline = false;
 
 MqttComBase::MqttComBase(const char* classID) {
   strlcpy(this->classId, classID, sizeof(this->classId));
-  //Connectivity::registerCallback(this);
+  Connectivity::registerCallback(this);
 }
 
 void MqttComBase::messageSend(const char* payload) const {

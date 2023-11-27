@@ -1,8 +1,8 @@
 #include "connectivity.hpp"
 #include "MqttComBase.hpp"
 
-//MqttComBase* Connectivity::messageMap[10] = { nullptr };
-//uint8_t Connectivity::messageMapPointer = 0;
+MqttComBase* Connectivity::messageMap[10] = { nullptr };
+uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::configFileLocation[] PROGMEM       = "/config/config.json";      // Config file location on FS.
@@ -28,14 +28,7 @@ const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
 Connectivity::Connectivity(HardwareSerial* serial, const uint8_t ethCS) :
 serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    MqttComBase* currentObject = const_cast<MqttComBase*>(Connectivity::messageMap[i]); // Remove constness for binding
-    if(currentObject != nullptr) {
-      currentObject->setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
-    }
-  }
-}
+interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {}
 
 bool Connectivity::begin(Interface interface) {
   if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
@@ -131,6 +124,14 @@ bool Connectivity::begin(Interface interface) {
   if(!connect(CertFile::NORMAL)) { return false; }
 
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
+
+  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+    MqttComBase* currentObject = messageMap[i];
+    if(currentObject != nullptr) {
+      currentObject->setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
+    }
+  }
+
   return true;
 }
 
@@ -321,11 +322,12 @@ String Connectivity::getISODateTime() {
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
   return String(buffer);
 }
-/*
+
 bool Connectivity::registerCallback(MqttComBase* obj) {
+  if(!obj) { return false; }
   if(messageMapPointer >= sizeof(messageMap)) { return false; }
   messageMap[messageMapPointer] = obj;
   messageMapPointer++;
   return true;
 }
-*/
+

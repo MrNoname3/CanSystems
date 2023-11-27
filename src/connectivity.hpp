@@ -53,7 +53,7 @@ public:
 
   String getISODateTime();
 
-  //static bool registerCallback(MqttComBase* obj);
+  static bool registerCallback(MqttComBase* obj);
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -82,11 +82,9 @@ private:
   MqttCredentials mqttCredentials;
   int8_t mqttState;
 
-  //static MqttComBase* messageMap[10];
-  //static uint8_t messageMapPointer;
+  static MqttComBase* messageMap[10];
+  static uint8_t messageMapPointer;
 
-public:
-  static const MqttComBase* messageMap[];
 private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM configFileLocation[];

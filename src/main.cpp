@@ -5,13 +5,12 @@
 //--- Debug LED ---//
 Ticker ticker;
 
-Radiation radiation("radiation", RAD);
 
 //--- Networking ---//
-const MqttComBase* Connectivity::messageMap[] = { &radiation, nullptr };
 const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
 Connectivity iotConn(&Serial, SPI_CS);
 
+Radiation radiation("radiation", RAD);
 
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
