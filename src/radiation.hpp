@@ -1,7 +1,7 @@
 #ifndef RADIATION_HPP
 #define RADIATION_HPP
 
-#include "connectivity.hpp"
+#include "mqttComBase.hpp"
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 #include <Ticker.h>                           /// Timer interrupt hadnler.

@@ -12,6 +12,7 @@ const MqttComBase* Connectivity::messageMap[] = { &radiation, nullptr };
 const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
 Connectivity iotConn(&Serial, SPI_CS);
 
+
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
