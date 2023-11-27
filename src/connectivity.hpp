@@ -53,7 +53,7 @@ public:
 
   String getISODateTime();
 
-  static bool registerCallback(MqttComBase* obj);
+  //static bool registerCallback(MqttComBase* obj);
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -97,7 +97,7 @@ private:
 public:
   static const char PROGMEM OK_STATE[];
   static const char PROGMEM ERR_STATE[];
-  static const char PROGMEM DEVICE_TOPIC[];
+  static const char PROGMEM DEVICE_TYPE[];
 private:
   static const char PROGMEM INIT_PREFIX[];
   static const char PROGMEM FS_PREFIX[];

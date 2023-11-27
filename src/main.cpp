@@ -7,9 +7,8 @@ Ticker ticker;
 
 
 //--- Networking ---//
-const char Connectivity::DEVICE_TOPIC[] PROGMEM = "test";
+const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
 Connectivity iotConn(&Serial, SPI_CS);
-
 Radiation radiation("radiation", RAD);
 
 void setup() {
