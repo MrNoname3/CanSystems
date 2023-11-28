@@ -6,7 +6,7 @@ std::function<void(const char*, const char*)> MqttComBase::mqttSender = nullptr;
 
 MqttComBase::MqttComBase(const char* classID) {
   strlcpy(this->classId, classID, sizeof(this->classId));
-  //Connectivity::registerCallback(this);
+  Connectivity::registerCallback(this);
 }
 
 void MqttComBase::messageSend(const char* payload) const {

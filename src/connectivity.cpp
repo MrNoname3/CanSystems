@@ -105,7 +105,7 @@ bool Connectivity::begin(Interface interface) {
   // Setup MQTT topics.
   const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", DEVICE_TYPE, macAddress);
   const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
-  const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
+  const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
   const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
   const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
   const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
@@ -238,7 +238,7 @@ bool Connectivity::connect(CertFile actualCert) {
   if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %d\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, mqttClient.state()); }
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
-  if(serialPort) { serialPort->printf_P(PSTR("%sListening on: %s%s\r\n"), MQTT_PREFIX, mqttCredentials.receiverTopic, subResult ? OK_STATE : ERR_STATE); }
+  if(serialPort) { serialPort->printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE); }
   if(!subResult) { return false; }
 
   return true;
@@ -315,7 +315,7 @@ String Connectivity::getISODateTime() {
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
   return String(buffer);
 }
-/*
+
 bool Connectivity::registerCallback(MqttComBase* obj) {
   if(!obj) { return false; }
   if(messageMapPointer >= sizeof(messageMap)) { return false; }
@@ -323,4 +323,4 @@ bool Connectivity::registerCallback(MqttComBase* obj) {
   messageMapPointer++;
   return true;
 }
-*/
+

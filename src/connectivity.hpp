@@ -53,7 +53,7 @@ public:
 
   String getISODateTime();
 
-  //static bool registerCallback(MqttComBase* obj);
+  static bool registerCallback(MqttComBase* obj);
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -67,9 +67,9 @@ private:
     char password[24];
     char serverName[34];
     uint16_t serverPort;
-    char clientName[32];
-    char senderTopic[48];
-    char receiverTopic[48];
+    char clientName[28];
+    char senderTopic[32];
+    char receiverTopic[32];
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
   };
 
