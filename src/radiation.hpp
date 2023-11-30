@@ -32,8 +32,8 @@ public:
   bool loop() {
     if(measureDone) {
       measureDone = false;
-      char dataOut[sizeof(MqttComBase::classId) + 24] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), PSTR("{""\"classID\":\"%s\",""\"cpm\":%hu""}"), MqttComBase::getClassId(), cpmToSend);
+      char dataOut[16] = { '\0' };
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), PSTR("{""\"cpm\":%hu""}"), cpmToSend);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       MqttComBase::messageSend(dataOut);
@@ -42,6 +42,11 @@ public:
   }
 
   virtual void messageReceived(uint8_t* payload, uint32_t length) const override {}
+
+  Radiation(const Radiation&) = delete;                       // Define copy constructor.
+  Radiation& operator=(const Radiation&) = delete;            // Define copy assignment operator.
+  Radiation(Radiation&&) = delete;                            // Define move constructor.
+  Radiation& operator=(Radiation&&) = delete;                 // Define move assignment operator.
 
 private:
   static IRAM_ATTR void counter() { cpm++; }

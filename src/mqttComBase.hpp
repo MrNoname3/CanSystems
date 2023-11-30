@@ -15,10 +15,15 @@ public:
   const char* getClassId() const { return classId; }
   static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
   static void setConState(bool state) { isOnline = state; }
+
+  MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
+  MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
+  MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
+  MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
 protected:
   static bool getConState() { return isOnline; }
-  char classId[16];
 private:
+  char classId[16];
   static std::function<void(const char*, const char*)> mqttSender;
   static bool isOnline;
 };

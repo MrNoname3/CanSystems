@@ -278,15 +278,7 @@ bool Connectivity::loop() {
 }
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
-  const char* classID = nullptr;
-  {
-    StaticJsonDocument<MQTT_MAX_PACKET_SIZE> mqttMessageJson;
-    DeserializationError deserializationError = deserializeJson(mqttMessageJson, payload, length);
-    const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-    if(deSerResult) { classID = mqttMessageJson["classID"] | "Unknown"; }
-    if(serialPort) { serialPort->printf_P(PSTR("%sSerialize received MQTT message:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
-    if(!deSerResult) { return; }
-  }
+  const char* classID = strrchr(topic, '/') + 1;
   if(!classID) { return; }
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     const MqttComBase* currentObject = Connectivity::messageMap[i];
