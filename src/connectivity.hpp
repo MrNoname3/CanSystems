@@ -94,8 +94,8 @@ private:
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-  static const char PROGMEM WILL_TOPIC[];
-  static const char PROGMEM WILL_MSG[];
+  static const char PROGMEM LOG_TOPIC[];
+  static const char PROGMEM LOG_MSG[];
 public:
   static const char PROGMEM OK_STATE[];
   static const char PROGMEM ERR_STATE[];
