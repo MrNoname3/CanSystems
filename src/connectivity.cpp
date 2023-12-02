@@ -5,10 +5,10 @@ MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
-const char Connectivity::configFileLocation[] PROGMEM       = "/config/config.json";      // Config file location on FS.
-const char Connectivity::configBackupFileLocation[] PROGMEM = "/config/config.json.bkp";  // Config file backup location on FS.
-const char Connectivity::certFileLocation[] PROGMEM         = "/cert/mosq-ca.crt";        // Used cert location on FS.
-const char Connectivity::certBackupFileLocation[] PROGMEM   = "/cert/mosq-ca.crt.bkp";    // Cert backup location on FS.
+const char Connectivity::configFileLocation[] PROGMEM       = "/config/server.json";      // Config file location on FS.
+const char Connectivity::configBackupFileLocation[] PROGMEM = "/config/server.json.bkp";  // Config file backup location on FS.
+const char Connectivity::certFileLocation[] PROGMEM         = "/config/mosq-ca.crt";      // Used cert location on FS.
+const char Connectivity::certBackupFileLocation[] PROGMEM   = "/config/mosq-ca.crt.bkp";  // Cert backup location on FS.
 
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
