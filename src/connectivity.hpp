@@ -2,7 +2,7 @@
 #define CONNECTIVITY_HPP
 
 #include <Arduino.h>                          /// Arduino libraries header.
-#include <HardwareSerial.h>
+//#include <HardwareSerial.h>
 #include <ESP8266WiFi.h>                      /// Wifi driver.
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
@@ -30,7 +30,7 @@ public:
     BACKUP
   };
 
-  Connectivity(HardwareSerial* serial = nullptr, const uint8_t ethCS = D8);
+  Connectivity(Stream* serial = nullptr, const uint8_t ethCS = D8);
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;

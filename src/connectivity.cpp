@@ -28,7 +28,7 @@ const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
-Connectivity::Connectivity(HardwareSerial* serial, const uint8_t ethCS) :
+Connectivity::Connectivity(Stream* serial, const uint8_t ethCS) :
 serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
 interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {}
 
@@ -296,7 +296,7 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
   const char* classID = strrchr(topic, '/') + 1;
   if(!classID) { return; }
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    const MqttComBase* currentObject = Connectivity::messageMap[i];
+    MqttComBase* currentObject = Connectivity::messageMap[i];
     if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
       if(serialPort) { serialPort->printf_P(PSTR("%sForward message to class with ID: %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
       currentObject->messageReceived(payload, length);

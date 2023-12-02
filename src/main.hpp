@@ -8,9 +8,10 @@
 //#include <ENC28J60lwIP.h>                     /// Ethernet driver.
 //#include <WiFiClientSecure.h>                 /// TCP client with SSL.
 //#include <PubSubClient.h>                     /// MQTT client.
-#include <LittleFS.h>                         /// Use FLASH filesystem.
-#include <ArduinoJson.h>                      /// Handle JSON files.
+//#include <LittleFS.h>                         /// Use FLASH filesystem.
+//#include <ArduinoJson.h>                      /// Handle JSON files.
 #include "connectivity.hpp"
+#include "common.hpp"
 #include "radiation.hpp"
 
 //--- Constants ---//
@@ -38,8 +39,5 @@ ADC_MODE(ADC_VCC);
 /// @brief 
 /// @param  
 void tick(void);
-
-/// @brief Reset the MCU.
-void RestartESP();
 
 #endif // MAIN_HPP

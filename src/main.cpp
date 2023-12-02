@@ -5,11 +5,11 @@
 //--- Debug LED ---//
 Ticker ticker;
 
-
 //--- Networking ---//
 const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
 Connectivity iotConn(&Serial, SPI_CS);
 Radiation radiation("radiation", RAD);
+Common common("common", &Serial);
 
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
@@ -48,10 +48,3 @@ void loop() {
 }
 
 void tick() { LED_T; }
-
-void RestartESP() {
-  Serial.println(F("Restarting..."));
-  Serial.flush();                                     // Sends out data from serial buffer, before reset.
-  ESP.restart();
-  delay(10000);                                       // Prevent doing anything before restart.
-}

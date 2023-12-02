@@ -41,7 +41,7 @@ public:
     return true;
   }
 
-  virtual void messageReceived(uint8_t* payload, uint32_t length) const override {}
+  virtual void messageReceived(uint8_t* payload, uint32_t length) override {}
 
   Radiation(const Radiation&) = delete;                       // Define copy constructor.
   Radiation& operator=(const Radiation&) = delete;            // Define copy assignment operator.

@@ -11,7 +11,7 @@ protected:
   virtual ~MqttComBase() = default;
   void messageSend(const char* payload) const;
 public:
-  virtual void messageReceived(uint8_t* payload, uint32_t length) const = 0;
+  virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
   const char* getClassId() const { return classId; }
   static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
   static void setConState(bool state) { isOnline = state; }
