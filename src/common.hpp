@@ -9,7 +9,10 @@ class Common : public MqttComBase {
 public:
   enum class Command : uint8_t {
     BLANK = 0,
-    RESTART
+    RESTART,
+    OTA_START,
+    OTA_DATA,
+    OTA_STOP
   };
 
   Common(const char* classID, Stream* serial = nullptr) : MqttComBase(classID), serialPort(serial) {}
