@@ -3,6 +3,7 @@ import os
 import time  # Import the time module
 import binascii
 import threading
+import zlib
 
 try:
     import paho.mqtt.client as mqtt
@@ -32,7 +33,7 @@ mqtt_server_name = mqtt_credentials['mqttServerName']
 mqtt_server_port = mqtt_credentials['mqttServerPort']
 mqtt_ca_cert = os.path.join(data_dir, 'mosq-ca.crt')
 mqtt_client_id = 'Python_OTA'
-mqtt_ota_topic = 'iot/stod/testmac/common'
+mqtt_ota_topic = 'iot/stod/40f520286e69/common'
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
@@ -43,16 +44,24 @@ def on_connect(client, userdata, flags, rc):
 
 # Calculate CRC32 of the firmware file
 def calculate_crc32(file_path):
-    with open(file_path, 'rb') as file:
-        content = file.read()
-        return binascii.crc32(content) & 0xFFFFFFFF
+    crc = 0  # Initial CRC value
+
+    with open(file_path, 'rb') as f:
+        while True:
+            data = f.read(1)
+            if not data:
+                break
+            crc = zlib.crc32(data, crc)
+
+    return crc & 0xFFFFFFFF
+
 
 # Set the path to firmware.bin
 firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 
 # Function to send firmware pieces
 def send_fw():
-    piece_size = 100
+    piece_size = 25
     piece_number = 0  # Start from 0
 
     fw_size = os.path.getsize(firmware_path)
@@ -60,37 +69,41 @@ def send_fw():
 
     # Start message
     start_message = {
-        "command": 2,
+        "cmd": 2,
         "fwSize": fw_size,
         "crc32": crc32
     }
     client.publish(mqtt_ota_topic, json.dumps(start_message))
-    time.sleep(0.1)  # 100ms delay
+    print("Start:", json.dumps(start_message))
+    time.sleep(0.15)  # 100ms delay
 
     # Send firmware in pieces
+    remaining_bytes = fw_size
     with open(firmware_path, 'rb') as fw_file:
-        while True:
-            data = fw_file.read(piece_size)
-            if not data:
-                break
+        while remaining_bytes != 0:
+            read_size = 0
+            if remaining_bytes < piece_size:
+                read_size = remaining_bytes
+            else:
+                read_size = piece_size
+            data = fw_file.read(read_size)
 
             piece_message = {
-                "command": 3,
-                "pieceNumber": piece_number,
-                "fwData": list(data)
+                "cmd": 3,
+                "piece": piece_number,
+                "size": read_size,
+                "data": list(data)
             }
+            print("Piece:", json.dumps(piece_message))  # Print the JSON message
             client.publish(mqtt_ota_topic, json.dumps(piece_message))
             piece_number += 1
-            time.sleep(0.1)  # 100ms delay
-
-        # If there are remaining bytes (< 100), send as the final piece
-        if data:
-            piece_message = {
-                "command": 3,
-                "pieceNumber": piece_number,
-                "fwData": list(data)
-            }
-            client.publish(mqtt_ota_topic, json.dumps(piece_message))
+            remaining_bytes -= read_size
+            time.sleep(0.15)  # 50ms delay
+    end_message = {
+        "cmd": 4
+    }
+    client.publish(mqtt_ota_topic, json.dumps(end_message))
+    print("End:", json.dumps(end_message))
 
     print("Upload done, exiting...")
     client.disconnect()
