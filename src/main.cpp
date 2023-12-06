@@ -33,17 +33,9 @@ void setup() {
 
   radiation.begin();
 
-  File fwFile = LittleFS.open("/config/espFirmware.bin", "r");
-    if(!fwFile) {
-      Serial.printf_P(PSTR("Opening failed: %s\r\n"), "/config/espFirmware.bin");
-    }
-    Crc32 crc32;
-    while(fwFile.available() > 0) {
-      crc32.next(fwFile.read());
-    }
-    Serial.println(fwFile.size());
-    fwFile.close();
-    Serial.printf_P(PSTR("CRC: %u\r\n"), crc32.get());
+  uint32_t calculatedCrc = 0;
+  OTA::checkFwCrc32(&calculatedCrc);
+  Serial.printf_P(PSTR("FW CRC: %u\r\n"), calculatedCrc);
 
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));

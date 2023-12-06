@@ -298,12 +298,12 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     MqttComBase* currentObject = Connectivity::messageMap[i];
     if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
-      if(serialPort) { serialPort->printf_P(PSTR("%sForward message to class with ID: %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
+      if(serialPort) { serialPort->printf_P(PSTR("%sForward -> %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
       currentObject->messageReceived(payload, length);
       return;
     }
   }
-  if(serialPort) { serialPort->printf_P(PSTR("%sNo class with ID: %s\r\n"), MQTT_PREFIX, classID); }
+  if(serialPort) { serialPort->printf_P(PSTR("%sNo handler -> %s\r\n"), MQTT_PREFIX, classID); }
 }
 
 void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {

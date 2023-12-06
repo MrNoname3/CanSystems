@@ -64,7 +64,7 @@ public:
           uint8_t fwData[25];
           JsonArray fwDataArray = cmdJson["data"];
           for(uint8_t i = 0; i < fwDataSize; i++) {
-            fwData[i] = fwDataArray[i];đ
+            fwData[i] = fwDataArray[i];
           }
           if(ota) {
             if(!ota->store(fwPieceNumber, fwData, fwDataSize)) {

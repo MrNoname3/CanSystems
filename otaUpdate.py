@@ -75,7 +75,7 @@ def send_fw():
     }
     client.publish(mqtt_ota_topic, json.dumps(start_message))
     print("Start:", json.dumps(start_message))
-    time.sleep(0.15)  # 100ms delay
+    time.sleep(0.2)  # 100ms delay
 
     # Send firmware in pieces
     remaining_bytes = fw_size
@@ -98,7 +98,7 @@ def send_fw():
             client.publish(mqtt_ota_topic, json.dumps(piece_message))
             piece_number += 1
             remaining_bytes -= read_size
-            time.sleep(0.15)  # 50ms delay
+            time.sleep(0.2)  # 50ms delay
     end_message = {
         "cmd": 4
     }
