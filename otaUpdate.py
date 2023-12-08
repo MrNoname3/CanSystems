@@ -4,6 +4,7 @@ import time  # Import the time module
 import binascii
 import threading
 import zlib
+import base64
 
 try:
     import paho.mqtt.client as mqtt
@@ -61,7 +62,7 @@ firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 
 # Function to send firmware pieces
 def send_fw():
-    piece_size = 25
+    piece_size = 288
     piece_number = 0  # Start from 0
 
     fw_size = os.path.getsize(firmware_path)
@@ -81,18 +82,14 @@ def send_fw():
     remaining_bytes = fw_size
     with open(firmware_path, 'rb') as fw_file:
         while remaining_bytes != 0:
-            read_size = 0
-            if remaining_bytes < piece_size:
-                read_size = remaining_bytes
-            else:
-                read_size = piece_size
+            read_size = min(remaining_bytes, piece_size)  # Read up to 100 bytes at a time
             data = fw_file.read(read_size)
 
             piece_message = {
                 "cmd": 3,
                 "piece": piece_number,
                 "size": read_size,
-                "data": list(data)
+                "data": base64.b64encode(data).decode('utf-8')  # Convert bytes to base64-encoded string
             }
             print("Piece:", json.dumps(piece_message))  # Print the JSON message
             client.publish(mqtt_ota_topic, json.dumps(piece_message))

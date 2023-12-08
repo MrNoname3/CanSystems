@@ -5,6 +5,7 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 #include "ota.hpp"
+#include <Base64.hpp>
 
 class Common : public MqttComBase {
 public:
@@ -59,14 +60,19 @@ public:
           }
         } break;
         case Command::OTA_DATA: {
-          const uint32_t fwPieceNumber = cmdJson["piece"] | -1;
-          const uint16_t fwDataSize = cmdJson["size"] | 0;
-          uint8_t fwData[25];
-          JsonArray fwDataArray = cmdJson["data"];
-          for(uint8_t i = 0; i < fwDataSize; i++) {
-            fwData[i] = fwDataArray[i];
-          }
-          if(ota) {
+          const uint32_t fwPieceNumber = cmdJson["piece"].as<uint32_t>();
+          const uint16_t fwDataSize = cmdJson["size"].as<uint16_t>();
+          String fwDataB64 = cmdJson["data"].as<String>();
+
+          if(ota && fwDataB64) {
+            uint32_t decodedSize = Base64::decodeBase64Length(reinterpret_cast<const uint8_t*>(fwDataB64.c_str()));
+            if(fwDataSize != decodedSize) {
+              if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size check error!\r\n"), COMMON_PREFIX); }
+              return;
+            }
+            uint8_t fwData[288];
+            Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64.c_str()), fwData, fwDataSize);
+            //Serial.println(String((char*)fwData));
             if(!ota->store(fwPieceNumber, fwData, fwDataSize)) {
               if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
             }
