@@ -59,11 +59,9 @@ public:
           }
         } break;
         case Command::OTA_DATA: {
-          uint8_t fwData[240];
+          uint8_t fwData[300];
           const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
           const uint16_t fwDataSize = cmdJson[F("size")].as<uint16_t>();
-          const uint32_t crc32BE = cmdJson[F("crc32BE")].as<uint32_t>();
-          
           const char* fwDataB64 = cmdJson["data"].as<const char*>();
           uint32_t decodedSize = Base64::decodeBase64Length(reinterpret_cast<const uint8_t*>(fwDataB64));
           if(fwDataSize != decodedSize) {
@@ -71,13 +69,7 @@ public:
             return;
           }
           Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, strlen(fwDataB64));
-          
-          const uint32_t crc32BE_calc = Crc32::calculate(fwData, fwDataSize);
-          if(crc32BE != crc32BE_calc) {
-            Serial.printf_P(PSTR("Crc BE: %u - %u\r\n"), crc32BE, crc32BE_calc);
-          }
-
-          if(!ota.store(fwPieceNumber, fwData, fwDataSize)) {
+          if(!ota.store(fwPieceNumber, fwData, decodedSize)) {
             if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
           }
         } break;

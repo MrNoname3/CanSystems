@@ -56,19 +56,19 @@ public:
 
   bool checkValidity() {
     if(remainingFwSize != 0) { return false; }
-    uint32_t calcFwCrc32 = 0;
-    checkFwCrc32(&calcFwCrc32);
-    const bool isCrcOk = (calcFwCrc32 == fwCrc);
-    return isCrcOk;
-  }
-
-  static bool checkFwCrc32(uint32_t* fwCrc32) {
     File fwFile = LittleFS.open(FPSTR(OTA_FW_LOCATION), "r");
+    if(serialPort) { serialPort->printf_P(PSTR("%sChecking FW file:%s\r\n"), OTA_PREFIX, fwFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
     if(!fwFile) { return false; }
+    const bool fwSizeOk = (fwFile.size() == fwSize);
+    if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fwSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+    if(!fwSizeOk) { return false; }
     Crc32 crc32;
     while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
     fwFile.close();
-    *fwCrc32 = crc32.get();
+    const uint32_t calcFwCrc32 = crc32.get();
+    const bool fwCrcOk = (calcFwCrc32 == fwCrc);
+    if(serialPort) { serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fwCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+    if(!fwCrcOk) { return false; }
     return true;
   }
 

@@ -33,10 +33,6 @@ void setup() {
 
   radiation.begin();
 
-  uint32_t calculatedCrc = 0;
-  OTA::checkFwCrc32(&calculatedCrc);
-  Serial.printf_P(PSTR("FW CRC: %u\r\n"), calculatedCrc);
-
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
   ticker.detach();

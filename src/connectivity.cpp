@@ -144,10 +144,10 @@ bool Connectivity::startWifi() {
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(deSerResult) {
-    const char* ssid = wifiJson["ssid"];
-    const char* pass = wifiJson["password"];
-    const uint8_t channel = wifiJson["channel"];
-    JsonArray bssidArray = wifiJson["bssid"];
+    const char* ssid = wifiJson[F("ssid")].as<const char*>();
+    const char* pass = wifiJson[F("password")].as<const char*>();
+    const uint8_t channel = wifiJson[F("channel")].as<const uint8_t>();
+    JsonArray bssidArray = wifiJson[F("bssid")];
     uint8_t bssid[6];
     for(uint8_t i = 0; i < bssidArray.size(); i++) {
       bssid[i] = bssidArray[i];
@@ -195,10 +195,10 @@ bool Connectivity::loadConfig(ConfigFile actualConfig) {
   DeserializationError deserializationError = deserializeJson(configJson, configFile);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(deSerResult) {
-    strlcpy(mqttCredentials.userName, configJson["mqttUserName"], sizeof(mqttCredentials.userName));
-    strlcpy(mqttCredentials.password, configJson["mqttPassword"], sizeof(mqttCredentials.password));
-    strlcpy(mqttCredentials.serverName, configJson["mqttServerName"], sizeof(mqttCredentials.serverName));
-    mqttCredentials.serverPort = configJson["mqttServerPort"];
+    strlcpy(mqttCredentials.userName, configJson[F("mqttUserName")].as<const char*>(), sizeof(mqttCredentials.userName));
+    strlcpy(mqttCredentials.password, configJson[F("mqttPassword")].as<const char*>(), sizeof(mqttCredentials.password));
+    strlcpy(mqttCredentials.serverName, configJson[F("mqttServerName")].as<const char*>(), sizeof(mqttCredentials.serverName));
+    mqttCredentials.serverPort = configJson[F("mqttServerPort")].as<uint16_t>();
   }
   if(serialPort) { serialPort->printf_P(PSTR("%sSerialize file:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
   configFile.close();
@@ -298,7 +298,7 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     MqttComBase* currentObject = Connectivity::messageMap[i];
     if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
-      if(serialPort) { serialPort->printf_P(PSTR("%sForward -> %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
+      //if(serialPort) { serialPort->printf_P(PSTR("%sForward -> %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
       currentObject->messageReceived(payload, length);
       return;
     }
