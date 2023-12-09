@@ -111,40 +111,34 @@ public:
   /// @param input_length (optional) - Number of bytes to read from input pointer.
   /// @return Number of bytes in the decoded binary.
   static uint32_t decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength = -1) {
-    int i = 0, j = 0;
-    int decodedLength = 0;
-    unsigned char A3[3];
-    unsigned char A4[4];
+    int32_t i = 0, j = 0;
+    int32_t decodedLength = 0;
+    uint8_t A3[3];
+    uint8_t A4[4];
 
     while(inputLength--) {
       if(*input == '=') { break; }
-
       A4[i++] = *(input++);
-      if (i == 4) {
-        for (i = 0; i <4; i++) {
+      if(i == 4) {
+        for(i = 0; i < 4; i++) {
           A4[i] = lookupTable(A4[i]);
         }
-        fromA4ToA3(A3,A4);
-
-        for (i = 0; i < 3; i++) {
+        fromA4ToA3(A3, A4);
+        for(i = 0; i < 3; i++) {
           output[decodedLength++] = A3[i];
         }
         i = 0;
       }
     }
-
-    if (i) {
-      for (j = i; j < 4; j++) {
+    if(i) {
+      for(j = i; j < 4; j++) {
         A4[j] = '\0';
       }
-
-      for (j = 0; j <4; j++) {
+      for(j = 0; j < 4; j++) {
         A4[j] = lookupTable(A4[j]);
       }
-
-      fromA4ToA3(A3,A4);
-
-      for (j = 0; j < i - 1; j++) {
+      fromA4ToA3(A3, A4);
+      for(j = 0; j < i - 1; j++) {
         output[decodedLength++] = A3[j];
       }
     }
@@ -153,20 +147,20 @@ public:
   }
 
 private:
-  static inline void fromA3ToA4(unsigned char * A4, unsigned char * A3) {
+  static inline void fromA3ToA4(uint8_t* A4, uint8_t* A3) {
     A4[0] = (A3[0] & 0xfc) >> 2;
     A4[1] = ((A3[0] & 0x03) << 4) + ((A3[1] & 0xf0) >> 4);
     A4[2] = ((A3[1] & 0x0f) << 2) + ((A3[2] & 0xc0) >> 6);
     A4[3] = (A3[2] & 0x3f);
   }
 
-  static inline void fromA4ToA3(unsigned char * A3, unsigned char * A4) {
+  static inline void fromA4ToA3(uint8_t* A3, uint8_t* A4) {
     A3[0] = (A4[0] << 2) + ((A4[1] & 0x30) >> 4);
     A3[1] = ((A4[1] & 0xf) << 4) + ((A4[2] & 0x3c) >> 2);
     A3[2] = ((A4[2] & 0x3) << 6) + A4[3];
   }
 
-  static inline unsigned char lookupTable(char c) {
+  static inline uint8_t lookupTable(char c) {
     if(c >='A' && c <='Z') return c - 'A';
     if(c >='a' && c <='z') return c - 71;
     if(c >='0' && c <='9') return c + 4;

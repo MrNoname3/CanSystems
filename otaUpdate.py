@@ -76,13 +76,13 @@ def send_fw():
     }
     client.publish(mqtt_ota_topic, json.dumps(start_message))
     print("Start:", json.dumps(start_message))
-    time.sleep(0.2)  # 100ms delay
+    time.sleep(0.2)
 
     # Send firmware in pieces
     remaining_bytes = fw_size
     with open(firmware_path, 'rb') as fw_file:
         while remaining_bytes != 0:
-            read_size = min(remaining_bytes, piece_size)  # Read up to 100 bytes at a time
+            read_size = min(remaining_bytes, piece_size)
             data = fw_file.read(read_size)
 
             # Calculate CRC32 before encoding the firmware piece
@@ -93,24 +93,18 @@ def send_fw():
             # Base64 encode the firmware piece
             encoded_data = base64.b64encode(data).decode('utf-8')
 
-            # Calculate CRC32 after encoding the firmware piece
-            crc32_after_encoding = 0
-            crc32_after_encoding = zlib.crc32(encoded_data.encode('utf-8'), crc32_after_encoding)
-            crc32_after_encoding &= 0xFFFFFFFF
-
             piece_message = {
                 "cmd": 3,
                 "piece": piece_number,
                 "size": read_size,
                 "data": encoded_data,
                 "crc32BE": crc32_before_encoding,
-                "crc32AE": crc32_after_encoding
             }
             print("Piece:", json.dumps(piece_message))  # Print the JSON message
             client.publish(mqtt_ota_topic, json.dumps(piece_message))
             piece_number += 1
             remaining_bytes -= read_size
-            time.sleep(0.2)  # 50ms delay
+            time.sleep(0.2)
     end_message = {
         "cmd": 4
     }

@@ -65,7 +65,6 @@ public:
   static bool checkFwCrc32(uint32_t* fwCrc32) {
     File fwFile = LittleFS.open(FPSTR(OTA_FW_LOCATION), "r");
     if(!fwFile) { return false; }
-    Serial.println(fwFile.size());
     Crc32 crc32;
     while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
     fwFile.close();
