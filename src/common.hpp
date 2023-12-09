@@ -63,15 +63,15 @@ public:
           const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
           const uint16_t fwDataSize = cmdJson[F("size")].as<uint16_t>();
           const uint32_t crc32BE = cmdJson[F("crc32BE")].as<uint32_t>();
-          {
-            String fwDataB64 = cmdJson[F("data")].as<String>();
-            uint32_t decodedSize = Base64::decodeBase64Length(reinterpret_cast<const uint8_t*>(fwDataB64.c_str()));
-            if(fwDataSize != decodedSize) {
-              if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size check error!\r\n"), COMMON_PREFIX); }
-              return;
-            }
-            Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64.c_str()), fwData, fwDataB64.length());
+          
+          const char* fwDataB64 = cmdJson["data"].as<const char*>();
+          uint32_t decodedSize = Base64::decodeBase64Length(reinterpret_cast<const uint8_t*>(fwDataB64));
+          if(fwDataSize != decodedSize) {
+            if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size check error!\r\n"), COMMON_PREFIX); }
+            return;
           }
+          Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, strlen(fwDataB64));
+          
           const uint32_t crc32BE_calc = Crc32::calculate(fwData, fwDataSize);
           if(crc32BE != crc32BE_calc) {
             Serial.printf_P(PSTR("Crc BE: %u - %u\r\n"), crc32BE, crc32BE_calc);
