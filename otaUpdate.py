@@ -62,17 +62,17 @@ firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 
 # Function to send firmware pieces
 def send_fw():
-    piece_size = 288
+    piece_size = 240
     piece_number = 0  # Start from 0
 
     fw_size = os.path.getsize(firmware_path)
-    crc32 = calculate_crc32(firmware_path)
+    crc32_total = calculate_crc32(firmware_path)
 
     # Start message
     start_message = {
         "cmd": 2,
         "fwSize": fw_size,
-        "crc32": crc32
+        "crc32": crc32_total
     }
     client.publish(mqtt_ota_topic, json.dumps(start_message))
     print("Start:", json.dumps(start_message))
@@ -85,11 +85,26 @@ def send_fw():
             read_size = min(remaining_bytes, piece_size)  # Read up to 100 bytes at a time
             data = fw_file.read(read_size)
 
+            # Calculate CRC32 before encoding the firmware piece
+            crc32_before_encoding = 0
+            crc32_before_encoding = zlib.crc32(data, crc32_before_encoding)
+            crc32_before_encoding &= 0xFFFFFFFF
+
+            # Base64 encode the firmware piece
+            encoded_data = base64.b64encode(data).decode('utf-8')
+
+            # Calculate CRC32 after encoding the firmware piece
+            crc32_after_encoding = 0
+            crc32_after_encoding = zlib.crc32(encoded_data.encode('utf-8'), crc32_after_encoding)
+            crc32_after_encoding &= 0xFFFFFFFF
+
             piece_message = {
                 "cmd": 3,
                 "piece": piece_number,
                 "size": read_size,
-                "data": base64.b64encode(data).decode('utf-8')  # Convert bytes to base64-encoded string
+                "data": encoded_data,
+                "crc32BE": crc32_before_encoding,
+                "crc32AE": crc32_after_encoding
             }
             print("Piece:", json.dumps(piece_message))  # Print the JSON message
             client.publish(mqtt_ota_topic, json.dumps(piece_message))
@@ -105,6 +120,7 @@ def send_fw():
     print("Upload done, exiting...")
     client.disconnect()
     sys.exit()
+
 
 
 # Run MQTT loop

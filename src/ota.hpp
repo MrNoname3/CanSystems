@@ -9,41 +9,30 @@
 class OTA {
 
 public:
-  OTA(uint32_t fwSize, uint32_t fwCrc, Stream* serial = nullptr) :
-  fwSize(fwSize), fwCrc(fwCrc), serialPort(serial), nextFwPieceNumber(0), remainingFwSize(fwSize) {
-    const bool otaFwExists = LittleFS.exists(FPSTR(OTA_FW_LOCATION));
-    if(otaFwExists) {
-      const bool rmFileResult = LittleFS.remove(FPSTR(OTA_FW_LOCATION));
-      if(!rmFileResult) {
-        if(serialPort) { serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), OTA_PREFIX, OTA_FW_LOCATION); }
-        this->~OTA();
-      }
-    }
-    if(serialPort) { serialPort->printf_P(PSTR("%sFW size: %u crc: %u\r\n"), OTA_PREFIX, this->fwSize, this->fwCrc); }
-    if(fwSize == 0) { this->~OTA(); }
-  }
+  OTA(Stream* serial = nullptr) : serialPort(serial) {}
 
   /// @brief Destructor of the object.
   virtual ~OTA() = default;
-/*
+
   bool begin(uint32_t fwSize, uint32_t fwCrc) {
     this->fwSize = fwSize;
     this->fwCrc = fwCrc;
     this->nextFwPieceNumber = 0;
     this->remainingFwSize = fwSize;
-    isFwFileCheckable = false;
 
     const bool otaFwExists = LittleFS.exists(FPSTR(OTA_FW_LOCATION));
     if(otaFwExists) {
       const bool rmFileResult = LittleFS.remove(FPSTR(OTA_FW_LOCATION));
       if(!rmFileResult) {
         if(serialPort) { serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), OTA_PREFIX, OTA_FW_LOCATION); }
-        this->~OTA();
+        return false;
       }
     }
-    if(fwSize == 0) { this->~OTA(); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sFW size: %u crc: %u\r\n"), OTA_PREFIX, this->fwSize, this->fwCrc); }
+    if(fwSize == 0) { return false; }
+    return true;
   }
-*/
+
   bool store(uint32_t fwPieceNumber, const uint8_t* fwData, uint16_t fwDataSize) {
     if(fwPieceNumber != nextFwPieceNumber) { return false; }
     if(fwDataSize == 0) { return false; }
@@ -76,6 +65,7 @@ public:
   static bool checkFwCrc32(uint32_t* fwCrc32) {
     File fwFile = LittleFS.open(FPSTR(OTA_FW_LOCATION), "r");
     if(!fwFile) { return false; }
+    Serial.println(fwFile.size());
     Crc32 crc32;
     while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
     fwFile.close();
@@ -89,8 +79,8 @@ public:
   OTA& operator=(OTA&&) = delete;                 // Define move assignment operator.
 
 private:
-  const uint32_t fwSize;
-  const uint32_t fwCrc;
+  uint32_t fwSize;
+  uint32_t fwCrc;
   Stream* serialPort;
   uint32_t nextFwPieceNumber;
   uint32_t remainingFwSize;
