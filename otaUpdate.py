@@ -62,7 +62,7 @@ firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 
 # Function to send firmware pieces
 def send_fw():
-    piece_size = 300
+    piece_size = 336
     piece_number = 0  # Start from 0
 
     fw_size = os.path.getsize(firmware_path)
@@ -87,7 +87,6 @@ def send_fw():
             piece_message = {
                 "cmd": 3,
                 "piece": piece_number,
-                "size": read_size,
                 "data": base64.b64encode(data).decode('utf-8')
             }
             print("Piece:", json.dumps(piece_message))  # Print the JSON message

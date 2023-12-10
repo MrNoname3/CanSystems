@@ -59,16 +59,20 @@ public:
           }
         } break;
         case Command::OTA_DATA: {
-          uint8_t fwData[300];
+          uint8_t fwData[336];
           const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
-          const uint16_t fwDataSize = cmdJson[F("size")].as<uint16_t>();
           const char* fwDataB64 = cmdJson["data"].as<const char*>();
-          uint32_t decodedSize = Base64::decodeBase64Length(reinterpret_cast<const uint8_t*>(fwDataB64));
-          if(fwDataSize != decodedSize) {
-            if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size check error!\r\n"), COMMON_PREFIX); }
+          const uint32_t fwDataB64Size = strlen(fwDataB64);
+          const uint32_t decodedSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fwDataB64), fwDataB64Size);
+          if(decodedSize > sizeof(fwData)) {
+            if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size error!\r\n"), COMMON_PREFIX); }
             return;
           }
-          Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, strlen(fwDataB64));
+          const uint32_t decodedSize2 = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, fwDataB64Size);
+          if(decodedSize != decodedSize2) {
+            if(serialPort) { serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), COMMON_PREFIX); }
+            return;
+          }
           if(!ota.store(fwPieceNumber, fwData, decodedSize)) {
             if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
           }
