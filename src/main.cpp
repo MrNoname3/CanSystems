@@ -24,8 +24,7 @@ void setup() {
   Serial.println(__cplusplus);
   Serial.print(F("[INIT] FW: "));
   Serial.println(FPSTR(SW_VERSION));
-  Serial.print(F("[INIT] Git hash: "));
-  Serial.println(F(GIT_COMMIT_HASH));
+  Serial.printf_P(PSTR("[INIT] Git hash: %x\r\n"), GIT_COMMIT_HASH);
   Serial.printf_P(PSTR("[INIT] Internal VCC: %humV\r\n"), ESP.getVcc());
 
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
