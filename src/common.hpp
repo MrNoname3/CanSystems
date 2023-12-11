@@ -14,8 +14,7 @@ public:
     RESTART,
     OTA_START,
     OTA_DATA,
-    OTA_END,
-    OTA_STOP
+    OTA_END
   };
 
   enum class Response : uint8_t {
@@ -82,7 +81,6 @@ public:
             if(serialPort) { serialPort->printf_P(PSTR("%sStored FW is not valid!\r\n"), COMMON_PREFIX); }
           }
         } break;
-        case Command::OTA_STOP: {  } break;
       };
     }
   }

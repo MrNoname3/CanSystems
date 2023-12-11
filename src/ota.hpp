@@ -5,6 +5,8 @@
 #include <ArduinoJson.h>                      /// Handle JSON files.
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include "crc32.hpp"
+#include <Updater.h>
+#include "connectivity.hpp"
 
 class OTA {
 
@@ -58,17 +60,28 @@ public:
     if(remainingFwSize != 0) { return false; }
     File fwFile = LittleFS.open(FPSTR(OTA_FW_LOCATION), "r");
     if(serialPort) { serialPort->printf_P(PSTR("%sChecking FW file:%s\r\n"), OTA_PREFIX, fwFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-    if(!fwFile) { return false; }
+    if(!fwFile) { fwFile.close(); return false; }
     const bool fwSizeOk = (fwFile.size() == fwSize);
     if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fwSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-    if(!fwSizeOk) { return false; }
+    if(!fwSizeOk) { fwFile.close(); return false; }
     Crc32 crc32;
     while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
-    fwFile.close();
     const uint32_t calcFwCrc32 = crc32.get();
     const bool fwCrcOk = (calcFwCrc32 == fwCrc);
     if(serialPort) { serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fwCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-    if(!fwCrcOk) { return false; }
+    if(!fwCrcOk) { fwFile.close(); return false; }
+
+    fwFile.seek(0, SeekSet);
+    const bool updateBeginResult = Update.begin(fwSize, 0, 2, 0);
+    if(serialPort) { serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+    if(!updateBeginResult) { fwFile.close(); return false; }
+    const bool updateStreamResult = (Update.writeStream(fwFile) == fwSize);
+    if(serialPort) { serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+    if(!updateStreamResult) { fwFile.close(); return false; }
+    fwFile.close();
+    const bool updateEndResult = Update.end();
+    if(serialPort) { serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+    if(!updateEndResult) { return false; }
     return true;
   }
 
