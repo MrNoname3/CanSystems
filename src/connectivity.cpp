@@ -1,5 +1,7 @@
 #include "connectivity.hpp"
 #include "MqttComBase.hpp"
+#include <LittleFS.h>                         /// Use FLASH filesystem.
+#include <ArduinoJson.h>                      /// Handle JSON files.
 
 MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
@@ -30,7 +32,7 @@ const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
 Connectivity::Connectivity(Stream* serial, const uint8_t ethCS) :
 serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED) {}
+interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), common("common", serial) {}
 
 bool Connectivity::begin(Interface interface) {
   if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }

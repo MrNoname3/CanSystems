@@ -4,14 +4,7 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <Ticker.h>                           /// Timer interrupt hadnler.
-//#include <ESP8266WiFi.h>                      /// Wifi driver.
-//#include <ENC28J60lwIP.h>                     /// Ethernet driver.
-//#include <WiFiClientSecure.h>                 /// TCP client with SSL.
-//#include <PubSubClient.h>                     /// MQTT client.
-//#include <LittleFS.h>                         /// Use FLASH filesystem.
-//#include <ArduinoJson.h>                      /// Handle JSON files.
 #include "connectivity.hpp"
-#include "common.hpp"
 #include "radiation.hpp"
 
 //--- Constants ---//

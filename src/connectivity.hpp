@@ -7,8 +7,7 @@
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
-#include <LittleFS.h>                         /// Use FLASH filesystem.
-#include <ArduinoJson.h>                      /// Handle JSON files.
+#include "common.hpp"
 
 class MqttComBase;
 
@@ -84,6 +83,8 @@ private:
 
   static MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;
+
+  Common common;
 
 private:
   static const char PROGMEM wifiFileLocation[];

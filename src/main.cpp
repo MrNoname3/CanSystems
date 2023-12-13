@@ -9,7 +9,6 @@ Ticker ticker;
 const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
 Connectivity iotConn(&Serial, SPI_CS);
 Radiation radiation("radiation", RAD);
-Common common("common", &Serial);
 
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
