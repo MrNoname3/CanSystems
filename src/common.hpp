@@ -25,11 +25,16 @@ public:
   /// @brief Destructor of the object.
   virtual ~Common() = default;
 
+  virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+
   /// @brief Reset the MCU.
   void restartESP();
 
-  virtual void messageReceived(uint8_t* payload, uint32_t length) override;
 
+private:
+  bool sendResponse(Response resp, uint16_t cmd);
+
+public:
   Common(const Common&) = delete;                       // Define copy constructor.
   Common& operator=(const Common&) = delete;            // Define copy assignment operator.
   Common(Common&&) = delete;                            // Define move constructor.

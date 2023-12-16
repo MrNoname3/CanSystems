@@ -140,7 +140,7 @@ bool Connectivity::startWifi() {
 
   File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
   if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFile.fullName(), wifiFile ? OK_STATE : ERR_STATE); }
-  if(!wifiFile) { return false; }
+  if(!wifiFile) { wifiFile.close(); return false; }
 
   StaticJsonDocument<256> wifiJson;
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
@@ -191,7 +191,7 @@ bool Connectivity::loadConfig(ConfigFile actualConfig) {
     return false;
   }
   if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, configFile.fullName(), configFile ? OK_STATE : ERR_STATE); }
-  if(!configFile) { return false; }
+  if(!configFile) { configFile.close(); return false; }
 
   StaticJsonDocument<256> configJson;
   DeserializationError deserializationError = deserializeJson(configJson, configFile);
@@ -220,7 +220,7 @@ bool Connectivity::connect(CertFile actualCert) {
     return false;
   }
   if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, certFile.fullName(), certFile ? OK_STATE : ERR_STATE); }
-  if(!certFile) { return false; }
+  if(!certFile) { certFile.close(); return false; }
 
   X509List cert(certFile);
   tcpClient.setTrustAnchors(&cert);
