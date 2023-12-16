@@ -6,10 +6,16 @@
 class Connectivity; // Forward declaration
 
 class MqttComBase {
+public:
+  enum class Response : uint8_t {
+    NACK = 0,
+    ACK,
+  };
 protected:
   MqttComBase(const char* classID);
   virtual ~MqttComBase() = default;
   void messageSend(const char* payload) const;
+  virtual bool sendResponse(Response resp, uint16_t cmd);
 public:
   virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
   const char* getClassId() const { return classId; }

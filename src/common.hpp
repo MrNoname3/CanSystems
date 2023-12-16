@@ -15,11 +15,6 @@ public:
     OTA_END
   };
 
-  enum class Response : uint8_t {
-    NACK = 0,
-    ACK,
-  };
-
   Common(const char* classID, Stream* serial = nullptr);
 
   /// @brief Destructor of the object.
@@ -29,10 +24,6 @@ public:
 
   /// @brief Reset the MCU.
   void restartESP();
-
-
-private:
-  bool sendResponse(Response resp, uint16_t cmd);
 
 public:
   Common(const Common&) = delete;                       // Define copy constructor.
