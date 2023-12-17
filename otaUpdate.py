@@ -4,6 +4,8 @@ import time
 import threading
 import zlib
 import base64
+import sys
+from tqdm import tqdm
 
 try:
     import paho.mqtt.client as mqtt
@@ -38,11 +40,11 @@ mqtt_ota_receive_topic = 'iot/dtos/40f520286e69/common'
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
-    print("Connected to MQTT broker with result code " + str(rc))
+    print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
     # Subscribe to the OTA acknowledgment topic here
     client.subscribe(mqtt_ota_receive_topic)
     # Start a thread to send firmware pieces
-    send_fw_thread = threading.Thread(target=send_fw, daemon=True)
+    send_fw_thread = threading.Thread(target=send_fw, daemon=False)
     send_fw_thread.start()
 
 # Calculate CRC32 of the firmware file
@@ -65,7 +67,6 @@ firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 def send_fw():
     piece_size = 336
     piece_number = 0  # Start from 0
-
     fw_size = os.path.getsize(firmware_path)
     crc32_total = calculate_crc32(firmware_path)
 
@@ -76,12 +77,17 @@ def send_fw():
         "crc32": crc32_total
     }
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
-    print("Start:", json.dumps(start_message))
-    wait_for_ack(2)
+    print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total} ", end="")
+    starting_result = wait_for_ack(2)
+    print(f"-> {'OK' if starting_result else 'ERR'}")
+    if starting_result == False:
+        exit_program()
 
-    # Send firmware in piecesđ
+    # Send firmware in pieces
     remaining_bytes = fw_size
     with open(firmware_path, 'rb') as fw_file:
+        # Initialize tqdm progress bar
+        progress_bar = tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
         while remaining_bytes != 0:
             read_size = min(remaining_bytes, piece_size)
             data = fw_file.read(read_size)
@@ -90,21 +96,33 @@ def send_fw():
                 "piece": piece_number,
                 "data": base64.b64encode(data).decode('utf-8')
             }
-            print("Piece:", json.dumps(piece_message))  # Print the JSON message
             client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
-            wait_for_ack(3)
+            sending_piece_result = wait_for_ack(3)
+            if sending_piece_result == False:
+                progress_bar.close()
+                print("NACK or timeout occured during FW piece transmission!")
+                exit_program()
             piece_number += 1
             remaining_bytes -= read_size
+            progress_bar.update(read_size)      # Update tqdm progress bar
+        progress_bar.close()                    # Close tqdm progress bar
 
-    end_message = {
+    check_message = {
         "cmd": 4
     }
-    client.publish(mqtt_ota_send_topic, json.dumps(end_message))
-    print("End:", json.dumps(end_message))
-    wait_for_ack(4)
+    client.publish(mqtt_ota_send_topic, json.dumps(check_message))
+    print("Checking FW ", end="")
+    fw_check_result = wait_for_ack(4)
+    print(f"-> {'OK' if fw_check_result else 'ERR'}")
+    if fw_check_result == False:
+        exit_program()
+    else:
+        print("Upload done, exiting...")
+    exit_program()
 
-    print("Upload done, exiting...")
+def exit_program():
     client.disconnect()
+    client.loop_stop()
     sys.exit()
 
 # Define a global variable or use a queue to manage commands and their corresponding ACK/NACK status
@@ -123,22 +141,20 @@ def on_message(client, userdata, msg):
 
 # Function to wait for ACK/NACK for a particular command with a timeout
 def wait_for_ack(cmd):
-    timeout = 300  # 5 minutes in seconds
+    timeout = 10  # timeout in seconds
     start_time = time.time()
 
     while not command_status[cmd]:
         elapsed_time = time.time() - start_time
         if elapsed_time > timeout:
-            print("Timeout: No response received within 5 minutes.")
-            sys.exit()  # Exit the program if timeout occurs
-        time.sleep(0.05)  # Small delay to avoid excessive CPU usage
+            return False
+        time.sleep(0.05)  # Small delay to avoid excessive CPU usage on the MCU
 
     if command_status[cmd]:
-        print(f"Received ACK for command: {cmd}")
         command_status[cmd] = False
+        return True
     else:
-        print(f"Received NACK for command: {cmd}")
-        sys.exit()
+        return False
 
 # Run MQTT loop
 client = mqtt.Client(client_id=mqtt_client_id)
