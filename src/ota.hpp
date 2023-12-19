@@ -11,7 +11,7 @@ public:
   /// @brief Destructor of the object.
   virtual ~OTA() = default;
 
-  bool begin(uint32_t fwSize, uint32_t fwCrc);
+  bool begin(uint32_t fwSize, uint32_t fwCrc, const char* fileName = OTA_FW_LOCATION);
 
   bool store(uint32_t fwPieceNumber, const uint8_t* fwData, uint16_t fwDataSize);
 
@@ -28,6 +28,7 @@ private:
   Stream* serialPort;
   uint32_t nextFwPieceNumber;
   uint32_t remainingFwSize;
+  const char* fileName_;
 
   static const char PROGMEM OTA_PREFIX[];
   static const char PROGMEM OTA_FW_LOCATION[];
