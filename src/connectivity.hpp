@@ -2,16 +2,20 @@
 #define CONNECTIVITY_HPP
 
 #include <Arduino.h>                          /// Arduino libraries header.
-//#include <HardwareSerial.h>
 #include <ESP8266WiFi.h>                      /// Wifi driver.
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
-#include "common.hpp"
-
-class MqttComBase;
+#include <functional>
+#include "ota.hpp"
 
 class Connectivity {
+public:
+  class MqttComBase;
+
+private:
+  class Common;
+
 public:
   enum class Interface : uint8_t {
     WIFI = 0,
@@ -52,7 +56,7 @@ public:
 
   String getISODateTime();
 
-  static bool registerCallback(MqttComBase* obj);
+  static bool registerCallback(Connectivity::MqttComBase* obj);
 
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -81,10 +85,8 @@ private:
   MqttCredentials mqttCredentials;
   int8_t mqttState;
 
-  static MqttComBase* messageMap[10];
+  static Connectivity::MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;
-
-  Common common;
 
 private:
   static const char PROGMEM wifiFileLocation[];
@@ -110,6 +112,71 @@ private:
   static const char PROGMEM JSON_PREFIX[];
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
+
+public:
+  class MqttComBase {
+  public:
+    enum class Response : uint8_t {
+      NACK = 0,
+      ACK,
+    };
+  protected:
+    MqttComBase(const char* classID);
+    virtual ~MqttComBase() = default;
+    void messageSend(const char* payload) const;
+    virtual bool sendResponse(Response resp, uint16_t cmd);
+  public:
+    virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
+    const char* getClassId() const;
+    static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
+    static void setConState(bool state);
+
+    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
+    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
+    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
+    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
+  protected:
+    static bool getConState();
+  private:
+    char classId[16];
+    static std::function<void(const char*, const char*)> mqttSender;
+    static bool isOnline;
+  };
+
+private:
+  class Common : public Connectivity::MqttComBase {
+  public:
+    enum class Command : uint8_t {
+      BLANK = 0,
+      RESTART,
+      OTA_START,
+      OTA_DATA,
+      OTA_END
+    };
+
+    Common(const char* classID, Stream* serial = nullptr);
+
+    /// @brief Destructor of the object.
+    virtual ~Common() = default;
+
+    virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+
+    /// @brief Reset the MCU.
+    void restartESP();
+
+  public:
+    Common(const Common&) = delete;                       // Define copy constructor.
+    Common& operator=(const Common&) = delete;            // Define copy assignment operator.
+    Common(Common&&) = delete;                            // Define move constructor.
+    Common& operator=(Common&&) = delete;                 // Define move assignment operator.
+  private:
+    Stream* serialPort;
+    OTA ota;
+
+    static const char PROGMEM COMMON_PREFIX[];
+  };
+  Common common;
+
 };
 
 #endif

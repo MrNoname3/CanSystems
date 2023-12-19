@@ -1,9 +1,9 @@
 #include "connectivity.hpp"
-#include "MqttComBase.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include <ArduinoJson.h>                      /// Handle JSON files.
+#include <Base64.hpp>
 
-MqttComBase* Connectivity::messageMap[10] = { nullptr };
+Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
@@ -128,7 +128,7 @@ bool Connectivity::begin(Interface interface) {
   if(!connect(CertFile::NORMAL)) { return false; }
 
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
-  MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
+  Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
   return true;
 }
 
@@ -270,7 +270,7 @@ bool Connectivity::loop() {
   if(interfaceStatus != actualInterfaceStatus) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
     interfaceStatus = actualInterfaceStatus;
-    if(interfaceStatus != WL_CONNECTED) { MqttComBase::setConState(false); }
+    if(interfaceStatus != WL_CONNECTED) { Connectivity::MqttComBase::setConState(false); }
   }
   if(interfaceStatus != WL_CONNECTED) { return false; }
 
@@ -278,7 +278,7 @@ bool Connectivity::loop() {
   if(mqttState != actualMqttState) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
     mqttState = actualMqttState;
-    if(mqttState == MQTT_CONNECTED) { MqttComBase::setConState(true); }
+    if(mqttState == MQTT_CONNECTED) { Connectivity::MqttComBase::setConState(true); }
   }
 
   if(!mqttClient.loop()) {
@@ -298,7 +298,7 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
   const char* classID = strrchr(topic, '/') + 1;
   if(!classID) { return; }
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    MqttComBase* currentObject = Connectivity::messageMap[i];
+    Connectivity::MqttComBase* currentObject = messageMap[i];
     if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
       //if(serialPort) { serialPort->printf_P(PSTR("%sForward -> %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
       currentObject->messageReceived(payload, length);
@@ -325,7 +325,7 @@ String Connectivity::getISODateTime() {
   return String(buffer);
 }
 
-bool Connectivity::registerCallback(MqttComBase* obj) {
+bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   if(!obj) { return false; }
   if(messageMapPointer >= sizeof(messageMap)) { return false; }
   messageMap[messageMapPointer] = obj;
@@ -333,3 +333,109 @@ bool Connectivity::registerCallback(MqttComBase* obj) {
   return true;
 }
 
+//////////////////// -- MqttComBase class-- ////////////////////
+
+bool Connectivity::MqttComBase::isOnline = false;
+std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
+
+Connectivity::MqttComBase::MqttComBase(const char* classID) {
+  strlcpy(this->classId, classID, sizeof(this->classId));
+  Connectivity::registerCallback(this);
+}
+
+void Connectivity::MqttComBase::messageSend(const char* payload) const {
+  if(mqttSender) {
+    mqttSender(getClassId(), payload);
+  }
+}
+
+void Connectivity::MqttComBase::setMqttSender(std::function<void(const char*, const char*)> senderFunction) {
+  mqttSender = senderFunction;
+}
+
+bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
+  static constexpr const uint8_t respBufSize = 28;
+  char respBuf[respBufSize] = { '\0' };
+  const int32_t respBufRealSize = snprintf_P(respBuf, sizeof(respBuf), PSTR("{""\"type\":%hu,""\"cmd\":%hu""}"), static_cast<uint8_t>(resp), cmd);
+  const bool respBufValid = (respBufRealSize >= 0 && respBufRealSize < static_cast<int32_t>(sizeof(respBuf)));
+  if(!respBufValid) { return false; }
+  messageSend(respBuf);
+  return true;
+}
+
+const char* Connectivity::MqttComBase::getClassId() const { return classId; }
+
+void Connectivity::MqttComBase::setConState(bool state) { isOnline = state; }
+
+bool Connectivity::MqttComBase::getConState() { return isOnline; }
+
+//////////////////// -- Connectivity class-- ////////////////////
+
+const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
+
+Connectivity::Common::Common(const char* classID, Stream* serial) : MqttComBase(classID), serialPort(serial), ota(serial) {}
+
+void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
+  StaticJsonDocument<512> cmdJson;
+  DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
+  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
+  if(!deSerResult){
+    if(serialPort) { serialPort->printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX); }
+  }
+  if(deSerResult) {
+    const uint8_t cmd = cmdJson["cmd"].as<uint8_t>();
+    Command command = static_cast<Command>(cmd);
+    switch(command) {
+      case Command::BLANK: {} break;
+      case Command::RESTART: { restartESP(); } break;
+      case Command::OTA_START: {
+        const uint32_t fwSize = cmdJson[F("fwSize")].as<uint32_t>();
+        const uint32_t fwCrc = cmdJson[F("crc32")].as<uint32_t>();
+        const bool otaBeginResult = ota.begin(fwSize, fwCrc);
+        MqttComBase::sendResponse((otaBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
+        if(!otaBeginResult) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin OTA!\r\n"), COMMON_PREFIX); }
+          return;
+        }
+      } break;
+      case Command::OTA_DATA: {
+        uint8_t fwData[336];
+        const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
+        const char* fwDataB64 = cmdJson["data"].as<const char*>();
+        const uint32_t fwDataB64Size = strlen(fwDataB64);
+        const uint32_t decodedSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fwDataB64), fwDataB64Size);
+        if(decodedSize > sizeof(fwData)) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size error!\r\n"), COMMON_PREFIX); }
+          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+          return;
+        }
+        const uint32_t decodedSize2 = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, fwDataB64Size);
+        if(decodedSize != decodedSize2) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), COMMON_PREFIX); }
+          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+          return;
+        }
+        if(!ota.store(fwPieceNumber, fwData, decodedSize)) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
+          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+          return;
+        }
+        MqttComBase::sendResponse(MqttComBase::Response::ACK, cmd);
+      } break;
+      case Command::OTA_END: {
+        const bool validityCheckResult = ota.checkValidity();
+        MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
+        if(!validityCheckResult) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sStored FW is not valid!\r\n"), COMMON_PREFIX); }
+        }
+      } break;
+    };
+  }
+}
+
+void Connectivity::Common::restartESP() {
+  if(serialPort) { serialPort->printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX); }
+  if(serialPort) { serialPort->flush(); }             // Sends out data from serial buffer, before reset.
+  ESP.restart();
+  delay(10000);                                       // Prevent doing anything before restart.
+}

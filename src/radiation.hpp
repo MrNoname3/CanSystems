@@ -1,12 +1,12 @@
 #ifndef RADIATION_HPP
 #define RADIATION_HPP
 
-#include "mqttComBase.hpp"
+#include "connectivity.hpp"
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 
-class Radiation : public MqttComBase {
+class Radiation : public Connectivity::MqttComBase {
 public:
   Radiation(const char* classID, uint8_t sensorPin) : MqttComBase(classID), measureTimer(), sensorPin(sensorPin) {
     pinMode(sensorPin, INPUT_PULLUP); // INPUT_PULLUP is only for test, for real sensor it should be only INPUT.
