@@ -32,11 +32,12 @@ const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
-Connectivity::Connectivity(Stream* serial, const uint8_t ethCS) :
+Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
 serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), common("common", serial) {}
+interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, dbgLedOnState), common("common", serial) {}
 
 bool Connectivity::begin(Interface interface) {
+  debugLed.startTicker(500);
   if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
 
   // Init filesystem.
@@ -131,6 +132,7 @@ bool Connectivity::begin(Interface interface) {
 
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
   Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
+  debugLed.stopTicker();
   return true;
 }
 
@@ -335,6 +337,39 @@ bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   return true;
 }
 
+//////////////////// -- Debug LED class-- ////////////////////
+
+Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledPin_(ledPin), ledOnState_(ledOnState) {
+  if(ledPin != 255) { pinMode(ledPin, OUTPUT); }
+}
+
+void Connectivity::DebugLED::ledOn() { ledOnState_ ? ledLow() : ledHigh(); }
+
+void Connectivity::DebugLED::ledOff() { ledOnState_ ? ledHigh() : ledLow(); }
+
+void Connectivity::DebugLED::startTicker(uint32_t tickInterval_ms) {
+  if(ledPin_ == 255) { return; }
+  ledOff();
+  ledTicker.attach_ms(tickInterval_ms, [this](){ ledToggle(); });
+}
+
+void Connectivity::DebugLED::stopTicker() {
+  if(ledPin_ == 255) { return; }
+  ledTicker.detach();
+  ledOff();
+}
+
+void Connectivity::DebugLED::ledToggle() {
+  if(ledPin_ != 255) { (GPO  ^=  (1 << ledPin_)); }     // LED pin toggle.
+}
+
+void Connectivity::DebugLED::ledHigh() {
+  if(ledPin_ != 255) { (GPOS |=  (1 << ledPin_)); }     // LED pin high.
+}
+void Connectivity::DebugLED::ledLow() {
+  if(ledPin_ != 255) { (GPOC |=  (1 << ledPin_)); }     // LED pin low.
+}
+
 //////////////////// -- OTA class-- ////////////////////
 
 const char Connectivity::OTA::OTA_PREFIX[] PROGMEM              = "[OTA] ";
@@ -403,7 +438,7 @@ bool Connectivity::OTA::checkValidity() {
   if(fileName_ != OTA_FW_LOCATION) { fwFile.close(); return true; }
 
   fwFile.seek(0, SeekSet);
-  const bool updateBeginResult = Update.begin(fwSize, 0, 2, 0);
+  const bool updateBeginResult = Update.begin(fwSize);
   if(serialPort) { serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!updateBeginResult) { fwFile.close(); return false; }
   const bool updateStreamResult = (Update.writeStream(fwFile) == fwSize);

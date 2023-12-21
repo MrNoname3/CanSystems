@@ -3,7 +3,6 @@
 
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
-#include <Ticker.h>                           /// Timer interrupt hadnler.
 #include "connectivity.hpp"
 #include "radiation.hpp"
 
@@ -14,11 +13,6 @@ static constexpr const uint8_t LED                    = D8;           // Status 
 static constexpr const uint8_t SPI_CS                 = D0;           // Ethernet shield SPI CS.
 static constexpr const uint8_t RAD                    = D2;           // Radiation meter.
 
-#define LED_T (GPO  ^=  (1 << LED))                 // LED pin toggle.
-#define LED_H (GPOS |=  (1 << LED))                 // LED pin high.
-#define LED_L (GPOC |=  (1 << LED))                 // LED pin low.
-#define NOP __asm__("nop\n\t");                     // 1 CPU cycle delay.
-
 // Monitor the internal VCC level, it varies with WiFi load.
 // Don't connect anything to the analog input pin!
 ADC_MODE(ADC_VCC);
@@ -28,9 +22,5 @@ ADC_MODE(ADC_VCC);
 //--- Enums ---//
 
 //--- Functions ---//
-
-/// @brief 
-/// @param  
-void tick(void);
 
 #endif // MAIN_HPP

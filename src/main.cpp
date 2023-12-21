@@ -2,9 +2,6 @@
 
 //--- Variables ---//
 
-//--- Debug LED ---//
-Ticker ticker;
-
 //--- Networking ---//
 const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
 Connectivity iotConn(&Serial, SPI_CS);
@@ -13,9 +10,7 @@ Radiation radiation("radiation", RAD);
 void setup() {
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
-  pinMode(LED, OUTPUT);
   delay(1);
-  ticker.attach(0.2, tick);
   Serial.println();
   Serial.println(F("******************************************************"));
   Serial.println(F("Starting..."));
@@ -33,8 +28,6 @@ void setup() {
 
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
-  ticker.detach();
-  LED_L;
   wdt_reset();
 }
 
@@ -44,5 +37,3 @@ void loop() {
   radiation.loop();
   wdt_reset();
 }
-
-void tick() { LED_T; }

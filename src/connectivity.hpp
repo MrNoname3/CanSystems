@@ -7,6 +7,7 @@
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
 #include <functional>
+#include <Ticker.h>                           /// Timer interrupt hadnler.
 
 class Connectivity {
 public:
@@ -32,7 +33,7 @@ public:
     BACKUP
   };
 
-  Connectivity(Stream* serial = nullptr, const uint8_t ethCS = D8);
+  Connectivity(Stream* serial = nullptr, const uint8_t ethCS = D8, uint8_t dbgLedPin = D4, bool dbgLedOnState = HIGH);
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -113,6 +114,31 @@ private:
   static const char PROGMEM MQTT_PREFIX[];
 
 public:
+  class DebugLED {
+  public:
+    DebugLED(uint8_t ledPin = 255, bool ledOnState = HIGH);
+    virtual ~DebugLED() = default;
+    inline void ledOn() __attribute__((always_inline));
+    inline void ledOff() __attribute__((always_inline));
+    void startTicker(uint32_t tickInterval_ms);
+    void stopTicker();
+
+    DebugLED(const DebugLED&) = delete;                       // Define copy constructor.
+    DebugLED& operator=(const DebugLED&) = delete;            // Define copy assignment operator.
+    DebugLED(DebugLED&&) = delete;                            // Define move constructor.
+    DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
+
+  private:
+    inline IRAM_ATTR void ledToggle();
+    inline void ledHigh() __attribute__((always_inline));
+    inline void ledLow() __attribute__((always_inline));
+
+    const uint8_t ledPin_;
+    const bool ledOnState_;
+    Ticker ledTicker;
+  };
+  DebugLED debugLed;
+
   class OTA {
   public:
     OTA(Stream* serial = nullptr);
