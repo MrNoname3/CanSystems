@@ -129,7 +129,7 @@ public:
     DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
 
   private:
-    inline IRAM_ATTR void ledToggle();
+    inline IRAM_ATTR void ledToggle() __attribute__((always_inline));
     inline void ledHigh() __attribute__((always_inline));
     inline void ledLow() __attribute__((always_inline));
 

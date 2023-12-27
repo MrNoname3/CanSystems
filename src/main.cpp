@@ -4,7 +4,7 @@
 
 //--- Networking ---//
 const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
-Connectivity iotConn(&Serial, SPI_CS);
+Connectivity iotConn(&Serial, SPI_CS, LED, false);
 Radiation radiation("radiation", RAD);
 
 void setup() {

@@ -38,6 +38,9 @@ mqtt_client_id = 'Python_OTA'
 mqtt_ota_send_topic = 'iot/stod/40f520286e69/common'
 mqtt_ota_receive_topic = 'iot/dtos/40f520286e69/common'
 
+# Set the path to firmware.bin
+firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin.gz')
+
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
     print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
@@ -59,9 +62,6 @@ def calculate_crc32(file_path):
             crc = zlib.crc32(data, crc)
 
     return crc & 0xFFFFFFFF
-
-# Set the path to firmware.bin
-firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
 
 # Function to send firmware pieces
 def send_fw():
