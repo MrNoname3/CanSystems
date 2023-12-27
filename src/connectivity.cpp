@@ -34,9 +34,12 @@ const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
 Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
 serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, dbgLedOnState), common("common", serial) {}
+interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, dbgLedOnState), common("common", serial) {
+  WdtHandler.enableHwWdt();
+}
 
 bool Connectivity::begin(Interface interface) {
+  WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
   if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
 
@@ -54,6 +57,7 @@ bool Connectivity::begin(Interface interface) {
   if(serialPort) { serialPort->printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE); }
 
   // Start interface.
+  WdtHandler.resetHwWdtIfPossible();
   if(interface == Interface::ETHERNET) {
     WiFi.mode(WIFI_OFF);
     ethInt.setDefault();         // default route set through this interface
@@ -62,6 +66,7 @@ bool Connectivity::begin(Interface interface) {
     if(!ethInit) { return false; }
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), ETH_PREFIX); }
     while(!ethInt.connected()) {
+      yield();
       if(serialPort) { serialPort->print(F(".")); }
       delay(300);
     }
@@ -79,8 +84,9 @@ bool Connectivity::begin(Interface interface) {
     if(!startWifi()) { return false; }
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX); }
     while(WiFi.status() != WL_CONNECTED) {
+      yield();
+      if(serialPort) { serialPort->print(F(".")); }
       delay(300);
-      Serial.print(".");
     }
     if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE); }
     if(WiFi.status() != WL_CONNECTED) { return false; }
@@ -96,6 +102,7 @@ bool Connectivity::begin(Interface interface) {
 
   // Set time via NTP, as required for x.509 validation.
   yield();
+  WdtHandler.resetHwWdtIfPossible();
   if(serialPort) { serialPort->printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX); }
   configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
   time_t nowSecs = time(nullptr);
@@ -133,6 +140,7 @@ bool Connectivity::begin(Interface interface) {
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
   Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
   debugLed.stopTicker();
+  WdtHandler.resetHwWdtIfPossible();
   return true;
 }
 
@@ -266,6 +274,9 @@ bool Connectivity::connect(CertFile actualCert) {
 }
 
 bool Connectivity::loop() {
+  yield();
+  WdtHandler.resetHwWdt();
+
   static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   const char* intPrefix;
   if(usedInterface == Interface::ETHERNET) { actualInterfaceStatus = ethInt.status(); intPrefix = ETH_PREFIX; }
@@ -335,6 +346,27 @@ bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   messageMap[messageMapPointer] = obj;
   messageMapPointer++;
   return true;
+}
+
+//////////////////// -- WDT class-- ////////////////////
+
+void Connectivity::WdtWrapper::enableHwWdt() {
+  wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
+}
+
+void Connectivity::WdtWrapper::resetHwWdt() {
+  this->enabledResetNumber = 0;
+  wdt_reset();
+}
+
+void Connectivity::WdtWrapper::resetHwWdtIfPossible() {
+  if(this->enabledResetNumber > 0) {
+    this->enabledResetNumber--;
+    wdt_reset();
+  }
+}
+void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber) {
+  this->enabledResetNumber = enabledResetNumber;
 }
 
 //////////////////// -- Debug LED class-- ////////////////////

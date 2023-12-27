@@ -8,7 +8,6 @@ Connectivity iotConn(&Serial, SPI_CS, LED, false);
 Radiation radiation("radiation", RAD);
 
 void setup() {
-  wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
   Serial.begin(115200);
   delay(1);
   Serial.println();
@@ -28,12 +27,9 @@ void setup() {
 
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
-  wdt_reset();
 }
 
 void loop() {
-  yield();
   iotConn.loop();
   radiation.loop();
-  wdt_reset();
 }

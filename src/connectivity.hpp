@@ -114,6 +114,26 @@ private:
   static const char PROGMEM MQTT_PREFIX[];
 
 public:
+  class WdtWrapper {
+  public:
+    WdtWrapper() = default;
+    ~WdtWrapper() = default;
+
+    void enableHwWdt();
+    void resetHwWdt();
+    void resetHwWdtIfPossible();
+    void setEnabledResetNumber(uint8_t enabledResetNumber);
+
+    WdtWrapper(const WdtWrapper&) = delete;                       // Define copy constructor.
+    WdtWrapper& operator=(const WdtWrapper&) = delete;            // Define copy assignment operator.
+    WdtWrapper(WdtWrapper&&) = delete;                            // Define move constructor.
+    WdtWrapper& operator=(WdtWrapper&&) = delete;                 // Define move assignment operator.
+
+  private:
+    uint8_t enabledResetNumber;
+  };
+  WdtWrapper WdtHandler;
+
   class DebugLED {
   public:
     DebugLED(uint8_t ledPin = 255, bool ledOnState = HIGH);
