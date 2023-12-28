@@ -16,9 +16,9 @@ public:
   virtual ~Radiation() = default;
 
   void begin() {
-    constexpr const uint8_t measureTime = 60;  //sec
+    constexpr const uint16_t measureTime = 60000;  //millisec
     attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
-    measureTimer.attach(measureTime, measure);
+    measureTimer.attach_ms(measureTime, measure);
     cpm = 0;
   }
 
@@ -49,11 +49,13 @@ public:
   Radiation& operator=(Radiation&&) = delete;                 // Define move assignment operator.
 
 private:
-  static IRAM_ATTR void counter() { cpm++; }
-  static IRAM_ATTR void measure() {
+  inline static IRAM_ATTR void counter() __attribute__((always_inline)) { cpm++; }
+  inline static IRAM_ATTR void measure() __attribute__((always_inline)) {
+    cli();
     cpmToSend = cpm;
     cpm = 0;
     measureDone = true;
+    sei();
   }
 
 private:
