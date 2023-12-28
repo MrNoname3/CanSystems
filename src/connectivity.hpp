@@ -84,6 +84,9 @@ private:
   wl_status_t interfaceStatus;
   MqttCredentials mqttCredentials;
   int8_t mqttState;
+  const uint32_t cppVersion;
+  const uint16_t fwVersion;
+  const uint32_t gitHash;
 
   static Connectivity::MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;

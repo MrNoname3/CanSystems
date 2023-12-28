@@ -5,6 +5,10 @@
 #include "crc32.hpp"
 #include <Updater.h>
 
+// Monitor the internal VCC level, it varies with WiFi load.
+// Don't connect anything to the analog input pin!
+ADC_MODE(ADC_VCC);
+
 Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
@@ -33,8 +37,19 @@ const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
 Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
-serialPort(serial), ethInt(ethCS), tcpClient(), mqttClient(tcpClient), usedInterface(Interface::UNKNOWN),
-interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, dbgLedOnState), common("common", serial) {
+  serialPort(serial),
+  ethInt(ethCS),
+  tcpClient(),
+  mqttClient(tcpClient),
+  usedInterface(Interface::UNKNOWN),
+  interfaceStatus(WL_CONNECTED),
+  mqttState(MQTT_CONNECTED),
+  cppVersion(__cplusplus),
+  fwVersion(GIT_COMMIT_COUNT),
+  gitHash(GIT_COMMIT_HASH),
+  debugLed(dbgLedPin, dbgLedOnState),
+  common("common", serial)
+{
   WdtHandler.enableHwWdt();
 }
 
@@ -42,8 +57,12 @@ bool Connectivity::begin(Interface interface) {
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
   if(serialPort) {
-    serialPort->flush();
+    serialPort->printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
+    serialPort->printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
+    serialPort->printf_P(PSTR("%sGit hash: %x\r\n"), INIT_PREFIX, gitHash);
+    serialPort->printf_P(PSTR("%sInternal VCC: %humV\r\n"), INIT_PREFIX, ESP.getVcc());
     serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
+    serialPort->flush();
   }
 
   // Init filesystem.
