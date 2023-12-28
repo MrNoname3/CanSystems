@@ -23,13 +23,10 @@ void setup() {
   const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
   Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
 
-  radiation.begin();
-
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
 }
 
 void loop() {
   iotConn.loop();
-  radiation.loop();
 }

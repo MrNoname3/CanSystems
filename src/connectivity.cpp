@@ -41,20 +41,25 @@ interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, db
 bool Connectivity::begin(Interface interface) {
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
+  if(serialPort) { serialPort->flush(); }
   if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
 
   // Init filesystem.
-  const bool initFS = LittleFS.begin();
-  if(serialPort) { serialPort->printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE)); }
-  if(!initFS) { return false; }
+  {
+    const bool initFS = LittleFS.begin();
+    if(serialPort) { serialPort->printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE)); }
+    if(!initFS) { return false; }
+  }
 
   // Get MAC.
   uint8_t mac[6] = { 0 };
   char macAddress[13] = { '\0' };
-  wifi_get_macaddr(STATION_IF, mac);
-  const uint32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
-  if(serialPort) { serialPort->printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE); }
+  {
+    wifi_get_macaddr(STATION_IF, mac);
+    const uint32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
+    if(serialPort) { serialPort->printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE); }
+  }
 
   // Start interface.
   WdtHandler.resetHwWdtIfPossible();
@@ -103,35 +108,40 @@ bool Connectivity::begin(Interface interface) {
   // Set time via NTP, as required for x.509 validation.
   yield();
   WdtHandler.resetHwWdtIfPossible();
-  if(serialPort) { serialPort->printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX); }
-  configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
-  time_t nowSecs = time(nullptr);
-  while(nowSecs < 8 * 3600 * 2) {
-    delay(500);
-    if(serialPort) { serialPort->print(F(".")); }
-    nowSecs = time(nullptr);
+  {
+    if(serialPort) { serialPort->printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX); }
+    configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
+    time_t nowSecs = time(nullptr);
+    while(nowSecs < 8 * 3600 * 2) {
+      delay(500);
+      if(serialPort) { serialPort->print(F(".")); }
+      nowSecs = time(nullptr);
+    }
+    tm timeinfo;
+    gmtime_r(&nowSecs, &timeinfo);
+    if(serialPort) { serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo)); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str()); }
   }
-  tm timeinfo;
-  gmtime_r(&nowSecs, &timeinfo);
-  if(serialPort) { serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo)); }
-  if(serialPort) { serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str()); }
 
   // Setup MQTT topics.
-  const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", DEVICE_TYPE, macAddress);
-  const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
-  const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
-  const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
-  const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
-  const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-  if(serialPort) { serialPort->printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize); }
-  if(serialPort) { serialPort->printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize); }
-  if(serialPort) { serialPort->printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize); }
-  if(!clientNameValid) { return false; }
-  if(!senderTopicValid) { return false; }
-  if(!receiverTopicValid) { return false; }
+  {
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", DEVICE_TYPE, macAddress);
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
+    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
+    const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
+    const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
+    const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
+    if(serialPort) { serialPort->printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE); }
+    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE); }
+    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE); }
+    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize); }
+    if(serialPort) { serialPort->flush(); }
+    if(!clientNameValid) { return false; }
+    if(!senderTopicValid) { return false; }
+    if(!receiverTopicValid) { return false; }
+  }
 
   if(!checkFiles()) { return false; }
   if(!loadConfig(ConfigFile::NORMAL)) { return false; }
@@ -139,6 +149,14 @@ bool Connectivity::begin(Interface interface) {
 
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
   Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
+
+  if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
+  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+    Connectivity::MqttComBase* currentObject = messageMap[i];
+    const bool beginResult = currentObject->begin();
+    if(serialPort) { serialPort->printf_P(PSTR("  %hu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE); }
+  }
+
   debugLed.stopTicker();
   WdtHandler.resetHwWdtIfPossible();
   return true;
@@ -274,6 +292,11 @@ bool Connectivity::connect(CertFile actualCert) {
 }
 
 bool Connectivity::loop() {
+  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+    Connectivity::MqttComBase* currentObject = messageMap[i];
+    currentObject->loop();
+  }
+
   yield();
   WdtHandler.resetHwWdt();
 
@@ -315,7 +338,6 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
     if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
-      //if(serialPort) { serialPort->printf_P(PSTR("%sForward -> %s\r\n"), MQTT_PREFIX, currentObject->getClassId()); }
       currentObject->messageReceived(payload, length);
       return;
     }
@@ -519,7 +541,7 @@ void Connectivity::MqttComBase::setConState(bool state) { isOnline = state; }
 
 bool Connectivity::MqttComBase::getConState() { return isOnline; }
 
-//////////////////// -- Connectivity class-- ////////////////////
+//////////////////// -- Common class-- ////////////////////
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
@@ -582,6 +604,10 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
     };
   }
 }
+
+bool Connectivity::Common::begin() { return true; }
+
+bool Connectivity::Common::loop() { return true; }
 
 void Connectivity::Common::restartESP() {
   if(serialPort) { serialPort->printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX); }

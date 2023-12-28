@@ -202,6 +202,8 @@ public:
     virtual bool sendResponse(Response resp, uint16_t cmd);
   public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
+    virtual bool begin() = 0;
+    virtual bool loop() = 0;
     const char* getClassId() const;
     static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
     static void setConState(bool state);
@@ -235,6 +237,10 @@ private:
     virtual ~Common() = default;
 
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+
+    virtual bool begin() override;
+
+    virtual bool loop() override;
 
     /// @brief Reset the MCU.
     void restartESP();

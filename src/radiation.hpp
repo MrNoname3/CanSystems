@@ -15,11 +15,12 @@ public:
   /// @brief Destructor of the object.
   virtual ~Radiation() = default;
 
-  void begin() {
+  virtual bool begin() override {
     constexpr const uint16_t measureTime = 60000;  //millisec
     attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
     measureTimer.attach_ms(measureTime, measure);
     cpm = 0;
+    return true;
   }
 
   void end() {
@@ -29,7 +30,7 @@ public:
     measureDone = false;
   }
 
-  bool loop() {
+  virtual bool loop() override {
     if(measureDone) {
       measureDone = false;
       char dataOut[16] = { '\0' };
