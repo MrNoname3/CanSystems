@@ -41,8 +41,10 @@ interfaceStatus(WL_CONNECTED), mqttState(MQTT_CONNECTED), debugLed(dbgLedPin, db
 bool Connectivity::begin(Interface interface) {
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
-  if(serialPort) { serialPort->flush(); }
-  if(serialPort) { serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX); }
+  if(serialPort) {
+    serialPort->flush();
+    serialPort->printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
+  }
 
   // Init filesystem.
   {
@@ -77,9 +79,11 @@ bool Connectivity::begin(Interface interface) {
     }
     if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE); }
     if(!ethInt.connected()) { return false; }
-    if(serialPort) { serialPort->printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str()); }
-    if(serialPort) { serialPort->printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str()); }
-    if(serialPort) { serialPort->printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str()); }
+    if(serialPort) {
+      serialPort->printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str());
+      serialPort->printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str());
+      serialPort->printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str());
+    }
   }
   else if(interface == Interface::WIFI) {
     const bool wifiInit = WiFi.mode(WIFI_STA);
@@ -95,9 +99,11 @@ bool Connectivity::begin(Interface interface) {
     }
     if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE); }
     if(WiFi.status() != WL_CONNECTED) { return false; }
-    if(serialPort) { serialPort->printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str()); }
-    if(serialPort) { serialPort->printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str()); }
-    if(serialPort) { serialPort->printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str()); }
+    if(serialPort) {
+      serialPort->printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
+      serialPort->printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
+      serialPort->printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str());
+    }
   }
   else {
     return false;
@@ -119,8 +125,10 @@ bool Connectivity::begin(Interface interface) {
     }
     tm timeinfo;
     gmtime_r(&nowSecs, &timeinfo);
-    if(serialPort) { serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo)); }
-    if(serialPort) { serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str()); }
+    if(serialPort) {
+      serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo));
+      serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str());
+    }
   }
 
   // Setup MQTT topics.
@@ -131,13 +139,15 @@ bool Connectivity::begin(Interface interface) {
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    if(serialPort) { serialPort->printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE); }
-    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize); }
-    if(serialPort) { serialPort->printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE); }
-    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize); }
-    if(serialPort) { serialPort->printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE); }
-    if(serialPort) { serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize); }
-    if(serialPort) { serialPort->flush(); }
+    if(serialPort) {
+      serialPort->printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE);
+      serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize);
+      serialPort->printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE);
+      serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize);
+      serialPort->printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE);
+      serialPort->printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize);
+      serialPort->flush();
+    }
     if(!clientNameValid) { return false; }
     if(!senderTopicValid) { return false; }
     if(!receiverTopicValid) { return false; }
@@ -164,8 +174,10 @@ bool Connectivity::begin(Interface interface) {
 
 bool Connectivity::startWifi() {
   const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
-  if(serialPort) { serialPort->printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE); }
+  if(serialPort) {
+    serialPort->printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
+  }
   if(!wifiFileExists) { return false; }
 
   File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
@@ -195,16 +207,20 @@ bool Connectivity::checkFiles() {
   // Check for config.
   const bool configFileExists = LittleFS.exists(FPSTR(configFileLocation));
   const bool configBackupFileExists = LittleFS.exists(FPSTR(configBackupFileLocation));
-  if(serialPort) { serialPort->printf_P(PSTR("%sCheck config files:\r\n"), FS_PREFIX); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), configFileLocation, configFileExists ? OK_STATE : ERR_STATE); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), configBackupFileLocation, configBackupFileExists ? OK_STATE : ERR_STATE); }
+  if(serialPort) {
+    serialPort->printf_P(PSTR("%sCheck config files:\r\n"), FS_PREFIX);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), configFileLocation, configFileExists ? OK_STATE : ERR_STATE);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), configBackupFileLocation, configBackupFileExists ? OK_STATE : ERR_STATE);
+  }
 
   // Check for cert.
   const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
   const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
-  if(serialPort) { serialPort->printf_P(PSTR("%sCheck certification files:\r\n"), FS_PREFIX); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), certFileLocation, certFileExists ? OK_STATE : ERR_STATE); }
-  if(serialPort) { serialPort->printf_P(PSTR("  %s ->%s\r\n"), certBackupFileLocation, certBackupFileExists ? OK_STATE : ERR_STATE); }
+  if(serialPort) {
+    serialPort->printf_P(PSTR("%sCheck certification files:\r\n"), FS_PREFIX);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), certFileLocation, certFileExists ? OK_STATE : ERR_STATE);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), certBackupFileLocation, certBackupFileExists ? OK_STATE : ERR_STATE);
+  }
 
   return ((configFileExists || configBackupFileExists) && (certFileExists || certBackupFileExists));
 }
@@ -610,8 +626,10 @@ bool Connectivity::Common::begin() { return true; }
 bool Connectivity::Common::loop() { return true; }
 
 void Connectivity::Common::restartESP() {
-  if(serialPort) { serialPort->printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX); }
-  if(serialPort) { serialPort->flush(); }             // Sends out data from serial buffer, before reset.
+  if(serialPort) {
+    serialPort->printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX);
+    serialPort->flush();                              // Sends out data from serial buffer, before reset.
+  }
   ESP.restart();
   delay(10000);                                       // Prevent doing anything before restart.
 }
