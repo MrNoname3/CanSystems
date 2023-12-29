@@ -6,6 +6,7 @@ import zlib
 import base64
 import sys
 from tqdm import tqdm
+import subprocess
 
 try:
     import paho.mqtt.client as mqtt
@@ -39,11 +40,17 @@ mqtt_ota_send_topic = 'iot/stod/40f520286e69/common'
 mqtt_ota_receive_topic = 'iot/dtos/40f520286e69/common'
 
 # Set the path to firmware.bin
-firmware_path = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin.gz')
+firmware_path_bin = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
+firmware_path_gz = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin.gz')
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
     print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
+
+    comp_result = compress_with_7z(firmware_path_bin, firmware_path_gz)
+    if comp_result != 0:
+        exit_program()
+
     # Subscribe to the OTA acknowledgment topic here
     client.subscribe(mqtt_ota_receive_topic)
     # Start a thread to send firmware pieces
@@ -63,12 +70,35 @@ def calculate_crc32(file_path):
 
     return crc & 0xFFFFFFFF
 
+def compress_with_7z(bin_path, gz_path):
+    # Run 7z command to compress firmware.bin to firmware.bin.gz
+    command = [ '7z', 'a', '-tgzip', '-mx=9', gz_path, bin_path ]
+
+    try:
+        # Run the command
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = process.communicate()
+        returncode = process.returncode
+        
+        # Check the return code and output
+        if returncode == 0:
+            print("Compression successful!")
+            print("Output:", output.decode())
+        else:
+            print("Compression failed!")
+            print("Error:", error.decode())
+        
+        return returncode
+    except Exception as e:
+        print("Error:", str(e))
+        return 1  # Return a non-zero code to indicate failure
+
 # Function to send firmware pieces
 def send_fw():
     piece_size = 336
     piece_number = 0  # Start from 0
-    fw_size = os.path.getsize(firmware_path)
-    crc32_total = calculate_crc32(firmware_path)
+    fw_size = os.path.getsize(firmware_path_gz)
+    crc32_total = calculate_crc32(firmware_path_gz)
 
     # Start message
     start_message = {
@@ -85,7 +115,7 @@ def send_fw():
 
     # Send firmware in pieces
     remaining_bytes = fw_size
-    with open(firmware_path, 'rb') as fw_file:
+    with open(firmware_path_gz, 'rb') as fw_file:
         # Initialize tqdm progress bar
         progress_bar = tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
         while remaining_bytes != 0:
