@@ -162,6 +162,29 @@ public:
   };
   DebugLED debugLed;
 
+  class Crc32 {
+  public:
+    Crc32();
+    ~Crc32() = default;
+
+    void next(uint8_t value);
+
+    void next(const uint8_t* values, uint32_t length);
+
+    uint32_t get() const;
+
+    static uint32_t calculate(const uint8_t *data, uint16_t length);
+
+    Crc32(const Crc32&) = delete;                       // Define copy constructor.
+    Crc32& operator=(const Crc32&) = delete;            // Define copy assignment operator.
+    Crc32(Crc32&&) = delete;                            // Define move constructor.
+    Crc32& operator=(Crc32&&) = delete;                 // Define move assignment operator.
+
+  private:
+    static constexpr uint32_t polynomial = 0xEDB88320; // CRC32 polynomial
+    uint32_t crc;
+  };
+
   /// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
   class Base64 {
   public:

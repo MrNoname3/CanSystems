@@ -1,7 +1,6 @@
 #include "connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include <ArduinoJson.h>                      /// Handle JSON files.
-#include "crc32.hpp"
 #include <Updater.h>
 #if (defined(__AVR__) || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_SAM))
 #include <avr/pgmspace.h>
@@ -25,8 +24,8 @@ const char Connectivity::certBackupFileLocation[] PROGMEM   = "/config/mosq-ca.c
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::LOG_TOPIC[] PROGMEM               = "log";
-const char Connectivity::LOG_MSG[] PROGMEM                 = "{""\"online\":%s""}";
+const char Connectivity::LOG_TOPIC[] PROGMEM                = "log";
+const char Connectivity::LOG_MSG[] PROGMEM                  = "{""\"online\":%s""}";
 
 const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
@@ -469,6 +468,36 @@ void Connectivity::DebugLED::ledLow() {
   if(ledPin_ != 255) { (GPOC |=  (1 << ledPin_)); }     // LED pin low.
 }
 
+//////////////////// -- CRC32 class-- ////////////////////
+
+Connectivity::Crc32::Crc32() : crc(0xFFFFFFFF) {} // Initialize CRC32 value
+
+void Connectivity::Crc32::next(uint8_t value) {
+    crc ^= (uint32_t)value;
+    for(uint8_t i = 0; i < 8; i++) {
+      if(crc & 1) {
+        crc = (crc >> 1) ^ polynomial;
+      }
+      else {
+        crc >>= 1;
+      }
+    }
+  }
+
+  void Connectivity::Crc32::next(const uint8_t* values, uint32_t length) {
+    for (uint32_t i = 0; i < length; i++) {
+      next(values[i]);
+    }
+  }
+
+  uint32_t Connectivity::Crc32::get() const { return ~crc; } // Final CRC32 value is complemented
+
+  uint32_t Connectivity::Crc32::calculate(const uint8_t *data, uint16_t length) {
+    Connectivity::Crc32 crc;
+    crc.next(data, length);
+    return crc.get();
+  }
+
 //////////////////// -- Base64 class-- ////////////////////
 
 uint32_t Connectivity::Base64::encodedLength(uint32_t plainLength) {
@@ -636,7 +665,7 @@ bool Connectivity::OTA::checkValidity() {
   const bool fwSizeOk = (fwFile.size() == fwSize);
   if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fwSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!fwSizeOk) { fwFile.close(); return false; }
-  Crc32 crc32;
+  Connectivity::Crc32 crc32;
   while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
   const uint32_t calcFwCrc32 = crc32.get();
   const bool fwCrcOk = (calcFwCrc32 == fwCrc);
