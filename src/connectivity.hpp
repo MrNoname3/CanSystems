@@ -239,9 +239,9 @@ public:
     /// @brief Destructor of the object.
     virtual ~OTA() = default;
 
-    bool begin(uint32_t fwSize, uint32_t fwCrc, const char* fileName = OTA_FW_LOCATION);
+    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName = OTA_FW_LOCATION);
 
-    bool store(uint32_t fwPieceNumber, const uint8_t* fwData, uint16_t fwDataSize);
+    bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
 
     bool checkValidity();
 
@@ -251,11 +251,11 @@ public:
     OTA& operator=(OTA&&) = delete;                 // Define move assignment operator.
 
   private:
-    uint32_t fwSize;
-    uint32_t fwCrc;
+    uint32_t fileSize_;
+    uint32_t fileCrc_;
     Stream* serialPort;
-    uint32_t nextFwPieceNumber;
-    uint32_t remainingFwSize;
+    uint32_t nextFilePieceNumber_;
+    uint32_t remainingFileSize_;
     const char* fileName_;
 
     static const char PROGMEM OTA_PREFIX[];

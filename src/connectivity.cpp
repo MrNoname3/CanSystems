@@ -613,11 +613,11 @@ const char Connectivity::OTA::OTA_FW_LOCATION[] PROGMEM         = "/config/espFi
 
 Connectivity::OTA::OTA(Stream* serial) : serialPort(serial), fileName_(nullptr) {}
 
-bool Connectivity::OTA::begin(uint32_t fwSize, uint32_t fwCrc, const char* fileName) {
-  this->fwSize = fwSize;
-  this->fwCrc = fwCrc;
-  this->nextFwPieceNumber = 0;
-  this->remainingFwSize = fwSize;
+bool Connectivity::OTA::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
+  this->fileSize_ = fileSize;
+  this->fileCrc_ = fileCrc;
+  this->nextFilePieceNumber_ = 0;
+  this->remainingFileSize_ = fileSize;
   if(!fileName) { return false; }
   this->fileName_ = fileName;
 
@@ -629,58 +629,58 @@ bool Connectivity::OTA::begin(uint32_t fwSize, uint32_t fwCrc, const char* fileN
       return false;
     }
   }
-  if(serialPort) { serialPort->printf_P(PSTR("%sFW size: %u crc: %u\r\n"), OTA_PREFIX, this->fwSize, this->fwCrc); }
-  if(fwSize == 0) { return false; }
+  if(serialPort) { serialPort->printf_P(PSTR("%sFile size: %u crc: %u\r\n"), OTA_PREFIX, this->fileSize_, this->fileCrc_); }
+  if(fileSize == 0) { return false; }
   return true;
 }
 
-bool Connectivity::OTA::store(uint32_t fwPieceNumber, const uint8_t* fwData, uint16_t fwDataSize) {
+bool Connectivity::OTA::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
   if(!fileName_) { return false; }
-  if(fwPieceNumber != nextFwPieceNumber) { return false; }
-  if(fwDataSize == 0) { return false; }
-  if(remainingFwSize == 0) { return false; }
+  if(filePieceNumber != nextFilePieceNumber_) { return false; }
+  if(fileDataSize == 0) { return false; }
+  if(remainingFileSize_ == 0) { return false; }
 
-  File fwFile = LittleFS.open(FPSTR(fileName_), "a");
-  if(!fwFile) {
+  File receivedFile = LittleFS.open(FPSTR(fileName_), "a");
+  if(!receivedFile) {
     if(serialPort) { serialPort->printf_P(PSTR("%sOpening failed: %s\r\n"), OTA_PREFIX, fileName_); }
     return false;
   }
-  const uint32_t writtenBytes = fwFile.write(fwData, fwDataSize);
-  fwFile.close();
-  if(writtenBytes != fwDataSize) {
+  const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
+  receivedFile.close();
+  if(writtenBytes != fileDataSize) {
     if(serialPort) { serialPort->printf_P(PSTR("%sWriting failed: %s\r\n"), OTA_PREFIX, fileName_); }
     return false;
   }
-  nextFwPieceNumber++;
-  remainingFwSize -= fwDataSize;
+  nextFilePieceNumber_++;
+  remainingFileSize_ -= fileDataSize;
   return true;
 }
 
 bool Connectivity::OTA::checkValidity() {
   if(!fileName_) { return false; }
-  if(remainingFwSize != 0) { return false; }
-  File fwFile = LittleFS.open(FPSTR(fileName_), "r");
-  if(serialPort) { serialPort->printf_P(PSTR("%sChecking FW file:%s\r\n"), OTA_PREFIX, fwFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!fwFile) { fwFile.close(); return false; }
-  const bool fwSizeOk = (fwFile.size() == fwSize);
-  if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fwSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!fwSizeOk) { fwFile.close(); return false; }
+  if(remainingFileSize_ != 0) { return false; }
+  File receivedFile = LittleFS.open(FPSTR(fileName_), "r");
+  if(serialPort) { serialPort->printf_P(PSTR("%sChecking received file:%s\r\n"), OTA_PREFIX, receivedFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(!receivedFile) { receivedFile.close(); return false; }
+  const bool fileSizeOk = (receivedFile.size() == fileSize_);
+  if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(!fileSizeOk) { receivedFile.close(); return false; }
   Connectivity::Crc32 crc32;
-  while(fwFile.available() > 0) { crc32.next(fwFile.read()); }
-  const uint32_t calcFwCrc32 = crc32.get();
-  const bool fwCrcOk = (calcFwCrc32 == fwCrc);
-  if(serialPort) { serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fwCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!fwCrcOk) { fwFile.close(); return false; }
-  if(fileName_ != OTA_FW_LOCATION) { fwFile.close(); return true; }
+  while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
+  const uint32_t calcFileCrc32 = crc32.get();
+  const bool fileCrcOk = (calcFileCrc32 == fileCrc_);
+  if(serialPort) { serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(!fileCrcOk) { receivedFile.close(); return false; }
+  if(fileName_ != OTA_FW_LOCATION) { receivedFile.close(); return true; }
 
-  fwFile.seek(0, SeekSet);
-  const bool updateBeginResult = Update.begin(fwSize);
+  receivedFile.seek(0, SeekSet);
+  const bool updateBeginResult = Update.begin(fileSize_);
   if(serialPort) { serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!updateBeginResult) { fwFile.close(); return false; }
-  const bool updateStreamResult = (Update.writeStream(fwFile) == fwSize);
+  if(!updateBeginResult) { receivedFile.close(); return false; }
+  const bool updateStreamResult = (Update.writeStream(receivedFile) == fileSize_);
   if(serialPort) { serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!updateStreamResult) { fwFile.close(); return false; }
-  fwFile.close();
+  if(!updateStreamResult) { receivedFile.close(); return false; }
+  receivedFile.close();
   const bool updateEndResult = Update.end();
   if(serialPort) { serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!updateEndResult) { return false; }
