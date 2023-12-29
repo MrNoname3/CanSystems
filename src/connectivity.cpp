@@ -343,7 +343,10 @@ bool Connectivity::loop() {
   if(interfaceStatus != actualInterfaceStatus) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
     interfaceStatus = actualInterfaceStatus;
-    if(interfaceStatus != WL_CONNECTED) { Connectivity::MqttComBase::setConState(false); }
+    if(interfaceStatus != WL_CONNECTED || mqttState != MQTT_CONNECTED) {
+      Connectivity::MqttComBase::setConState(false);
+      debugLed.startTicker(250);
+    }
   }
   if(interfaceStatus != WL_CONNECTED) { return false; }
 
@@ -351,7 +354,10 @@ bool Connectivity::loop() {
   if(mqttState != actualMqttState) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
     mqttState = actualMqttState;
-    if(mqttState == MQTT_CONNECTED) { Connectivity::MqttComBase::setConState(true); }
+    if(mqttState == MQTT_CONNECTED) {
+      Connectivity::MqttComBase::setConState(true);
+      debugLed.stopTicker();
+    }
   }
 
   if(!mqttClient.loop()) {
