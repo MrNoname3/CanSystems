@@ -621,13 +621,13 @@ Connectivity::DataTransfer::DataTransfer(Stream* serial) :
   fileTransferStarted_(false) {}
 
 bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName, bool deleteExistingFile) {
-  if(this->fileTransferStarted_) { return false; }
+  if(this->fileTransferStarted_) { stop(false); }
   this->fileTransferStarted_ = true;
   this->fileSize_ = fileSize;
   this->fileCrc_ = fileCrc;
   this->nextFilePieceNumber_ = 0;
   this->remainingFileSize_ = fileSize;
-  if(!fileName) { stop(true); return false; }
+  if(!fileName) { stop(false); return false; }
   this->fileName_ = fileName;
 
   const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
@@ -643,7 +643,7 @@ bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, cons
     this->serialPort->printf_P(PSTR("%sFile transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"),
       FILE_TRANSFER_PREFIX, this->fileName_, this->fileSize_, this->fileCrc_);
   }
-  if(fileSize == 0) { stop(true); return false; }
+  if(fileSize == 0) { stop(false); return false; }
   return true;
 }
 
