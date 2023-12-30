@@ -7,6 +7,7 @@ import base64
 import sys
 from tqdm import tqdm
 import subprocess
+import signal
 
 try:
     import paho.mqtt.client as mqtt
@@ -155,6 +156,9 @@ def exit_program():
     client.loop_stop()
     sys.exit()
 
+def signal_handler(sig, frame):
+    exit_program()
+
 # Define a global variable or use a queue to manage commands and their corresponding ACK/NACK status
 command_status = {
     2: False,  # Start command
@@ -165,9 +169,12 @@ command_status = {
 # Callback function when a message is received
 def on_message(client, userdata, msg):
     message = json.loads(msg.payload)
-    if message["type"] == 1 or message["type"] == 0:
-        cmd = message["cmd"]
-        command_status[cmd] = True  # Update the status based on the received ACK/NACK
+    cmd = message["cmd"]
+    # Update the status based on the received ACK/NACK
+    if message["type"] == 0:
+        command_status[cmd] = False
+    else:
+        command_status[cmd] = True
 
 # Function to wait for ACK/NACK for a particular command with a timeout
 def wait_for_ack(cmd):
@@ -185,7 +192,9 @@ def wait_for_ack(cmd):
         return True
     else:
         return False
-
+    
+# Set up the signal handler for SIGINT (Ctrl+C)
+signal.signal(signal.SIGINT, signal_handler)
 # Run MQTT loop
 client = mqtt.Client(client_id=mqtt_client_id)
 client.username_pw_set(username=mqtt_username, password=mqtt_password)
