@@ -232,33 +232,36 @@ public:
     static const char PROGMEM _Base64AlphabetTable[];
   };
 
-  class OTA {
+  class DataTransfer {
   public:
-    OTA(Stream* serial = nullptr);
+    DataTransfer(Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
-    virtual ~OTA() = default;
+    virtual ~DataTransfer() = default;
 
-    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName = OTA_FW_LOCATION);
+    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName = OTA_FW_LOCATION, bool deleteExistingFile = true);
+
+    bool stop(bool deleteFile = true);
 
     bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
 
     bool checkValidity();
 
-    OTA(const OTA&) = delete;                       // Define copy constructor.
-    OTA& operator=(const OTA&) = delete;            // Define copy assignment operator.
-    OTA(OTA&&) = delete;                            // Define move constructor.
-    OTA& operator=(OTA&&) = delete;                 // Define move assignment operator.
+    DataTransfer(const DataTransfer&) = delete;                       // Define copy constructor.
+    DataTransfer& operator=(const DataTransfer&) = delete;            // Define copy assignment operator.
+    DataTransfer(DataTransfer&&) = delete;                            // Define move constructor.
+    DataTransfer& operator=(DataTransfer&&) = delete;                 // Define move assignment operator.
 
   private:
+    Stream* serialPort;
     uint32_t fileSize_;
     uint32_t fileCrc_;
-    Stream* serialPort;
     uint32_t nextFilePieceNumber_;
     uint32_t remainingFileSize_;
     const char* fileName_;
+    bool fileTransferStarted_;
 
-    static const char PROGMEM OTA_PREFIX[];
+    static const char PROGMEM FILE_TRANSFER_PREFIX[];
     static const char PROGMEM OTA_FW_LOCATION[];
   };
 
@@ -325,7 +328,7 @@ private:
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
   private:
     Stream* serialPort;
-    OTA ota;
+    DataTransfer ota;
 
     static const char PROGMEM COMMON_PREFIX[];
   };

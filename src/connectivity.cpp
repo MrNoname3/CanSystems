@@ -606,84 +606,129 @@ const char Connectivity::Base64::_Base64AlphabetTable[] = "ABCDEFGHIJKLMNOPQRSTU
   "abcdefghijklmnopqrstuvwxyz"
   "0123456789+/";
 
-//////////////////// -- OTA class-- ////////////////////
+//////////////////// -- DataTransfer class-- ////////////////////
 
-const char Connectivity::OTA::OTA_PREFIX[] PROGMEM              = "[OTA] ";
-const char Connectivity::OTA::OTA_FW_LOCATION[] PROGMEM         = "/config/espFirmware.bin";
+const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM              = "[FT] ";
+const char Connectivity::DataTransfer::OTA_FW_LOCATION[] PROGMEM         = "/config/espFirmware.bin";
 
-Connectivity::OTA::OTA(Stream* serial) : serialPort(serial), fileName_(nullptr) {}
+Connectivity::DataTransfer::DataTransfer(Stream* serial) :
+  serialPort(serial),
+  fileSize_(0),
+  fileCrc_(0),
+  nextFilePieceNumber_(-1),
+  remainingFileSize_(0),
+  fileName_(nullptr),
+  fileTransferStarted_(false) {}
 
-bool Connectivity::OTA::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
+bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName, bool deleteExistingFile) {
+  if(this->fileTransferStarted_) { return false; }
+  this->fileTransferStarted_ = true;
   this->fileSize_ = fileSize;
   this->fileCrc_ = fileCrc;
   this->nextFilePieceNumber_ = 0;
   this->remainingFileSize_ = fileSize;
-  if(!fileName) { return false; }
+  if(!fileName) { stop(true); return false; }
   this->fileName_ = fileName;
 
-  const bool otaFwExists = LittleFS.exists(FPSTR(fileName_));
-  if(otaFwExists) {
-    const bool rmFileResult = LittleFS.remove(FPSTR(fileName_));
+  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
+  if(fileExists && deleteExistingFile) {
+    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
     if(!rmFileResult) {
-      if(serialPort) { serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), OTA_PREFIX, fileName_); }
+      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
+      stop(true);
       return false;
     }
   }
-  if(serialPort) { serialPort->printf_P(PSTR("%sFile size: %u crc: %u\r\n"), OTA_PREFIX, this->fileSize_, this->fileCrc_); }
-  if(fileSize == 0) { return false; }
+  if(this->serialPort) {
+    this->serialPort->printf_P(PSTR("%sFile transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"),
+      FILE_TRANSFER_PREFIX, this->fileName_, this->fileSize_, this->fileCrc_);
+  }
+  if(fileSize == 0) { stop(true); return false; }
   return true;
 }
 
-bool Connectivity::OTA::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
-  if(!fileName_) { return false; }
-  if(filePieceNumber != nextFilePieceNumber_) { return false; }
-  if(fileDataSize == 0) { return false; }
-  if(remainingFileSize_ == 0) { return false; }
+bool Connectivity::DataTransfer::stop(bool deleteFile) {
+  this->fileTransferStarted_ = false;
+  this->fileSize_ = 0;
+  this->fileCrc_ = 0;
+  this->nextFilePieceNumber_ = -1;
+  this->remainingFileSize_ = 0;
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped!\r\n"), FILE_TRANSFER_PREFIX); }
 
-  File receivedFile = LittleFS.open(FPSTR(fileName_), "a");
+  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
+  if(fileExists && deleteFile) {
+    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
+    if(!rmFileResult) {
+      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
+      return false;
+    }
+  }
+
+  this->fileName_ = nullptr;
+  return true;
+}
+
+bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
+  if(!this->fileTransferStarted_) { return false; }
+  //if(!this->fileName_) { return false; }
+  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
+  if(fileDataSize == 0) { return false; }
+  if(this->remainingFileSize_ == 0) { return false; }
+
+  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "a");
   if(!receivedFile) {
-    if(serialPort) { serialPort->printf_P(PSTR("%sOpening failed: %s\r\n"), OTA_PREFIX, fileName_); }
+    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sOpening failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
+    receivedFile.close();
     return false;
   }
   const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
   receivedFile.close();
   if(writtenBytes != fileDataSize) {
-    if(serialPort) { serialPort->printf_P(PSTR("%sWriting failed: %s\r\n"), OTA_PREFIX, fileName_); }
+    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sWriting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
     return false;
   }
-  nextFilePieceNumber_++;
-  remainingFileSize_ -= fileDataSize;
+  this->nextFilePieceNumber_++;
+  this->remainingFileSize_ -= fileDataSize;
   return true;
 }
 
-bool Connectivity::OTA::checkValidity() {
-  if(!fileName_) { return false; }
-  if(remainingFileSize_ != 0) { return false; }
-  File receivedFile = LittleFS.open(FPSTR(fileName_), "r");
-  if(serialPort) { serialPort->printf_P(PSTR("%sChecking received file:%s\r\n"), OTA_PREFIX, receivedFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+bool Connectivity::DataTransfer::checkValidity() {
+  if(!this->fileTransferStarted_) { return false; }
+  //if(!this->fileName_) { return false; }
+  if(this->remainingFileSize_ != 0) { return false; }
+  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "r");
+  if(this->serialPort) {
+    this->serialPort->printf_P(PSTR("%sChecking received file:%s\r\n"),
+      FILE_TRANSFER_PREFIX, receivedFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
+  }
   if(!receivedFile) { receivedFile.close(); return false; }
-  const bool fileSizeOk = (receivedFile.size() == fileSize_);
-  if(serialPort) { serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  const bool fileSizeOk = (receivedFile.size() == this->fileSize_);
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!fileSizeOk) { receivedFile.close(); return false; }
   Connectivity::Crc32 crc32;
   while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
   const uint32_t calcFileCrc32 = crc32.get();
-  const bool fileCrcOk = (calcFileCrc32 == fileCrc_);
-  if(serialPort) { serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!fileCrcOk) { receivedFile.close(); return false; }
-  if(fileName_ != OTA_FW_LOCATION) { receivedFile.close(); return true; }
+  if(this->fileName_ != OTA_FW_LOCATION) {
+    receivedFile.close();
+    stop(false);
+    return true;
+  }
 
   receivedFile.seek(0, SeekSet);
-  const bool updateBeginResult = Update.begin(fileSize_);
-  if(serialPort) { serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  const bool updateBeginResult = Update.begin(this->fileSize_);
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!updateBeginResult) { receivedFile.close(); return false; }
-  const bool updateStreamResult = (Update.writeStream(receivedFile) == fileSize_);
-  if(serialPort) { serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  const bool updateStreamResult = (Update.writeStream(receivedFile) == this->fileSize_);
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!updateStreamResult) { receivedFile.close(); return false; }
   receivedFile.close();
   const bool updateEndResult = Update.end();
-  if(serialPort) { serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!updateEndResult) { return false; }
+  stop(true);
   return true;
 }
 
