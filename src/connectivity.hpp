@@ -116,7 +116,7 @@ private:
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
 
-public:
+private:
   class WdtWrapper {
   public:
     WdtWrapper() = default;
@@ -137,6 +137,7 @@ public:
   };
   WdtWrapper WdtHandler;
 
+public:
   class DebugLED {
   public:
     DebugLED(uint8_t ledPin = 255, bool ledOnState = HIGH);
@@ -239,9 +240,9 @@ public:
     /// @brief Destructor of the object.
     virtual ~DataTransfer() = default;
 
-    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName = OTA_FW_LOCATION, bool deleteExistingFile = true);
+    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName, bool deleteExistingFile);
 
-    bool stop(bool deleteFile = true);
+    bool stop(bool deleteFile);
 
     bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
 
@@ -262,6 +263,8 @@ public:
     bool fileTransferStarted_;
 
     static const char PROGMEM FILE_TRANSFER_PREFIX[];
+  
+  public:
     static const char PROGMEM OTA_FW_LOCATION[];
   };
 

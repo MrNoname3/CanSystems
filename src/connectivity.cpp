@@ -670,7 +670,6 @@ bool Connectivity::DataTransfer::stop(bool deleteFile) {
 
 bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
   if(!this->fileTransferStarted_) { return false; }
-  //if(!this->fileName_) { return false; }
   if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
   if(fileDataSize == 0) { return false; }
   if(this->remainingFileSize_ == 0) { return false; }
@@ -694,7 +693,6 @@ bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* 
 
 bool Connectivity::DataTransfer::checkValidity() {
   if(!this->fileTransferStarted_) { return false; }
-  //if(!this->fileName_) { return false; }
   if(this->remainingFileSize_ != 0) { return false; }
   File receivedFile = LittleFS.open(FPSTR(this->fileName_), "r");
   if(this->serialPort) {
@@ -727,8 +725,8 @@ bool Connectivity::DataTransfer::checkValidity() {
   receivedFile.close();
   const bool updateEndResult = Update.end();
   if(this->serialPort) { this->serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!updateEndResult) { return false; }
   stop(true);
+  if(!updateEndResult) { return false; }
   return true;
 }
 
@@ -790,7 +788,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       case Command::OTA_START: {
         const uint32_t fwSize = cmdJson[F("fwSize")].as<uint32_t>();
         const uint32_t fwCrc = cmdJson[F("crc32")].as<uint32_t>();
-        const bool otaBeginResult = ota.begin(fwSize, fwCrc);
+        const bool otaBeginResult = ota.begin(fwSize, fwCrc, DataTransfer::OTA_FW_LOCATION, true);
         MqttComBase::sendResponse((otaBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!otaBeginResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin OTA!\r\n"), COMMON_PREFIX); }
