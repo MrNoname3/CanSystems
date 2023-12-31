@@ -29,6 +29,7 @@ const char Connectivity::LOG_MSG[] PROGMEM                  = "{""\"online\":%s"
 
 const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
+const char Connectivity::DEVICE_TYPE[] PROGMEM              = BUILD_ENV_NAME;
 
 const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
 const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
@@ -155,7 +156,8 @@ bool Connectivity::begin(Interface interface) {
 
   // Setup MQTT topics.
   {
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", DEVICE_TYPE, macAddress);
+    const char* deviceID = strchr(DEVICE_TYPE, '_') + 1;
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
@@ -608,8 +610,8 @@ const char Connectivity::Base64::_Base64AlphabetTable[] = "ABCDEFGHIJKLMNOPQRSTU
 
 //////////////////// -- DataTransfer class-- ////////////////////
 
-const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM              = "[FT] ";
-const char Connectivity::DataTransfer::OTA_FW_LOCATION[] PROGMEM         = "/config/espFirmware.bin";
+const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
+const char Connectivity::DataTransfer::OTA_FW_LOCATION[] PROGMEM          = "/config/espFirmware.bin";
 
 Connectivity::DataTransfer::DataTransfer(Stream* serial) :
   serialPort(serial),
@@ -653,8 +655,8 @@ bool Connectivity::DataTransfer::stop(bool deleteFile) {
   this->fileCrc_ = 0;
   this->nextFilePieceNumber_ = -1;
   this->remainingFileSize_ = 0;
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped, cleaning up done!\r\n"), FILE_TRANSFER_PREFIX); }
 
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped, cleaning up done!\r\n"), FILE_TRANSFER_PREFIX); }
   const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
   if(fileExists && deleteFile) {
     const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
@@ -663,7 +665,6 @@ bool Connectivity::DataTransfer::stop(bool deleteFile) {
       return false;
     }
   }
-
   this->fileName_ = nullptr;
   return true;
 }
@@ -814,6 +815,12 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       case Command::OTA_START: {
         const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
         const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
+        const char* binId = cmdJson[F("binId")].as<const char*>();
+        if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
+          if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
+          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+          return;
+        }
         const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, DataTransfer::OTA_FW_LOCATION);
         MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!transferBeginResult) {

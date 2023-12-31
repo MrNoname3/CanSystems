@@ -41,8 +41,8 @@ mqtt_ota_send_topic = 'iot/stod/40f520286e69/common'
 mqtt_ota_receive_topic = 'iot/dtos/40f520286e69/common'
 
 # Set the path to firmware.bin
-firmware_path_bin = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin')
-firmware_path_gz = os.path.join(current_dir, '.pio/build/d1_mini/firmware.bin.gz')
+firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp8266_rad/firmware.bin')
+firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp8266_rad/firmware.bin.gz')
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
@@ -93,6 +93,26 @@ def compress_with_7z(bin_path, gz_path):
     except Exception as e:
         print("Error:", str(e))
         return 1  # Return a non-zero code to indicate failure
+    
+def get_fw_id(file_path):
+    begin_of_id = b"project_"
+    with open(file_path, 'rb') as file:
+        data = file.read()
+
+    # Find the start index of the identifier
+    start_index = data.find(begin_of_id)
+
+    if start_index != -1:  # If the identifier is found
+        # Find the end of the string by searching for the null terminator
+        end_index = data.find(b'\0', start_index + len(begin_of_id))
+
+        # Extract the string after the identifier and before the null terminator
+        identifier = data[start_index:end_index].decode('utf-8')
+        print(f"ID of bin file: \"{identifier}\"")
+        return True, identifier
+    else:
+        print("ID not found for the file!")
+        return False, ""
 
 # Function to send firmware pieces
 def send_fw():
@@ -101,11 +121,16 @@ def send_fw():
     fw_size = os.path.getsize(firmware_path_gz)
     crc32_total = calculate_crc32(firmware_path_gz)
 
+    success, identifier = get_fw_id(firmware_path_bin)
+    if not success:
+        exit_program()
+
     # Start message
     start_message = {
         "cmd": 2,
         "fileSize": fw_size,
-        "crc32": crc32_total
+        "crc32": crc32_total,
+        "binId": identifier
     }
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
     print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total} ", end="")

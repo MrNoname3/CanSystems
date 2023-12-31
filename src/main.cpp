@@ -3,12 +3,11 @@
 //--- Variables ---//
 
 //--- Networking ---//
-const char Connectivity::DEVICE_TYPE[] PROGMEM = "ESP8266";
 Connectivity iotConn(&Serial, SPI_CS, LED, false);
 Radiation radiation("radiation", RAD);
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(MONITOR_BAUD);
   delay(1);
   Serial.println();
   Serial.println(F("******************************************************"));

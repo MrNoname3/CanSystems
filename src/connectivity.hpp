@@ -70,7 +70,7 @@ private:
     char password[24];
     char serverName[34];
     uint16_t serverPort;
-    char clientName[28];
+    char clientName[36];
     char senderTopic[32];
     char receiverTopic[32];
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
@@ -163,6 +163,7 @@ public:
   };
   DebugLED debugLed;
 
+public:
   class Crc32 {
   public:
     Crc32();
@@ -186,6 +187,7 @@ public:
     uint32_t crc;
   };
 
+public:
   /// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
   class Base64 {
   public:
@@ -233,6 +235,7 @@ public:
     static const char PROGMEM _Base64AlphabetTable[];
   };
 
+private:
   class DataTransfer {
   public:
     DataTransfer(Stream* serial = nullptr);
@@ -242,8 +245,10 @@ public:
 
     bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName);
 
+  private:
     bool stop(bool deleteFile);
 
+  public:
     bool storeBase64(uint32_t filePieceNumber, const char* fileData);
 
     bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
@@ -271,6 +276,7 @@ public:
     static const char PROGMEM OTA_FW_LOCATION[];
   };
 
+public:
   class MqttComBase {
   public:
     enum class Response : uint8_t {
