@@ -240,7 +240,7 @@ public:
     /// @brief Destructor of the object.
     virtual ~DataTransfer() = default;
 
-    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName, bool deleteExistingFile);
+    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName);
 
     bool stop(bool deleteFile);
 

@@ -620,18 +620,18 @@ Connectivity::DataTransfer::DataTransfer(Stream* serial) :
   fileName_(nullptr),
   fileTransferStarted_(false) {}
 
-bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName, bool deleteExistingFile) {
-  if(this->fileTransferStarted_) { stop(false); }
+bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
+  if(this->fileTransferStarted_) { stop(true); }
   this->fileTransferStarted_ = true;
   this->fileSize_ = fileSize;
   this->fileCrc_ = fileCrc;
   this->nextFilePieceNumber_ = 0;
   this->remainingFileSize_ = fileSize;
-  if(!fileName) { stop(false); return false; }
+  if(!fileName) { stop(true); return false; }
   this->fileName_ = fileName;
 
   const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
-  if(fileExists && deleteExistingFile) {
+  if(fileExists) {
     const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
     if(!rmFileResult) {
       if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
@@ -643,7 +643,7 @@ bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, cons
     this->serialPort->printf_P(PSTR("%sFile transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"),
       FILE_TRANSFER_PREFIX, this->fileName_, this->fileSize_, this->fileCrc_);
   }
-  if(fileSize == 0) { stop(false); return false; }
+  if(fileSize == 0) { stop(true); return false; }
   return true;
 }
 
@@ -653,7 +653,7 @@ bool Connectivity::DataTransfer::stop(bool deleteFile) {
   this->fileCrc_ = 0;
   this->nextFilePieceNumber_ = -1;
   this->remainingFileSize_ = 0;
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped!\r\n"), FILE_TRANSFER_PREFIX); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped, cleaning up done!\r\n"), FILE_TRANSFER_PREFIX); }
 
   const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
   if(fileExists && deleteFile) {
@@ -788,7 +788,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       case Command::OTA_START: {
         const uint32_t fwSize = cmdJson[F("fwSize")].as<uint32_t>();
         const uint32_t fwCrc = cmdJson[F("crc32")].as<uint32_t>();
-        const bool otaBeginResult = ota.begin(fwSize, fwCrc, DataTransfer::OTA_FW_LOCATION, true);
+        const bool otaBeginResult = ota.begin(fwSize, fwCrc, DataTransfer::OTA_FW_LOCATION);
         MqttComBase::sendResponse((otaBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!otaBeginResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin OTA!\r\n"), COMMON_PREFIX); }
