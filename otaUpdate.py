@@ -104,7 +104,7 @@ def send_fw():
     # Start message
     start_message = {
         "cmd": 2,
-        "fwSize": fw_size,
+        "fileSize": fw_size,
         "crc32": crc32_total
     }
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
@@ -178,7 +178,7 @@ def on_message(client, userdata, msg):
 
 # Function to wait for ACK/NACK for a particular command with a timeout
 def wait_for_ack(cmd):
-    timeout = 5  # timeout in seconds
+    timeout = 10  # timeout in seconds
     start_time = time.time()
 
     while not command_status[cmd]:

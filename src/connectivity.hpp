@@ -244,6 +244,8 @@ public:
 
     bool stop(bool deleteFile);
 
+    bool storeBase64(uint32_t filePieceNumber, const char* fileData);
+
     bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
 
     bool checkValidity();
@@ -261,6 +263,7 @@ public:
     uint32_t remainingFileSize_;
     const char* fileName_;
     bool fileTransferStarted_;
+    static constexpr uint16_t receivedFilePieceSize = 336; // It should always be divisible by both 3 and 4!
 
     static const char PROGMEM FILE_TRANSFER_PREFIX[];
   
@@ -331,7 +334,7 @@ private:
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
   private:
     Stream* serialPort;
-    DataTransfer ota;
+    DataTransfer dataTransfer;
 
     static const char PROGMEM COMMON_PREFIX[];
   };

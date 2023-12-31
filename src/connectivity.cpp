@@ -668,6 +668,32 @@ bool Connectivity::DataTransfer::stop(bool deleteFile) {
   return true;
 }
 
+bool Connectivity::DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
+  if(!this->fileTransferStarted_) { return false; }
+  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
+  if(this->remainingFileSize_ == 0) { return false; }
+  constexpr uint16_t maxB64Length = receivedFilePieceSize * 4 / 3;
+  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length);
+  if(filePieceB64Size == 0) { return false; }
+
+  uint8_t decodedData[receivedFilePieceSize];
+  const uint32_t decodedPreSize = Connectivity::Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
+  if(decodedPreSize > sizeof(decodedData)) {
+    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile piece size error!\r\n"), FILE_TRANSFER_PREFIX); }
+    return false;
+  }
+  const uint32_t decodedPostSize = Connectivity::Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
+  if(decodedPreSize != decodedPostSize) {
+    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), FILE_TRANSFER_PREFIX); }
+    return false;
+  }
+  const bool storingResult = store(filePieceNumber, decodedData, decodedPreSize);
+  if(!storingResult) {
+    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), FILE_TRANSFER_PREFIX); }
+  }
+  return storingResult;
+}
+
 bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
   if(!this->fileTransferStarted_) { return false; }
   if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
@@ -770,7 +796,7 @@ bool Connectivity::MqttComBase::getConState() { return isOnline; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(const char* classID, Stream* serial) : MqttComBase(classID), serialPort(serial), ota(serial) {}
+Connectivity::Common::Common(const char* classID, Stream* serial) : MqttComBase(classID), serialPort(serial), dataTransfer(serial) {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   StaticJsonDocument<512> cmdJson;
@@ -780,47 +806,32 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
     if(serialPort) { serialPort->printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX); }
   }
   if(deSerResult) {
-    const uint8_t cmd = cmdJson["cmd"].as<uint8_t>();
+    const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
     Command command = static_cast<Command>(cmd);
     switch(command) {
       case Command::BLANK: {} break;
       case Command::RESTART: { restartESP(); } break;
       case Command::OTA_START: {
-        const uint32_t fwSize = cmdJson[F("fwSize")].as<uint32_t>();
-        const uint32_t fwCrc = cmdJson[F("crc32")].as<uint32_t>();
-        const bool otaBeginResult = ota.begin(fwSize, fwCrc, DataTransfer::OTA_FW_LOCATION);
-        MqttComBase::sendResponse((otaBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-        if(!otaBeginResult) {
+        const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
+        const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
+        const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, DataTransfer::OTA_FW_LOCATION);
+        MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
+        if(!transferBeginResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin OTA!\r\n"), COMMON_PREFIX); }
           return;
         }
       } break;
       case Command::OTA_DATA: {
-        uint8_t fwData[336];
         const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
         const char* fwDataB64 = cmdJson["data"].as<const char*>();
-        const uint32_t fwDataB64Size = strlen(fwDataB64);
-        const uint32_t decodedSize = Connectivity::Base64::decodedLength(reinterpret_cast<const uint8_t*>(fwDataB64), fwDataB64Size);
-        if(decodedSize > sizeof(fwData)) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sFW piece size error!\r\n"), COMMON_PREFIX); }
-          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-          return;
-        }
-        const uint32_t decodedSize2 = Connectivity::Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fwDataB64), fwData, fwDataB64Size);
-        if(decodedSize != decodedSize2) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), COMMON_PREFIX); }
-          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-          return;
-        }
-        if(!ota.store(fwPieceNumber, fwData, decodedSize)) {
+        const bool storingResult = dataTransfer.storeBase64(fwPieceNumber, fwDataB64);
+        MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
+        if(!storingResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
-          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-          return;
         }
-        MqttComBase::sendResponse(MqttComBase::Response::ACK, cmd);
       } break;
       case Command::OTA_END: {
-        const bool validityCheckResult = ota.checkValidity();
+        const bool validityCheckResult = dataTransfer.checkValidity();
         MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!validityCheckResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sStored FW is not valid!\r\n"), COMMON_PREFIX); }
