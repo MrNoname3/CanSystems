@@ -25,8 +25,6 @@ const char Connectivity::certBackupFileLocation[] PROGMEM   = "/config/mosq-ca.c
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::LOG_TOPIC[] PROGMEM                = "log";
-const char Connectivity::LOG_MSG[] PROGMEM                  = "{""\"online\":%s""}";
 
 const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
@@ -75,6 +73,14 @@ bool Connectivity::begin(Interface interface) {
     const bool initFS = LittleFS.begin();
     if(serialPort) { serialPort->printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE)); }
     if(!initFS) { return false; }
+    else {
+      FSInfo fsInfo;
+      LittleFS.info(fsInfo);
+      if(serialPort) {
+        serialPort->printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n  Block size: %u\r\n  Page size: %u\r\n  Max open files: %u\r\n  Max path lengths: %u\r\n"),
+        fsInfo.totalBytes, fsInfo.usedBytes, (fsInfo.totalBytes - fsInfo.usedBytes), fsInfo.blockSize, fsInfo.pageSize, fsInfo.maxOpenFiles, fsInfo.maxPathLength);
+      }
+    }
   }
 
   // Get MAC.
@@ -310,28 +316,14 @@ bool Connectivity::connect(CertFile actualCert) {
   if(!tcpConResult) { return false; }
 
   // MQTT connection.
-  char logTopic[sizeof(mqttCredentials.senderTopic) + sizeof(LOG_TOPIC)] = { '\0' };
-  const int32_t logTopicSize = snprintf_P(logTopic, sizeof(logTopic), "%s/%s", mqttCredentials.senderTopic, LOG_TOPIC);
-  const bool logTopicValid = (logTopicSize >= 0 && logTopicSize < static_cast<int32_t>(sizeof(logTopic)));
-  if(!logTopicValid) { return false; }
-
-  char logMsg[sizeof(LOG_MSG) + 8] = { '\0' };
-  int32_t logMsgSize = snprintf_P(logMsg, sizeof(logMsg), LOG_MSG, "false");
-  bool logMsgValid = (logMsgSize >= 0 && logMsgSize < static_cast<int32_t>(sizeof(logMsg)));
-  if(!logMsgValid) { return false; }
-
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
-  const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password, logTopic, 1, false, logMsg, true);
+  const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
   if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %d\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, mqttClient.state()); }
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
   if(serialPort) { serialPort->printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE); }
   if(!subResult) { return false; }
-
-  logMsgSize = snprintf_P(logMsg, sizeof(logMsg), LOG_MSG, "true");
-  logMsgValid = (logMsgSize >= 0 && logMsgSize < static_cast<int32_t>(sizeof(logMsg)));
-  if(!logMsgValid) { return false; }
-  return mqttClient.publish(logTopic, logMsg);
+  return true;
 }
 
 bool Connectivity::loop() {
