@@ -16,6 +16,7 @@ Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
+const char Connectivity::wifiBackupFileLocation[] PROGMEM   = "/config/wifi.json.bkp";
 const char Connectivity::configFileLocation[] PROGMEM       = "/config/server.json";      // Config file location on FS.
 const char Connectivity::configBackupFileLocation[] PROGMEM = "/config/server.json.bkp";  // Config file backup location on FS.
 const char Connectivity::certFileLocation[] PROGMEM         = "/config/mosq-ca.crt";      // Used cert location on FS.
@@ -198,9 +199,11 @@ bool Connectivity::begin(Interface interface) {
 
 bool Connectivity::startWifi() {
   const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
+  const bool wifiBackupFileExists = LittleFS.exists(FPSTR(wifiBackupFileLocation));
   if(serialPort) {
     serialPort->printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
     serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
+    serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiBackupFileLocation, wifiBackupFileExists ? OK_STATE : ERR_STATE);
   }
   if(!wifiFileExists) { return false; }
 
@@ -611,7 +614,10 @@ const char Connectivity::Base64::_Base64AlphabetTable[] = "ABCDEFGHIJKLMNOPQRSTU
 //////////////////// -- DataTransfer class-- ////////////////////
 
 const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
-const char Connectivity::DataTransfer::OTA_FW_LOCATION[] PROGMEM          = "/config/espFirmware.bin";
+const char Connectivity::DataTransfer::otaFwLocation[] PROGMEM            = "/config/espFirmware.bin";
+const char Connectivity::DataTransfer::wifiTempFileLocation[] PROGMEM     = "/config/wifi.json.tmp";
+const char Connectivity::DataTransfer::configTempFileLocation[] PROGMEM   = "/config/server.json.tmp";
+const char Connectivity::DataTransfer::certTempFileLocation[] PROGMEM     = "/config/mosq-ca.crt.tmp";
 
 Connectivity::DataTransfer::DataTransfer(Stream* serial) :
   serialPort(serial),
@@ -736,7 +742,7 @@ bool Connectivity::DataTransfer::checkValidity() {
   const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
   if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!fileCrcOk) { receivedFile.close(); return false; }
-  if(this->fileName_ != OTA_FW_LOCATION) {
+  if(this->fileName_ != otaFwLocation) {
     receivedFile.close();
     stop(false);
     return true;
@@ -803,45 +809,65 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   StaticJsonDocument<512> cmdJson;
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(!deSerResult){
+  if(!deSerResult) {
     if(serialPort) { serialPort->printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX); }
+    return;
   }
-  if(deSerResult) {
+  else {
     const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
     Command command = static_cast<Command>(cmd);
     switch(command) {
       case Command::BLANK: {} break;
       case Command::RESTART: { restartESP(); } break;
-      case Command::OTA_START: {
+      case Command::FW_DT_START:
+      case Command::WIFICFG_DT_START:
+      case Command::SERVERCFG_DT_START:
+      case Command::SERVERCERT_DT_START: {
         const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
         const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
-        const char* binId = cmdJson[F("binId")].as<const char*>();
-        if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
-          MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-          return;
+        const char* fileNamePtr = nullptr;
+        switch(command) {
+          case Command::FW_DT_START: {
+            const char* binId = cmdJson[F("binId")].as<const char*>();
+            if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
+              if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
+              MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+              return;
+            }
+            fileNamePtr = DataTransfer::otaFwLocation;
+            } break;
+          case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
+          case Command::SERVERCFG_DT_START: { fileNamePtr = DataTransfer::configTempFileLocation; } break;
+          case Command::SERVERCERT_DT_START: { fileNamePtr = DataTransfer::certTempFileLocation; } break;
+          default: {} break;
         }
-        const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, DataTransfer::OTA_FW_LOCATION);
+        const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
         MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!transferBeginResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin OTA!\r\n"), COMMON_PREFIX); }
+          if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr); }
           return;
         }
       } break;
-      case Command::OTA_DATA: {
-        const uint32_t fwPieceNumber = cmdJson[F("piece")].as<uint32_t>();
-        const char* fwDataB64 = cmdJson["data"].as<const char*>();
-        const bool storingResult = dataTransfer.storeBase64(fwPieceNumber, fwDataB64);
+      case Command::FW_DT_DATA:
+      case Command::WIFICFG_DT_DATA:
+      case Command::SERVERCFG_DT_DATA:
+      case Command::SERVERCERT_DT_DATA: {
+        const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
+        const char* filePieceB64 = cmdJson["data"].as<const char*>();
+        const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
         MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
         if(!storingResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sFW storing failed!\r\n"), COMMON_PREFIX); }
+          if(serialPort) { serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX); }
         }
       } break;
-      case Command::OTA_END: {
+      case Command::FW_DT_END:
+      case Command::WIFICFG_DT_END:
+      case Command::SERVERCFG_DT_END:
+      case Command::SERVERCERT_DT_END: {
         const bool validityCheckResult = dataTransfer.checkValidity();
         MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!validityCheckResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sStored FW is not valid!\r\n"), COMMON_PREFIX); }
+          if(serialPort) { serialPort->printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX); }
         }
       } break;
     };

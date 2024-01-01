@@ -93,6 +93,7 @@ private:
 
 private:
   static const char PROGMEM wifiFileLocation[];
+  static const char PROGMEM wifiBackupFileLocation[];
   static const char PROGMEM configFileLocation[];
   static const char PROGMEM configBackupFileLocation[];
   static const char PROGMEM certFileLocation[];
@@ -269,11 +270,12 @@ private:
     const char* fileName_;
     bool fileTransferStarted_;
     static constexpr uint16_t receivedFilePieceSize = 336; // It should always be divisible by both 3 and 4!
-
     static const char PROGMEM FILE_TRANSFER_PREFIX[];
-  
   public:
-    static const char PROGMEM OTA_FW_LOCATION[];
+    static const char PROGMEM otaFwLocation[];
+    static const char PROGMEM wifiTempFileLocation[];
+    static const char PROGMEM configTempFileLocation[];
+    static const char PROGMEM certTempFileLocation[];
   };
 
 public:
@@ -314,9 +316,18 @@ private:
     enum class Command : uint8_t {
       BLANK = 0,
       RESTART,
-      OTA_START,
-      OTA_DATA,
-      OTA_END
+      FW_DT_START,
+      FW_DT_DATA,
+      FW_DT_END,
+      WIFICFG_DT_START,
+      WIFICFG_DT_DATA,
+      WIFICFG_DT_END,
+      SERVERCFG_DT_START,
+      SERVERCFG_DT_DATA,
+      SERVERCFG_DT_END,
+      SERVERCERT_DT_START,
+      SERVERCERT_DT_DATA,
+      SERVERCERT_DT_END
     };
 
     Common(const char* classID, Stream* serial = nullptr);
