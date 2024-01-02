@@ -17,10 +17,6 @@ uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::wifiBackupFileLocation[] PROGMEM   = "/config/wifi.json.bkp";
-const char Connectivity::configFileLocation[] PROGMEM       = "/config/server.json";      // Config file location on FS.
-const char Connectivity::configBackupFileLocation[] PROGMEM = "/config/server.json.bkp";  // Config file backup location on FS.
-const char Connectivity::certFileLocation[] PROGMEM         = "/config/mosq-ca.crt";      // Used cert location on FS.
-const char Connectivity::certBackupFileLocation[] PROGMEM   = "/config/mosq-ca.crt.bkp";  // Cert backup location on FS.
 
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
@@ -85,7 +81,7 @@ bool Connectivity::begin(Interface interface) {
 
   // Get MAC.
   uint8_t mac[6] = { 0 };
-  char macAddress[13] = { '\0' };
+  char macAddress[macStringSize] = { '\0' };
   {
     wifi_get_macaddr(STATION_IF, mac);
     const uint32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -163,6 +159,10 @@ bool Connectivity::begin(Interface interface) {
 
   // Setup MQTT topics.
   {
+    memccpy_P(mqttCredentials.userName, mqttSettings::userName, '\0', sizeof(mqttCredentials.userName));
+    memccpy_P(mqttCredentials.password, mqttSettings::password, '\0', sizeof(mqttCredentials.password));
+    memccpy_P(mqttCredentials.serverName, mqttSettings::serverName, '\0', sizeof(mqttCredentials.serverName));
+    mqttCredentials.serverPort = mqttSettings::serverPort;
     const char* deviceID = strchr(DEVICE_TYPE, '_') + 1;
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
@@ -184,10 +184,7 @@ bool Connectivity::begin(Interface interface) {
     if(!receiverTopicValid) { return false; }
   }
 
-  if(!checkFiles()) { return false; }
-  if(!loadConfig(ConfigFile::NORMAL)) { return false; }
-  if(!connect(CertFile::NORMAL)) { return false; }
-
+  if(!connect()) { return false; }
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
   Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
 
@@ -236,75 +233,11 @@ bool Connectivity::startWifi() {
   return deSerResult;
 }
 
-bool Connectivity::checkFiles() {
-  // Check for config.
-  const bool configFileExists = LittleFS.exists(FPSTR(configFileLocation));
-  const bool configBackupFileExists = LittleFS.exists(FPSTR(configBackupFileLocation));
-  if(serialPort) {
-    serialPort->printf_P(PSTR("%sCheck config files:\r\n"), FS_PREFIX);
-    serialPort->printf_P(PSTR("  %s ->%s\r\n"), configFileLocation, configFileExists ? OK_STATE : ERR_STATE);
-    serialPort->printf_P(PSTR("  %s ->%s\r\n"), configBackupFileLocation, configBackupFileExists ? OK_STATE : ERR_STATE);
-  }
-
-  // Check for cert.
-  const bool certFileExists = LittleFS.exists(FPSTR(certFileLocation));
-  const bool certBackupFileExists = LittleFS.exists(FPSTR(certBackupFileLocation));
-  if(serialPort) {
-    serialPort->printf_P(PSTR("%sCheck certification files:\r\n"), FS_PREFIX);
-    serialPort->printf_P(PSTR("  %s ->%s\r\n"), certFileLocation, certFileExists ? OK_STATE : ERR_STATE);
-    serialPort->printf_P(PSTR("  %s ->%s\r\n"), certBackupFileLocation, certBackupFileExists ? OK_STATE : ERR_STATE);
-  }
-
-  return ((configFileExists || configBackupFileExists) && (certFileExists || certBackupFileExists));
-}
-
-bool Connectivity::loadConfig(ConfigFile actualConfig) {
-  File configFile;
-  if(actualConfig == ConfigFile::NORMAL) {
-    configFile = LittleFS.open(FPSTR(configFileLocation), "r");
-  }
-  else if(actualConfig == ConfigFile::BACKUP) {
-    configFile = LittleFS.open(FPSTR(configBackupFileLocation), "r");
-  }
-  else {
-    return false;
-  }
-  if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, configFile.fullName(), configFile ? OK_STATE : ERR_STATE); }
-  if(!configFile) { configFile.close(); return false; }
-
-  StaticJsonDocument<256> configJson;
-  DeserializationError deserializationError = deserializeJson(configJson, configFile);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(deSerResult) {
-    strlcpy(mqttCredentials.userName, configJson[F("mqttUserName")].as<const char*>(), sizeof(mqttCredentials.userName));
-    strlcpy(mqttCredentials.password, configJson[F("mqttPassword")].as<const char*>(), sizeof(mqttCredentials.password));
-    strlcpy(mqttCredentials.serverName, configJson[F("mqttServerName")].as<const char*>(), sizeof(mqttCredentials.serverName));
-    mqttCredentials.serverPort = configJson[F("mqttServerPort")].as<uint16_t>();
-  }
-  if(serialPort) { serialPort->printf_P(PSTR("%sSerialize file:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
-  configFile.close();
-  return deSerResult;
-}
-
-bool Connectivity::connect(CertFile actualCert) {
+bool Connectivity::connect() {
   // Open cert.
-  File certFile;
-  if(actualCert == CertFile::NORMAL) {
-    certFile = LittleFS.open(FPSTR(certFileLocation), "r");
-  }
-  else if(actualCert == CertFile::BACKUP) {
-    certFile = LittleFS.open(FPSTR(certBackupFileLocation), "r");
-  }
-  else {
-    return false;
-  }
-  if(serialPort) { serialPort->printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, certFile.fullName(), certFile ? OK_STATE : ERR_STATE); }
-  if(!certFile) { certFile.close(); return false; }
-
-  X509List cert(certFile);
+  X509List cert(mqttSettings::caCert);
   tcpClient.setTrustAnchors(&cert);
   tcpClient.setTimeout(5000);
-  certFile.close();
 
   // TCP connection.
   //tcpClient.getLastSSLError() == BR_ERR_OK ?
@@ -365,7 +298,7 @@ bool Connectivity::loop() {
       static uint32_t reconnectTimer = millis();
       if(millis() - reconnectTimer >= 10000) {
         reconnectTimer = millis();
-        connect(CertFile::NORMAL);
+        connect();
       }
     }
   }
@@ -608,8 +541,6 @@ const char Connectivity::Base64::_Base64AlphabetTable[] = "ABCDEFGHIJKLMNOPQRSTU
 const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
 const char Connectivity::DataTransfer::otaFwLocation[] PROGMEM            = "/config/espFirmware.bin";
 const char Connectivity::DataTransfer::wifiTempFileLocation[] PROGMEM     = "/config/wifi.json.tmp";
-const char Connectivity::DataTransfer::configTempFileLocation[] PROGMEM   = "/config/server.json.tmp";
-const char Connectivity::DataTransfer::certTempFileLocation[] PROGMEM     = "/config/mosq-ca.crt.tmp";
 
 Connectivity::DataTransfer::DataTransfer(Stream* serial) :
   serialPort(serial),
@@ -812,9 +743,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       case Command::BLANK: {} break;
       case Command::RESTART: { restartESP(); } break;
       case Command::FW_DT_START:
-      case Command::WIFICFG_DT_START:
-      case Command::SERVERCFG_DT_START:
-      case Command::SERVERCERT_DT_START: {
+      case Command::WIFICFG_DT_START: {
         const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
         const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
         const char* fileNamePtr = nullptr;
@@ -829,8 +758,6 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
             fileNamePtr = DataTransfer::otaFwLocation;
             } break;
           case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
-          case Command::SERVERCFG_DT_START: { fileNamePtr = DataTransfer::configTempFileLocation; } break;
-          case Command::SERVERCERT_DT_START: { fileNamePtr = DataTransfer::certTempFileLocation; } break;
           default: {} break;
         }
         const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
@@ -841,9 +768,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         }
       } break;
       case Command::FW_DT_DATA:
-      case Command::WIFICFG_DT_DATA:
-      case Command::SERVERCFG_DT_DATA:
-      case Command::SERVERCERT_DT_DATA: {
+      case Command::WIFICFG_DT_DATA: {
         const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
         const char* filePieceB64 = cmdJson["data"].as<const char*>();
         const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
@@ -853,9 +778,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         }
       } break;
       case Command::FW_DT_END:
-      case Command::WIFICFG_DT_END:
-      case Command::SERVERCFG_DT_END:
-      case Command::SERVERCERT_DT_END: {
+      case Command::WIFICFG_DT_END: {
         const bool validityCheckResult = dataTransfer.checkValidity();
         MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!validityCheckResult) {

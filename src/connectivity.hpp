@@ -8,6 +8,7 @@
 #include <PubSubClient.h>                     /// MQTT client.
 #include <functional>
 #include <Ticker.h>                           /// Timer interrupt hadnler.
+#include "server.hpp"
 
 class Connectivity {
 public:
@@ -23,16 +24,6 @@ public:
     UNKNOWN
   };
 
-  enum class ConfigFile : uint8_t {
-    NORMAL = 0,
-    BACKUP
-  };
-
-  enum class CertFile : uint8_t {
-    NORMAL = 0,
-    BACKUP
-  };
-
   Connectivity(Stream* serial = nullptr, const uint8_t ethCS = D8, uint8_t dbgLedPin = D4, bool dbgLedOnState = HIGH);
 
   /// @brief Destructor of the object.
@@ -42,11 +33,7 @@ public:
 
   bool startWifi();
 
-  bool checkFiles();
-
-  bool loadConfig(ConfigFile actualConfig = ConfigFile::NORMAL);
-
-  bool connect(CertFile actualCert = CertFile::NORMAL);
+  bool connect();
 
   bool loop();
 
@@ -66,9 +53,9 @@ public:
 private:
   struct __attribute__((packed))
   MqttCredentials {
-    char userName[24];
-    char password[24];
-    char serverName[34];
+    char userName[sizeof(mqttSettings::userName)];
+    char password[sizeof(mqttSettings::password)];
+    char serverName[sizeof(mqttSettings::serverName)];
     uint16_t serverPort;
     char clientName[36];
     char senderTopic[32];
@@ -87,6 +74,7 @@ private:
   const uint32_t cppVersion;
   const uint16_t fwVersion;
   const uint32_t gitHash;
+  static constexpr uint8_t macStringSize = 13;
 
   static Connectivity::MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;
@@ -94,10 +82,6 @@ private:
 private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM wifiBackupFileLocation[];
-  static const char PROGMEM configFileLocation[];
-  static const char PROGMEM configBackupFileLocation[];
-  static const char PROGMEM certFileLocation[];
-  static const char PROGMEM certBackupFileLocation[];
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
@@ -272,8 +256,6 @@ private:
   public:
     static const char PROGMEM otaFwLocation[];
     static const char PROGMEM wifiTempFileLocation[];
-    static const char PROGMEM configTempFileLocation[];
-    static const char PROGMEM certTempFileLocation[];
   };
 
 public:
@@ -319,13 +301,7 @@ private:
       FW_DT_END,
       WIFICFG_DT_START,
       WIFICFG_DT_DATA,
-      WIFICFG_DT_END,
-      SERVERCFG_DT_START,
-      SERVERCFG_DT_DATA,
-      SERVERCFG_DT_END,
-      SERVERCERT_DT_START,
-      SERVERCERT_DT_DATA,
-      SERVERCERT_DT_END
+      WIFICFG_DT_END
     };
 
     Common(const char* classID, Stream* serial = nullptr);
