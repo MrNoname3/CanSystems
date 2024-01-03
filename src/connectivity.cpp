@@ -191,6 +191,14 @@ bool Connectivity::begin(Interface interface) {
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
   Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
 
+  {
+    char versionString[64];
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"VCC\":%hu""}"), cppVersion, fwVersion, gitHash, ESP.getVcc());
+    const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
+    if(!versionStringValid) { return false; }
+    common.messageSend(versionString);
+  }
+
   if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
@@ -789,6 +797,10 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
 bool Connectivity::Common::begin() { return true; }
 
 bool Connectivity::Common::loop() { return true; }
+
+void Connectivity::Common::messageSend(const char* payload) const {
+  MqttComBase::messageSend(payload);
+}
 
 void Connectivity::Common::restartESP() {
   if(serialPort) {

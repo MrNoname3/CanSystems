@@ -313,6 +313,8 @@ private:
 
     virtual bool loop() override;
 
+    inline void messageSend(const char* payload) const;
+
     /// @brief Reset the MCU.
     void restartESP();
 
