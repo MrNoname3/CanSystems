@@ -356,48 +356,48 @@ void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber)
 //////////////////// -- Debug LED class-- ////////////////////
 
 Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledPin_(ledPin), ledOnState_(ledOnState) {
-  if(ledPin != 255) { pinMode(ledPin, OUTPUT); }
+  pinMode(this->ledPin_, OUTPUT);
 }
 
-void Connectivity::DebugLED::ledOn() { ledOnState_ ? ledLow() : ledHigh(); }
+void Connectivity::DebugLED::ledOn() { this->ledOnState_ ? ledLow() : ledHigh(); }
 
-void Connectivity::DebugLED::ledOff() { ledOnState_ ? ledHigh() : ledLow(); }
+void Connectivity::DebugLED::ledOff() { this->ledOnState_ ? ledHigh() : ledLow(); }
 
 void Connectivity::DebugLED::startTicker(uint32_t tickInterval_ms) {
-  if(ledPin_ == 255) { return; }
   ledOff();
-  ledTicker.attach_ms(tickInterval_ms, [this](){ ledToggle(); });
+  this->ledTicker.attach_ms(tickInterval_ms, [this](){ ledToggle(); });
 }
 
 void Connectivity::DebugLED::stopTicker() {
-  if(ledPin_ == 255) { return; }
-  ledTicker.detach();
+  this->ledTicker.detach();
   ledOff();
 }
 
 void Connectivity::DebugLED::ledToggle() {
-  if(ledPin_ != 255) { (GPO  ^=  (1 << ledPin_)); }     // LED pin toggle.
+  digitalWrite(this->ledPin_, !digitalRead(this->ledPin_));   // LED pin toggle.
 }
 
 void Connectivity::DebugLED::ledHigh() {
-  if(ledPin_ != 255) { (GPOS |=  (1 << ledPin_)); }     // LED pin high.
+  digitalWrite(this->ledPin_, HIGH);                          // LED pin high.
 }
 void Connectivity::DebugLED::ledLow() {
-  if(ledPin_ != 255) { (GPOC |=  (1 << ledPin_)); }     // LED pin low.
+  digitalWrite(this->ledPin_, LOW);                           // LED pin low.
 }
 
 //////////////////// -- CRC32 class-- ////////////////////
 
-Connectivity::Crc32::Crc32() : crc(0xFFFFFFFF) {} // Initialize CRC32 value
+Connectivity::Crc32::Crc32(uint32_t initValue, uint32_t polynomial) :
+  crc_(initValue),
+  polynomial_(polynomial) {}
 
 void Connectivity::Crc32::next(uint8_t value) {
-    crc ^= (uint32_t)value;
+    crc_ ^= (uint32_t)value;
     for(uint8_t i = 0; i < 8; i++) {
-      if(crc & 1) {
-        crc = (crc >> 1) ^ polynomial;
+      if(crc_ & 1) {
+        crc_ = (crc_ >> 1) ^ polynomial_;
       }
       else {
-        crc >>= 1;
+        crc_ >>= 1;
       }
     }
   }
@@ -408,7 +408,7 @@ void Connectivity::Crc32::next(uint8_t value) {
     }
   }
 
-  uint32_t Connectivity::Crc32::get() const { return ~crc; } // Final CRC32 value is complemented
+  uint32_t Connectivity::Crc32::get() const { return ~crc_; } // Final CRC32 value is complemented
 
   uint32_t Connectivity::Crc32::calculate(const uint8_t *data, uint16_t length) {
     Connectivity::Crc32 crc;

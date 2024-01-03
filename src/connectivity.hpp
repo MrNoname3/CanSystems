@@ -14,28 +14,25 @@ class Connectivity {
 public:
   class MqttComBase;
 
-private:
-  class Common;
-
-public:
   enum class Interface : uint8_t {
     WIFI = 0,
     ETHERNET,
     UNKNOWN
   };
 
-  Connectivity(Stream* serial = nullptr, const uint8_t ethCS = D8, uint8_t dbgLedPin = D4, bool dbgLedOnState = HIGH);
+  Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
 
   bool begin(Interface interface = Interface::ETHERNET);
 
+  bool loop();
+
+private:
   bool startWifi();
 
   bool connect();
-
-  bool loop();
 
   void receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length);
 
@@ -45,6 +42,7 @@ public:
 
   static bool registerCallback(Connectivity::MqttComBase* obj);
 
+public:
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
   Connectivity(Connectivity&&) = delete;                            // Define move constructor.
@@ -79,16 +77,15 @@ private:
   static Connectivity::MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;
 
+public:
+  static const char PROGMEM OK_STATE[];
+  static const char PROGMEM ERR_STATE[];
 private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-public:
-  static const char PROGMEM OK_STATE[];
-  static const char PROGMEM ERR_STATE[];
   static const char PROGMEM DEVICE_TYPE[];
-private:
   static const char PROGMEM INIT_PREFIX[];
   static const char PROGMEM FS_PREFIX[];
   static const char PROGMEM ETH_PREFIX[];
@@ -122,7 +119,7 @@ private:
 public:
   class DebugLED {
   public:
-    DebugLED(uint8_t ledPin = 255, bool ledOnState = HIGH);
+    DebugLED(uint8_t ledPin, bool ledOnState);
     virtual ~DebugLED() = default;
     inline void ledOn() __attribute__((always_inline));
     inline void ledOff() __attribute__((always_inline));
@@ -148,7 +145,7 @@ public:
 public:
   class Crc32 {
   public:
-    Crc32();
+    Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
     ~Crc32() = default;
 
     void next(uint8_t value);
@@ -165,8 +162,8 @@ public:
     Crc32& operator=(Crc32&&) = delete;                 // Define move assignment operator.
 
   private:
-    static constexpr uint32_t polynomial = 0xEDB88320; // CRC32 polynomial
-    uint32_t crc;
+    uint32_t crc_;                                      // CRC32 starting value.
+    const uint32_t polynomial_;                         // CRC32 polynomial.
   };
 
 public:
@@ -325,7 +322,6 @@ private:
   private:
     Stream* serialPort;
     DataTransfer dataTransfer;
-
     static const char PROGMEM COMMON_PREFIX[];
   };
   Common common;
