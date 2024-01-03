@@ -81,7 +81,6 @@ private:
 
 private:
   static const char PROGMEM wifiFileLocation[];
-  static const char PROGMEM wifiBackupFileLocation[];
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];

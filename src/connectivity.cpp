@@ -16,16 +16,12 @@ Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
-const char Connectivity::wifiBackupFileLocation[] PROGMEM   = "/config/wifi.json.bkp";
-
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-
 const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
 const char Connectivity::DEVICE_TYPE[] PROGMEM              = BUILD_ENV_NAME;
-
 const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
 const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
 const char Connectivity::ETH_PREFIX[] PROGMEM               = "[ETH] ";
@@ -202,11 +198,9 @@ bool Connectivity::begin(Interface interface) {
 
 bool Connectivity::startWifi() {
   const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
-  const bool wifiBackupFileExists = LittleFS.exists(FPSTR(wifiBackupFileLocation));
   if(serialPort) {
     serialPort->printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
     serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
-    serialPort->printf_P(PSTR("  %s ->%s\r\n"), wifiBackupFileLocation, wifiBackupFileExists ? OK_STATE : ERR_STATE);
   }
   if(!wifiFileExists) { return false; }
 
@@ -220,13 +214,7 @@ bool Connectivity::startWifi() {
   if(deSerResult) {
     const char* ssid = wifiJson[F("ssid")].as<const char*>();
     const char* pass = wifiJson[F("password")].as<const char*>();
-    const uint8_t channel = wifiJson[F("channel")].as<const uint8_t>();
-    JsonArray bssidArray = wifiJson[F("bssid")];
-    uint8_t bssid[6];
-    for(uint8_t i = 0; i < bssidArray.size(); i++) {
-      bssid[i] = bssidArray[i];
-    }
-    WiFi.begin(ssid, pass, channel, bssid);
+    WiFi.begin(ssid, pass);
   }
   if(serialPort) { serialPort->printf_P(PSTR("%sSerialize file:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE); }
   wifiFile.close();
