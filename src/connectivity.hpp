@@ -25,11 +25,13 @@ public:
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
 
-  bool begin(Interface interface = Interface::ETHERNET);
+  void begin(Interface interface, bool errorHandling);
 
   bool loop();
 
 private:
+  bool begin(Interface interface);
+  
   bool startWifi();
 
   bool connect();

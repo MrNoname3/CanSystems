@@ -48,6 +48,12 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   WdtHandler.enableHwWdt();
 }
 
+void Connectivity::begin(Interface interface, bool errorHandling) {
+  const bool conResult = begin(interface);
+  if(serialPort) { serialPort->printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE)); }
+  if(!conResult && errorHandling) { common.restartESP(); }
+}
+
 bool Connectivity::begin(Interface interface) {
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
@@ -83,6 +89,7 @@ bool Connectivity::begin(Interface interface) {
     const uint32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
     if(serialPort) { serialPort->printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE); }
+    if(!macValid) { return false; }
   }
 
   // Start interface.
@@ -232,6 +239,7 @@ bool Connectivity::connect() {
   yield();
   const bool tcpStopResult = tcpClient.stop(2000);
   if(serialPort) { serialPort->printf_P(PSTR("%sReset connection for fresh start%s\r\n"), TCP_PREFIX, tcpStopResult ? OK_STATE : ERR_STATE); }
+  if(!tcpStopResult) { return false; }
   const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
   if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE); }
   if(!tcpConResult) { return false; }
@@ -772,6 +780,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         if(!validityCheckResult) {
           if(serialPort) { serialPort->printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX); }
         }
+        if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
       } break;
     };
   }
@@ -787,5 +796,5 @@ void Connectivity::Common::restartESP() {
     serialPort->flush();                              // Sends out data from serial buffer, before reset.
   }
   ESP.restart();
-  delay(10000);                                       // Prevent doing anything before restart.
+  while(true) {};                                     // Prevent doing anything before restart.
 }

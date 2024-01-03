@@ -12,10 +12,7 @@ void setup() {
   Serial.println();
   Serial.println(F("******************************************************"));
   Serial.println(F("Starting..."));
-
-  const bool conResult = iotConn.begin(Connectivity::Interface::ETHERNET);
-  Serial.printf_P(PSTR("IOT connection:%s\r\n"), conResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
-
+  iotConn.begin(Connectivity::Interface::ETHERNET, true);
   Serial.println(F("******************************************************"));
   Serial.println(F("Loop starting..."));
 }
