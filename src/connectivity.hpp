@@ -29,6 +29,8 @@ public:
 
   void loop();
 
+  static bool getConnectionState();
+
 private:
   inline bool loopSimple();
 
@@ -73,12 +75,11 @@ private:
   wl_status_t interfaceStatus;
   MqttCredentials mqttCredentials;
   int8_t mqttState;
-  bool isDeviceOnline;
+  static bool isDeviceOnline;
   const uint32_t cppVersion;
   const uint16_t fwVersion;
   const uint32_t gitHash;
   static constexpr uint8_t macStringSize = 13;
-
   static Connectivity::MqttComBase* messageMap[10];
   static uint8_t messageMapPointer;
 
@@ -277,18 +278,14 @@ public:
     virtual bool loop() = 0;
     const char* getClassId() const;
     static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
-    static void setConState(bool state);
 
     MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
     MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
     MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
-  protected:
-    static bool getConState();
   private:
     char classId[16];
     static std::function<void(const char*, const char*)> mqttSender;
-    static bool isOnline;
   };
 
 private:

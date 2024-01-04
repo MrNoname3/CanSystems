@@ -12,6 +12,7 @@
 // Don't connect anything to the analog input pin!
 ADC_MODE(ADC_VCC);
 
+bool Connectivity::isDeviceOnline = true;
 Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
@@ -39,7 +40,6 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   usedInterface(Interface::UNKNOWN),
   interfaceStatus(WL_CONNECTED),
   mqttState(MQTT_CONNECTED),
-  isDeviceOnline(true),
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
@@ -270,7 +270,6 @@ void Connectivity::loop() {
   const bool statusChanged = loopingResult != isDeviceOnline;
   if(statusChanged) {
     isDeviceOnline = loopingResult;
-    Connectivity::MqttComBase::setConState(isDeviceOnline);
     isDeviceOnline ? debugLed.stopTicker() : debugLed.startTicker(250);
     if(serialPort) { serialPort->printf_P(PSTR("%sDevice is: %s\r\n"), MQTT_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE")); }
   }
@@ -315,6 +314,8 @@ bool Connectivity::loopSimple() {
 
   return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
 }
+
+bool Connectivity::getConnectionState() { return isDeviceOnline; }
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
@@ -707,7 +708,6 @@ bool Connectivity::DataTransfer::checkValidity() {
 
 //////////////////// -- MqttComBase class-- ////////////////////
 
-bool Connectivity::MqttComBase::isOnline = false;
 std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
 
 Connectivity::MqttComBase::MqttComBase(const char* classID) {
@@ -736,10 +736,6 @@ bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
 }
 
 const char* Connectivity::MqttComBase::getClassId() const { return classId; }
-
-void Connectivity::MqttComBase::setConState(bool state) { isOnline = state; }
-
-bool Connectivity::MqttComBase::getConState() { return isOnline; }
 
 //////////////////// -- Common class-- ////////////////////
 
