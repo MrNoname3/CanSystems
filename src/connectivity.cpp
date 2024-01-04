@@ -564,7 +564,16 @@ bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, cons
   this->remainingFileSize_ = fileSize;
   if(!fileName) { stop(true); return false; }
   this->fileName_ = fileName;
-
+  {
+    FSInfo fsInfo;
+    LittleFS.info(fsInfo);
+    const uint32 freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
+    const bool isEnoughFreeSpace = freeSpace > this->fileSize_;
+    if(!isEnoughFreeSpace) {
+      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sNot enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), FILE_TRANSFER_PREFIX, freeSpace, this->fileSize_); }
+      return false;
+    }
+  }
   const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
   if(fileExists) {
     const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
