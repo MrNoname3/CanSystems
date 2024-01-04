@@ -55,6 +55,7 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 }
 
 bool Connectivity::beginSimple(Interface interface) {
+  const char loadingMark = '.';
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
   if(serialPort) {
@@ -103,7 +104,7 @@ bool Connectivity::beginSimple(Interface interface) {
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), ETH_PREFIX); }
     while(!ethInt.connected()) {
       yield();
-      if(serialPort) { serialPort->print(F(".")); }
+      if(serialPort) { serialPort->print(loadingMark); }
       delay(300);
     }
     if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE); }
@@ -123,7 +124,7 @@ bool Connectivity::beginSimple(Interface interface) {
     if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX); }
     while(WiFi.status() != WL_CONNECTED) {
       yield();
-      if(serialPort) { serialPort->print(F(".")); }
+      if(serialPort) { serialPort->print(loadingMark); }
       delay(300);
     }
     if(serialPort) { serialPort->printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE); }
@@ -149,7 +150,7 @@ bool Connectivity::beginSimple(Interface interface) {
     time_t nowSecs = time(nullptr);
     while(nowSecs < 8 * 3600 * 2) {
       delay(500);
-      if(serialPort) { serialPort->print(F(".")); }
+      if(serialPort) { serialPort->print(loadingMark); }
       nowSecs = time(nullptr);
     }
     tm timeinfo;
