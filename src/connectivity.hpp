@@ -30,9 +30,9 @@ public:
   bool loop();
 
 private:
-  bool begin(Interface interface);
-  
-  bool startWifi();
+  inline bool beginSimple(Interface interface);
+
+  inline bool startWifi();
 
   bool connect();
 

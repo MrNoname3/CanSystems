@@ -49,12 +49,12 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
 }
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
-  const bool conResult = begin(interface);
+  const bool conResult = beginSimple(interface);
   if(serialPort) { serialPort->printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE)); }
   if(!conResult && errorHandling) { common.restartESP(); }
 }
 
-bool Connectivity::begin(Interface interface) {
+bool Connectivity::beginSimple(Interface interface) {
   WdtHandler.setEnabledResetNumber(3);
   debugLed.startTicker(500);
   if(serialPort) {
