@@ -739,7 +739,11 @@ bool Connectivity::MqttComBase::getConState() { return isOnline; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(const char* classID, Stream* serial) : MqttComBase(classID), serialPort(serial), dataTransfer(serial) {}
+Connectivity::Common::Common(const char* classID, Stream* serial) :
+  MqttComBase(classID),
+  serialPort(serial),
+  dataTransfer(serial),
+  externalFileName{'\0'} {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   StaticJsonDocument<512> cmdJson;
@@ -756,7 +760,8 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       case Command::BLANK: {} break;
       case Command::RESTART: { restartESP(); } break;
       case Command::FW_DT_START:
-      case Command::WIFICFG_DT_START: {
+      case Command::WIFICFG_DT_START:
+      case Command::EXT_FILE_DT_START: {
         const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
         const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
         const char* fileNamePtr = nullptr;
@@ -771,6 +776,18 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
             fileNamePtr = DataTransfer::otaFwLocation;
             } break;
           case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
+          case Command::EXT_FILE_DT_START: {
+            const char* fileName = cmdJson[F("name")].as<const char*>();
+            memset(externalFileName, '\0', sizeof(externalFileName));
+            if(fileName) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
+            uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
+            if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
+              if(serialPort) { serialPort->printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX); }
+              MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+              return;
+            }
+            fileNamePtr = externalFileName;
+          } break;
           default: {} break;
         }
         const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
@@ -781,7 +798,8 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         }
       } break;
       case Command::FW_DT_DATA:
-      case Command::WIFICFG_DT_DATA: {
+      case Command::WIFICFG_DT_DATA:
+      case Command::EXT_FILE_DT_DATA: {
         const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
         const char* filePieceB64 = cmdJson["data"].as<const char*>();
         const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
@@ -791,7 +809,8 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         }
       } break;
       case Command::FW_DT_END:
-      case Command::WIFICFG_DT_END: {
+      case Command::WIFICFG_DT_END:
+      case Command::EXT_FILE_DT_END: {
         const bool validityCheckResult = dataTransfer.checkValidity();
         MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
         if(!validityCheckResult) {

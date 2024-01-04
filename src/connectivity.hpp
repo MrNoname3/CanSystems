@@ -299,7 +299,10 @@ private:
       FW_DT_END,
       WIFICFG_DT_START,
       WIFICFG_DT_DATA,
-      WIFICFG_DT_END
+      WIFICFG_DT_END,
+      EXT_FILE_DT_START,
+      EXT_FILE_DT_DATA,
+      EXT_FILE_DT_END
     };
 
     Common(const char* classID, Stream* serial = nullptr);
@@ -326,6 +329,7 @@ private:
   private:
     Stream* serialPort;
     DataTransfer dataTransfer;
+    char externalFileName[28];
     static const char PROGMEM COMMON_PREFIX[];
   };
   Common common;
