@@ -39,6 +39,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   usedInterface(Interface::UNKNOWN),
   interfaceStatus(WL_CONNECTED),
   mqttState(MQTT_CONNECTED),
+  isDeviceOnline(true),
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
@@ -264,7 +265,18 @@ bool Connectivity::connect() {
   return true;
 }
 
-bool Connectivity::loop() {
+void Connectivity::loop() {
+  const bool loopingResult = loopSimple();
+  const bool statusChanged = loopingResult != isDeviceOnline;
+  if(statusChanged) {
+    isDeviceOnline = loopingResult;
+    Connectivity::MqttComBase::setConState(isDeviceOnline);
+    isDeviceOnline ? debugLed.stopTicker() : debugLed.startTicker(250);
+    if(serialPort) { serialPort->printf_P(PSTR("%sDevice is: %s\r\n"), MQTT_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE")); }
+  }
+}
+
+bool Connectivity::loopSimple() {
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
     currentObject->loop();
@@ -281,25 +293,18 @@ bool Connectivity::loop() {
   if(interfaceStatus != actualInterfaceStatus) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
     interfaceStatus = actualInterfaceStatus;
-    if(interfaceStatus != WL_CONNECTED || mqttState != MQTT_CONNECTED) {
-      Connectivity::MqttComBase::setConState(false);
-      debugLed.startTicker(250);
-    }
+    if(interfaceStatus == WL_CONNECTED) { connect(); }
+    else { mqttClient.disconnect(); }
   }
-  if(interfaceStatus != WL_CONNECTED) { return false; }
 
   const int8_t actualMqttState = mqttClient.state();
   if(mqttState != actualMqttState) {
     if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
     mqttState = actualMqttState;
-    if(mqttState == MQTT_CONNECTED) {
-      Connectivity::MqttComBase::setConState(true);
-      debugLed.stopTicker();
-    }
   }
 
   if(!mqttClient.loop()) {
-    if(mqttState < MQTT_CONNECTED) {
+    if((mqttState < MQTT_CONNECTED) && (interfaceStatus == WL_CONNECTED)) {
       static uint32_t reconnectTimer = millis();
       if(millis() - reconnectTimer >= 10000) {
         reconnectTimer = millis();

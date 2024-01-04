@@ -27,9 +27,11 @@ public:
 
   void begin(Interface interface, bool errorHandling);
 
-  bool loop();
+  void loop();
 
 private:
+  inline bool loopSimple();
+
   inline bool beginSimple(Interface interface);
 
   inline bool startWifi();
@@ -71,6 +73,7 @@ private:
   wl_status_t interfaceStatus;
   MqttCredentials mqttCredentials;
   int8_t mqttState;
+  bool isDeviceOnline;
   const uint32_t cppVersion;
   const uint16_t fwVersion;
   const uint32_t gitHash;
