@@ -4,7 +4,7 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include "connectivity.hpp"
-#include "radiation.hpp"
+#include "radiation/src/radiation.hpp"
 
 //--- Constants ---//
 static constexpr const uint8_t LED                    = D8;           // Status LED.
