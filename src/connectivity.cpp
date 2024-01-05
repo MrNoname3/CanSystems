@@ -13,7 +13,7 @@
 ADC_MODE(ADC_VCC);
 
 bool Connectivity::isDeviceOnline = true;
-Connectivity::MqttComBase* Connectivity::messageMap[10] = { nullptr };
+Connectivity::MqttComBase* Connectivity::messageMap[] = { nullptr };
 uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
@@ -298,11 +298,6 @@ void Connectivity::loop() {
 }
 
 bool Connectivity::loopSimple() {
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
-    currentObject->loop();
-  }
-
   yield();
   WdtHandler.resetHwWdt();
 
@@ -332,6 +327,11 @@ bool Connectivity::loopSimple() {
         connect();
       }
     }
+  }
+
+  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+    Connectivity::MqttComBase* currentObject = messageMap[i];
+    currentObject->loop();
   }
 
   return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));

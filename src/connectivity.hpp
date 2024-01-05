@@ -84,7 +84,7 @@ private:
   const uint16_t fwVersion;
   const uint32_t gitHash;
   static constexpr uint8_t macStringSize = 13;
-  static Connectivity::MqttComBase* messageMap[10];
+  static Connectivity::MqttComBase* messageMap[12];
   static uint8_t messageMapPointer;
 
 public:
