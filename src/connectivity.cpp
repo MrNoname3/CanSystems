@@ -31,6 +31,7 @@ const char Connectivity::NTP_PREFIX[] PROGMEM               = "[NTP] ";
 const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
+const char Connectivity::RUN_PREFIX[] PROGMEM               = "[RUN] ";
 
 const char Connectivity::WL_NO_SHIELD_STR[] PROGMEM                 = "WL_NO_SHIELD";
 const char Connectivity::WL_IDLE_STATUS_STR[] PROGMEM               = "WL_IDLE_STATUS";
@@ -66,6 +67,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
   debugLed(dbgLedPin, dbgLedOnState),
+  timeTracker(deviceResetTime),
   common("common", serial)
 {
   WdtHandler.enableHwWdt();
@@ -279,7 +281,7 @@ bool Connectivity::connect() {
   // MQTT connection.
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %s\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, getMqttStatusStr(mqttClient.state())); }
+  if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s\r\n  State: %s\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, getMqttStatusStr(mqttClient.state())); }
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
   if(serialPort) { serialPort->printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE); }
@@ -292,8 +294,19 @@ void Connectivity::loop() {
   const bool statusChanged = loopingResult != isDeviceOnline;
   if(statusChanged) {
     isDeviceOnline = loopingResult;
-    isDeviceOnline ? debugLed.stopTicker() : debugLed.startTicker(250);
-    if(serialPort) { serialPort->printf_P(PSTR("%sDevice is: %s\r\n"), MQTT_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE")); }
+    if(isDeviceOnline) {
+      debugLed.stopTicker();
+      timeTracker.stopTime();
+    } 
+    else {
+      debugLed.startTicker(250);
+      timeTracker.startTime();
+    }
+    if(serialPort) { serialPort->printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE")); }
+  }
+  if(timeTracker.isGoalReached()) {
+    if(serialPort) { serialPort->printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, timeTracker.getElapsedTime()); }
+    common.restartESP();
   }
 }
 
@@ -458,6 +471,21 @@ void Connectivity::DebugLED::ledHigh() {
 }
 void Connectivity::DebugLED::ledLow() {
   digitalWrite(this->ledPin_, LOW);                           // LED pin low.
+}
+
+//////////////////// -- TimeTracker class-- ////////////////////
+
+Connectivity::TimeTracker::TimeTracker(uint32_t goalTime) : startTime_(0), goalTime_(goalTime) {}
+
+void Connectivity::TimeTracker::startTime() { startTime_ = millis(); }
+
+void Connectivity::TimeTracker::stopTime() { startTime_ = 0; }
+
+uint32_t Connectivity::TimeTracker::getElapsedTime() { return (millis() - startTime_); }
+
+bool Connectivity::TimeTracker::isGoalReached() {
+  if(startTime_ == 0) { return false; }
+  return (getElapsedTime() >= goalTime_);
 }
 
 //////////////////// -- CRC32 class-- ////////////////////

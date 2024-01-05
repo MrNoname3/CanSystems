@@ -86,6 +86,7 @@ private:
   static constexpr uint8_t macStringSize = 13;
   static Connectivity::MqttComBase* messageMap[12];
   static uint8_t messageMapPointer;
+  static constexpr uint32_t deviceResetTime = 1 * 60 * 60 * 1000;
 
 public:
   static const char PROGMEM OK_STATE[];
@@ -104,6 +105,7 @@ private:
   static const char PROGMEM JSON_PREFIX[];
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
+  static const char PROGMEM RUN_PREFIX[];
 
   static const char PROGMEM WL_NO_SHIELD_STR[];
   static const char PROGMEM WL_IDLE_STATUS_STR[];
@@ -173,6 +175,27 @@ public:
     Ticker ledTicker;
   };
   DebugLED debugLed;
+
+public:
+  class TimeTracker {
+  public:
+    TimeTracker(uint32_t goalTime);
+    virtual ~TimeTracker() = default;
+    void startTime();
+    void stopTime();
+    uint32_t getElapsedTime();
+    bool isGoalReached();
+
+    TimeTracker(const TimeTracker&) = delete;                       // Define copy constructor.
+    TimeTracker& operator=(const TimeTracker&) = delete;            // Define copy assignment operator.
+    TimeTracker(TimeTracker&&) = delete;                            // Define move constructor.
+    TimeTracker& operator=(TimeTracker&&) = delete;                 // Define move assignment operator.
+
+  private:
+    uint32_t startTime_;
+    const uint32_t goalTime_;
+  };
+  TimeTracker timeTracker;
 
 public:
   class Crc32 {
