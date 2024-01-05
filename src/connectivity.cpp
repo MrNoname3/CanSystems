@@ -32,6 +32,28 @@ const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 
+const char Connectivity::WL_NO_SHIELD_STR[] PROGMEM                 = "WL_NO_SHIELD";
+const char Connectivity::WL_IDLE_STATUS_STR[] PROGMEM               = "WL_IDLE_STATUS";
+const char Connectivity::WL_NO_SSID_AVAIL_STR[] PROGMEM             = "WL_NO_SSID_AVAIL";
+const char Connectivity::WL_SCAN_COMPLETED_STR[] PROGMEM            = "WL_SCAN_COMPLETED";
+const char Connectivity::WL_CONNECTED_STR[] PROGMEM                 = "WL_CONNECTED";
+const char Connectivity::WL_CONNECT_FAILED_STR[] PROGMEM            = "WL_CONNECT_FAILED";
+const char Connectivity::WL_CONNECTION_LOST_STR[] PROGMEM           = "WL_CONNECTION_LOST";
+const char Connectivity::WL_WRONG_PASSWORD_STR[] PROGMEM            = "WL_WRONG_PASSWORD";
+const char Connectivity::WL_DISCONNECTED_STR[] PROGMEM              = "WL_DISCONNECTED";
+const char Connectivity::WL_UNKNOWN_STATUS_STR[] PROGMEM            = "WL_UNKNOWN_STATUS";
+const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
+const char Connectivity::MQTT_CONNECTION_LOST_STR[] PROGMEM         = "MQTT_CONNECTION_LOST";
+const char Connectivity::MQTT_CONNECT_FAILED_STR[] PROGMEM          = "MQTT_CONNECT_FAILED";
+const char Connectivity::MQTT_DISCONNECTED_STR[] PROGMEM            = "MQTT_DISCONNECTED";
+const char Connectivity::MQTT_CONNECTED_STR[] PROGMEM               = "MQTT_CONNECTED";
+const char Connectivity::MQTT_CONNECT_BAD_PROTOCOL_STR[] PROGMEM    = "MQTT_CONNECT_BAD_PROTOCOL";
+const char Connectivity::MQTT_CONNECT_BAD_CLIENT_ID_STR[] PROGMEM   = "MQTT_CONNECT_BAD_CLIENT_ID";
+const char Connectivity::MQTT_CONNECT_UNAVAILABLE_STR[] PROGMEM     = "MQTT_CONNECT_UNAVAILABLE";
+const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONNECT_BAD_CREDENTIALS";
+const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
+const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
+
 Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
   serialPort(serial),
   ethInt(ethCS),
@@ -257,7 +279,7 @@ bool Connectivity::connect() {
   // MQTT connection.
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %d\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, mqttClient.state()); }
+  if(serialPort) { serialPort->printf_P(PSTR("%sConnecting to MQTT broker:%s State: %s\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, getMqttStatusStr(mqttClient.state())); }
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
   if(serialPort) { serialPort->printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE); }
@@ -290,7 +312,7 @@ bool Connectivity::loopSimple() {
   else if(usedInterface == Interface::WIFI) { actualInterfaceStatus = WiFi.status();  intPrefix = WIFI_PREFIX; }
   else { return false; }
   if(interfaceStatus != actualInterfaceStatus) {
-    if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), intPrefix, interfaceStatus, actualInterfaceStatus); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), intPrefix, getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus)); }
     interfaceStatus = actualInterfaceStatus;
     if(interfaceStatus == WL_CONNECTED) { connect(); }
     else { mqttClient.disconnect(); }
@@ -298,7 +320,7 @@ bool Connectivity::loopSimple() {
 
   const int8_t actualMqttState = mqttClient.state();
   if(mqttState != actualMqttState) {
-    if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %hd -> %hd\r\n"), MQTT_PREFIX, mqttState, actualMqttState); }
+    if(serialPort) { serialPort->printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), MQTT_PREFIX, getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState)); }
     mqttState = actualMqttState;
   }
 
@@ -353,6 +375,37 @@ bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   messageMap[messageMapPointer] = obj;
   messageMapPointer++;
   return true;
+}
+
+const char* Connectivity::getIntStatusStr(wl_status_t status) {
+  switch(status) {
+    case WL_NO_SHIELD: { return WL_NO_SHIELD_STR; } break;
+    case WL_IDLE_STATUS: { return WL_IDLE_STATUS_STR; } break;
+    case WL_NO_SSID_AVAIL: { return WL_NO_SSID_AVAIL_STR; } break;
+    case WL_SCAN_COMPLETED: { return WL_SCAN_COMPLETED_STR; } break;
+    case WL_CONNECTED: { return WL_CONNECTED_STR; } break;
+    case WL_CONNECT_FAILED: { return WL_CONNECT_FAILED_STR; } break;
+    case WL_CONNECTION_LOST: { return WL_CONNECTION_LOST_STR; } break;
+    case WL_WRONG_PASSWORD: { return WL_WRONG_PASSWORD_STR; } break;
+    case WL_DISCONNECTED: { return WL_DISCONNECTED_STR; } break;
+    default: { return WL_UNKNOWN_STATUS_STR; } break;
+  }
+}
+
+const char* Connectivity::getMqttStatusStr(int8_t status) {
+  switch(status) {
+    case MQTT_CONNECTION_TIMEOUT: { return MQTT_CONNECTION_TIMEOUT_STR; } break;
+    case MQTT_CONNECTION_LOST: { return MQTT_CONNECTION_LOST_STR; } break;
+    case MQTT_CONNECT_FAILED: { return MQTT_CONNECT_FAILED_STR; } break;
+    case MQTT_DISCONNECTED: { return MQTT_DISCONNECTED_STR; } break;
+    case MQTT_CONNECTED: { return MQTT_CONNECTED_STR; } break;
+    case MQTT_CONNECT_BAD_PROTOCOL: { return MQTT_CONNECT_BAD_PROTOCOL_STR; } break;
+    case MQTT_CONNECT_BAD_CLIENT_ID: { return MQTT_CONNECT_BAD_CLIENT_ID_STR; } break;
+    case MQTT_CONNECT_UNAVAILABLE: { return MQTT_CONNECT_UNAVAILABLE_STR; } break;
+    case MQTT_CONNECT_BAD_CREDENTIALS: { return MQTT_CONNECT_BAD_CREDENTIALS_STR; } break;
+    case MQTT_CONNECT_UNAUTHORIZED: { return MQTT_CONNECT_UNAUTHORIZED_STR; } break;
+    default: { return MQTT_UNKNOWN_STATUS_STR; } break;
+  }
 }
 
 //////////////////// -- WDT class-- ////////////////////

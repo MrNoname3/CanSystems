@@ -48,6 +48,10 @@ private:
 
   static bool registerCallback(Connectivity::MqttComBase* obj);
 
+  const char* getIntStatusStr(wl_status_t status);
+
+  const char* getMqttStatusStr(int8_t status);
+
 public:
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -100,6 +104,28 @@ private:
   static const char PROGMEM JSON_PREFIX[];
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
+
+  static const char PROGMEM WL_NO_SHIELD_STR[];
+  static const char PROGMEM WL_IDLE_STATUS_STR[];
+  static const char PROGMEM WL_NO_SSID_AVAIL_STR[];
+  static const char PROGMEM WL_SCAN_COMPLETED_STR[];
+  static const char PROGMEM WL_CONNECTED_STR[];
+  static const char PROGMEM WL_CONNECT_FAILED_STR[];
+  static const char PROGMEM WL_CONNECTION_LOST_STR[];
+  static const char PROGMEM WL_WRONG_PASSWORD_STR[];
+  static const char PROGMEM WL_DISCONNECTED_STR[];
+  static const char PROGMEM WL_UNKNOWN_STATUS_STR[];
+  static const char PROGMEM MQTT_CONNECTION_TIMEOUT_STR[];
+  static const char PROGMEM MQTT_CONNECTION_LOST_STR[];
+  static const char PROGMEM MQTT_CONNECT_FAILED_STR[];
+  static const char PROGMEM MQTT_DISCONNECTED_STR[];
+  static const char PROGMEM MQTT_CONNECTED_STR[];
+  static const char PROGMEM MQTT_CONNECT_BAD_PROTOCOL_STR[];
+  static const char PROGMEM MQTT_CONNECT_BAD_CLIENT_ID_STR[];
+  static const char PROGMEM MQTT_CONNECT_UNAVAILABLE_STR[];
+  static const char PROGMEM MQTT_CONNECT_BAD_CREDENTIALS_STR[];
+  static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
+  static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
 
 private:
   class WdtWrapper {
