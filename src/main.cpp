@@ -5,6 +5,7 @@
 //--- Networking ---//
 Connectivity iotConn(&Serial, SPI_CS, LED, false);
 Radiation radiation("radiation", RAD);
+RfHandler rfHandler("rf433", RF_RX, RF_TX);
 
 void setup() {
   Serial.begin(MONITOR_BAUD);
