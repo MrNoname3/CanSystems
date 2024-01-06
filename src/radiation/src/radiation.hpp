@@ -35,5 +35,7 @@ private:
   static volatile uint16_t cpm;
   static volatile bool measureDone;
   static volatile uint16_t cpmToSend;
+  static constexpr uint8_t dataOutSize = 64;
+  static const char PROGMEM CPM_MSG_FRAME[];
 };
 #endif // RADIATION_HPP

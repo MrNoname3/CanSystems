@@ -182,7 +182,7 @@ bool Connectivity::beginSimple(Interface interface) {
     gmtime_r(&nowSecs, &timeinfo);
     if(serialPort) {
       serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo));
-      serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime().c_str());
+      serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime());
     }
   }
 
@@ -373,13 +373,14 @@ void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   mqttClient.publish(actualTopic, payload);
 }
 
-String Connectivity::getISODateTime() {
+const char* Connectivity::getISODateTime() {
   const time_t time_ = time(nullptr);
-  char buffer[30];
+  static char buffer[30];
+  memset(buffer, '\0', sizeof(buffer));
   struct tm * timeinfo;
   timeinfo = gmtime(&time_); // Convert time to UTC time structure
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
-  return String(buffer);
+  return buffer;
 }
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
@@ -804,6 +805,10 @@ void Connectivity::MqttComBase::messageSend(const char* payload) const {
 
 void Connectivity::MqttComBase::setMqttSender(std::function<void(const char*, const char*)> senderFunction) {
   mqttSender = senderFunction;
+}
+
+const char* Connectivity::MqttComBase::getIsoTime() {
+  return Connectivity::getISODateTime();
 }
 
 bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {

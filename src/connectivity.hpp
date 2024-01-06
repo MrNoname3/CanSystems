@@ -44,7 +44,7 @@ private:
 
   void sendMqttMessage(const char* subTopic, const char* payload);
 
-  String getISODateTime();
+  static const char* getISODateTime();
 
   static bool registerCallback(Connectivity::MqttComBase* obj);
 
@@ -327,6 +327,7 @@ public:
     virtual bool loop() = 0;
     const char* getClassId() const;
     static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
+    const char* getIsoTime();
 
     MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
