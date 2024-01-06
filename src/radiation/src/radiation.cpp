@@ -5,8 +5,8 @@ volatile bool Radiation::measureDone = false;
 volatile uint16_t Radiation::cpmToSend = 0;
 const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
   "{"
-  "\"Time\":\"%s\","
-  "\"cpm\":%hu"
+    "\"Time\":\"%s\","
+    "\"cpm\":%hu"
   "}"
 };
 

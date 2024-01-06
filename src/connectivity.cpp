@@ -375,7 +375,7 @@ void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 
 const char* Connectivity::getISODateTime() {
   const time_t time_ = time(nullptr);
-  static char buffer[30];
+  static char buffer[24];
   memset(buffer, '\0', sizeof(buffer));
   struct tm * timeinfo;
   timeinfo = gmtime(&time_); // Convert time to UTC time structure
