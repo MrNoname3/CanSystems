@@ -19,7 +19,10 @@ RfHandler::RfHandler(const char* classID, uint8_t rxPin, uint8_t txPin) :
   rxPin_(rxPin),
   txPin_(txPin)
 {
-  if(rxPin_ != -1) { rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_)); }
+  if(rxPin_ != -1) {
+    pinMode(rxPin_, INPUT);
+    rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
+  }
   if(txPin_ != -1) { rfTransciever.enableTransmit(txPin_); }
 }
 
