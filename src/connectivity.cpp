@@ -74,14 +74,17 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
 }
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
+  TimeTracker conTime;
+  conTime.startTime();
   const bool conResult = beginSimple(interface);
   if(serialPort) { serialPort->printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE)); }
+  if(serialPort) { serialPort->printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, conTime.stopTime()); }
   if(!conResult && errorHandling) { common.restartESP(); }
 }
 
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
-  WdtHandler.setEnabledResetNumber(3);
+  WdtHandler.setEnabledResetNumber(4);
   debugLed.startTicker(500);
   if(serialPort) {
     serialPort->printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
@@ -225,6 +228,7 @@ bool Connectivity::beginSimple(Interface interface) {
     common.messageSend(versionString);
   }
 
+  WdtHandler.resetHwWdtIfPossible();
   if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
   for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
@@ -296,7 +300,7 @@ void Connectivity::loop() {
     isDeviceOnline = loopingResult;
     if(isDeviceOnline) {
       debugLed.stopTicker();
-      timeTracker.stopTime();
+      timeTracker.resetTime();
     } 
     else {
       debugLed.startTicker(250);
@@ -480,12 +484,18 @@ Connectivity::TimeTracker::TimeTracker(uint32_t goalTime) : startTime_(0), goalT
 
 void Connectivity::TimeTracker::startTime() { startTime_ = millis(); }
 
-void Connectivity::TimeTracker::stopTime() { startTime_ = 0; }
+void Connectivity::TimeTracker::resetTime() { startTime_ = 0; }
+
+uint32_t Connectivity::TimeTracker::stopTime() { 
+  const uint32_t stoppedTime = getElapsedTime();
+  resetTime();
+  return stoppedTime;
+ }
 
 uint32_t Connectivity::TimeTracker::getElapsedTime() { return (millis() - startTime_); }
 
 bool Connectivity::TimeTracker::isGoalReached() {
-  if(startTime_ == 0) { return false; }
+  if(startTime_ == 0 || goalTime_ == 0) { return false; }
   return (getElapsedTime() >= goalTime_);
 }
 

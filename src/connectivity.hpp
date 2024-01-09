@@ -86,7 +86,7 @@ private:
   static constexpr uint8_t macStringSize = 13;
   static Connectivity::MqttComBase* messageMap[12];
   static uint8_t messageMapPointer;
-  static constexpr uint32_t deviceResetTime = 1 * 60 * 60 * 1000;
+  static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 
 public:
   static const char PROGMEM OK_STATE[];
@@ -179,10 +179,11 @@ public:
 public:
   class TimeTracker {
   public:
-    TimeTracker(uint32_t goalTime);
+    TimeTracker(uint32_t goalTime = 0);
     virtual ~TimeTracker() = default;
     void startTime();
-    void stopTime();
+    void resetTime();
+    uint32_t stopTime();
     uint32_t getElapsedTime();
     bool isGoalReached();
 
