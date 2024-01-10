@@ -231,7 +231,7 @@ bool Connectivity::beginSimple(Interface interface) {
 
   WdtHandler.resetHwWdtIfPossible();
   if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+  for(uint8_t i = 0; i < messageMapPointer; i++) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
     const bool beginResult = currentObject->begin();
     if(serialPort) { serialPort->printf_P(PSTR("  %hu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE); }
@@ -353,9 +353,14 @@ bool Connectivity::loopSimple() {
     }
   }
 
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
+  static uint8_t currentObjectPointer = 0;
+  if(currentObjectPointer < messageMapPointer) {
+    Connectivity::MqttComBase* currentObject = messageMap[currentObjectPointer];
     currentObject->loop();
+    currentObjectPointer++;
+  }
+  else {
+    currentObjectPointer = 0;
   }
 
   return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
@@ -366,9 +371,9 @@ bool Connectivity::getConnectionState() { return isDeviceOnline; }
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
   if(!classID) { return; }
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
+  for(uint8_t i = 0; i < messageMapPointer; i++) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
-    if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
+    if(strcmp(currentObject->getClassId(), classID) == 0) {
       currentObject->messageReceived(payload, length);
       return;
     }

@@ -89,7 +89,8 @@ private:
 #else
   static constexpr uint8_t messageMapSize = 12;
 #endif
-  static Connectivity::MqttComBase* messageMap[messageMapSize + 1];
+  static_assert(messageMapSize > 0, "MessageMapSize can't be 0!");
+  static Connectivity::MqttComBase* messageMap[messageMapSize];
   static uint8_t messageMapPointer;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 
