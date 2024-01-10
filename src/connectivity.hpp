@@ -183,6 +183,7 @@ public:
     virtual ~TimeTracker() = default;
     void startTime();
     void resetTime();
+    void setGoal(uint32_t goalTime);
     uint32_t stopTime();
     uint32_t getElapsedTime();
     bool isGoalReached();
@@ -194,9 +195,10 @@ public:
 
   private:
     uint32_t startTime_;
-    const uint32_t goalTime_;
+    uint32_t goalTime_;
   };
   TimeTracker timeTracker;
+  TimeTracker loopTimeTracker;
 
 public:
   class Crc32 {

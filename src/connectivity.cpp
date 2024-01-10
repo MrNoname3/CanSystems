@@ -68,6 +68,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   gitHash(GIT_COMMIT_HASH),
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
+  loopTimeTracker(1),
   common("common", serial)
 {
   WdtHandler.enableHwWdt();
@@ -294,6 +295,7 @@ bool Connectivity::connect() {
 }
 
 void Connectivity::loop() {
+  loopTimeTracker.startTime();
   const bool loopingResult = loopSimple();
   const bool statusChanged = loopingResult != isDeviceOnline;
   if(statusChanged) {
@@ -311,6 +313,11 @@ void Connectivity::loop() {
   if(timeTracker.isGoalReached()) {
     if(serialPort) { serialPort->printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, timeTracker.getElapsedTime()); }
     common.restartESP();
+  }
+  if(loopTimeTracker.isGoalReached()) {
+    const uint32_t loopTime = loopTimeTracker.stopTime();
+    if(serialPort) { serialPort->printf_P(PSTR("%sMax loop time is: %ums\r\n"), RUN_PREFIX, loopTime); }
+    loopTimeTracker.setGoal(loopTime + 1);
   }
 }
 
@@ -486,6 +493,8 @@ void Connectivity::TimeTracker::startTime() { startTime_ = millis(); }
 
 void Connectivity::TimeTracker::resetTime() { startTime_ = 0; }
 
+void Connectivity::TimeTracker::setGoal(uint32_t goalTime) { goalTime_ = goalTime; }
+
 uint32_t Connectivity::TimeTracker::stopTime() { 
   const uint32_t stoppedTime = getElapsedTime();
   resetTime();
@@ -495,7 +504,7 @@ uint32_t Connectivity::TimeTracker::stopTime() {
 uint32_t Connectivity::TimeTracker::getElapsedTime() { return (millis() - startTime_); }
 
 bool Connectivity::TimeTracker::isGoalReached() {
-  if(startTime_ == 0 || goalTime_ == 0) { return false; }
+  if(startTime_ == 0) { return false; }
   return (getElapsedTime() >= goalTime_);
 }
 
