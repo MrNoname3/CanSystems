@@ -84,7 +84,12 @@ private:
   const uint16_t fwVersion;
   const uint32_t gitHash;
   static constexpr uint8_t macStringSize = 13;
-  static Connectivity::MqttComBase* messageMap[12];
+#ifdef MESSAGE_MAP_SIZE
+  static constexpr uint8_t messageMapSize = MESSAGE_MAP_SIZE;
+#else
+  static constexpr uint8_t messageMapSize = 12;
+#endif
+  static Connectivity::MqttComBase* messageMap[messageMapSize + 1];
   static uint8_t messageMapPointer;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 

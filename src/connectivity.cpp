@@ -396,7 +396,7 @@ const char* Connectivity::getISODateTime() {
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   if(!obj) { return false; }
-  if(messageMapPointer >= sizeof(messageMap)) { return false; }
+  if(messageMapPointer >= messageMapSize) { return false; }
   messageMap[messageMapPointer] = obj;
   messageMapPointer++;
   return true;
