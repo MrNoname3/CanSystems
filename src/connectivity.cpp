@@ -101,7 +101,7 @@ bool Connectivity::beginSimple(Interface interface) {
     const bool initFS = LittleFS.begin();
     if(serialPort) { serialPort->printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE)); }
     if(!initFS) { return false; }
-    else {
+    {
       FSInfo fsInfo;
       LittleFS.info(fsInfo);
       if(serialPort) {
@@ -116,7 +116,7 @@ bool Connectivity::beginSimple(Interface interface) {
   char macAddress[macStringSize] = { '\0' };
   {
     wifi_get_macaddr(STATION_IF, mac);
-    const uint32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
     if(serialPort) { serialPort->printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE); }
     if(!macValid) { return false; }
@@ -178,16 +178,11 @@ bool Connectivity::beginSimple(Interface interface) {
     configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
     time_t nowSecs = time(nullptr);
     while(nowSecs < 8 * 3600 * 2) {
-      delay(500);
+      delay(300);
       if(serialPort) { serialPort->print(loadingMark); }
       nowSecs = time(nullptr);
     }
-    tm timeinfo;
-    gmtime_r(&nowSecs, &timeinfo);
-    if(serialPort) {
-      serialPort->printf_P(PSTR("\r\n%sCurrent UTC time: %s"), NTP_PREFIX, asctime(&timeinfo));
-      serialPort->printf_P(PSTR("%sUTC ISO format: %s\r\n"), NTP_PREFIX, getISODateTime());
-    }
+    if(serialPort) { serialPort->printf_P(PSTR("\r\n%sUTC ISO time: %s\r\n"), NTP_PREFIX, getISODateTime()); }
   }
 
   // Setup MQTT topics.
@@ -370,7 +365,7 @@ bool Connectivity::getConnectionState() { return isDeviceOnline; }
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
-  if(!classID) { return; }
+  if(classID == nullptr) { return; }
   for(uint8_t i = 0; i < messageMapPointer; i++) {
     Connectivity::MqttComBase* currentObject = messageMap[i];
     if(strcmp(currentObject->getClassId(), classID) == 0) {
@@ -396,14 +391,13 @@ const char* Connectivity::getISODateTime() {
   struct tm * timeinfo;
   timeinfo = gmtime(&time_); // Convert time to UTC time structure
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
-  return buffer;
+  return static_cast<const char*>(buffer);
 }
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
-  if(!obj) { return false; }
+  if(obj == nullptr) { return false; }
   if(messageMapPointer >= messageMapSize) { return false; }
-  messageMap[messageMapPointer] = obj;
-  messageMapPointer++;
+  messageMap[messageMapPointer++] = obj;
   return true;
 }
 
@@ -445,18 +439,18 @@ void Connectivity::WdtWrapper::enableHwWdt() {
 }
 
 void Connectivity::WdtWrapper::resetHwWdt() {
-  this->enabledResetNumber = 0;
+  this->enabledResetNumber_ = 0;
   wdt_reset();
 }
 
 void Connectivity::WdtWrapper::resetHwWdtIfPossible() {
-  if(this->enabledResetNumber > 0) {
-    this->enabledResetNumber--;
+  if(this->enabledResetNumber_ > 0) {
+    this->enabledResetNumber_--;
     wdt_reset();
   }
 }
 void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber) {
-  this->enabledResetNumber = enabledResetNumber;
+  this->enabledResetNumber_ = enabledResetNumber;
 }
 
 //////////////////// -- Debug LED class-- ////////////////////
@@ -560,8 +554,8 @@ uint32_t Connectivity::Base64::decodedLength(const uint8_t input[], uint32_t inp
 }
 
 uint32_t Connectivity::Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0, j = 0;
-  int32_t encodedLength = 0;
+  int32_t i = 0;
+  int32_t encodedLength_ = 0;
   uint8_t A3[3];
   uint8_t A4[4];
 
@@ -570,30 +564,31 @@ uint32_t Connectivity::Base64::encodeBase64(const uint8_t input[], uint8_t outpu
     if(i == 3) {
       fromA3ToA4(A4, A3);
       for(i = 0; i < 4; i++) {
-        output[encodedLength++] = pgm_read_byte(&_Base64AlphabetTable[A4[i]]);
+        output[encodedLength_++] = pgm_read_byte(&Base64AlphabetTable_[A4[i]]);
       }
       i = 0;
     }
   }
   if(i) {
+    int32_t j = 0;
     for(j = i; j < 3; j++) {
       A3[j] = '\0';
     }
     fromA3ToA4(A4, A3);
     for(j = 0; j < i + 1; j++) {
-      output[encodedLength++] = pgm_read_byte(&_Base64AlphabetTable[A4[j]]);
+      output[encodedLength_++] = pgm_read_byte(&Base64AlphabetTable_[A4[j]]);
     }
     while((i++ < 3)) {
-      output[encodedLength++] = '=';
+      output[encodedLength_++] = '=';
     }
   }
-  output[encodedLength] = '\0';
-  return encodedLength;
+  output[encodedLength_] = '\0';
+  return encodedLength_;
 }
 
 uint32_t Connectivity::Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0, j = 0;
-  uint32_t decodedLength = 0;
+  int32_t i = 0;
+  uint32_t decodedLength_ = 0;
   uint8_t A3[3];
   uint8_t A4[4];
 
@@ -606,12 +601,13 @@ uint32_t Connectivity::Base64::decodeBase64(const uint8_t input[], uint8_t outpu
       }
       fromA4ToA3(A3, A4);
       for(i = 0; i < 3; i++) {
-        output[decodedLength++] = A3[i];
+        output[decodedLength_++] = A3[i];
       }
       i = 0;
     }
   }
   if(i) {
+    int32_t j = 0;
     for(j = i; j < 4; j++) {
       A4[j] = '\0';
     }
@@ -620,36 +616,36 @@ uint32_t Connectivity::Base64::decodeBase64(const uint8_t input[], uint8_t outpu
     }
     fromA4ToA3(A3, A4);
     for(j = 0; j < i - 1; j++) {
-      output[decodedLength++] = A3[j];
+      output[decodedLength_++] = A3[j];
     }
   }
-  output[decodedLength] = '\0';
-  return decodedLength;
+  output[decodedLength_] = '\0';
+  return decodedLength_;
 }
 
-void Connectivity::Base64::fromA3ToA4(uint8_t* A4, uint8_t* A3) {
+void Connectivity::Base64::fromA3ToA4(uint8_t* A4, const uint8_t* A3) {
   A4[0] = (A3[0] & 0xfc) >> 2;
   A4[1] = ((A3[0] & 0x03) << 4) + ((A3[1] & 0xf0) >> 4);
   A4[2] = ((A3[1] & 0x0f) << 2) + ((A3[2] & 0xc0) >> 6);
   A4[3] = (A3[2] & 0x3f);
 }
 
-void Connectivity::Base64::fromA4ToA3(uint8_t* A3, uint8_t* A4) {
+void Connectivity::Base64::fromA4ToA3(uint8_t* A3, const uint8_t* A4) {
   A3[0] = (A4[0] << 2) + ((A4[1] & 0x30) >> 4);
   A3[1] = ((A4[1] & 0xf) << 4) + ((A4[2] & 0x3c) >> 2);
   A3[2] = ((A4[2] & 0x3) << 6) + A4[3];
 }
 
 uint8_t Connectivity::Base64::lookupTable(char c) {
-  if(c >='A' && c <='Z') return c - 'A';
-  if(c >='a' && c <='z') return c - 71;
-  if(c >='0' && c <='9') return c + 4;
-  if(c == '+') return 62;
-  if(c == '/') return 63;
+  if(c >='A' && c <='Z') { return c - 'A'; }
+  if(c >='a' && c <='z') { return c - 71; }
+  if(c >='0' && c <='9') { return c + 4; }
+  if(c == '+') { return 62; }
+  if(c == '/') { return 63; }
   return -1;
 }
 
-const char Connectivity::Base64::_Base64AlphabetTable[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const char Connectivity::Base64::Base64AlphabetTable_[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   "abcdefghijklmnopqrstuvwxyz"
   "0123456789+/";
 
@@ -675,7 +671,7 @@ bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, cons
   this->fileCrc_ = fileCrc;
   this->nextFilePieceNumber_ = 0;
   this->remainingFileSize_ = fileSize;
-  if(!fileName) { stop(true); return false; }
+  if(fileName == nullptr) { stop(true); return false; }
   this->fileName_ = fileName;
   {
     FSInfo fsInfo;
@@ -865,73 +861,71 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
     if(serialPort) { serialPort->printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX); }
     return;
   }
-  else {
-    const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
-    Command command = static_cast<Command>(cmd);
-    switch(command) {
-      case Command::BLANK: {} break;
-      case Command::RESTART: { restartESP(); } break;
-      case Command::FW_DT_START:
-      case Command::WIFICFG_DT_START:
-      case Command::EXT_FILE_DT_START: {
-        const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
-        const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
-        const char* fileNamePtr = nullptr;
-        switch(command) {
-          case Command::FW_DT_START: {
-            const char* binId = cmdJson[F("binId")].as<const char*>();
-            if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
-              if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
-              MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-              return;
-            }
-            fileNamePtr = DataTransfer::otaFwLocation;
-            } break;
-          case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
-          case Command::EXT_FILE_DT_START: {
-            const char* fileName = cmdJson[F("name")].as<const char*>();
-            memset(externalFileName, '\0', sizeof(externalFileName));
-            if(fileName) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
-            uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
-            if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-              if(serialPort) { serialPort->printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX); }
-              MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-              return;
-            }
-            fileNamePtr = externalFileName;
+  const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
+  Command command = static_cast<Command>(cmd);
+  switch(command) {
+    case Command::BLANK: {} break;
+    case Command::RESTART: { restartESP(); } break;
+    case Command::FW_DT_START:
+    case Command::WIFICFG_DT_START:
+    case Command::EXT_FILE_DT_START: {
+      const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
+      const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
+      const char* fileNamePtr = nullptr;
+      switch(command) {
+        case Command::FW_DT_START: {
+          const char* binId = cmdJson[F("binId")].as<const char*>();
+          if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
+            if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
+            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+            return;
+          }
+          fileNamePtr = DataTransfer::otaFwLocation;
           } break;
-          default: {} break;
-        }
-        const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
-        MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-        if(!transferBeginResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr); }
-          return;
-        }
-      } break;
-      case Command::FW_DT_DATA:
-      case Command::WIFICFG_DT_DATA:
-      case Command::EXT_FILE_DT_DATA: {
-        const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
-        const char* filePieceB64 = cmdJson["data"].as<const char*>();
-        const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
-        MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
-        if(!storingResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX); }
-        }
-      } break;
-      case Command::FW_DT_END:
-      case Command::WIFICFG_DT_END:
-      case Command::EXT_FILE_DT_END: {
-        const bool validityCheckResult = dataTransfer.checkValidity();
-        MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-        if(!validityCheckResult) {
-          if(serialPort) { serialPort->printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX); }
-        }
-        if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
-      } break;
-    };
-  }
+        case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
+        case Command::EXT_FILE_DT_START: {
+          const char* fileName = cmdJson[F("name")].as<const char*>();
+          memset(externalFileName, '\0', sizeof(externalFileName));
+          if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
+          uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
+          if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
+            if(serialPort) { serialPort->printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX); }
+            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
+            return;
+          }
+          fileNamePtr = static_cast<const char*>(externalFileName);
+        } break;
+        default: {} break;
+      }
+      const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
+      MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
+      if(!transferBeginResult) {
+        if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr); }
+        return;
+      }
+    } break;
+    case Command::FW_DT_DATA:
+    case Command::WIFICFG_DT_DATA:
+    case Command::EXT_FILE_DT_DATA: {
+      const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
+      const char* filePieceB64 = cmdJson["data"].as<const char*>();
+      const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
+      MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
+      if(!storingResult) {
+        if(serialPort) { serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX); }
+      }
+    } break;
+    case Command::FW_DT_END:
+    case Command::WIFICFG_DT_END:
+    case Command::EXT_FILE_DT_END: {
+      const bool validityCheckResult = dataTransfer.checkValidity();
+      MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
+      if(!validityCheckResult) {
+        if(serialPort) { serialPort->printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX); }
+      }
+      if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
+    } break;
+  };
 }
 
 bool Connectivity::Common::begin() { return true; }

@@ -35,7 +35,7 @@ void Radiation::end() {
 bool Radiation::loop() {
   if(measureDone) {
     measureDone = false;
-    char dataOut[dataOutSize] = { '\0' };
+    char dataOut[dataOutSize_] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, MqttComBase::getIsoTime(), cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }

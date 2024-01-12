@@ -20,7 +20,7 @@ public:
     UNKNOWN
   };
 
-  Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
+  Connectivity(Stream* serial, uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -152,7 +152,7 @@ private:
     WdtWrapper& operator=(WdtWrapper&&) = delete;                 // Define move assignment operator.
 
   private:
-    uint8_t enabledResetNumber;
+    uint8_t enabledResetNumber_ = 0;
   };
   WdtWrapper WdtHandler;
 
@@ -185,7 +185,7 @@ public:
 public:
   class TimeTracker {
   public:
-    TimeTracker(uint32_t goalTime = 0);
+    explicit TimeTracker(uint32_t goalTime = 0);
     virtual ~TimeTracker() = default;
     void startTime();
     void resetTime();
@@ -209,7 +209,7 @@ public:
 public:
   class Crc32 {
   public:
-    Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
+    explicit Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
     ~Crc32() = default;
 
     void next(uint8_t value);
@@ -264,8 +264,8 @@ public:
     static uint32_t decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength);
 
   private:
-    static inline void fromA3ToA4(uint8_t* A4, uint8_t* A3);
-    static inline void fromA4ToA3(uint8_t* A3, uint8_t* A4);
+    static inline void fromA3ToA4(uint8_t* A4, const uint8_t* A3);
+    static inline void fromA4ToA3(uint8_t* A3, const uint8_t* A4);
     static inline uint8_t lookupTable(char c);
 
   public:
@@ -275,13 +275,13 @@ public:
     Base64& operator=(Base64&&) = delete;                 // Define move assignment operator.
 
   private:
-    static const char PROGMEM _Base64AlphabetTable[];
+    static const char PROGMEM Base64AlphabetTable_[];
   };
 
 private:
   class DataTransfer {
   public:
-    DataTransfer(Stream* serial = nullptr);
+    explicit DataTransfer(Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
     virtual ~DataTransfer() = default;
@@ -326,7 +326,7 @@ public:
       ACK,
     };
   protected:
-    MqttComBase(const char* classID);
+    explicit MqttComBase(const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
@@ -364,7 +364,7 @@ private:
       EXT_FILE_DT_END
     };
 
-    Common(const char* classID, Stream* serial = nullptr);
+    explicit Common(const char* classID, Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
     virtual ~Common() = default;

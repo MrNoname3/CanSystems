@@ -19,11 +19,11 @@ RfHandler::RfHandler(const char* classID, uint8_t rxPin, uint8_t txPin) :
   rxPin_(rxPin),
   txPin_(txPin)
 {
-  if(rxPin_ != -1) {
+  if(rxPin_ != 255) {
     pinMode(rxPin_, INPUT);
     rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
   }
-  if(txPin_ != -1) { rfTransciever.enableTransmit(txPin_); }
+  if(txPin_ != 255) { rfTransciever.enableTransmit(txPin_); }
 }
 
 bool RfHandler::begin() { return true; }
@@ -47,7 +47,7 @@ bool RfHandler::loop() {
 
     // Filter repeated data.
     if((rfDataOld.data != rfData.data) || (rfDataOld.bitLength != rfData.bitLength) || (rfDataOld.protocol != rfData.protocol)) {
-      char dataOut[dataOutSize] = { '\0' };
+      char dataOut[dataOutSize_] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, MqttComBase::getIsoTime(), rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
@@ -64,13 +64,11 @@ void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) { return; }
-  else {
-    const uint64_t rfOutData = rfJson[F("Data")].as<uint64_t>();
-    const uint32_t rfOutBitLength = rfJson[F("Bits")].as<uint32_t>();
-    const uint32_t rfOutProtocol = rfJson[F("Protocol")].as<uint32_t>();
-    const uint32_t rfOutPulseLength = rfJson[F("Pulse")].as<uint32_t>();
-    if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
-    if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
-    if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
-  }
+  const uint64_t rfOutData = rfJson[F("Data")].as<uint64_t>();
+  const uint32_t rfOutBitLength = rfJson[F("Bits")].as<uint32_t>();
+  const uint32_t rfOutProtocol = rfJson[F("Protocol")].as<uint32_t>();
+  const uint32_t rfOutPulseLength = rfJson[F("Pulse")].as<uint32_t>();
+  if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
+  if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
+  if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
 }
