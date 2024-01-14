@@ -14,8 +14,8 @@ const char RfHandler::RF_MSG_FRAME[] PROGMEM = {
   "}"
 };
 
-RfHandler::RfHandler(const char* classID, uint8_t rxPin, uint8_t txPin) :
-  MqttComBase(classID),
+RfHandler::RfHandler(Connectivity* connectivity, const char* classID, uint8_t rxPin, uint8_t txPin) :
+  MqttComBase(connectivity, classID),
   rxPin_(rxPin),
   txPin_(txPin)
 {

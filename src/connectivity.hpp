@@ -9,6 +9,7 @@
 #include <functional>
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 #include "server.hpp"
+#include <vector>
 
 class Connectivity {
 public:
@@ -46,7 +47,7 @@ private:
 
   static const char* getISODateTime();
 
-  static bool registerCallback(Connectivity::MqttComBase* obj);
+  bool registerCallback(Connectivity::MqttComBase* obj);
 
   const char* getIntStatusStr(wl_status_t status);
 
@@ -84,13 +85,7 @@ private:
   const uint16_t fwVersion;
   const uint32_t gitHash;
   static constexpr uint8_t macStringSize = 13;
-#ifdef MESSAGE_MAP_SIZE
-  static constexpr uint8_t messageMapSize = MESSAGE_MAP_SIZE;
-#else
-  static constexpr uint8_t messageMapSize = 12;
-#endif
-  static Connectivity::MqttComBase* messageMap[messageMapSize + 1];
-  static uint8_t messageMapPointer;
+  std::vector<Connectivity::MqttComBase*> messageMap;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 
 public:
@@ -325,7 +320,7 @@ public:
       ACK,
     };
   protected:
-    MqttComBase(const char* classID);
+    MqttComBase(Connectivity* connectivity, const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
@@ -342,6 +337,7 @@ public:
     MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
     MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
   private:
+    Connectivity* connectivity_;
     char classId[16];
     static std::function<void(const char*, const char*)> mqttSender;
   };
@@ -363,7 +359,7 @@ private:
       EXT_FILE_DT_END
     };
 
-    Common(const char* classID, Stream* serial = nullptr);
+    Common(Connectivity* connectivity, const char* classID, Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
     virtual ~Common() = default;

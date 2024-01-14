@@ -7,7 +7,7 @@
 
 class Radiation : public Connectivity::MqttComBase {
 public:
-  Radiation(const char* classID, uint8_t sensorPin);
+  Radiation(Connectivity* connectivity, const char* classID, uint8_t sensorPin);
 
   /// @brief Destructor of the object.
   virtual ~Radiation() = default;

@@ -13,8 +13,6 @@
 ADC_MODE(ADC_VCC);
 
 bool Connectivity::isDeviceOnline = true;
-Connectivity::MqttComBase* Connectivity::messageMap[] = { nullptr };
-uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
@@ -69,7 +67,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
-  common("common", serial)
+  common(this, "common", serial)
 {
   WdtHandler.enableHwWdt();
 }
@@ -231,10 +229,17 @@ bool Connectivity::beginSimple(Interface interface) {
 
   WdtHandler.resetHwWdtIfPossible();
   if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
-    const bool beginResult = currentObject->begin();
-    if(serialPort) { serialPort->printf_P(PSTR("  %hu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE); }
+  for(std::size_t i = 0; i < messageMap.size(); ++i) {
+    const auto& currentObject = messageMap[i];
+    if(currentObject != nullptr) {
+      const bool beginResult = currentObject->begin();
+      if(serialPort) { 
+        serialPort->printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE);
+      }
+    }
+    else {
+      serialPort->printf_P(PSTR("  %zu. No object here!\r\n"), i);
+    }
   }
 
   debugLed.stopTicker();
@@ -353,9 +358,10 @@ bool Connectivity::loopSimple() {
     }
   }
 
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
-    currentObject->loop();
+  for(const auto &currentObject : messageMap) {
+    if(currentObject != nullptr) {
+      currentObject->loop();
+    }
   }
 
   return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
@@ -366,9 +372,9 @@ bool Connectivity::getConnectionState() { return isDeviceOnline; }
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
   if(!classID) { return; }
-  for(uint8_t i = 0; messageMap[i] != nullptr; ++i) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
-    if (currentObject != nullptr && strcmp(currentObject->getClassId(), classID) == 0) {
+  for(const auto &currentObject : messageMap) {
+    if(currentObject == nullptr) { return; }
+    if(strcmp(currentObject->getClassId(), classID) == 0) {
       currentObject->messageReceived(payload, length);
       return;
     }
@@ -396,9 +402,7 @@ const char* Connectivity::getISODateTime() {
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   if(!obj) { return false; }
-  if(messageMapPointer >= messageMapSize) { return false; }
-  messageMap[messageMapPointer] = obj;
-  messageMapPointer++;
+  messageMap.push_back(obj);
   return true;
 }
 
@@ -811,9 +815,11 @@ bool Connectivity::DataTransfer::checkValidity() {
 
 std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
 
-Connectivity::MqttComBase::MqttComBase(const char* classID) {
+Connectivity::MqttComBase::MqttComBase(Connectivity* connectivity, const char* classID) : connectivity_(connectivity) {
   strlcpy(this->classId, classID, sizeof(this->classId));
-  Connectivity::registerCallback(this);
+  if(connectivity_ != nullptr) {
+    connectivity_->registerCallback(this);
+  }
 }
 
 void Connectivity::MqttComBase::messageSend(const char* payload) const {
@@ -846,8 +852,8 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(const char* classID, Stream* serial) :
-  MqttComBase(classID),
+Connectivity::Common::Common(Connectivity* connectivity, const char* classID, Stream* serial) :
+  MqttComBase(connectivity, classID),
   serialPort(serial),
   dataTransfer(serial),
   externalFileName{'\0'} {}
