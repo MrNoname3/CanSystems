@@ -217,7 +217,6 @@ bool Connectivity::beginSimple(Interface interface) {
 
   if(!connect()) { return false; }
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
-  Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
 
   {
     char versionString[64];
@@ -813,26 +812,16 @@ bool Connectivity::DataTransfer::checkValidity() {
 
 //////////////////// -- MqttComBase class-- ////////////////////
 
-std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
-
 Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
   strlcpy(this->classId, classID, sizeof(this->classId));
   conn.registerCallback(this);
 }
 
 void Connectivity::MqttComBase::messageSend(const char* payload) const {
-  if(mqttSender) {
-    mqttSender(getClassId(), payload);
-  }
+  conn.sendMqttMessage(getClassId(), payload);
 }
 
-void Connectivity::MqttComBase::setMqttSender(std::function<void(const char*, const char*)> senderFunction) {
-  mqttSender = senderFunction;
-}
-
-const char* Connectivity::MqttComBase::getIsoTime() {
-  return Connectivity::getISODateTime();
-}
+const char* Connectivity::MqttComBase::getIsoTime() { return conn.getISODateTime(); }
 
 bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
   static constexpr const uint8_t respBufSize = 28;

@@ -5,7 +5,7 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 
-class Radiation : public Connectivity::MqttComBase {
+class Radiation final : public Connectivity::MqttComBase {
 public:
   Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin);
 
@@ -35,7 +35,7 @@ private:
   static volatile uint16_t cpm;
   static volatile bool measureDone;
   static volatile uint16_t cpmToSend;
-  static constexpr uint8_t dataOutSize = 64;
+  static constexpr uint8_t dataOutBufSize = 64;
   static const char PROGMEM CPM_MSG_FRAME[];
 };
 #endif // RADIATION_HPP

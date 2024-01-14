@@ -11,7 +11,7 @@
 #include "server.hpp"
 #include <vector>
 
-class Connectivity {
+class Connectivity final {
 public:
   class MqttComBase;
 
@@ -130,7 +130,7 @@ private:
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
 
 private:
-  class WdtWrapper {
+  class WdtWrapper final {
   public:
     WdtWrapper() = default;
     ~WdtWrapper() = default;
@@ -151,7 +151,7 @@ private:
   WdtWrapper WdtHandler;
 
 public:
-  class DebugLED {
+  class DebugLED final {
   public:
     DebugLED(uint8_t ledPin, bool ledOnState);
     virtual ~DebugLED() = default;
@@ -177,7 +177,7 @@ public:
   DebugLED debugLed;
 
 public:
-  class TimeTracker {
+  class TimeTracker final {
   public:
     TimeTracker(uint32_t goalTime = 0);
     virtual ~TimeTracker() = default;
@@ -201,7 +201,7 @@ public:
   TimeTracker loopTimeTracker;
 
 public:
-  class Crc32 {
+  class Crc32 final {
   public:
     Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
     ~Crc32() = default;
@@ -226,7 +226,7 @@ public:
 
 public:
   /// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
-  class Base64 {
+  class Base64 final {
   public:
     Base64() = delete;
     ~Base64() = delete;
@@ -273,7 +273,7 @@ public:
   };
 
 private:
-  class DataTransfer {
+  class DataTransfer final {
   public:
     DataTransfer(Stream* serial = nullptr);
 
@@ -324,13 +324,12 @@ public:
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
+    const char* getIsoTime();
   public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
     virtual bool begin() = 0;
     virtual bool loop() = 0;
     const char* getClassId() const;
-    static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
-    const char* getIsoTime();
 
     MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
@@ -339,11 +338,10 @@ public:
   private:
     Connectivity& conn;
     char classId[16];
-    static std::function<void(const char*, const char*)> mqttSender;
   };
 
 private:
-  class Common : public Connectivity::MqttComBase {
+  class Common final : public Connectivity::MqttComBase {
   public:
     enum class Command : uint8_t {
       BLANK = 0,
