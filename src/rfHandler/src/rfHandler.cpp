@@ -19,11 +19,11 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rx
   rxPin_(rxPin),
   txPin_(txPin)
 {
-  if(rxPin_ != -1) {
+  if(rxPin_ != 255) {
     pinMode(rxPin_, INPUT);
     rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
   }
-  if(txPin_ != -1) { rfTransciever.enableTransmit(txPin_); }
+  if(txPin_ != 255) { rfTransciever.enableTransmit(txPin_); }
 }
 
 bool RfHandler::begin() { return true; }
@@ -64,13 +64,11 @@ void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) { return; }
-  else {
-    const uint64_t rfOutData = rfJson[F("Data")].as<uint64_t>();
-    const uint32_t rfOutBitLength = rfJson[F("Bits")].as<uint32_t>();
-    const uint32_t rfOutProtocol = rfJson[F("Protocol")].as<uint32_t>();
-    const uint32_t rfOutPulseLength = rfJson[F("Pulse")].as<uint32_t>();
-    if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
-    if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
-    if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
-  }
+  const uint64_t rfOutData = rfJson[F("Data")].as<uint64_t>();
+  const uint32_t rfOutBitLength = rfJson[F("Bits")].as<uint32_t>();
+  const uint32_t rfOutProtocol = rfJson[F("Protocol")].as<uint32_t>();
+  const uint32_t rfOutPulseLength = rfJson[F("Pulse")].as<uint32_t>();
+  if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
+  if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
+  if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
 }
