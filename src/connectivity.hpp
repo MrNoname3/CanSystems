@@ -155,8 +155,8 @@ public:
   public:
     DebugLED(uint8_t ledPin, bool ledOnState);
     virtual ~DebugLED() = default;
-    inline void ledOn() __attribute__((always_inline));
-    inline void ledOff() __attribute__((always_inline));
+    inline void ledOn();
+    inline void ledOff();
     void startTicker(uint32_t tickInterval_ms);
     void stopTicker();
 
@@ -166,9 +166,9 @@ public:
     DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
 
   private:
-    inline IRAM_ATTR void ledToggle() __attribute__((always_inline));
-    inline void ledHigh() __attribute__((always_inline));
-    inline void ledLow() __attribute__((always_inline));
+    inline IRAM_ATTR void ledToggle();
+    inline void ledHigh();
+    inline void ledLow();
 
     const uint8_t ledPin_;
     const bool ledOnState_;

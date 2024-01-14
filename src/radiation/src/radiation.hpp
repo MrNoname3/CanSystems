@@ -26,8 +26,8 @@ public:
   Radiation& operator=(Radiation&&) = delete;                 // Define move assignment operator.
 
 private:
-  inline static IRAM_ATTR void counter() __attribute__((always_inline));
-  inline static IRAM_ATTR void measure() __attribute__((always_inline));
+  inline static IRAM_ATTR void counter();
+  inline static IRAM_ATTR void measure();
 
 private:
   Ticker measureTimer;
