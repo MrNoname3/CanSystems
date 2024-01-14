@@ -320,7 +320,7 @@ public:
       ACK,
     };
   protected:
-    MqttComBase(Connectivity* connectivity, const char* classID);
+    MqttComBase(Connectivity& connectivity, const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
@@ -337,7 +337,7 @@ public:
     MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
     MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
   private:
-    Connectivity* connectivity_;
+    Connectivity& conn;
     char classId[16];
     static std::function<void(const char*, const char*)> mqttSender;
   };
@@ -359,7 +359,7 @@ private:
       EXT_FILE_DT_END
     };
 
-    Common(Connectivity* connectivity, const char* classID, Stream* serial = nullptr);
+    Common(Connectivity& connectivity, const char* classID, Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
     virtual ~Common() = default;

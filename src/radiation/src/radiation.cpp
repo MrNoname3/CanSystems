@@ -10,7 +10,7 @@ const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
   "}"
 };
 
-Radiation::Radiation(Connectivity* connectivity, const char* classID, uint8_t sensorPin) :
+Radiation::Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin) :
   MqttComBase(connectivity, classID),
   sensorPin(sensorPin)
 {

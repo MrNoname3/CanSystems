@@ -67,7 +67,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
-  common(this, "common", serial)
+  common(*this, "common", serial)
 {
   WdtHandler.enableHwWdt();
 }
@@ -815,11 +815,9 @@ bool Connectivity::DataTransfer::checkValidity() {
 
 std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
 
-Connectivity::MqttComBase::MqttComBase(Connectivity* connectivity, const char* classID) : connectivity_(connectivity) {
+Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
   strlcpy(this->classId, classID, sizeof(this->classId));
-  if(connectivity_ != nullptr) {
-    connectivity_->registerCallback(this);
-  }
+  conn.registerCallback(this);
 }
 
 void Connectivity::MqttComBase::messageSend(const char* payload) const {
@@ -852,7 +850,7 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(Connectivity* connectivity, const char* classID, Stream* serial) :
+Connectivity::Common::Common(Connectivity& connectivity, const char* classID, Stream* serial) :
   MqttComBase(connectivity, classID),
   serialPort(serial),
   dataTransfer(serial),

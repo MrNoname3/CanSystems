@@ -7,7 +7,7 @@
 
 class RfHandler : public Connectivity::MqttComBase {
 public:
-  RfHandler(Connectivity* connectivity, const char* classID, uint8_t rxPin, uint8_t txPin);
+  RfHandler(Connectivity& connectivity, const char* classID, uint8_t rxPin, uint8_t txPin);
 
   /// @brief Destructor of the object.
   virtual ~RfHandler() = default;
