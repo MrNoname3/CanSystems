@@ -9,8 +9,9 @@
 #include <functional>
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 #include "server.hpp"
+#include <vector>
 
-class Connectivity {
+class Connectivity final {
 public:
   class MqttComBase;
 
@@ -46,7 +47,7 @@ private:
 
   static const char* getISODateTime();
 
-  static bool registerCallback(Connectivity::MqttComBase* obj);
+  bool registerCallback(Connectivity::MqttComBase* obj);
 
   const char* getIntStatusStr(wl_status_t status);
 
@@ -84,14 +85,7 @@ private:
   const uint16_t fwVersion;
   const uint32_t gitHash;
   static constexpr uint8_t macStringSize = 13;
-#ifdef MESSAGE_MAP_SIZE
-  static constexpr uint8_t messageMapSize = MESSAGE_MAP_SIZE;
-#else
-  static constexpr uint8_t messageMapSize = 12;
-#endif
-  static_assert(messageMapSize > 0, "MessageMapSize can't be 0!");
-  static Connectivity::MqttComBase* messageMap[messageMapSize];
-  static uint8_t messageMapPointer;
+  std::vector<Connectivity::MqttComBase*> messageMap;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 
 public:
@@ -136,7 +130,7 @@ private:
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
 
 private:
-  class WdtWrapper {
+  class WdtWrapper final {
   public:
     WdtWrapper() = default;
     ~WdtWrapper() = default;
@@ -157,12 +151,12 @@ private:
   WdtWrapper WdtHandler;
 
 public:
-  class DebugLED {
+  class DebugLED final {
   public:
     DebugLED(uint8_t ledPin, bool ledOnState);
     virtual ~DebugLED() = default;
-    inline void ledOn() __attribute__((always_inline));
-    inline void ledOff() __attribute__((always_inline));
+    inline void ledOn();
+    inline void ledOff();
     void startTicker(uint32_t tickInterval_ms);
     void stopTicker();
 
@@ -172,9 +166,9 @@ public:
     DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
 
   private:
-    inline IRAM_ATTR void ledToggle() __attribute__((always_inline));
-    inline void ledHigh() __attribute__((always_inline));
-    inline void ledLow() __attribute__((always_inline));
+    inline IRAM_ATTR void ledToggle();
+    inline void ledHigh();
+    inline void ledLow();
 
     const uint8_t ledPin_;
     const bool ledOnState_;
@@ -183,7 +177,7 @@ public:
   DebugLED debugLed;
 
 public:
-  class TimeTracker {
+  class TimeTracker final {
   public:
     explicit TimeTracker(uint32_t goalTime = 0);
     virtual ~TimeTracker() = default;
@@ -207,7 +201,7 @@ public:
   TimeTracker loopTimeTracker;
 
 public:
-  class Crc32 {
+  class Crc32 final {
   public:
     explicit Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
     ~Crc32() = default;
@@ -232,7 +226,7 @@ public:
 
 public:
   /// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
-  class Base64 {
+  class Base64 final {
   public:
     Base64() = delete;
     ~Base64() = delete;
@@ -275,11 +269,11 @@ public:
     Base64& operator=(Base64&&) = delete;                 // Define move assignment operator.
 
   private:
-    static const char PROGMEM Base64AlphabetTable_[];
+    static const char PROGMEM base64AlphabetTable_[];
   };
 
 private:
-  class DataTransfer {
+  class DataTransfer final {
   public:
     explicit DataTransfer(Stream* serial = nullptr);
 
@@ -326,29 +320,28 @@ public:
       ACK,
     };
   protected:
-    explicit MqttComBase(const char* classID);
+    MqttComBase(Connectivity& connectivity, const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
+    const char* getIsoTime();
   public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
     virtual bool begin() = 0;
     virtual bool loop() = 0;
     const char* getClassId() const;
-    static void setMqttSender(std::function<void(const char*, const char*)> senderFunction);
-    const char* getIsoTime();
 
     MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
     MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
     MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
   private:
+    Connectivity& conn;
     char classId[16];
-    static std::function<void(const char*, const char*)> mqttSender;
   };
 
 private:
-  class Common : public Connectivity::MqttComBase {
+  class Common final : public Connectivity::MqttComBase {
   public:
     enum class Command : uint8_t {
       BLANK = 0,
@@ -364,7 +357,7 @@ private:
       EXT_FILE_DT_END
     };
 
-    explicit Common(const char* classID, Stream* serial = nullptr);
+    Common(Connectivity& connectivity, const char* classID, Stream* serial = nullptr);
 
     /// @brief Destructor of the object.
     virtual ~Common() = default;

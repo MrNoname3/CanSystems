@@ -10,8 +10,8 @@ const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
   "}"
 };
 
-Radiation::Radiation(const char* classID, uint8_t sensorPin) :
-  MqttComBase(classID),
+Radiation::Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin) :
+  MqttComBase(connectivity, classID),
   sensorPin(sensorPin)
 {
   pinMode(sensorPin, INPUT);
@@ -35,7 +35,7 @@ void Radiation::end() {
 bool Radiation::loop() {
   if(measureDone) {
     measureDone = false;
-    char dataOut[dataOutSize_] = { '\0' };
+    char dataOut[dataOutBufSize] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, MqttComBase::getIsoTime(), cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }

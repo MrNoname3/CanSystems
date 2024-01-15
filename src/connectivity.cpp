@@ -13,8 +13,6 @@
 ADC_MODE(ADC_VCC);
 
 bool Connectivity::isDeviceOnline = true;
-Connectivity::MqttComBase* Connectivity::messageMap[] = { nullptr };
-uint8_t Connectivity::messageMapPointer = 0;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
@@ -69,7 +67,7 @@ Connectivity::Connectivity(Stream* serial, const uint8_t ethCS, uint8_t dbgLedPi
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
-  common("common", serial)
+  common(*this, "common", serial)
 {
   WdtHandler.enableHwWdt();
 }
@@ -214,7 +212,6 @@ bool Connectivity::beginSimple(Interface interface) {
 
   if(!connect()) { return false; }
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
-  Connectivity::MqttComBase::setMqttSender([this](const char* subTopic, const char* payload) { sendMqttMessage(subTopic, payload); });
 
   {
     char versionString[64];
@@ -226,10 +223,17 @@ bool Connectivity::beginSimple(Interface interface) {
 
   WdtHandler.resetHwWdtIfPossible();
   if(serialPort) { serialPort->printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX); }
-  for(uint8_t i = 0; i < messageMapPointer; i++) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
-    const bool beginResult = currentObject->begin();
-    if(serialPort) { serialPort->printf_P(PSTR("  %hu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE); }
+  for(std::size_t i = 0; i < messageMap.size(); ++i) {
+    const auto& currentObject = messageMap[i];
+    if(currentObject != nullptr) {
+      const bool beginResult = currentObject->begin();
+      if(serialPort) { 
+        serialPort->printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE);
+      }
+    }
+    else {
+      serialPort->printf_P(PSTR("  %zu. No object here!\r\n"), i);
+    }
   }
 
   debugLed.stopTicker();
@@ -348,14 +352,10 @@ bool Connectivity::loopSimple() {
     }
   }
 
-  static uint8_t currentObjectPointer = 0;
-  if(currentObjectPointer < messageMapPointer) {
-    Connectivity::MqttComBase* currentObject = messageMap[currentObjectPointer];
-    currentObject->loop();
-    currentObjectPointer++;
-  }
-  else {
-    currentObjectPointer = 0;
+  for(const auto &currentObject : messageMap) {
+    if(currentObject != nullptr) {
+      currentObject->loop();
+    }
   }
 
   return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
@@ -365,9 +365,9 @@ bool Connectivity::getConnectionState() { return isDeviceOnline; }
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
-  if(classID == nullptr) { return; }
-  for(uint8_t i = 0; i < messageMapPointer; i++) {
-    Connectivity::MqttComBase* currentObject = messageMap[i];
+  if(!classID) { return; }
+  for(const auto &currentObject : messageMap) {
+    if(currentObject == nullptr) { return; }
     if(strcmp(currentObject->getClassId(), classID) == 0) {
       currentObject->messageReceived(payload, length);
       return;
@@ -395,9 +395,8 @@ const char* Connectivity::getISODateTime() {
 }
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
-  if(obj == nullptr) { return false; }
-  if(messageMapPointer >= messageMapSize) { return false; }
-  messageMap[messageMapPointer++] = obj;
+  if(!obj) { return false; }
+  messageMap.push_back(obj);
   return true;
 }
 
@@ -564,7 +563,7 @@ uint32_t Connectivity::Base64::encodeBase64(const uint8_t input[], uint8_t outpu
     if(i == 3) {
       fromA3ToA4(A4, A3);
       for(i = 0; i < 4; i++) {
-        output[encodedLength_++] = pgm_read_byte(&Base64AlphabetTable_[A4[i]]);
+        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[i]]);
       }
       i = 0;
     }
@@ -576,7 +575,7 @@ uint32_t Connectivity::Base64::encodeBase64(const uint8_t input[], uint8_t outpu
     }
     fromA3ToA4(A4, A3);
     for(j = 0; j < i + 1; j++) {
-      output[encodedLength_++] = pgm_read_byte(&Base64AlphabetTable_[A4[j]]);
+      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[j]]);
     }
     while((i++ < 3)) {
       output[encodedLength_++] = '=';
@@ -645,7 +644,7 @@ uint8_t Connectivity::Base64::lookupTable(char c) {
   return -1;
 }
 
-const char Connectivity::Base64::Base64AlphabetTable_[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const char Connectivity::Base64::base64AlphabetTable_[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   "abcdefghijklmnopqrstuvwxyz"
   "0123456789+/";
 
@@ -810,26 +809,16 @@ bool Connectivity::DataTransfer::checkValidity() {
 
 //////////////////// -- MqttComBase class-- ////////////////////
 
-std::function<void(const char*, const char*)> Connectivity::MqttComBase::mqttSender = nullptr;
-
-Connectivity::MqttComBase::MqttComBase(const char* classID) {
+Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
   strlcpy(this->classId, classID, sizeof(this->classId));
-  Connectivity::registerCallback(this);
+  conn.registerCallback(this);
 }
 
 void Connectivity::MqttComBase::messageSend(const char* payload) const {
-  if(mqttSender) {
-    mqttSender(getClassId(), payload);
-  }
+  conn.sendMqttMessage(getClassId(), payload);
 }
 
-void Connectivity::MqttComBase::setMqttSender(std::function<void(const char*, const char*)> senderFunction) {
-  mqttSender = senderFunction;
-}
-
-const char* Connectivity::MqttComBase::getIsoTime() {
-  return Connectivity::getISODateTime();
-}
+const char* Connectivity::MqttComBase::getIsoTime() { return conn.getISODateTime(); }
 
 bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
   static constexpr const uint8_t respBufSize = 28;
@@ -847,8 +836,8 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(const char* classID, Stream* serial) :
-  MqttComBase(classID),
+Connectivity::Common::Common(Connectivity& connectivity, const char* classID, Stream* serial) :
+  MqttComBase(connectivity, classID),
   serialPort(serial),
   dataTransfer(serial),
   externalFileName{'\0'} {}

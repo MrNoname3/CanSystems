@@ -5,9 +5,9 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <RCSwitch.h>                         /// RF driver library.
 
-class RfHandler : public Connectivity::MqttComBase {
+class RfHandler final : public Connectivity::MqttComBase {
 public:
-  RfHandler(const char* classID, uint8_t rxPin, uint8_t txPin);
+  RfHandler(Connectivity& connectivity, const char* classID, uint8_t rxPin, uint8_t txPin);
 
   /// @brief Destructor of the object.
   virtual ~RfHandler() = default;
@@ -37,7 +37,7 @@ private:
   RCSwitch rfTransciever;                                      // RF modules driver object.
   const uint8_t rxPin_;
   const uint8_t txPin_;
-  static constexpr uint8_t dataOutSize_ = 140;
+  static constexpr uint8_t dataOutBufSize = 140;
   static constexpr uint8_t dataInSize = 92;
   static const char PROGMEM RF_MSG_FRAME[];
 };
