@@ -67,6 +67,7 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
+  dataTransfer(&serialPort),
   common(*this, "common")
 {
   WdtHandler.enableHwWdt();
@@ -827,7 +828,6 @@ const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON
 
 Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   MqttComBase(connectivity, classID),
-  dataTransfer(&conn.serialPort),
   externalFileName{'\0'} {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
@@ -874,7 +874,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         } break;
         default: {} break;
       }
-      const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
+      const bool transferBeginResult = conn.dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
       MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!transferBeginResult) {
         conn.serialPort.printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr);
@@ -886,7 +886,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
     case Command::EXT_FILE_DT_DATA: {
       const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
       const char* filePieceB64 = cmdJson["data"].as<const char*>();
-      const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
+      const bool storingResult = conn.dataTransfer.storeBase64(filePieceNumber, filePieceB64);
       MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
       if(!storingResult) {
         conn.serialPort.printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX);
@@ -895,7 +895,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
     case Command::FW_DT_END:
     case Command::WIFICFG_DT_END:
     case Command::EXT_FILE_DT_END: {
-      const bool validityCheckResult = dataTransfer.checkValidity();
+      const bool validityCheckResult = conn.dataTransfer.checkValidity();
       MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!validityCheckResult) {
         conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);

@@ -312,6 +312,7 @@ private:
     static const char PROGMEM otaFwLocation[];
     static const char PROGMEM wifiTempFileLocation[];
   };
+  DataTransfer dataTransfer;
 
 public:
   class MqttComBase {
@@ -381,7 +382,6 @@ private:
     Common(Common&&) = delete;                            // Define move constructor.
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
   private:
-    DataTransfer dataTransfer;
     char externalFileName[28];
     static const char PROGMEM COMMON_PREFIX[];
   };
