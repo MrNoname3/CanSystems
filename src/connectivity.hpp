@@ -336,8 +336,9 @@ public:
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
     MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
     MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
-  private:
+  protected:
     Connectivity& conn;
+  private:
     char classId[16];
   };
 
@@ -358,7 +359,7 @@ private:
       EXT_FILE_DT_END
     };
 
-    Common(Connectivity& connectivity, const char* classID, Stream* serial = nullptr);
+    Common(Connectivity& connectivity, const char* classID);
 
     /// @brief Destructor of the object.
     virtual ~Common() = default;
@@ -380,7 +381,6 @@ private:
     Common(Common&&) = delete;                            // Define move constructor.
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
   private:
-    Stream* serialPort;
     DataTransfer dataTransfer;
     char externalFileName[28];
     static const char PROGMEM COMMON_PREFIX[];

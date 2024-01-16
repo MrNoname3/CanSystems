@@ -67,7 +67,7 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
-  common(*this, "common", &serialPort)
+  common(*this, "common")
 {
   WdtHandler.enableHwWdt();
   serialPort.begin(MONITOR_BAUD);
@@ -825,10 +825,9 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
 
-Connectivity::Common::Common(Connectivity& connectivity, const char* classID, Stream* serial) :
+Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   MqttComBase(connectivity, classID),
-  serialPort(serial),
-  dataTransfer(serial),
+  dataTransfer(&conn.serialPort),
   externalFileName{'\0'} {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
@@ -836,7 +835,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    if(serialPort) { serialPort->printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX); }
+    conn.serialPort.printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX);
     return;
   }
   const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
@@ -854,7 +853,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         case Command::FW_DT_START: {
           const char* binId = cmdJson[F("binId")].as<const char*>();
           if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
-            if(serialPort) { serialPort->printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId); }
+            conn.serialPort.printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId);
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
@@ -867,7 +866,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
           if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
           uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
           if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-            if(serialPort) { serialPort->printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX); }
+            conn.serialPort.printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX);
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
@@ -878,7 +877,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
       MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!transferBeginResult) {
-        if(serialPort) { serialPort->printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr); }
+        conn.serialPort.printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr);
         return;
       }
     } break;
@@ -890,7 +889,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
       MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
       if(!storingResult) {
-        if(serialPort) { serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX); }
+        conn.serialPort.printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX);
       }
     } break;
     case Command::FW_DT_END:
@@ -899,7 +898,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool validityCheckResult = dataTransfer.checkValidity();
       MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!validityCheckResult) {
-        if(serialPort) { serialPort->printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX); }
+        conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);
       }
       if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
     } break;
@@ -915,10 +914,8 @@ void Connectivity::Common::messageSend(const char* payload) const {
 }
 
 void Connectivity::Common::restartESP() {
-  if(serialPort) {
-    serialPort->printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX);
-    serialPort->flush();                              // Sends out data from serial buffer, before reset.
-  }
+  conn.serialPort.printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX);
+  conn.serialPort.flush();                            // Sends out data from serial buffer, before reset.
   ESP.restart();
   while(true) {};                                     // Prevent doing anything before restart.
 }
