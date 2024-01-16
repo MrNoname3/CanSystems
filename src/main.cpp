@@ -3,7 +3,7 @@
 //--- Variables ---//
 
 //--- Networking ---//
-Connectivity iotConn(&Serial, SPI_CS, LED, false);
+Connectivity iotConn(Serial, SPI_CS, LED, false);
 Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 

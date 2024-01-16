@@ -6,6 +6,7 @@
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
+#include <HardwareSerial.h>
 #include <functional>
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 #include "server.hpp"
@@ -21,7 +22,7 @@ public:
     UNKNOWN
   };
 
-  Connectivity(Stream* serial, uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
+  Connectivity(HardwareSerial& serial, uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
 
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -72,7 +73,7 @@ private:
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
   };
 
-  Stream* serialPort;
+  HardwareSerial& serialPort;
   ENC28J60lwIP ethInt;
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
