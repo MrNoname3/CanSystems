@@ -67,9 +67,12 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   debugLed(dbgLedPin, dbgLedOnState),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
-  common(*this, "common", &serial)
+  common(*this, "common", &serialPort)
 {
   WdtHandler.enableHwWdt();
+  serialPort.begin(MONITOR_BAUD);
+  delay(1);
+  serialPort.println();
 }
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
