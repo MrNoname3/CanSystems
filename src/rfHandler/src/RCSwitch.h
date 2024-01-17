@@ -49,6 +49,25 @@
 
 #include <stdint.h>
 
+#ifdef RaspberryPi
+    // PROGMEM and _P functions are for AVR based microprocessors,
+    // so we must normalize these for the ARM processor:
+    #define PROGMEM
+    #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
+#endif
+
+#if defined(ESP8266)
+    // interrupt handler and related code must be in RAM on ESP8266,
+    // according to issue #46.
+    #define RECEIVE_ATTR IRAM_ATTR
+    #define VAR_ISR_ATTR
+#elif defined(ESP32)
+    #define RECEIVE_ATTR IRAM_ATTR
+    #define VAR_ISR_ATTR DRAM_ATTR
+#else
+    #define RECEIVE_ATTR
+    #define VAR_ISR_ATTR
+#endif
 
 // At least for the ATTiny X4/X5, receiving has to be disabled due to
 // missing libm depencies (udivmodhi4)
@@ -72,10 +91,10 @@ class RCSwitch {
   public:
     RCSwitch();
 
-    void switchOn(int nGroupNumber, int nSwitchNumber);
-    void switchOff(int nGroupNumber, int nSwitchNumber);
-    void switchOn(const char* sGroup, int nSwitchNumber);
-    void switchOff(const char* sGroup, int nSwitchNumber);
+    void switchOn(int nAddressCode, int nChannelCode);
+    void switchOff(int nAddressCode, int nChannelCode);
+    void switchOn(const char* sGroup, int nChannel);
+    void switchOff(const char* sGroup, int nChannel);
     void switchOn(char sFamily, int nGroup, int nDevice);
     void switchOff(char sFamily, int nGroup, int nDevice);
     void switchOn(const char* sGroup, const char* sDevice);
@@ -162,15 +181,15 @@ class RCSwitch {
     void setProtocol(int nProtocol, int nPulseLength);
 
   private:
-    char* getCodeWordA(const char* sGroup, const char* sDevice, bool bStatus);
-    char* getCodeWordB(int nGroupNumber, int nSwitchNumber, bool bStatus);
-    char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
-    char* getCodeWordD(char group, int nDevice, bool bStatus);
+    const char* getCodeWordA(const char* sGroup, const char* sDevice, bool bStatus);
+    const char* getCodeWordB(int nAddressCode, int nChannelCode, bool bStatus);
+    const char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
+    const char* getCodeWordD(char group, int nDevice, bool bStatus);
     void transmit(HighLow pulses);
 
     #if not defined( RCSwitchDisableReceiving )
-    static void handleInterrupt();
-    static bool receiveProtocol(const int p, unsigned int changeCount);
+    inline static RECEIVE_ATTR void handleInterrupt();
+    inline static RECEIVE_ATTR bool receiveProtocol(const int p, unsigned int changeCount);
     int nReceiverInterrupt;
     #endif
     int nTransmitterPin;
