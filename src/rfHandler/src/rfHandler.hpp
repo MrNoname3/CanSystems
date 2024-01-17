@@ -3,7 +3,7 @@
 
 #include "../../connectivity.hpp"
 #include <Arduino.h>                          /// Arduino libraries header.
-#include <RCSwitch.h>                         /// RF driver library.
+#include "RCSwitch.h"                         /// RF driver library.
 
 class RfHandler final : public Connectivity::MqttComBase {
 public:
