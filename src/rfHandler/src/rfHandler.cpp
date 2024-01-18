@@ -19,11 +19,9 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rx
   rxPin_(rxPin),
   txPin_(txPin)
 {
-  if(rxPin_ != 255) {
-    pinMode(rxPin_, INPUT);
-    rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
-  }
-  if(txPin_ != 255) { rfTransciever.enableTransmit(txPin_); }
+  pinMode(rxPin_, INPUT_PULLUP);
+  rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
+  rfTransciever.enableTransmit(txPin_);
 }
 
 bool RfHandler::begin() { return true; }
