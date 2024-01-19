@@ -47,7 +47,6 @@
   #include "WProgram.h"
 #endif
 #include <stdint.h>
-#include "../../CircularBuffer/CircularBuffer.hpp"
 
 #ifdef RaspberryPi
   // PROGMEM and _P functions are for AVR based microprocessors,
@@ -88,18 +87,7 @@
 
 class RCSwitch {
 public:
-  /// @brief RF data struct.
-  struct __attribute__((packed))
-  RFData {
-    uint64_t data;                              // RF data.
-    uint32_t bitLength;                         // RF data bit length.
-    uint32_t protocol;                          // RF protocol.
-    uint32_t pulseLength;                       // RF pulse length.
-    RFData() : data(0), bitLength(0), protocol(0), pulseLength(0) {}
-  };
-
   RCSwitch();
-
   void switchOn(int nAddressCode, int nChannelCode);
   void switchOff(int nAddressCode, int nChannelCode);
   void switchOn(const char* sGroup, int nChannel);
@@ -219,7 +207,6 @@ private:
   static unsigned int timings[RCSWITCH_MAX_CHANGES];
   // буфер длительностей последних четырех пакетов, [0] - последний
   static unsigned int buftimings[4];
-  CircularBuffer<RFData, 10> rxRfSignalBuffer;
 #endif
 };
 #endif // RC_SWITCH_H

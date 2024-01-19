@@ -150,9 +150,7 @@ enum {
   unsigned int RCSwitch::buftimings[4];
 #endif
 
-RCSwitch::RCSwitch() :
-  rxRfSignalBuffer()
-{
+RCSwitch::RCSwitch() {
   this->nTransmitterPin = -1;
   this->setRepeatTransmit(5);
   this->setProtocol(1);
