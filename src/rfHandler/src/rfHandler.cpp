@@ -28,9 +28,9 @@ bool RfHandler::begin() { return true; }
 
 bool RfHandler::loop() {
   if(rfTransciever.available()) {                                         // Check if RF data received.
-    static RFData rfDataOld;                                              // Save old data.
+    static RCSwitch::RFData rfDataOld;                                    // Save old data.
     static uint32_t dataCheckTimer = 0;                                   // Serial data send cooldown timer.
-    RFData rfData;
+    RCSwitch::RFData rfData;
     rfData.data = rfTransciever.getReceivedValue();                       // Get received data.
     rfData.bitLength = rfTransciever.getReceivedBitlength();              // Get received data bit length.
     rfData.protocol = rfTransciever.getReceivedProtocol();                // Get receved data protocol.

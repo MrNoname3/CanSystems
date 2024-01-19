@@ -24,17 +24,7 @@ public:
   RfHandler& operator=(RfHandler&&) = delete;                 // Define move assignment operator.
 
 private:
-  /// @brief RF data transciev struct.
-  struct __attribute__((packed))
-  RFData {
-    uint64_t data;                              // RF data.
-    uint32_t bitLength;                         // RF data bit length.
-    uint32_t protocol;                          // RF protocol.
-    uint32_t pulseLength;                       // RF pulse length.
-    RFData() : data(0), bitLength(0), protocol(0), pulseLength(0) {}
-  };
-
-  RCSwitch rfTransciever;                                      // RF modules driver object.
+  RCSwitch rfTransciever;                                     // RF modules driver object.
   const uint8_t rxPin_;
   const uint8_t txPin_;
   static constexpr uint8_t dataOutBufSize = 140;

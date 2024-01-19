@@ -88,9 +88,9 @@
  */
 
 #if defined(ESP8266) || defined(ESP32)
-static const VAR_ISR_ATTR RCSwitch::Protocol proto[] = {
+  static const VAR_ISR_ATTR RCSwitch::Protocol proto[] = {
 #else
-static const RCSwitch::Protocol PROGMEM proto[] = {
+  static const RCSwitch::Protocol PROGMEM proto[] = {
 #endif
   { 350,  0, { 0, 0 }, 1, {  1, 31 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 01 (Princeton, PT-2240)
   { 650,  0, { 0, 0 }, 1, {  1, 10 }, { 1,  2 }, { 2, 1 }, false,  0 },  // 02
@@ -135,36 +135,39 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
 };
 
 enum {
-   numProto = sizeof(proto) / sizeof(proto[0])
+  numProto = sizeof(proto) / sizeof(proto[0])
 };
 
 #if not defined( RCSwitchDisableReceiving )
-volatile unsigned long long RCSwitch::nReceivedValue = 0;
-volatile unsigned long long RCSwitch::nReceiveProtocolMask;
-volatile unsigned int RCSwitch::nReceivedBitlength = 0;
-volatile unsigned int RCSwitch::nReceivedDelay = 0;
-volatile unsigned int RCSwitch::nReceivedProtocol = 0;
-int RCSwitch::nReceiveTolerance = 60;
-const unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
-unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
-unsigned int RCSwitch::buftimings[4];
+  volatile unsigned long long RCSwitch::nReceivedValue = 0;
+  volatile unsigned long long RCSwitch::nReceiveProtocolMask;
+  volatile unsigned int RCSwitch::nReceivedBitlength = 0;
+  volatile unsigned int RCSwitch::nReceivedDelay = 0;
+  volatile unsigned int RCSwitch::nReceivedProtocol = 0;
+  int RCSwitch::nReceiveTolerance = 60;
+  const unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
+  unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
+  unsigned int RCSwitch::buftimings[4];
 #endif
 
-RCSwitch::RCSwitch() {
+RCSwitch::RCSwitch() :
+  rxRfSignalBuffer()
+{
   this->nTransmitterPin = -1;
   this->setRepeatTransmit(5);
   this->setProtocol(1);
-  #if not defined( RCSwitchDisableReceiving )
+#if not defined( RCSwitchDisableReceiving )
   this->nReceiverInterrupt = -1;
   this->setReceiveTolerance(60);
   RCSwitch::nReceivedValue = 0;
   RCSwitch::nReceiveProtocolMask = (1ULL << numProto)-1ULL;  //pow(2,numProto)-1;
-  #endif
+#endif
 }
 
 uint8_t RCSwitch::getNumProtos() {
   return numProto;
 }
+
 /**
   * Sets the protocol to send.
   */
@@ -505,17 +508,17 @@ void RCSwitch::sendTriState(const char* sCodeWord) {
   for (const char* p = sCodeWord; *p; p++) {
     code <<= 2L;
     switch (*p) {
-      case '0':
+      case '0': {
         // bit pattern 00
-        break;
-      case 'F':
+      } break;
+      case 'F': {
         // bit pattern 01
         code |= 1ULL;
-        break;
-      case '1':
+      } break;
+      case '1': {
         // bit pattern 11
         code |= 3ULL;
-        break;
+      } break;
     }
     length += 2;
   }

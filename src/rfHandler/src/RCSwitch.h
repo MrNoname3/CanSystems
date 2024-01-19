@@ -27,52 +27,52 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef _RCSwitch_h
-#define _RCSwitch_h
+#ifndef RC_SWITCH_H
+#define RC_SWITCH_H
 
 #if defined(ARDUINO) && ARDUINO >= 100
-    #include "Arduino.h"
+  #include "Arduino.h"
 #elif defined(ENERGIA) // LaunchPad, FraunchPad and StellarPad specific
-    #include "Energia.h"
+  #include "Energia.h"
 #elif defined(RPI) // Raspberry Pi
-    #define RaspberryPi
+  #define RaspberryPi
 
-    // Include libraries for RPi:
-    #include <string.h> /* memcpy */
-    #include <stdlib.h> /* abs */
-    #include <wiringPi.h>
+  // Include libraries for RPi:
+  #include <string.h> /* memcpy */
+  #include <stdlib.h> /* abs */
+  #include <wiringPi.h>
 #elif defined(SPARK)
-    #include "application.h"
+  #include "application.h"
 #else
-    #include "WProgram.h"
+  #include "WProgram.h"
 #endif
-
 #include <stdint.h>
+#include "../../CircularBuffer/CircularBuffer.hpp"
 
 #ifdef RaspberryPi
-    // PROGMEM and _P functions are for AVR based microprocessors,
-    // so we must normalize these for the ARM processor:
-    #define PROGMEM
-    #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
+  // PROGMEM and _P functions are for AVR based microprocessors,
+  // so we must normalize these for the ARM processor:
+  #define PROGMEM
+  #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
 #endif
 
 #if defined(ESP8266)
-    // interrupt handler and related code must be in RAM on ESP8266,
-    // according to issue #46.
-    #define RECEIVE_ATTR IRAM_ATTR
-    #define VAR_ISR_ATTR
+  // interrupt handler and related code must be in RAM on ESP8266,
+  // according to issue #46.
+  #define RECEIVE_ATTR IRAM_ATTR
+  #define VAR_ISR_ATTR
 #elif defined(ESP32)
-    #define RECEIVE_ATTR IRAM_ATTR
-    #define VAR_ISR_ATTR DRAM_ATTR
+  #define RECEIVE_ATTR IRAM_ATTR
+  #define VAR_ISR_ATTR DRAM_ATTR
 #else
-    #define RECEIVE_ATTR
-    #define VAR_ISR_ATTR
+  #define RECEIVE_ATTR
+  #define VAR_ISR_ATTR
 #endif
 
 // At least for the ATTiny X4/X5, receiving has to be disabled due to
 // missing libm depencies (udivmodhi4)
 #if defined( __AVR_ATtinyX5__ ) or defined ( __AVR_ATtinyX4__ )
-#define RCSwitchDisableReceiving
+  #define RCSwitchDisableReceiving
 #endif
 
 // Number of maximum high/Low changes per packet.
@@ -87,132 +87,139 @@
 #define RCSWITCH_SEPARATION_LIMIT 4100
 
 class RCSwitch {
+public:
+  /// @brief RF data struct.
+  struct __attribute__((packed))
+  RFData {
+    uint64_t data;                              // RF data.
+    uint32_t bitLength;                         // RF data bit length.
+    uint32_t protocol;                          // RF protocol.
+    uint32_t pulseLength;                       // RF pulse length.
+    RFData() : data(0), bitLength(0), protocol(0), pulseLength(0) {}
+  };
 
-  public:
-    RCSwitch();
+  RCSwitch();
 
-    void switchOn(int nAddressCode, int nChannelCode);
-    void switchOff(int nAddressCode, int nChannelCode);
-    void switchOn(const char* sGroup, int nChannel);
-    void switchOff(const char* sGroup, int nChannel);
-    void switchOn(char sFamily, int nGroup, int nDevice);
-    void switchOff(char sFamily, int nGroup, int nDevice);
-    void switchOn(const char* sGroup, const char* sDevice);
-    void switchOff(const char* sGroup, const char* sDevice);
-    void switchOn(char sGroup, int nDevice);
-    void switchOff(char sGroup, int nDevice);
+  void switchOn(int nAddressCode, int nChannelCode);
+  void switchOff(int nAddressCode, int nChannelCode);
+  void switchOn(const char* sGroup, int nChannel);
+  void switchOff(const char* sGroup, int nChannel);
+  void switchOn(char sFamily, int nGroup, int nDevice);
+  void switchOff(char sFamily, int nGroup, int nDevice);
+  void switchOn(const char* sGroup, const char* sDevice);
+  void switchOff(const char* sGroup, const char* sDevice);
+  void switchOn(char sGroup, int nDevice);
+  void switchOff(char sGroup, int nDevice);
 
-    void sendTriState(const char* sCodeWord);
-    void send(unsigned long long code, unsigned int length);
-    void send(const char* sCodeWord);
+  void sendTriState(const char* sCodeWord);
+  void send(unsigned long long code, unsigned int length);
+  void send(const char* sCodeWord);
 
-    #if not defined( RCSwitchDisableReceiving )
-    void enableReceive(int interrupt);
-    void enableReceive();
-    void disableReceive();
-    bool available();
-    void resetAvailable();
+#if not defined( RCSwitchDisableReceiving )
+  void enableReceive(int interrupt);
+  void enableReceive();
+  void disableReceive();
+  bool available();
+  void resetAvailable();
 
-    unsigned long long getReceivedValue();
-    unsigned int getReceivedBitlength();
-    unsigned int getReceivedDelay();
-    unsigned int getReceivedProtocol();
-    unsigned int* getReceivedRawdata();
-    uint8_t getNumProtos();
-    #endif
-
-    void enableTransmit(int nTransmitterPin);
-    void disableTransmit();
-    void setPulseLength(int nPulseLength);
-    void setRepeatTransmit(int nRepeatTransmit);
-    #if not defined( RCSwitchDisableReceiving )
-    void setReceiveTolerance(int nPercent);
-    void setReceiveProtocolMask(unsigned long long mask);
-    #endif
-
-    /**
-     * Description of a single pule, which consists of a high signal
-     * whose duration is "high" times the base pulse length, followed
-     * by a low signal lasting "low" times the base pulse length.
-     * Thus, the pulse overall lasts (high+low)*pulseLength
-     */
-    struct HighLow {
-        uint8_t high;
-        uint8_t low;
-    };
-
-    /**
-     * A "protocol" describes how zero and one bits are encoded into high/low
-     * pulses.
-     */
-    struct Protocol {
-        /** base pulse length in microseconds, e.g. 350 */
-        uint16_t pulseLength;
-        uint8_t PreambleFactor;
-        HighLow Preamble;
-        uint8_t HeaderFactor;
-        HighLow Header;
-
-        HighLow zero;
-        HighLow one;
-
-        /**
-         * If true, interchange high and low logic levels in all transmissions.
-         *
-         * By default, RCSwitch assumes that any signals it sends or receives
-         * can be broken down into pulses which start with a high signal level,
-         * followed by a a low signal level. This is e.g. the case for the
-         * popular PT 2260 encoder chip, and thus many switches out there.
-         *
-         * But some devices do it the other way around, and start with a low
-         * signal level, followed by a high signal level, e.g. the HT6P20B. To
-         * accommodate this, one can set invertedSignal to true, which causes
-         * RCSwitch to change how it interprets any HighLow struct FOO: It will
-         * then assume transmissions start with a low signal lasting
-         * FOO.high*pulseLength microseconds, followed by a high signal lasting
-         * FOO.low*pulseLength microseconds.
-         */
-        bool invertedSignal;
-        uint16_t Guard;
-    };
-
-    void setProtocol(Protocol protocol);
-    void setProtocol(int nProtocol);
-    void setProtocol(int nProtocol, int nPulseLength);
-
-  private:
-    const char* getCodeWordA(const char* sGroup, const char* sDevice, bool bStatus);
-    const char* getCodeWordB(int nAddressCode, int nChannelCode, bool bStatus);
-    const char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
-    const char* getCodeWordD(char group, int nDevice, bool bStatus);
-    void transmit(HighLow pulses);
-
-    #if not defined( RCSwitchDisableReceiving )
-    inline static RECEIVE_ATTR void handleInterrupt();
-    inline static RECEIVE_ATTR bool receiveProtocol(const int p, unsigned int changeCount);
-    int nReceiverInterrupt;
-    #endif
-    int nTransmitterPin;
-    int nRepeatTransmit;
-    Protocol protocol;
-
-    #if not defined( RCSwitchDisableReceiving )
-    static int nReceiveTolerance;
-    volatile static unsigned long long nReceivedValue;
-    volatile static unsigned long long nReceiveProtocolMask;
-    volatile static unsigned int nReceivedBitlength;
-    volatile static unsigned int nReceivedDelay;
-    volatile static unsigned int nReceivedProtocol;
-    const static unsigned int nSeparationLimit;
-    /*
-     * timings[0] contains sync timing, followed by a number of bits
-     */
-    static unsigned int timings[RCSWITCH_MAX_CHANGES];
-    // буфер длительностей последних четырех пакетов, [0] - последний
-    static unsigned int buftimings[4];
-    #endif
-
-
-};
-
+  unsigned long long getReceivedValue();
+  unsigned int getReceivedBitlength();
+  unsigned int getReceivedDelay();
+  unsigned int getReceivedProtocol();
+  unsigned int* getReceivedRawdata();
+  uint8_t getNumProtos();
 #endif
+
+  void enableTransmit(int nTransmitterPin);
+  void disableTransmit();
+  void setPulseLength(int nPulseLength);
+  void setRepeatTransmit(int nRepeatTransmit);
+#if not defined( RCSwitchDisableReceiving )
+  void setReceiveTolerance(int nPercent);
+  void setReceiveProtocolMask(unsigned long long mask);
+#endif
+
+  /**
+   * Description of a single pule, which consists of a high signal
+   * whose duration is "high" times the base pulse length, followed
+   * by a low signal lasting "low" times the base pulse length.
+   * Thus, the pulse overall lasts (high+low)*pulseLength
+   */
+  struct HighLow {
+    uint8_t high;
+    uint8_t low;
+  };
+
+  /**
+   * A "protocol" describes how zero and one bits are encoded into high/low
+   * pulses.
+   */
+  struct Protocol {
+    /** base pulse length in microseconds, e.g. 350 */
+    uint16_t pulseLength;
+    uint8_t PreambleFactor;
+    HighLow Preamble;
+    uint8_t HeaderFactor;
+    HighLow Header;
+
+    HighLow zero;
+    HighLow one;
+
+    /**
+     * If true, interchange high and low logic levels in all transmissions.
+     *
+     * By default, RCSwitch assumes that any signals it sends or receives
+     * can be broken down into pulses which start with a high signal level,
+     * followed by a a low signal level. This is e.g. the case for the
+     * popular PT 2260 encoder chip, and thus many switches out there.
+     *
+     * But some devices do it the other way around, and start with a low
+     * signal level, followed by a high signal level, e.g. the HT6P20B. To
+     * accommodate this, one can set invertedSignal to true, which causes
+     * RCSwitch to change how it interprets any HighLow struct FOO: It will
+     * then assume transmissions start with a low signal lasting
+     * FOO.high*pulseLength microseconds, followed by a high signal lasting
+     * FOO.low*pulseLength microseconds.
+     */
+    bool invertedSignal;
+    uint16_t Guard;
+  };
+
+  void setProtocol(Protocol protocol);
+  void setProtocol(int nProtocol);
+  void setProtocol(int nProtocol, int nPulseLength);
+
+private:
+  const char* getCodeWordA(const char* sGroup, const char* sDevice, bool bStatus);
+  const char* getCodeWordB(int nAddressCode, int nChannelCode, bool bStatus);
+  const char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
+  const char* getCodeWordD(char group, int nDevice, bool bStatus);
+  void transmit(HighLow pulses);
+
+#if not defined( RCSwitchDisableReceiving )
+  inline static RECEIVE_ATTR void handleInterrupt();
+  inline static RECEIVE_ATTR bool receiveProtocol(const int p, unsigned int changeCount);
+  int nReceiverInterrupt;
+#endif
+  int nTransmitterPin;
+  int nRepeatTransmit;
+  Protocol protocol;
+
+#if not defined( RCSwitchDisableReceiving )
+  static int nReceiveTolerance;
+  volatile static unsigned long long nReceivedValue;
+  volatile static unsigned long long nReceiveProtocolMask;
+  volatile static unsigned int nReceivedBitlength;
+  volatile static unsigned int nReceivedDelay;
+  volatile static unsigned int nReceivedProtocol;
+  const static unsigned int nSeparationLimit;
+  /*
+      * timings[0] contains sync timing, followed by a number of bits
+      */
+  static unsigned int timings[RCSWITCH_MAX_CHANGES];
+  // буфер длительностей последних четырех пакетов, [0] - последний
+  static unsigned int buftimings[4];
+  CircularBuffer<RFData, 10> rxRfSignalBuffer;
+#endif
+};
+#endif // RC_SWITCH_H
