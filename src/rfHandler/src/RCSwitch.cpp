@@ -702,7 +702,7 @@ unsigned int* RCSwitch::getReceivedRawdata() {
 }
 
 /* helper function for the receiveProtocol method */
-static inline unsigned int diff(int A, int B) {
+unsigned int RCSwitch::diff(int A, int B) {
   return abs(A - B);
 }
 
