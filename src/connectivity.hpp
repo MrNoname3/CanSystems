@@ -2,8 +2,13 @@
 #define CONNECTIVITY_HPP
 
 #include <Arduino.h>                          /// Arduino libraries header.
+#ifdef ESP8266
 #include <ESP8266WiFi.h>                      /// Wifi driver.
 #include <ENC28J60lwIP.h>                     /// Ethernet driver.
+#elif defined ESP32
+#include <WiFi.h>
+#include <ETH.h>
+#endif
 #include <WiFiClientSecure.h>                 /// TCP client with SSL.
 #include <PubSubClient.h>                     /// MQTT client.
 #include <HardwareSerial.h>
@@ -54,6 +59,10 @@ private:
 
   const char* getMqttStatusStr(int8_t status);
 
+#ifdef ESP32
+  static void WiFiEvent(WiFiEvent_t event);
+#endif
+
 public:
   Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
@@ -74,7 +83,21 @@ private:
   };
 
   HardwareSerial& serialPort;
+#ifdef ESP8266
   ENC28J60lwIP ethInt;
+#elif defined ESP32
+  static constexpr uint8_t ETH_PHY_ADDR_ = 1;                 // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
+  static constexpr int8_t ETH_PHY_POWER_ = 17;                // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
+  static constexpr int8_t ETH_PHY_MDC_ = 23;                  // Pin# of the I²C clock signal for the Ethernet PHY
+  static constexpr int8_t ETH_PHY_MDIO_ = 18;                 // Pin# of the I²C IO signal for the Ethernet PHY
+  static constexpr auto ETH_PHY_TYPE_ = ETH_PHY_LAN8720;      // Type of the Ethernet PHY (LAN8720 or TLK110)
+  static constexpr auto ETH_CLK_MODE_ = ETH_CLOCK_GPIO0_IN;
+  //ETH_CLOCK_GPIO0_IN   - default: external clock from crystal oscillator
+  //ETH_CLOCK_GPIO0_OUT  - 50MHz clock from internal APLL output on GPIO0 - possibly an inverter is needed for LAN8720
+  //ETH_CLOCK_GPIO16_OUT - 50MHz clock from internal APLL output on GPIO16 - possibly an inverter is needed for LAN8720
+  //ETH_CLOCK_GPIO17_OUT - 50MHz clock from internal APLL inverted output on GPIO17 - tested with LAN8720
+  static bool ethConnected;
+#endif
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
   Interface usedInterface;
@@ -167,11 +190,11 @@ public:
     DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
 
   private:
-    inline IRAM_ATTR void ledToggle();
+    static IRAM_ATTR void ledToggle();
     inline void ledHigh();
     inline void ledLow();
 
-    const uint8_t ledPin_;
+    static uint8_t ledPin_;
     const bool ledOnState_;
     Ticker ledTicker;
   };

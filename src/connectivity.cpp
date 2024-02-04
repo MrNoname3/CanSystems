@@ -1,17 +1,25 @@
 #include "connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include <ArduinoJson.h>                      /// Handle JSON files.
+#ifdef ESP8266
 #include <Updater.h>
+#elif defined ESP32
+#include <Update.h>
+#include <esp_task_wdt.h>
+#endif
 #if (defined(__AVR__) || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_SAM))
 #include <avr/pgmspace.h>
 #else
 #include <pgmspace.h>
 #endif
 
+#ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
 // Don't connect anything to the analog input pin!
 ADC_MODE(ADC_VCC);
-
+#elif defined ESP32
+bool Connectivity::ethConnected = false;
+#endif
 bool Connectivity::isDeviceOnline = true;
 
 const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
@@ -55,7 +63,9 @@ const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKN
 
 Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
   serialPort(serial),
+#ifdef ESP8266
   ethInt(ethCS),
+#endif
   tcpClient(),
   mqttClient(tcpClient),
   usedInterface(Interface::UNKNOWN),
@@ -70,13 +80,13 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   dataTransfer(&serialPort),
   common(*this, "common")
 {
-  WdtHandler.enableHwWdt();
   serialPort.begin(MONITOR_BAUD);
   delay(1);
   serialPort.println();
 }
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
+  WdtHandler.enableHwWdt();
   TimeTracker conTime;
   conTime.startTime();
   const bool conResult = beginSimple(interface);
@@ -92,7 +102,9 @@ bool Connectivity::beginSimple(Interface interface) {
   serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
   serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
   serialPort.printf_P(PSTR("%sGit hash: %x\r\n"), INIT_PREFIX, gitHash);
+#ifdef ESP8266
   serialPort.printf_P(PSTR("%sInternal VCC: %humV\r\n"), INIT_PREFIX, ESP.getVcc());
+#endif
   serialPort.printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
   serialPort.flush();
 
@@ -101,44 +113,61 @@ bool Connectivity::beginSimple(Interface interface) {
     const bool initFS = LittleFS.begin();
     serialPort.printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE));
     if(!initFS) { return false; }
+#ifdef ESP8266
     {
       FSInfo fsInfo;
       LittleFS.info(fsInfo);
       serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n  Block size: %u\r\n  Page size: %u\r\n  Max open files: %u\r\n  Max path lengths: %u\r\n"),
         fsInfo.totalBytes, fsInfo.usedBytes, (fsInfo.totalBytes - fsInfo.usedBytes), fsInfo.blockSize, fsInfo.pageSize, fsInfo.maxOpenFiles, fsInfo.maxPathLength);
     }
+#elif defined ESP32
+    serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"),
+      LittleFS.totalBytes(), LittleFS.usedBytes(), (LittleFS.totalBytes() - LittleFS.usedBytes()));
+#endif
   }
 
   // Get MAC.
   uint8_t mac[6] = { 0 };
-  char macAddress[macStringSize] = { '\0' };
-  {
-    wifi_get_macaddr(STATION_IF, mac);
-    const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
-    serialPort.printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE);
-    if(!macValid) { return false; }
-  }
+#ifdef ESP8266
+  wifi_get_macaddr(STATION_IF, mac);
+#endif
 
   // Start interface.
   WdtHandler.resetHwWdtIfPossible();
   if(interface == Interface::ETHERNET) {
     WiFi.mode(WIFI_OFF);
+#ifdef ESP8266
     ethInt.setDefault();         // default route set through this interface
     const bool ethInit = ethInt.begin(mac);
+#elif defined ESP32
+  WiFi.onEvent(Connectivity::WiFiEvent);
+  const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
+#endif
     serialPort.printf_P(PSTR("%sInitialising ethernet modul:%s\r\n"), ETH_PREFIX, ethInit ? OK_STATE : ERR_STATE);
     if(!ethInit) { return false; }
     serialPort.printf_P(PSTR("%sConnecting to router"), ETH_PREFIX);
+#ifdef ESP8266
     while(!ethInt.connected()) {
+#elif defined ESP32
+    while(!ethConnected) {    // Wait until the device receives an IP address.
+#endif
       yield();
       serialPort.print(loadingMark);
       delay(300);
     }
+#ifdef ESP8266
     serialPort.printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE);
     if(!ethInt.connected()) { return false; }
     serialPort.printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str());
     serialPort.printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str());
     serialPort.printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str());
+#elif defined ESP32
+    serialPort.printf_P(PSTR("%s\r\n"), ethConnected ? OK_STATE : ERR_STATE);
+    if(!ethConnected) { return false; }
+    serialPort.printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
+    serialPort.printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
+    serialPort.printf_P(PSTR("  SNM: %s\r\n"), ETH.subnetMask().toString().c_str());
+#endif
   }
   else if(interface == Interface::WIFI) {
     const bool wifiInit = WiFi.mode(WIFI_STA);
@@ -161,8 +190,19 @@ bool Connectivity::beginSimple(Interface interface) {
   else {
     return false;
   }
+#ifdef ESP32
+  ETH.setHostname(BUILD_ENV_NAME);
+  ETH.macAddress(mac);
+#endif
   serialPort.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   usedInterface = interface;
+  char macAddress[macStringSize] = { '\0' };
+  {
+    const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
+    serialPort.printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE);
+    if(!macValid) { return false; }
+  }
 
   // Set time via NTP, as required for x.509 validation.
   yield();
@@ -209,7 +249,11 @@ bool Connectivity::beginSimple(Interface interface) {
 
   {
     char versionString[64];
+#ifdef ESP8266
     const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"VCC\":%hu""}"), cppVersion, fwVersion, gitHash, ESP.getVcc());
+#elif defined ESP32
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x""}"), cppVersion, fwVersion, gitHash);
+#endif
     const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
     if(!versionStringValid) { return false; }
     common.messageSend(versionString);
@@ -240,7 +284,7 @@ bool Connectivity::startWifi() {
   if(!wifiFileExists) { return false; }
 
   File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
-  serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFile.fullName(), wifiFile ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? OK_STATE : ERR_STATE);
   if(!wifiFile) { wifiFile.close(); return false; }
 
   StaticJsonDocument<256> wifiJson;
@@ -257,6 +301,8 @@ bool Connectivity::startWifi() {
 }
 
 bool Connectivity::connect() {
+  yield();
+#ifdef ESP8266
   // Open cert.
   X509List cert(mqttSettings::caCert);
   tcpClient.setTrustAnchors(&cert);
@@ -264,10 +310,14 @@ bool Connectivity::connect() {
 
   // TCP connection.
   //tcpClient.getLastSSLError() == BR_ERR_OK ?
-  yield();
   const bool tcpStopResult = tcpClient.stop(2000);
   serialPort.printf_P(PSTR("%sReset connection for fresh start%s\r\n"), TCP_PREFIX, tcpStopResult ? OK_STATE : ERR_STATE);
   if(!tcpStopResult) { return false; }
+#elif defined ESP32
+  //tcpClient.stop();
+  tcpClient.setCACert(mqttSettings::caCert);
+  tcpClient.setTimeout(10);
+#endif
   const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
   serialPort.printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE);
   if(!tcpConResult) { return false; }
@@ -316,7 +366,14 @@ bool Connectivity::loopSimple() {
 
   static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   const char* intPrefix;
-  if(usedInterface == Interface::ETHERNET) { actualInterfaceStatus = ethInt.status(); intPrefix = ETH_PREFIX; }
+  if(usedInterface == Interface::ETHERNET) {
+#ifdef ESP8266
+    actualInterfaceStatus = ethInt.status();
+#elif defined ESP32
+    actualInterfaceStatus = ethConnected ? WL_CONNECTED : WL_DISCONNECTED;
+#endif
+    intPrefix = ETH_PREFIX;
+  }
   else if(usedInterface == Interface::WIFI) { actualInterfaceStatus = WiFi.status();  intPrefix = WIFI_PREFIX; }
   else { return false; }
   if(interfaceStatus != actualInterfaceStatus) {
@@ -399,7 +456,9 @@ const char* Connectivity::getIntStatusStr(wl_status_t status) {
     case WL_CONNECTED: { return WL_CONNECTED_STR; } break;
     case WL_CONNECT_FAILED: { return WL_CONNECT_FAILED_STR; } break;
     case WL_CONNECTION_LOST: { return WL_CONNECTION_LOST_STR; } break;
+#ifdef ESP8266
     case WL_WRONG_PASSWORD: { return WL_WRONG_PASSWORD_STR; } break;
+#endif
     case WL_DISCONNECTED: { return WL_DISCONNECTED_STR; } break;
     default: { return WL_UNKNOWN_STATUS_STR; } break;
   }
@@ -421,21 +480,48 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
   }
 }
 
+#ifdef ESP32
+  void Connectivity::WiFiEvent(WiFiEvent_t event) {
+  switch(event) {
+    case ARDUINO_EVENT_ETH_START: {} break;
+    case ARDUINO_EVENT_ETH_CONNECTED: {} break;
+    case ARDUINO_EVENT_ETH_GOT_IP: { ethConnected = true; } break;
+    case ARDUINO_EVENT_ETH_DISCONNECTED: { ethConnected = false; } break;
+    case ARDUINO_EVENT_ETH_STOP: { ethConnected = false; } break;
+    default: {} break;
+  }
+}
+#endif
+
 //////////////////// -- WDT class-- ////////////////////
 
 void Connectivity::WdtWrapper::enableHwWdt() {
+#ifdef ESP8266
   wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
+#elif defined ESP32
+  constexpr uint8_t WDT_TIMEOUT = 10;                     // Temout in sec.
+  esp_task_wdt_init(WDT_TIMEOUT, true);                   // Enable panic so ESP32 restarts.
+  esp_task_wdt_add(nullptr);                              // Add current thread to WDT watch.
+#endif
 }
 
 void Connectivity::WdtWrapper::resetHwWdt() {
   this->enabledResetNumber_ = 0;
+#ifdef ESP8266
   wdt_reset();
+#elif defined ESP32
+  esp_task_wdt_reset();
+#endif
 }
 
 void Connectivity::WdtWrapper::resetHwWdtIfPossible() {
   if(this->enabledResetNumber_ > 0) {
     this->enabledResetNumber_--;
+#ifdef ESP8266
     wdt_reset();
+#elif defined ESP32
+    esp_task_wdt_reset();
+#endif
   }
 }
 void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber) {
@@ -444,7 +530,10 @@ void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber)
 
 //////////////////// -- Debug LED class-- ////////////////////
 
-Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledPin_(ledPin), ledOnState_(ledOnState) {
+uint8_t Connectivity::DebugLED::ledPin_ = -1;
+
+Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledOnState_(ledOnState) {
+  ledPin_ = ledPin;
   pinMode(this->ledPin_, OUTPUT);
 }
 
@@ -454,7 +543,7 @@ void Connectivity::DebugLED::ledOff() { this->ledOnState_ ? ledHigh() : ledLow()
 
 void Connectivity::DebugLED::startTicker(uint32_t tickInterval_ms) {
   ledOff();
-  this->ledTicker.attach_ms(tickInterval_ms, [this](){ ledToggle(); });
+  this->ledTicker.attach_ms(tickInterval_ms, ledToggle);
 }
 
 void Connectivity::DebugLED::stopTicker() {
@@ -463,7 +552,7 @@ void Connectivity::DebugLED::stopTicker() {
 }
 
 void Connectivity::DebugLED::ledToggle() {
-  digitalWrite(this->ledPin_, !digitalRead(this->ledPin_));   // LED pin toggle.
+  digitalWrite(ledPin_, !digitalRead(ledPin_));   // LED pin toggle.
 }
 
 void Connectivity::DebugLED::ledHigh() {
@@ -663,9 +752,13 @@ bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, cons
   if(fileName == nullptr) { stop(true); return false; }
   this->fileName_ = fileName;
   {
+#ifdef ESP8266
     FSInfo fsInfo;
     LittleFS.info(fsInfo);
-    const uint32 freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
+    const uint32_t freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
+#elif defined ESP32
+    const uint32_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+#endif
     const bool isEnoughFreeSpace = freeSpace > this->fileSize_;
     if(!isEnoughFreeSpace) {
       if(this->serialPort) { this->serialPort->printf_P(PSTR("%sNot enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), FILE_TRANSFER_PREFIX, freeSpace, this->fileSize_); }
