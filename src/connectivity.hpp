@@ -340,27 +340,25 @@ private:
 public:
   class MqttComBase {
   public:
+    friend class Connectivity;
     enum class Response : uint8_t {
       NACK = 0,
       ACK,
     };
+    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
+    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
+    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
+    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
   protected:
     MqttComBase(Connectivity& connectivity, const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
     const char* getIsoTime();
-  public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
     virtual bool begin() = 0;
     virtual bool loop() = 0;
     const char* getClassId() const;
-
-    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
-    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
-    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
-    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
-  protected:
     Connectivity& conn;
   private:
     char classId[16];
