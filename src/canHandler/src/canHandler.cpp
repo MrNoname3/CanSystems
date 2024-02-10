@@ -135,15 +135,23 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
 const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }
 
 void CanHandler::CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
+  sendCanFrame(static_cast<uint16_t>(command), data);
+}
+
+void CanHandler::CanComBase::sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
   CanFrame canFrame;
   canFrame.canId.from = localCanId;
   canFrame.canId.to = nodeCanId;
-  canFrame.canId.cmd = static_cast<uint16_t>(command);
+  canFrame.canId.cmd = command;
   memcpy(canFrame.data, data, sizeof(data));
   canHandler.send(canFrame);
 }
 
 void CanHandler::CanComBase::sendCanCmd(CanCmd command) const {
+  sendCanCmd(static_cast<uint16_t>(command));
+}
+
+void CanHandler::CanComBase::sendCanCmd(uint16_t command) const {
   uint8_t data[8] = { 0 };
   sendCanFrame(command, data);
 }

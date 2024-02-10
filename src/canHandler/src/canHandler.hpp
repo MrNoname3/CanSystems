@@ -106,7 +106,9 @@ public:
     virtual bool run(bool nodeAlive) = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
     void sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
+    void sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
     void sendCanCmd(CanCmd command) const;
+    void sendCanCmd(uint16_t command) const;
   private:
     bool beginPriv();
     bool loopPriv();
