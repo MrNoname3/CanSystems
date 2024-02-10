@@ -15,7 +15,7 @@ Connectivity iotConn(Serial, SPI_CS, LED, false);
 Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 #elif defined PROJECT_CAN
-
+CanHandler canHandler(Serial, false);
 #endif
 
 void setup() {
@@ -24,7 +24,7 @@ void setup() {
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
 #elif defined ESP32
-  if(xTaskCreateUniversal(mainTask, "mainTask", 32768U, nullptr, 3, &mainTaskHandle, 0) != pdTRUE) {
+  if(xTaskCreateUniversal(mainTask, "mainTask", 8192U, nullptr, 1, &mainTaskHandle, 0) != pdTRUE) {
     Serial.printf_P(PSTR("Error creating the main task!"));
   }
   vTaskDelete(nullptr);
@@ -41,6 +41,9 @@ void loop() {
 void mainTask(void *pvParameters) {
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
+  size_t stackSize = uxTaskGetStackHighWaterMark(NULL);
+  Serial.print("Configured stack size: ");
+  Serial.println(stackSize);
   while(true) {
     iotConn.loop();
     vTaskDelay(5);

@@ -8,7 +8,7 @@
 #include "radiation/src/radiation.hpp"
 #include "rfHandler/src/rfHandler.hpp"
 #elif defined PROJECT_CAN
-#include <CAN.h>                              /// SPI CAN controller library.
+#include "canHandler/src/canHandler.hpp"
 #endif
 
 //--- Constants ---//
