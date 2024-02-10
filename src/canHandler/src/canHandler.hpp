@@ -28,7 +28,7 @@ public:
     CanFrame() : canId(), data{0} {}
   };
 
-  CanHandler(HardwareSerial& serial, bool subClassHandling = false);
+  CanHandler(HardwareSerial& serial);
   /// @brief Destructor of the object.
   virtual ~CanHandler() = default;
   bool begin(uint32_t canBaud);
@@ -46,7 +46,6 @@ public:
   CanHandler& operator=(CanHandler&&) = delete;                 // Define move assignment operator.
 private:
   HardwareSerial& serialPort;
-  bool subClassHandling_;
   static constexpr uint8_t canRxQueueSize = 10U;
   static constexpr uint8_t canTxQueueSize = 10U;
   static QueueHandle_t canRxQueue;              // Queue handler for CAN RX.
@@ -80,14 +79,10 @@ public:
 public:
   class CanComBase {
   public:
+    friend class CanHandler;
     CanComBase(CanHandler& canHandler, uint32_t canId);
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
-    virtual bool begin();
-    virtual bool loop();
-    virtual void canFrameReceived(CanHandler::CanFrame& canFrame);
-    const uint32_t getCanId() const;
-
     CanComBase(const CanComBase&) = delete;                       // Define copy constructor.
     CanComBase& operator=(const CanComBase&) = delete;            // Define copy assignment operator.
     CanComBase(CanComBase&&) = delete;                            // Define move constructor.
@@ -107,14 +102,21 @@ public:
       OTA_END,                               // OTA process ended.
       RGB_LED,                               // Set WS2812 RGB LED color.
     };
-    void sendCanFrame(CanHandler::CanFrame& canFrame) const;
-    void sendCanCmd(CanCmd command);
-    CanHandler& canHandler;
-    static constexpr uint16_t localCanId = 10U;
+    virtual bool init() = 0;
+    virtual bool run(bool nodeAlive) = 0;
+    virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
+    void sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
+    void sendCanCmd(CanCmd command) const;
   private:
-    const uint32_t nodeCanId;
+    bool beginPriv();
+    bool loopPriv();
+    void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
+    const uint32_t getCanId() const;
+    static constexpr uint16_t localCanId = 10U;
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
+    CanHandler& canHandler;
+    const uint32_t nodeCanId;
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
   };

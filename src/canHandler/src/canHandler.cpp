@@ -5,9 +5,7 @@ const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";            
 const char CanHandler::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
 const char CanHandler::CAN_PREFIX[] PROGMEM               = "[CAN] ";
 
-CanHandler::CanHandler(HardwareSerial& serial, bool subClassHandling) :
-  serialPort(serial),
-  subClassHandling_(subClassHandling) {}
+CanHandler::CanHandler(HardwareSerial& serial) : serialPort(serial) {}
 
 bool CanHandler::begin(uint32_t canBaud) {
   serialPort.printf_P(PSTR("%s Hardware init started...\r\n"), CAN_PREFIX);
@@ -21,17 +19,15 @@ bool CanHandler::begin(uint32_t canBaud) {
   const bool txQueueResult = canTxQueue != nullptr;
   serialPort.printf_P(PSTR("%sCreating queues:%s\r\n"), CAN_PREFIX, (rxQueueResult && txQueueResult ? OK_STATE : ERR_STATE));
   if(!rxQueueResult || !txQueueResult) { return false; }
-  if(subClassHandling_) {
-    serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), CAN_PREFIX);
-    for(std::size_t i = 0; i < canDevices.size(); ++i) {
-      const auto& currentObject = canDevices[i];
-      if(currentObject != nullptr) {
-        const bool beginResult = currentObject->begin();
-        serialPort.printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getCanId(), beginResult ? OK_STATE : ERR_STATE);
-      }
-      else {
-        serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
-      }
+  serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), CAN_PREFIX);
+  for(std::size_t i = 0; i < canDevices.size(); ++i) {
+    const auto& currentObject = canDevices[i];
+    if(currentObject != nullptr) {
+      const bool beginResult = currentObject->beginPriv();
+      serialPort.printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getCanId(), beginResult ? OK_STATE : ERR_STATE);
+    }
+    else {
+      serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
     }
   }
   return true;
@@ -64,17 +60,15 @@ bool CanHandler::loop() {
       for(const auto &currentObject : canDevices) {
         if(currentObject == nullptr) { return false; }
         if(currentObject->getCanId() == messageCanId) {
-          currentObject->canFrameReceived(frameIn);
+          currentObject->canFrameReceivedPriv(frameIn);
         }
       }
     }
   }
   // Handle the looping of subclasses.
-  if(subClassHandling_) {
-    for(const auto &currentObject : canDevices) {
-      if(currentObject != nullptr) {
-        currentObject->loop();
-      }
+  for(const auto &currentObject : canDevices) {
+    if(currentObject != nullptr) {
+      currentObject->loopPriv();
     }
   }
   { // Handle CAN frame sending.
@@ -117,36 +111,39 @@ CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId) :
   canHandler.registerCallback(this);
 }
 
-bool CanHandler::CanComBase::begin() {
+bool CanHandler::CanComBase::beginPriv() {
   sendCanCmd(CanCmd::PING);
   pingTimer.reload();
   alertTimer.reload();
-  return true;
+  return init();
 }
 
-bool CanHandler::CanComBase::loop() {
+bool CanHandler::CanComBase::loopPriv() {
   if(pingTimer.isExpired()) {
     pingTimer.reload();
     sendCanCmd(CanCmd::PING);
   }
-  return alertTimer.isExpired();
+  return run(alertTimer.isExpired());
 }
 
-void CanHandler::CanComBase::canFrameReceived(CanHandler::CanFrame& canFrame) {
+void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame) {
   pingTimer.reload();
   alertTimer.reload();
+  canFrameReceived(canFrame);
 }
 
 const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }
 
-void CanHandler::CanComBase::sendCanFrame(CanHandler::CanFrame& canFrame) const {
+void CanHandler::CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
+  CanFrame canFrame;
+  canFrame.canId.from = localCanId;
+  canFrame.canId.to = nodeCanId;
+  canFrame.canId.cmd = static_cast<uint16_t>(command);
+  memcpy(canFrame.data, data, sizeof(data));
   canHandler.send(canFrame);
 }
 
-void CanHandler::CanComBase::sendCanCmd(CanCmd command) {
-  CanFrame pingFrame;
-  pingFrame.canId.from = localCanId;
-  pingFrame.canId.to = nodeCanId;
-  pingFrame.canId.cmd = static_cast<uint16_t>(command);
-  sendCanFrame(pingFrame);
+void CanHandler::CanComBase::sendCanCmd(CanCmd command) const {
+  uint8_t data[8] = { 0 };
+  sendCanFrame(command, data);
 }
