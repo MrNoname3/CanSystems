@@ -1,3 +1,4 @@
+#ifdef PROJECT_CAN
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
 
@@ -155,3 +156,4 @@ void CanHandler::CanComBase::sendCanCmd(uint16_t command) const {
   uint8_t data[8] = { 0 };
   sendCanFrame(command, data);
 }
+#endif // PROJECT_CAN

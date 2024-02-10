@@ -1,3 +1,4 @@
+#ifdef PROJECT_CAN
 #ifndef CAN_HANDLER_HPP
 #define CAN_HANDLER_HPP
 
@@ -80,14 +81,14 @@ public:
   class CanComBase {
   public:
     friend class CanHandler;
-    CanComBase(CanHandler& canHandler, uint32_t canId);
-    /// @brief Destructor of the object.
-    virtual ~CanComBase() = default;
     CanComBase(const CanComBase&) = delete;                       // Define copy constructor.
     CanComBase& operator=(const CanComBase&) = delete;            // Define copy assignment operator.
     CanComBase(CanComBase&&) = delete;                            // Define move constructor.
     CanComBase& operator=(CanComBase&&) = delete;                 // Define move assignment operator.
   protected:
+    CanComBase(CanHandler& canHandler, uint32_t canId);
+    /// @brief Destructor of the object.
+    virtual ~CanComBase() = default;
     /// @brief Base command list for nodes.
     enum class CanCmd : uint16_t {
       IDLE = 0,                              // Idle state.
@@ -125,3 +126,4 @@ public:
 
 };
 #endif // CAN_HANDLER_HPP
+#endif // PROJECT_CAN

@@ -4,12 +4,9 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include "connectivity.hpp"
-#ifdef PROJECT_RAD_RF
 #include "radiation/src/radiation.hpp"
 #include "rfHandler/src/rfHandler.hpp"
-#elif defined PROJECT_CAN
 #include "canHandler/src/canHandler.hpp"
-#endif
 
 //--- Constants ---//
 #ifdef ESP8266

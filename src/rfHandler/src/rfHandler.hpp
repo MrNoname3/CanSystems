@@ -1,3 +1,4 @@
+#ifdef PROJECT_RAD_RF
 #ifndef RFHANDLER_HPP
 #define RFHANDLER_HPP
 
@@ -42,3 +43,4 @@ private:
   static const char PROGMEM RF_MSG_FRAME[];
 };
 #endif // RFHANDLER_HPP
+#endif // PROJECT_RAD_RF
