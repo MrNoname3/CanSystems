@@ -94,7 +94,7 @@ public:
       IDLE = 0,                              // Idle state.
       PING,                                  // Ping command.
       RESET,                                 // Node reset command.
-      GET_FW_VERSION,                        // Firmware version command.
+      FW_VERSION,                            // Firmware version command.
       SETADDRESS,                            // CAN address setup.
       NODE_RESTARTED,                        // Node restarted.
       BUTTON_EVENT,                          // Button event occured.
