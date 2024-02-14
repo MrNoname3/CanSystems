@@ -38,7 +38,7 @@ void CanHandler::rxInterrupt(int packetsNum) {
   if(packetsNum <= 0) { return; }
   if(!CAN.packetExtended()) { return; }
   CanFrame rxCanData;
-  rxCanData.canId.id = CAN.packetId();
+  rxCanData.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
     const uint8_t canDataDlc = static_cast<uint8_t>(CAN.packetDlc());
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(rxCanData.data, canDataDlc));
@@ -57,7 +57,7 @@ bool CanHandler::loop() {
     CanFrame frameIn;
     const bool qReceiveResult = xQueueReceive(canRxQueue, &frameIn, 0U) == pdTRUE;
     if(qReceiveResult) {
-      const uint32_t messageCanId = frameIn.canId.id;
+      const uint32_t messageCanId = frameIn.extId;
       for(const auto &currentObject : canDevices) {
         if(currentObject == nullptr) { return false; }
         if(currentObject->getCanId() == messageCanId) {
@@ -76,7 +76,7 @@ bool CanHandler::loop() {
     CanFrame frameOut;
     const bool qReceiveResult = xQueueReceive(canTxQueue, &frameOut, 0U) == pdTRUE;
     if(qReceiveResult) {
-      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.canId.id) > 0;
+      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId) > 0;
       if(!beginPacketResult) { return false; }
       const bool packetWriteResult = CAN.write(frameOut.data, sizeof(frameOut.data)) > 0;
       if(!packetWriteResult) { return false; }
@@ -141,9 +141,9 @@ void CanHandler::CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[
 
 void CanHandler::CanComBase::sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
   CanFrame canFrame;
-  canFrame.canId.from = localCanId;
-  canFrame.canId.to = nodeCanId;
-  canFrame.canId.cmd = command;
+  canFrame.from = localCanId;
+  canFrame.to = nodeCanId;
+  canFrame.cmd = command;
   memcpy(canFrame.data, data, sizeof(data));
   canHandler.send(canFrame);
 }

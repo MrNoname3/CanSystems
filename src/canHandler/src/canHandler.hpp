@@ -10,23 +10,19 @@ class CanHandler final {
 public:
   class CanComBase;
 
-  union __attribute__((packed))
-  CanId {                                       // CAN ID store / convert.
-    uint32_t id;                                // Extended CAN ID.
-    struct {
-      uint32_t to : 10;                         // 10 bits for receiver address.
-      uint32_t cmd : 9;                         // 9 bits for command.
-      uint32_t from : 10;                       // 10 bits for sender address.
-      uint32_t padding : 3;                     // Padding to fill up to 32 bits.
-    };
-    CanId() : id{0U} {}
-  };
-
   struct __attribute__((packed))
   CanFrame {                                    // CAN frame.
-    CanId canId;                                // CAN ID.
+    union {
+      uint32_t extId;                           // Extended CAN ID.
+      struct {
+        uint32_t to : 10;                       // 10 bits for receiver address.
+        uint32_t cmd : 9;                       // 9 bits for command.
+        uint32_t from : 10;                     // 10 bits for sender address.
+        uint32_t padding : 3;                   // Padding to fill up to 32 bits.
+      };
+    };
     uint8_t data[8];                            // CAN data.
-    CanFrame() : canId(), data{0} {}
+    CanFrame() : extId(), data{0} {}
   };
 
   CanHandler(HardwareSerial& serial);
@@ -91,12 +87,8 @@ public:
     virtual ~CanComBase() = default;
     /// @brief Base command list for nodes.
     enum class CanCmd : uint16_t {
-      IDLE = 0,                              // Idle state.
-      PING,                                  // Ping command.
-      RESET,                                 // Node reset command.
-      FW_VERSION,                            // Firmware version command.
-      SETADDRESS,                            // CAN address setup.
-      NODE_RESTARTED,                        // Node restarted.
+      PING = 0,                              // Ping command.
+      RESTART,                               // Node restart command.
       BUTTON_EVENT,                          // Button event occured.
       OTA_START,                             // Init OTA process.
       OTA_SEND,                              // Stream FW bytes to OTA handler.
