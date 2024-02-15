@@ -103,11 +103,13 @@ void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
 
 //////////////////// -- CanComBase class-- ////////////////////
 
-CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId) :
+CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
+  MqttComBase(connectivity, classID),
   canHandler(canHandler),
   nodeCanId(canId),
   pingTimer(pingTime),
-  alertTimer(alertTime)
+  alertTimer(alertTime),
+  nodeAlive_(true)
 {
   canHandler.registerCallback(this);
 }
@@ -124,13 +126,44 @@ bool CanHandler::CanComBase::loopPriv() {
     pingTimer.reload();
     sendCanCmd(CanCmd::PING);
   }
-  return run(alertTimer.isExpired());
+  const bool nodeAlive = alertTimer.isExpired();
+  if(nodeAlive != nodeAlive_) {
+    nodeAlive_ = nodeAlive;
+    const uint8_t data[8] = { static_cast<uint8_t>(nodeAlive_), 0, 0, 0, 0, 0, 0, 0 };
+    sendResponse(MqttComBase::Response::ALERT, static_cast<uint16_t>(CanCmd::PING), data);
+  }
+  return run();
 }
 
 void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame) {
   pingTimer.reload();
   alertTimer.reload();
-  canFrameReceived(canFrame);
+  const uint16_t command = static_cast<uint16_t>(canFrame.cmd);
+  switch(command) {
+    case static_cast<uint16_t>(CanCmd::PING): {} break;
+    case static_cast<uint16_t>(CanCmd::RESTART): {
+      sendResponse(MqttComBase::Response::ALERT, command, canFrame.data);
+    } break;
+    case static_cast<uint16_t>(CanCmd::BUTTON_EVENT): {
+      sendResponse(MqttComBase::Response::EVENT, command, canFrame.data);
+    } break;
+    case static_cast<uint16_t>(CanCmd::OTA_START): {} break;
+    case static_cast<uint16_t>(CanCmd::OTA_SEND): {} break;
+    case static_cast<uint16_t>(CanCmd::OTA_END): {
+      MqttComBase::sendResponse(MqttComBase::Response::LOG, command);
+    } break;
+    case static_cast<uint16_t>(CanCmd::RGB_LED): {} break;
+    default: { canFrameReceived(canFrame); } break;
+  }
+}
+
+bool CanHandler::CanComBase::begin() { return true; }
+
+bool CanHandler::CanComBase::loop() { return true; }
+
+void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) {
+
+  mqttMsgReceived(payload, length);
 }
 
 const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }
@@ -155,5 +188,19 @@ void CanHandler::CanComBase::sendCanCmd(CanCmd command) const {
 void CanHandler::CanComBase::sendCanCmd(uint16_t command) const {
   uint8_t data[8] = { 0 };
   sendCanFrame(command, data);
+}
+
+bool CanHandler::CanComBase::sendResponse(Response resp, uint16_t cmd, const uint8_t (&data)[8]) {
+  static constexpr const uint8_t respBufSize = 64;
+  char respBuf[respBufSize] = { '\0' };
+  const int32_t respBufRealSize = snprintf_P(respBuf, sizeof(respBuf), PSTR("{""\"type\":%hu,""\"cmd\":%hu,""\"data\":%lu""}"),
+    static_cast<uint8_t>(resp),
+    cmd,
+    reinterpret_cast<const uint64_t&>(*data)
+  );
+  const bool respBufValid = (respBufRealSize >= 0 && respBufRealSize < static_cast<int32_t>(sizeof(respBuf)));
+  if(!respBufValid) { return false; }
+  MqttComBase::messageSend(respBuf);
+  return true;
 }
 #endif // PROJECT_CAN

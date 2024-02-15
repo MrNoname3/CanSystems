@@ -5,6 +5,7 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <HardwareSerial.h>
 #include <vector>
+#include "../../connectivity.hpp"
 
 class CanHandler final {
 public:
@@ -74,7 +75,7 @@ public:
   };
 
 public:
-  class CanComBase {
+  class CanComBase : protected Connectivity::MqttComBase {
   public:
     friend class CanHandler;
     CanComBase(const CanComBase&) = delete;                       // Define copy constructor.
@@ -82,7 +83,7 @@ public:
     CanComBase(CanComBase&&) = delete;                            // Define move constructor.
     CanComBase& operator=(CanComBase&&) = delete;                 // Define move assignment operator.
   protected:
-    CanComBase(CanHandler& canHandler, uint32_t canId);
+    CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
     /// @brief Base command list for nodes.
@@ -96,17 +97,22 @@ public:
       RGB_LED,                               // Set WS2812 RGB LED color.
     };
     virtual bool init() = 0;
-    virtual bool run(bool nodeAlive) = 0;
+    virtual bool run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
+    virtual void mqttMsgReceived(uint8_t* payload, uint32_t length) = 0;
     void sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
     void sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
     void sendCanCmd(CanCmd command) const;
     void sendCanCmd(uint16_t command) const;
+    bool sendResponse(Response resp, uint16_t cmd, const uint8_t (&data)[8]);
   private:
     bool beginPriv();
     bool loopPriv();
     void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
     const uint32_t getCanId() const;
+    virtual bool begin() override;
+    virtual bool loop() override;
+    virtual void messageReceived(uint8_t* payload, uint32_t length) override;
     static constexpr uint16_t localCanId = 10U;
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
@@ -114,6 +120,7 @@ public:
     const uint32_t nodeCanId;
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
+    bool nodeAlive_;
   };
 
 };

@@ -344,6 +344,9 @@ public:
     enum class Response : uint8_t {
       NACK = 0,
       ACK,
+      EVENT,
+      ALERT,
+      LOG
     };
     MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
     MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
