@@ -99,7 +99,6 @@ public:
     virtual bool init() = 0;
     virtual bool run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
-    virtual void mqttMsgReceived(uint8_t* payload, uint32_t length) = 0;
     void sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
     void sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
     void sendCanCmd(CanCmd command) const;
@@ -121,6 +120,7 @@ public:
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
     bool nodeAlive_;
+    static const char PROGMEM CAN_BASE_PREFIX[];
   };
 
 };

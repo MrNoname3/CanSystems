@@ -1,6 +1,7 @@
 #ifdef PROJECT_CAN
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
+#include <ArduinoJson.h>                      /// Handle JSON files.
 
 const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char CanHandler::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
@@ -103,6 +104,8 @@ void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
 
 //////////////////// -- CanComBase class-- ////////////////////
 
+const char CanHandler::CanComBase::CAN_BASE_PREFIX[] PROGMEM               = "[CANB] ";
+
 CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
   MqttComBase(connectivity, classID),
   canHandler(canHandler),
@@ -131,6 +134,7 @@ bool CanHandler::CanComBase::loopPriv() {
     nodeAlive_ = nodeAlive;
     const uint8_t data[8] = { static_cast<uint8_t>(nodeAlive_), 0, 0, 0, 0, 0, 0, 0 };
     sendResponse(MqttComBase::Response::ALERT, static_cast<uint16_t>(CanCmd::PING), data);
+    canHandler.serialPort.printf_P(PSTR("%s%s is %s!\r\n"), CAN_BASE_PREFIX, MqttComBase::getClassId(), nodeAlive_ ? F("ONLINE") : F("OFFLINE"));
   }
   return run();
 }
@@ -162,8 +166,27 @@ bool CanHandler::CanComBase::begin() { return true; }
 bool CanHandler::CanComBase::loop() { return true; }
 
 void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) {
-
-  mqttMsgReceived(payload, length);
+  StaticJsonDocument<64> cmdJson;
+  DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
+  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
+  if(!deSerResult) {
+    canHandler.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), CAN_BASE_PREFIX, deserializationError.f_str());
+    return;
+  }
+  const bool isFileMsg = cmdJson.containsKey(F("File"));
+  if(isFileMsg) {
+    // Start File transfer
+    return;
+  }
+  const bool isCanMsg = cmdJson.containsKey(F("Command")) && cmdJson.containsKey(F("Data"));
+  if(isCanMsg) {
+    const uint16_t command = cmdJson[F("Command")].as<uint16_t>();
+    const uint64_t canData64 = cmdJson[F("Data")].as<uint64_t>();
+    uint8_t canData[8] = { 0 };
+    memcpy(canData, &canData64, sizeof(canData));
+    sendCanFrame(command, canData);
+    return;
+  }
 }
 
 const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }

@@ -296,7 +296,9 @@ bool Connectivity::startWifi() {
     const char* pass = wifiJson[F("password")].as<const char*>();
     WiFi.begin(ssid, pass);
   }
-  serialPort.printf_P(PSTR("%sSerialize file:%s\r\n"), JSON_PREFIX, deSerResult ? OK_STATE : ERR_STATE);
+  else {
+    serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, deserializationError.f_str());
+  }
   wifiFile.close();
   return deSerResult;
 }
@@ -929,7 +931,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    conn.serialPort.printf_P(PSTR("%sDeserialisation failed!\r\n"), COMMON_PREFIX);
+    conn.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), COMMON_PREFIX, deserializationError.f_str());
     return;
   }
   const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
