@@ -102,6 +102,89 @@ bool CanHandler::SoftwareTimer::isExpired() { return (millis() - start_time_ >= 
 
 void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
 
+//////////////////// -- CRC16 class-- ////////////////////
+
+CanHandler::Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
+  crc_(initValue),
+  polynomial_(polynomial) {}
+
+void CanHandler::Crc16::next(uint8_t value) {
+    crc_ ^= ((uint16_t)value << 8);
+    for (int i = 0; i < 8; i++) {
+      if (crc_ & 0x8000) {
+        crc_ = (crc_ << 1) ^ polynomial_;
+      }
+      else {
+        crc_ <<= 1;
+      }
+    }
+  }
+
+  void CanHandler::Crc16::next(const uint8_t* values, uint32_t length) {
+    for (uint32_t i = 0; i < length; i++) {
+      next(values[i]);
+    }
+  }
+
+  uint16_t CanHandler::Crc16::get() const { return crc_; }
+
+  uint16_t CanHandler::Crc16::calculate(const uint8_t *data, uint32_t length) {
+    CanHandler::Crc16 crc;
+    crc.next(data, length);
+    return crc.get();
+  }
+
+//////////////////// -- CanFileTransfer class-- ////////////////////
+
+CanHandler::CanFileTransfer::CanFileTransfer(const char* fileName) :
+  receivedFile(),
+  firstFrame(true),
+  frameNumber(0),
+  storageNumber(0)
+{
+  if(fileName == nullptr) { return; }
+  memccpy(this->fileName, fileName, '\0', sizeof(this->fileName));
+  receivedFile = LittleFS.open(FPSTR(this->fileName), "r");
+  if(!receivedFile) {
+    receivedFile.close();
+    return;
+  }
+  fileSize = receivedFile.size();
+  Crc16 crc16;
+  while(receivedFile.available() > 0) { crc16.next(receivedFile.read()); }
+  fileCrc = crc16.get();
+}
+
+CanHandler::CanFileTransfer::~CanFileTransfer() {
+  receivedFile.close();
+}
+
+bool CanHandler::CanFileTransfer::getNextFrame(uint8_t (&dataFrame)[8]) {
+  if(fileName == nullptr) { return false; }
+  if(fileSize == 0) { return false; }
+  if(!receivedFile) { return false; }
+  if(firstFrame) {
+    dataFrame[0] = static_cast<uint8_t>((fileCrc >> 0) & 0xFF);       // Lower byte.
+    dataFrame[1] = static_cast<uint8_t>((fileCrc >> 8) & 0xFF);       // Upper byte.
+    dataFrame[2] = static_cast<uint8_t>((fileSize >> 0) & 0xFF);      // Lowest byte.
+    dataFrame[3] = static_cast<uint8_t>((fileSize >> 8) & 0xFF);
+    dataFrame[4] = static_cast<uint8_t>((fileSize >> 16) & 0xFF);
+    dataFrame[5] = static_cast<uint8_t>((fileSize >> 24) & 0xFF);     // Highest byte.
+    dataFrame[6] = static_cast<uint8_t>((storageNumber >> 0) & 0xFF); // Lower byte.
+    dataFrame[7] = static_cast<uint8_t>((storageNumber >> 8) & 0xFF); // Upper byte.
+    firstFrame = false;
+    return true;
+  }
+  constexpr uint8_t pieceSize = 7U;
+  const uint32_t remainingFileSize = receivedFile.available();
+  const uint8_t bytesNumber = remainingFileSize >= pieceSize ? pieceSize : remainingFileSize;
+  if(remainingFileSize == 0) { return false; }
+  receivedFile.readBytes(reinterpret_cast<char*>(&dataFrame), bytesNumber);
+  dataFrame[7] = frameNumber;
+  frameNumber++;
+  return true;
+}
+
 //////////////////// -- CanComBase class-- ////////////////////
 
 const char CanHandler::CanComBase::CAN_BASE_PREFIX[] PROGMEM               = "[CANB] ";
@@ -112,7 +195,8 @@ CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Conne
   nodeCanId(canId),
   pingTimer(pingTime),
   alertTimer(alertTime),
-  nodeAlive_(true)
+  nodeAlive_(true),
+  canFileTransfer(nullptr)
 {
   canHandler.registerCallback(this);
 }
@@ -151,12 +235,21 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
     case static_cast<uint16_t>(CanCmd::BUTTON_EVENT): {
       sendResponse(MqttComBase::Response::EVENT, command, canFrame.data);
     } break;
-    case static_cast<uint16_t>(CanCmd::OTA_START): {} break;
-    case static_cast<uint16_t>(CanCmd::OTA_SEND): {} break;
+    case static_cast<uint16_t>(CanCmd::OTA_START):
+    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+      const bool fileTransferResult = sendFilePiece(CanCmd::OTA_START);
+      if(!fileTransferResult) {
+        canHandler.serialPort.printf_P(PSTR("%sGetting file piece failed at %s!\r\n"),
+          CAN_BASE_PREFIX, MqttComBase::getClassId());
+      }
+    } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
       MqttComBase::sendResponse(MqttComBase::Response::LOG, command);
+      if(canFileTransfer == nullptr) { return; }
+      delete canFileTransfer;
+      canHandler.serialPort.printf_P(PSTR("%sFile transfer done at %s!\r\n"),
+        CAN_BASE_PREFIX, MqttComBase::getClassId());
     } break;
-    case static_cast<uint16_t>(CanCmd::RGB_LED): {} break;
     default: { canFrameReceived(canFrame); } break;
   }
 }
@@ -170,12 +263,19 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    canHandler.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), CAN_BASE_PREFIX, deserializationError.f_str());
+    canHandler.serialPort.printf_P(PSTR("%sDeserialisation failed at %s: %s\r\n"),
+      CAN_BASE_PREFIX, MqttComBase::getClassId(), deserializationError.f_str());
     return;
   }
   const bool isFileMsg = cmdJson.containsKey(F("File"));
   if(isFileMsg) {
-    // Start File transfer
+    const char* fileName = cmdJson[F("File")].as<const char*>();
+    if(canFileTransfer != nullptr) { return; }
+    if(fileName == nullptr) { return; }
+    canFileTransfer = new CanFileTransfer(fileName);
+    const bool fileTransferStartResult = sendFilePiece(CanCmd::OTA_START);
+    canHandler.serialPort.printf_P(PSTR("%sFile transfer start to %s: %s\r\n"),
+      CAN_BASE_PREFIX, MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     return;
   }
   const bool isCanMsg = cmdJson.containsKey(F("Command")) && cmdJson.containsKey(F("Data"));
@@ -187,6 +287,15 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
     sendCanFrame(command, canData);
     return;
   }
+}
+
+bool CanHandler::CanComBase::sendFilePiece(CanCmd command) {
+  if(canFileTransfer == nullptr) { return false; }
+  uint8_t canData[8] = { 0 };
+  const bool dataValid = canFileTransfer->getNextFrame(canData);
+  if(!dataValid) { return false; }
+  sendCanFrame(command, canData);
+  return true;
 }
 
 const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }

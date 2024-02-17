@@ -6,6 +6,7 @@
 #include <HardwareSerial.h>
 #include <vector>
 #include "../../connectivity.hpp"
+#include <LittleFS.h>                         /// Use FLASH filesystem.
 
 class CanHandler final {
 public:
@@ -68,10 +69,55 @@ public:
     SoftwareTimer& operator=(const SoftwareTimer&) = delete;            // Define copy assignment operator.
     SoftwareTimer(SoftwareTimer&&) = delete;                            // Define move constructor.
     SoftwareTimer& operator=(SoftwareTimer&&) = delete;                 // Define move assignment operator.
-
   private:
     const uint32_t time_;
     uint32_t start_time_;
+  };
+
+public:
+  class Crc16 final {
+  public:
+    explicit Crc16(uint16_t initValue = 0xFFFF, uint16_t polynomial = 0x1021);
+    ~Crc16() = default;
+
+    void next(uint8_t value);
+
+    void next(const uint8_t* values, uint32_t length);
+
+    uint16_t get() const;
+
+    static uint16_t calculate(const uint8_t *data, uint32_t length);
+
+    Crc16(const Crc16&) = delete;                       // Define copy constructor.
+    Crc16& operator=(const Crc16&) = delete;            // Define copy assignment operator.
+    Crc16(Crc16&&) = delete;                            // Define move constructor.
+    Crc16& operator=(Crc16&&) = delete;                 // Define move assignment operator.
+
+  private:
+    uint16_t crc_;                                      // CRC16 starting value.
+    const uint16_t polynomial_;                         // CRC16 polynomial.
+  };
+
+public:
+  class CanFileTransfer {
+  public:
+    CanFileTransfer(const char* fileName);
+    /// @brief Destructor of the object.
+    virtual ~CanFileTransfer();
+    bool getNextFrame(uint8_t (&dataFrame)[8]);
+
+    CanFileTransfer(const CanFileTransfer&) = delete;                       // Define copy constructor.
+    CanFileTransfer& operator=(const CanFileTransfer&) = delete;            // Define copy assignment operator.
+    CanFileTransfer(CanFileTransfer&&) = delete;                            // Define move constructor.
+    CanFileTransfer& operator=(CanFileTransfer&&) = delete;                 // Define move assignment operator.
+  private:
+    File receivedFile;
+    bool firstFrame;
+    uint8_t frameNumber;
+    uint16_t storageNumber;
+    char fileName[28];
+    uint32_t fileSize;
+    uint16_t fileCrc;
   };
 
 public:
@@ -93,8 +139,7 @@ public:
       BUTTON_EVENT,                          // Button event occured.
       OTA_START,                             // Init OTA process.
       OTA_SEND,                              // Stream FW bytes to OTA handler.
-      OTA_END,                               // OTA process ended.
-      RGB_LED,                               // Set WS2812 RGB LED color.
+      OTA_END                                // OTA process ended.
     };
     virtual bool init() = 0;
     virtual bool run() = 0;
@@ -112,6 +157,7 @@ public:
     virtual bool begin() override;
     virtual bool loop() override;
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+    bool sendFilePiece(CanCmd command);
     static constexpr uint16_t localCanId = 10U;
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
@@ -120,6 +166,7 @@ public:
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
     bool nodeAlive_;
+    CanFileTransfer* canFileTransfer;
     static const char PROGMEM CAN_BASE_PREFIX[];
   };
 
