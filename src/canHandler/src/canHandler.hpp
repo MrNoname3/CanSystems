@@ -33,17 +33,15 @@ public:
   bool begin(uint32_t canBaud);
   bool loop();
 
-private:
-  bool send(const CanFrame& frameOut);
-  static void rxInterrupt(int packetsNum) __attribute__((optimize("-O3")));
-  bool registerCallback(CanHandler::CanComBase* obj);
-
-public:
   CanHandler(const CanHandler&) = delete;                       // Define copy constructor.
   CanHandler& operator=(const CanHandler&) = delete;            // Define copy assignment operator.
   CanHandler(CanHandler&&) = delete;                            // Define move constructor.
   CanHandler& operator=(CanHandler&&) = delete;                 // Define move assignment operator.
 private:
+  bool send(const CanFrame& frameOut);
+  static void rxInterrupt(int packetsNum) __attribute__((optimize("-O3")));
+  bool registerCallback(CanHandler::CanComBase* obj);
+
   HardwareSerial& serialPort;
   static constexpr uint8_t canRxQueueSize = 10U;
   static constexpr uint8_t canTxQueueSize = 10U;
@@ -51,7 +49,6 @@ private:
   QueueHandle_t canTxQueue;                     // Queue handler for CAN TX.
   void* operator new(size_t size);              // Disable new operator.
   std::vector<CanHandler::CanComBase*> canDevices;
-
   static const char PROGMEM OK_STATE[];
   static const char PROGMEM ERR_STATE[];
   static const char PROGMEM CAN_PREFIX[];
@@ -79,20 +76,15 @@ public:
   public:
     explicit Crc16(uint16_t initValue = 0xFFFF, uint16_t polynomial = 0x1021);
     ~Crc16() = default;
-
     void next(uint8_t value);
-
     void next(const uint8_t* values, uint32_t length);
-
     uint16_t get() const;
-
     static uint16_t calculate(const uint8_t *data, uint32_t length);
 
     Crc16(const Crc16&) = delete;                       // Define copy constructor.
     Crc16& operator=(const Crc16&) = delete;            // Define copy assignment operator.
     Crc16(Crc16&&) = delete;                            // Define move constructor.
     Crc16& operator=(Crc16&&) = delete;                 // Define move assignment operator.
-
   private:
     uint16_t crc_;                                      // CRC16 starting value.
     const uint16_t polynomial_;                         // CRC16 polynomial.
