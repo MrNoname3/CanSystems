@@ -3,6 +3,7 @@
 #include <CAN.h>                              /// CAN controller library.
 #include <ArduinoJson.h>                      /// Handle JSON files.
 
+QueueHandle_t CanHandler::canRxQueue = nullptr;
 const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char CanHandler::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
 const char CanHandler::CAN_PREFIX[] PROGMEM               = "[CAN] ";
@@ -10,7 +11,7 @@ const char CanHandler::CAN_PREFIX[] PROGMEM               = "[CAN] ";
 CanHandler::CanHandler(HardwareSerial& serial) : serialPort(serial) {}
 
 bool CanHandler::begin(uint32_t canBaud) {
-  serialPort.printf_P(PSTR("%s Hardware init started...\r\n"), CAN_PREFIX);
+  serialPort.printf_P(PSTR("%sHardware init started...\r\n"), CAN_PREFIX);
   const bool canBeginResult = CAN.begin(canBaud) == 1;
   serialPort.printf_P(PSTR("%sInit:%s\r\n"), CAN_PREFIX, (canBeginResult ? OK_STATE : ERR_STATE));
   if(!canBeginResult) { return false; }
