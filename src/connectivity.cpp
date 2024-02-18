@@ -111,6 +111,7 @@ bool Connectivity::beginSimple(Interface interface) {
 
   // Init filesystem.
   {
+    delay(10);
     const bool initFS = LittleFS.begin();
     serialPort.printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE));
     if(!initFS) { return false; }
