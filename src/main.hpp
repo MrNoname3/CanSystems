@@ -23,8 +23,8 @@ static constexpr const uint8_t SPI_CS                 = -1;           // Etherne
 #endif
 
 //--- Functions ---//
-#ifdef ESP32
-void mainTask(void *pvParameters);
+#if defined(ESP32) && defined(PROJECT_CAN)
+void canTask(void *pvParameters);
 #endif
 
 #endif // MAIN_HPP

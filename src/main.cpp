@@ -3,8 +3,8 @@
 //--- Variables ---//
 const char separator[] PROGMEM = "******************************************************";
 
-#ifdef ESP32
-TaskHandle_t mainTaskHandle = nullptr;
+#if defined(ESP32) && defined(PROJECT_CAN)
+TaskHandle_t canTaskHandle = nullptr;
 #endif
 
 //--- Networking ---//
@@ -20,32 +20,29 @@ CanHandler canHandler(Serial);
 
 void setup() {
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
-#ifdef ESP8266
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
-#elif defined ESP32
-  if(xTaskCreateUniversal(mainTask, "mainTask", 8192U, nullptr, 1, &mainTaskHandle, 0) != pdTRUE) {
-    Serial.printf_P(PSTR("Error creating the main task!"));
+#if defined(ESP32) && defined(PROJECT_CAN)
+  if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
+    Serial.printf_P(PSTR("Error creating the CAN task!"));
   }
-  vTaskDelete(nullptr);
 #endif
 }
 
 void loop() {
-#ifdef ESP8266
   iotConn.loop();
+#ifdef ESP32
+  vTaskDelay(5);
 #endif
 }
 
-#ifdef ESP32
-void mainTask(void *pvParameters) {
-  iotConn.begin(Connectivity::Interface::ETHERNET, true);
-  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
-  size_t stackSize = uxTaskGetStackHighWaterMark(NULL);
-  Serial.print("Configured stack size: ");
-  Serial.println(stackSize);
+#if defined(ESP32) && defined(PROJECT_CAN)
+void canTask(void *pvParameters) {
+  Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), separator);
+  canHandler.begin(500E3);
+  Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), separator);
   while(true) {
-    iotConn.loop();
+    canHandler.loop();
     vTaskDelay(5);
   }
   vTaskDelete(nullptr);
