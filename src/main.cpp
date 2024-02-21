@@ -21,7 +21,7 @@ NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip(RGB_LED_NUM, RGB_PIN);  //
 CircularBuffer<RGBValues, 3> RGBColorBuffer;                                  // Queue for RGB values.
 
 //--- Button ---//
-PushButton Button(200, 500, 70);                                              // Object to handle pushbutton events.
+PushButton Button(300, 500, 70);                                              // Object to handle pushbutton events.
 
 //--- SPI and OTA ---//
 static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
@@ -46,7 +46,7 @@ void setup() {
 
   pinMode(LED, OUTPUT);                                                       // LED pin -> output.
   pinMode(CAN_INT, INPUT_PULLUP);                                             // CAN_INT pin -> input with pullup.
-  pinMode(BUTTON, INPUT_PULLUP);                                              // Button pin -> input with pullup.
+  //pinMode(BUTTON, INPUT_PULLUP);                                              // Button pin -> input with pullup.
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
   LED_H;                                                                      // Turn on LED.
@@ -100,6 +100,9 @@ void setup() {
   receivedCanFrames.put(canFrameOut);
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
+  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
+  bitSet(ADCSRA, ADPS1);
+  bitClear(ADCSRA, ADPS0);
   attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);    // Setup interrupt pin for CAN controller.
 
   MP3Player.attachRGBController(addToRGBQueue);                               // Add RGB LED controller to MP3 driver.
@@ -135,7 +138,7 @@ void loop() {
   }
 
   //--- Button press handling ---//
-  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? true : false);  // Check button actual state.
+  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);  // Check button actual state.
   if(buttonState > 0) {                                                       // Filter unvalid states.
     CanFrame canFrameOut;                                                     // CAN frame to send.
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
@@ -245,16 +248,31 @@ void loop() {
 
       case canCmd::BCMD_OTA_START: {
         const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
-
-
+        Serial.print(F("OTA:"));
+        if(ota.start(fwSize)) {
+          Serial.println(OK_STATE);
+          sendCanResponse(&canFrameOut);
+        }
+        else {
+          Serial.println(ERR_STATE);
+        }
       } break;
 
       case canCmd::BCMD_OTA_SEND: {
-
+        Serial.println(F("Store:"));
+        if(ota.storeNextData(reinterpret_cast<OTA<otaFlashBegin, otaFwPiece>::FwPiece*>(canFrameIn.data))) {
+          Serial.println(OK_STATE);
+        }
+        else {
+          Serial.println(ERR_STATE);
+        }
+        canFrameOut.data[0] = lowByte(ota.getAddressW());
+        canFrameOut.data[1] = highByte(ota.getAddressW());
+        sendCanResponse(&canFrameOut);
       } break;
 
       case canCmd::BCMD_OTA_END: {
-
+        ota.end();
       } break;
 
       case canCmd::BCMD_LAST_ELEMENT: { } break;
@@ -266,11 +284,6 @@ void loop() {
       case canCmd::ECMD_PLAY_MP3: {
         MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
         MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      case canCmd::ECMD_EXT_SENSOR_STATE: {
-        digitalWrite(EXT_SENSOR_EN, canFrameOut.data[0]);
         sendCanResponse(&canFrameOut);
       } break;
 
@@ -305,8 +318,6 @@ void loop() {
   }
 
   //--- Handle temperature and humidity sensors ---//
-  if(buttonState == 4) { digitalWrite(EXT_SENSOR_EN, HIGH); }               // Handle external sensor.
-  if(buttonState == 5) { digitalWrite(EXT_SENSOR_EN, LOW); }
   handleSensors();
 
   //--- Handling MP3 player ---//
@@ -434,4 +445,12 @@ uint16_t calculateCRC16(const uint8_t* data, uint16_t length) {
     }
   }
   return crc;
+}
+
+inline int analogReadFast(uint8_t ADCpin) {
+  uint8_t ADCSRAoriginal = ADCSRA;
+  ADCSRA = (ADCSRA & B11111000) | 4;
+  int adc = analogRead(ADCpin);
+  ADCSRA = ADCSRAoriginal;
+  return adc;
 }

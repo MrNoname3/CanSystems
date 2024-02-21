@@ -15,6 +15,7 @@
 #include <SPIFlash.h>                         /// SPI FLASH module driver.
 #include "ota.hpp"                            /// OTA byte stream handler.
 #include "serialIR.hpp"
+//#include <wiring_private.h>
 
 //--- Constants ---//
 static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
@@ -98,7 +99,6 @@ enum class canCmd : uint16_t {
   NODE_CB_LAST_ELEMENT,                       // Last element of callbacks.
 
   ECMD_PLAY_MP3,                              // Play MP3 file.
-  ECMD_EXT_SENSOR_STATE,                      // Enable/disable external sensor.
   ECMD_READ_HUM_TEMP_LDR,                     // Read humidity, temperature and light value.
   ECMD_LAST_ELEMENT                           // Last element of node specific commands.
 };
@@ -154,5 +154,7 @@ void (*resetFunc)() = nullptr;
 /// @param length Given data length in bytes.
 /// @return Returns with the calculated CRC value.
 uint16_t calculateCRC16(const uint8_t* data, uint16_t length);
+
+inline int analogReadFast(uint8_t ADCpin) __attribute__((always_inline));
 
 #endif // MAIN_HPP
