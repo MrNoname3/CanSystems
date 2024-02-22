@@ -1,6 +1,10 @@
 #ifdef PROJECT_CAN
 #include "canAlertDriver.hpp"
 
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
+  CanComBase::CanComBase(canHandler, canId, connectivity, classID)
+{}
+
 bool CanAlertDriver::init() { return true; }
 
 bool CanAlertDriver::run() { return true; }

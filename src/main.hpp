@@ -7,6 +7,7 @@
 #include "radiation/src/radiation.hpp"
 #include "rfHandler/src/rfHandler.hpp"
 #include "canHandler/src/canHandler.hpp"
+#include "canAlertDriver/src/canAlertDriver.hpp"
 
 //--- Constants ---//
 #ifdef ESP8266

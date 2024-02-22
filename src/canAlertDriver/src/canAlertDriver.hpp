@@ -9,8 +9,7 @@ public:
   enum class CanCmd : uint16_t {
     READ_HUM_TEMP_LDR
   };
-  /// @brief Use base class constructor.
-  using CanComBase::CanComBase;
+  CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
   ~CanAlertDriver() = default;
 protected:
   virtual bool init() override;

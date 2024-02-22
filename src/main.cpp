@@ -16,6 +16,7 @@ Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 #elif defined PROJECT_CAN
 CanHandler canHandler(Serial);
+CanAlertDriver canAlert1(canHandler, 26, iotConn, "alert1");
 #endif
 
 void setup() {

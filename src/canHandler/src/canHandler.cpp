@@ -27,7 +27,7 @@ bool CanHandler::begin(uint32_t canBaud) {
     const auto& currentObject = canDevices[i];
     if(currentObject != nullptr) {
       const bool beginResult = currentObject->beginPriv();
-      serialPort.printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getCanId(), beginResult ? OK_STATE : ERR_STATE);
+      serialPort.printf_P(PSTR("  %zu. %u ->%s\r\n"), i, currentObject->getCanId(), beginResult ? OK_STATE : ERR_STATE);
     }
     else {
       serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
@@ -59,10 +59,10 @@ bool CanHandler::loop() {
     CanFrame frameIn;
     const bool qReceiveResult = xQueueReceive(canRxQueue, &frameIn, 0U) == pdTRUE;
     if(qReceiveResult) {
-      const uint32_t messageCanId = frameIn.extId;
+      const uint32_t nodeCanId = frameIn.from;
       for(const auto &currentObject : canDevices) {
         if(currentObject == nullptr) { return false; }
-        if(currentObject->getCanId() == messageCanId) {
+        if(currentObject->getCanId() == nodeCanId) {
           currentObject->canFrameReceivedPriv(frameIn);
         }
       }
@@ -214,7 +214,7 @@ bool CanHandler::CanComBase::loopPriv() {
     pingTimer.reload();
     sendCanCmd(CanCmd::PING);
   }
-  const bool nodeAlive = alertTimer.isExpired();
+  const bool nodeAlive = !alertTimer.isExpired();
   if(nodeAlive != nodeAlive_) {
     nodeAlive_ = nodeAlive;
     const uint8_t data[8] = { static_cast<uint8_t>(nodeAlive_), 0, 0, 0, 0, 0, 0, 0 };
