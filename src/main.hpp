@@ -82,25 +82,17 @@ RGBValues {
 //--- Enums ---//
 
 /// @brief Base command list for nodes.
-enum class canCmd : uint16_t {
-  BCMD_IDLE = 0,                              // Idle state.
-  BCMD_PING,                                  // Ping command.
-  BCMD_RESET,                                 // Node reset command.
-  BCMD_GET_FW_VERSION,                        // Firmware version command.
-  BCMD_SETADDRESS,                            // CAN address setup.
-  BCMD_RGB_LED,                               // Set WS2812 RGB LED color.
-  BCMD_GET_BUTTON_EVENT,                      // Get button event type.
-  BCMD_OTA_START,                             // Init OTA process.
-  BCMD_OTA_SEND,                              // Stream FW bytes to OTA handler.
-  BCMD_OTA_END,                               // OTA process ended.
-  BCMD_LAST_ELEMENT,                          // Last element of base commands.
+enum class CanCmd : uint16_t {
+  PING = 0,                                   // Ping command.
+  RESTART,                                    // Node reset command.
+  BUTTON_EVENT,                               // Get button event type.
+  FILET_START,                                // Init file transfer process.
+  FILET_SEND,                                 // Send file pieces.
+  FILET_END,                                  // File transfer process ended.
 
-  NODE_CB_RESTARTED,                          // Node restarted.
-  NODE_CB_LAST_ELEMENT,                       // Last element of callbacks.
-
-  ECMD_PLAY_MP3,                              // Play MP3 file.
-  ECMD_READ_HUM_TEMP_LDR,                     // Read humidity, temperature and light value.
-  ECMD_LAST_ELEMENT                           // Last element of node specific commands.
+  RGB_LED,                                    // Set WS2812 RGB LED color.
+  PLAY_MP3,                                   // Play MP3 file.
+  READ_HUM_TEMP_LDR,                          // Read humidity, temperature and light value.
 };
 
 /// @brief Error types.

@@ -35,7 +35,7 @@ DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         //
 //--- Temperature, humidity and light ---//
 SI7021 si7021;                                                                // I2C humidity and temperature sensor driver.
 int16_t temperature = 0;                                                      // Temperature value.
-uint8_t humidity = 0;                                                         // Humidity value.
+uint16_t humidity = 0;                                                        // Humidity value.
 uint8_t light = 0;                                                            // Light value.
 
 SerialIR swSerial(RS232_RX, RS232_TX);
@@ -91,13 +91,13 @@ void setup() {
 
   CanFrame canFrameOut;                                                       // CAN frame to send.
   canFrameOut.canId.from = settings.canAddress;
-  canFrameOut.canId.cmd = static_cast<uint16_t>(canCmd::NODE_CB_RESTARTED);
+  canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::RESTART);
   canFrameOut.canId.to_ = settings.canAddress;
 
-  CAN.filterExtended(canFrameOut.canId.id, CAN_MASK);                         // Setup extended CAN ID filtering.
+  //CAN.filterExtended(canFrameOut.canId.id, CAN_MASK);                         // Setup extended CAN ID filtering.
 
-  canFrameOut.canId.to_ = broadcastAddress;
-  receivedCanFrames.put(canFrameOut);
+  //canFrameOut.canId.to_ = broadcastAddress;
+  //receivedCanFrames.put(canFrameOut);
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
   bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
@@ -142,7 +142,7 @@ void loop() {
   if(buttonState > 0) {                                                       // Filter unvalid states.
     CanFrame canFrameOut;                                                     // CAN frame to send.
     canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
-    canFrameOut.canId.cmd = static_cast<uint16_t>(canCmd::BCMD_GET_BUTTON_EVENT);
+    canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::BUTTON_EVENT);
     canFrameOut.canId.to_ = broadcastAddress;
 
     Serial.print(F("Button event: "));                                        // Debug prints.
@@ -199,11 +199,9 @@ void loop() {
     Serial.println();
 #endif
 
-    switch(static_cast<canCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
+    switch(static_cast<CanCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
 
-      case canCmd::BCMD_IDLE: { } break;
-
-      case canCmd::BCMD_PING: {
+      case CanCmd::PING: {
         canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
         canFrameOut.data[1] = lowByte(errorCode);                             // Send error code.
         canFrameOut.data[2] = highByte(errorCode);
@@ -211,42 +209,19 @@ void loop() {
         sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::BCMD_RESET: {
+      case CanCmd::RESTART: {
         sendCanResponse(&canFrameOut);
-        resetCMD();                                                           // Call reset function.
+        //resetCMD();                                                           // Call reset function.
       } break;
 
-      case canCmd::BCMD_GET_FW_VERSION: {                                     // Send firmware version to master.
-        memcpy(canFrameOut.data, SW_VERSION, strlen(SW_VERSION) + 1);
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      case canCmd::BCMD_SETADDRESS: {
-        newCanAddress = (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8)); // 0.->address lowbyte, 1.->address highbyte.
-        newCanAddress &= 0x3FF;                                               // Can't be more than 1023.
-
-        if(newCanAddress != settings.canAddress) {                            // Check if new address is equal to old or not.
-          constexpr uint8_t ledColor = 200;
-
-          saveNewAddress = true;                                              // Enable saving.
-          MP3Player.detachRGBController();                                    // Prevent RGB state overwrite.
-          addToRGBQueue(0, ledColor, 0);                                      // Turn on RGB LED as green.
-          Serial.println(F("Wait for button press to save new CAN address!"));  // Debug print.
-          canAddressSaveTimer = millis();                                     // Timer reload.
-        }
-        else {
-          Serial.println(F("Address already used!"));                         // Print if address is already used.
-        }
-      } break;
-
-      case canCmd::BCMD_RGB_LED: {
+      case CanCmd::RGB_LED: {
         addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
         sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::BCMD_GET_BUTTON_EVENT: { } break;
+      case CanCmd::BUTTON_EVENT: { } break;
 
-      case canCmd::BCMD_OTA_START: {
+      case CanCmd::FILET_START: {
         const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
         Serial.print(F("OTA:"));
         if(ota.start(fwSize)) {
@@ -258,7 +233,7 @@ void loop() {
         }
       } break;
 
-      case canCmd::BCMD_OTA_SEND: {
+      case CanCmd::FILET_SEND: {
         Serial.println(F("Store:"));
         if(ota.storeNextData(reinterpret_cast<OTA<otaFlashBegin, otaFwPiece>::FwPiece*>(canFrameIn.data))) {
           Serial.println(OK_STATE);
@@ -271,31 +246,24 @@ void loop() {
         sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::BCMD_OTA_END: {
+      case CanCmd::FILET_END: {
         ota.end();
       } break;
 
-      case canCmd::BCMD_LAST_ELEMENT: { } break;
-
-      case canCmd::NODE_CB_RESTARTED: { } break;
-
-      case canCmd::NODE_CB_LAST_ELEMENT: { } break;
-
-      case canCmd::ECMD_PLAY_MP3: {
+      case CanCmd::PLAY_MP3: {
         MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
         MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
         sendCanResponse(&canFrameOut);
       } break;
 
-      case canCmd::ECMD_READ_HUM_TEMP_LDR: {
+      case CanCmd::READ_HUM_TEMP_LDR: {
         canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
         canFrameOut.data[1] = highByte(temperature);
-        canFrameOut.data[2] = humidity;
-        canFrameOut.data[3] = light;
+        canFrameOut.data[2] = lowByte(humidity);
+        canFrameOut.data[3] = highByte(humidity);
+        canFrameOut.data[4] = light;
         sendCanResponse(&canFrameOut);
       } break;
-
-      case canCmd::ECMD_LAST_ELEMENT: { } break;
 
       default: {
         Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
@@ -386,7 +354,7 @@ void handleSensors() {
     } break;
 
     case si7021States::READ_HUMIDITY: {
-      humidity = static_cast<uint8_t>(si7021.getHumidityPercent());         // Read humidity.
+      humidity = si7021.getHumidityPercent();                               // Read humidity.
       sensorState = si7021States::IDLE;
     } break;
 
