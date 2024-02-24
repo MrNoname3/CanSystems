@@ -17,14 +17,17 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t csPin, uint8_t intPin, ui
 }
 
 bool CanHandler::begin(uint32_t canBaud) {
+  static constexpr uint16_t fwVersion = GIT_COMMIT_COUNT;
+  static constexpr uint32_t gitHash = GIT_COMMIT_HASH;
   {
+    static constexpr uint32_t cppVersion = __cplusplus;
     const char* SPACER = "|";
     serialPort.print(F("CPP: "));
-    serialPort.println(__cplusplus);
+    serialPort.println(cppVersion);
     serialPort.print(F("FW: "));
-    serialPort.println(GIT_COMMIT_COUNT);
+    serialPort.println(fwVersion);
     serialPort.print(F("GIT: "));
-    serialPort.println(GIT_COMMIT_HASH, HEX);
+    serialPort.println(gitHash, HEX);
     serialPort.print(F("Fuses: "));
     serialPort.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
     serialPort.print(SPACER);
@@ -57,7 +60,19 @@ bool CanHandler::begin(uint32_t canBaud) {
     if(!setFilterResult) { return false; }
     CAN.onReceive(rxInterrupt);
   }
-  send(CanCmd::RESTART);
+  {
+    static constexpr uint8_t versionInfo[8] = {
+      static_cast<uint8_t>((fwVersion >> 0) & 0xFF),
+      static_cast<uint8_t>((fwVersion >> 8) & 0xFF),
+      static_cast<uint8_t>((gitHash >> 0) & 0xFF),
+      static_cast<uint8_t>((gitHash >> 8) & 0xFF),
+      static_cast<uint8_t>((gitHash >> 16) & 0xFF),
+      static_cast<uint8_t>((gitHash >> 24) & 0xFF),
+      0,
+      0
+    };
+    send(CanCmd::RESTART, versionInfo);
+  }
   wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }

@@ -41,8 +41,7 @@ void setup() {
   canHandler.ledOn();
   digitalWrite(EXT_SENSOR_EN, HIGH);
 
-  Serial.println(F("*************************"));
-  Serial.println(F("Starting..."));                                           // Serial debug print.
+  Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
 
   ledStrip.Begin();                                                           // Clear LEDs
@@ -73,8 +72,7 @@ void setup() {
   }
   si7021.setPrecision(0x81);                                                  // Set humtemp sensor reading resolution.
 
-  Serial.println(F("*************************"));                             // Debug prints.
-  Serial.println(F("Loop starting..."));
+  Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
