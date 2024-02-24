@@ -1,19 +1,12 @@
 #include "main.hpp"
 
+//--- CAN handler ---//
+CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED);
+
 //--- Variables ---//
-volatile uint8_t canProcess = 0;                                              // On CAN interrupt, it counts incoming packets.
-uint32_t pingTimer = 0;                                                       // It stores the last ping time.
-static constexpr uint16_t pingTime = 1500;                                    // Ping timeot time in ms.
-Settings settings;                                                            // Struct of settings.
-uint16_t newCanAddress = 0;                                                   // Store arrived new local CAN address.
-CircularBuffer<CanFrame, 5> receivedCanFrames;                                // Ringbuffer of received CAN frames.
-EEPROMHandler<Settings, 0> eepromHandler(&settings);                          // EEPROM store/load handler object.
 
 //--- Maintenance variables ---//
 uint8_t cycleCostMax = 2;                                                     // Calculate and store max loop cost.
-constexpr uint16_t canAddressSaveTime = 30 * 1000;                            // Save new CAN address timeout time.
-uint32_t canAddressSaveTimer = 0;                                             // Save new CAN address timeout timer.
-bool saveNewAddress = false;                                                  // Enable saving new CAN address.
 uint16_t errorCode = 0;                                                       // Store occured error codes.
 
 //--- WS2812 RGB LED ---//
@@ -43,14 +36,9 @@ SerialIR swSerial(RS232_RX, RS232_TX);
 //--- Setup section ---//
 void setup() {
   Serial.begin(115200);                                                       // Open serial port with the given baudrate.
-
-  pinMode(LED, OUTPUT);                                                       // LED pin -> output.
-  pinMode(CAN_INT, INPUT_PULLUP);                                             // CAN_INT pin -> input with pullup.
-  //pinMode(BUTTON, INPUT_PULLUP);                                              // Button pin -> input with pullup.
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
-  LED_H;                                                                      // Turn on LED.
-  //delay(100);
+  canHandler.ledOn();
   digitalWrite(EXT_SENSOR_EN, HIGH);
 
   Serial.println(F("*************************"));
@@ -71,39 +59,15 @@ void setup() {
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
 
-  Serial.print(F("EEPROM data"));
-  eepromHandler.load() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);  // Load data from EEPROM.
-
   Serial.print(F("FLASH"));
   flash.initialize() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);    // Initialise SPI FLASH.
 
-  Serial.print(F("CAN"));                                                     // Serial debug print.
-  CAN.setClockFrequency(8e6);                                                 // SPI CAN controller runs from 8MHz crystal.
-  if(!static_cast<bool>(CAN.begin(500E3))) {                                  // Set CAN speed to 500Kb/s.
-    Serial.println(ERR_STATE);                                                // If can't init CAN controller, print ERROR.
-    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_INIT));        // Set error flag.
-  }
-  else {
-    Serial.println(OK_STATE);                                                 // If init ok, print OK.
-  }
-  Serial.print(F("Address: "));                                               // Print CAN address.
-  Serial.println(settings.canAddress);
-
-  CanFrame canFrameOut;                                                       // CAN frame to send.
-  canFrameOut.canId.from = settings.canAddress;
-  canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::RESTART);
-  canFrameOut.canId.to_ = settings.canAddress;
-
-  //CAN.filterExtended(canFrameOut.canId.id, CAN_MASK);                         // Setup extended CAN ID filtering.
-
-  //canFrameOut.canId.to_ = broadcastAddress;
-  //receivedCanFrames.put(canFrameOut);
+  canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
   bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
   bitSet(ADCSRA, ADPS1);
   bitClear(ADCSRA, ADPS0);
-  attachInterrupt(digitalPinToInterrupt(CAN_INT), canIrqHandler, FALLING);    // Setup interrupt pin for CAN controller.
 
   MP3Player.attachRGBController(addToRGBQueue);                               // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                       // Set MP3 player volume.
@@ -124,8 +88,7 @@ void setup() {
 
   Serial.println(F("*************************"));                             // Debug prints.
   Serial.println(F("Loop starting..."));
-  wdt_enable(WDTO_120MS);                                                     // Enable WDT timer.
-  LED_L;                                                                      // Turn off LED.
+  canHandler.ledOff();
 }
 
 void loop() {
@@ -140,149 +103,77 @@ void loop() {
   //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);  // Check button actual state.
   if(buttonState > 0) {                                                       // Filter unvalid states.
-    CanFrame canFrameOut;                                                     // CAN frame to send.
-    canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
-    canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::BUTTON_EVENT);
-    canFrameOut.canId.to_ = broadcastAddress;
+    //CanFrame canFrameOut;                                                     // CAN frame to send.
+    //canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
+    //canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::BUTTON_EVENT);
+    //canFrameOut.canId.to_ = broadcastAddress;
 
     Serial.print(F("Button event: "));                                        // Debug prints.
     Serial.println(buttonState);
 
-    sendCanResponse(&canFrameOut);                                            // Send answer.
+    //sendCanResponse(&canFrameOut);                                            // Send answer.
   }
 
-  //--- Handle received CAN messages ---//
-  if(canProcess > 0) {                                                        // If the CAN controller interrupted.
-    canProcess--;                                                             // Decrement value.
-    uint8_t recvSize = CAN.parsePacket();                                     // Process CAN message.
-    CanFrame canFrame;                                                        // CAN frame for received message.
-    canFrame.canId.id = CAN.packetId();                                       // ID of received CAN packet.
+  canHandler.loop();
 
-    if((CAN.available() > 0) && (recvSize > 0)) {                             // If the message has data,
-      CAN.readBytes(canFrame.data, sizeof(canFrame.data));                    // read and store it.
-    }
+/*
+  //--- Processing the frames ---//
+  case CanCmd::RGB_LED: {
+    addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
+    sendCanResponse(&canFrameOut);
+  } break;
 
-    if(CAN.packetExtended() == true) {                                        // Handle standard messages as broadcast messages.
-      if(settings.canAddress != canFrame.canId.to_) {                         // Software CAN ID filter. (HW doesn't work properly.)
-        Serial.print(F("SW filter rejected ID: "));                           // Debug print of dropped package.
-        Serial.println(canFrame.canId.id);
-        return;
-      }
+  case CanCmd::BUTTON_EVENT: { } break;
+
+  case CanCmd::FILET_START: {
+    const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
+    Serial.print(F("OTA:"));
+    if(ota.start(fwSize)) {
+      Serial.println(OK_STATE);
+      sendCanResponse(&canFrameOut);
     }
     else {
-      Serial.println(F("Standard CAN message dropped"));
+      Serial.println(ERR_STATE);
     }
+  } break;
 
-    receivedCanFrames.put(canFrame);                                          // Put received CAN frame to processing queue.
-    pingTimer = millis();                                                     // Ping timer reload.
-    LED_L;                                                                    // LED off.
-  }
-
-  //--- Processing the frames ---//
-  if(receivedCanFrames.isEmpty() == false) {                                  // Check queue.
-    CanFrame canFrameIn = receivedCanFrames.pop();                            // Get frame from queue.
-    CanFrame canFrameOut;                                                     // CAN frame to send.
-    canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
-    canFrameOut.canId.cmd = canFrameOut.canId.cmd;
-    canFrameOut.canId.to_ = canFrameIn.canId.from;
-
-#ifdef DEBUG_ON
-    Serial.println(F("Frame:"));
-    Serial.println(canFrameIn.canId.id);
-    Serial.println(canFrameIn.canId.from);
-    Serial.println(canFrameIn.canId.cmd);
-    Serial.println(canFrameIn.canId.to_);
-    for(uint8_t i = 0; i < sizeof(canFrameIn.data); i++) {
-      Serial.print(canFrameIn.data[i]);
-      Serial.print(F(" "));
+  case CanCmd::FILET_SEND: {
+    Serial.println(F("Store:"));
+    if(ota.storeNextData(reinterpret_cast<OTA<otaFlashBegin, otaFwPiece>::FwPiece*>(canFrameIn.data))) {
+      Serial.println(OK_STATE);
     }
-    Serial.println();
-#endif
+    else {
+      Serial.println(ERR_STATE);
+    }
+    canFrameOut.data[0] = lowByte(ota.getAddressW());
+    canFrameOut.data[1] = highByte(ota.getAddressW());
+    sendCanResponse(&canFrameOut);
+  } break;
 
-    switch(static_cast<CanCmd>(canFrameIn.canId.cmd)) {                       // Send the command in the switch.
+  case CanCmd::FILET_END: {
+    ota.end();
+  } break;
 
-      case CanCmd::PING: {
-        canFrameOut.data[0] = cycleCostMax;                                   // Send maximum cycle cost.
-        canFrameOut.data[1] = lowByte(errorCode);                             // Send error code.
-        canFrameOut.data[2] = highByte(errorCode);
-        errorCode = 0;                                                        // Clear error code.
-        sendCanResponse(&canFrameOut);
-      } break;
+  case CanCmd::PLAY_MP3: {
+    MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
+    MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
+    sendCanResponse(&canFrameOut);
+  } break;
 
-      case CanCmd::RESTART: {
-        sendCanResponse(&canFrameOut);
-        //resetCMD();                                                           // Call reset function.
-      } break;
-
-      case CanCmd::RGB_LED: {
-        addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      case CanCmd::BUTTON_EVENT: { } break;
-
-      case CanCmd::FILET_START: {
-        const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
-        Serial.print(F("OTA:"));
-        if(ota.start(fwSize)) {
-          Serial.println(OK_STATE);
-          sendCanResponse(&canFrameOut);
-        }
-        else {
-          Serial.println(ERR_STATE);
-        }
-      } break;
-
-      case CanCmd::FILET_SEND: {
-        Serial.println(F("Store:"));
-        if(ota.storeNextData(reinterpret_cast<OTA<otaFlashBegin, otaFwPiece>::FwPiece*>(canFrameIn.data))) {
-          Serial.println(OK_STATE);
-        }
-        else {
-          Serial.println(ERR_STATE);
-        }
-        canFrameOut.data[0] = lowByte(ota.getAddressW());
-        canFrameOut.data[1] = highByte(ota.getAddressW());
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      case CanCmd::FILET_END: {
-        ota.end();
-      } break;
-
-      case CanCmd::PLAY_MP3: {
-        MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
-        MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      case CanCmd::READ_HUM_TEMP_LDR: {
-        canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
-        canFrameOut.data[1] = highByte(temperature);
-        canFrameOut.data[2] = lowByte(humidity);
-        canFrameOut.data[3] = highByte(humidity);
-        canFrameOut.data[4] = light;
-        sendCanResponse(&canFrameOut);
-      } break;
-
-      default: {
-        Serial.println(F("Command is unhandled"));                            // If somehow program reach it, print it.
-        bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_UNHANDLED_COMMAND)); // Set error flag.
-      } break;
-
-    }  // End of switch.
-  }  // End of if statement.
-
+  case CanCmd::READ_HUM_TEMP_LDR: {
+    canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
+    canFrameOut.data[1] = highByte(temperature);
+    canFrameOut.data[2] = lowByte(humidity);
+    canFrameOut.data[3] = highByte(humidity);
+    canFrameOut.data[4] = light;
+    sendCanResponse(&canFrameOut);
+  } break;
+*/
   //--- Handling RGB LEDs ---//
   if(RGBColorBuffer.isEmpty() == false) {                                   // Check RGB color buffer.
     RGBValues RGBColor = RGBColorBuffer.pop();                              // Get a color set from the queue.
     ledStrip.ClearTo(RgbColor(RGBColor.red, RGBColor.green, RGBColor.blue));  // Set the same color for all RGB LED.
     ledStrip.Show();                                                        // Send color data to RGB LED strip.
-  }
-
-  //--- Handling timers ---//
-  if(millis() - pingTimer >= pingTime) {                                    // Check if ping timer is expired.
-    LED_H;                                                                  // If yes, turn on the LED.
   }
 
   //--- Handle temperature and humidity sensors ---//
@@ -292,43 +183,12 @@ void loop() {
   MP3Player.spin();
 
   //--- Maintenance ---//
-  if(saveNewAddress) {                                                      // Check if saving is enabled.
-    if(millis() - canAddressSaveTimer >= canAddressSaveTime) {              // Check saving timeout timer.
-      saveNewAddress = false;                                               // Disable saving.
-      Serial.println(F("Address saving timeout!"));                         // Debug print.
-      addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
-      MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
-    }
-    if(buttonState == 3) {
-      settings.canAddress = newCanAddress;                                  // Setup new can address.
-
-      Serial.print(F("Saving new CAN address"));
-      if(eepromHandler.save()) {                                            // Save new CAN address to EEPROM.
-        CanId canId;                                                        // Struct of CAN ID.
-        canId.from = 0;                                                     // Assemble CAN ID.
-        canId.cmd = 0;
-        canId.to_ = settings.canAddress;
-        CAN.filterExtended(canId.id, CAN_MASK);                             // Setup filter for new CAN address.
-        Serial.println(OK_STATE);
-      }
-      else {
-        Serial.println(ERR_STATE);
-      }
-
-      saveNewAddress = false;                                               // Disable saving.
-      addToRGBQueue(0, 0, 0);                                               // Turn off RGB LED.
-      MP3Player.attachRGBController(addToRGBQueue);                         // Enable RGB state overwrite.
-    }
-  }
-
   uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cycle cost.
   if(cycleCost > cycleCostMax) {                                            // If it is above max,
     cycleCostMax = cycleCost;                                               // save the new max.
     Serial.print(F("Max cost: "));                                          // Debug print.
     Serial.println(cycleCostMax);
   }
-
-  wdt_reset();                                                              // Reset the watchdog timer.
 }
 
 void handleSensors() {
@@ -377,25 +237,6 @@ void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
   RGBColor.green = green;
   RGBColor.blue = blue;
   RGBColorBuffer.put(RGBColor);                           // Add to queue.
-}
-
-void sendCanResponse(CanFrame* canFrameOut) {
-  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ID_SET),
-    !CAN.beginExtendedPacket(canFrameOut->canId.id));                             // Set extended ID.
-  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_DATA_WRITE),
-    !CAN.write(canFrameOut->data, sizeof(canFrameOut->data)));                    // Set data.
-  bitWrite(errorCode, static_cast<uint8_t>(errorTypes::ERR_CAN_ENDPACKET),
-    !CAN.endPacket());                                                            // Send packet.
-}
-
-void resetCMD() {
-  Serial.println(F("Restarting..."));
-  Serial.flush();                                         // Sends out data from serial buffer, before reset.
-  resetFunc();
-}
-
-void canIrqHandler() {                                    // CAN controller interrupt rutin handler.
-  canProcess++;                                           // Count incoming packets.
 }
 
 uint16_t calculateCRC16(const uint8_t* data, uint16_t length) {
