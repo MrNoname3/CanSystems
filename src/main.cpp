@@ -4,9 +4,6 @@
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
 
 //--- Variables ---//
-
-//--- Maintenance variables ---//
-uint8_t cycleCostMax = 2;                                                     // Calculate and store max loop cost.
 uint16_t errorCode = 0;                                                       // Store occured error codes.
 
 //--- WS2812 RGB LED ---//
@@ -36,9 +33,9 @@ SerialIR swSerial(RS232_RX, RS232_TX);
 //--- Setup section ---//
 void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
+  canHandler.ledOn();
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
-  canHandler.ledOn();
   digitalWrite(EXT_SENSOR_EN, HIGH);
 
   Serial.println(F("\r\n********\r\nStarting..."));
@@ -74,10 +71,6 @@ void setup() {
 }
 
 void loop() {
-
-  //--- Maintenance ---//
-  uint32_t cycleTimer = millis();                                             // Save millis value for loop cost calculation.
-
   while(swSerial.available() > 0) {
     Serial.println(swSerial.read());
   }
@@ -163,14 +156,6 @@ void loop() {
 
   //--- Handling MP3 player ---//
   MP3Player.spin();
-
-  //--- Maintenance ---//
-  uint8_t cycleCost = millis() - cycleTimer;                                // Calculate cycle cost.
-  if(cycleCost > cycleCostMax) {                                            // If it is above max,
-    cycleCostMax = cycleCost;                                               // save the new max.
-    Serial.print(F("Max cost: "));                                          // Debug print.
-    Serial.println(cycleCostMax);
-  }
 }
 
 void handleSensors() {

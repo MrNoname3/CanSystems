@@ -116,6 +116,15 @@ bool CanHandler::loopSimple() {
   if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
     ledOn();                                                      // If yes, turn on the LED.
   }
+  static uint32_t cycleTimer = millis();
+  static uint16_t cycleTime = 2U;
+  const uint16_t actulaCycleTime = millis() - cycleTimer;
+  cycleTimer = millis();
+  if(actulaCycleTime > cycleTime) {
+    cycleTime = actulaCycleTime;
+    serialPort.print(F("Max cycle time: "));
+    serialPort.println(cycleTime);
+  }
   wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }
