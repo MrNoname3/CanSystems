@@ -5,6 +5,7 @@
 #include <HardwareSerial.h>
 #include "eepromHandler.hpp"                  /// EEPROM wrapper class.
 #include "../../CircularBuffer/src/CircularBuffer.hpp"  /// Circular buffer class.
+#include <SPIFlash.h>                         /// SPI FLASH module driver.
 
 class CanHandler final {
 public:
@@ -36,11 +37,11 @@ public:
     CanFrame() : extId(), data{0} {}
   };
 
-  CanHandler(HardwareSerial& serial, uint8_t csPin, uint8_t intPin, uint8_t ledPin);
+  CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin);
   /// @brief Destructor of the object.
   ~CanHandler() = default;
-  bool begin(uint32_t canBaud);
-  bool loop();
+  void begin(uint32_t canBaud);
+  void loop();
   bool send(uint16_t command, const uint8_t (&data)[8]) const;
   bool send(uint16_t command) const;
   void ledOn();
@@ -55,6 +56,8 @@ public:
   CanHandler& operator=(CanHandler&&) = delete;                 // Define move assignment operator.
 
 private:
+  inline bool beginSimple(uint32_t canBaud);
+  inline bool loopSimple();
   bool send(CanCmd command, const uint8_t (&data)[8]) const;
   bool send(CanCmd command) const;
   static inline void rxInterrupt(int packetsNum) __attribute__((optimize("-O3")));
@@ -62,10 +65,12 @@ private:
   static constexpr uint16_t masterCanId = 10U;
   static constexpr uint8_t rxBufferSize = 5;
   static constexpr uint16_t pingTime = 1500;                    // Ping timeot time in ms.
+  static constexpr uint16_t flashJedecId = 0xEF40U;             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
   HardwareSerial& serialPort;
   uint16_t localCanId;
   EEPROMHandler<uint16_t, 0> eepromHandler;
   const uint8_t ledPin;
+  SPIFlash flash;
   static CircularBuffer<CanFrame, rxBufferSize> rxBuffer;       // Ringbuffer of received CAN frames.
 };
 

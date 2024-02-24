@@ -9,8 +9,7 @@
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
-#include <SPIFlash.h>                         /// SPI FLASH module driver.
-#include "ota.hpp"                            /// OTA byte stream handler.
+//#include "ota.hpp"                            /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//

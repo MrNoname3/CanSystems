@@ -1,7 +1,7 @@
 #include "main.hpp"
 
 //--- CAN handler ---//
-CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED);
+CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
 
 //--- Variables ---//
 
@@ -17,10 +17,10 @@ CircularBuffer<RGBValues, 3> RGBColorBuffer;                                  //
 PushButton Button(300, 500, 70);                                              // Object to handle pushbutton events.
 
 //--- SPI and OTA ---//
-static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
-static constexpr uint8_t otaFwPiece = 4;                                      // Size of FW chunks in bytes.
-SPIFlash flash(FLASH_CS, 0xEF40);                                             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
-OTA<otaFlashBegin, otaFwPiece> ota(&flash, calculateCRC16);                   // OTA handler.
+//static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
+//static constexpr uint8_t otaFwPiece = 4;                                      // Size of FW chunks in bytes.
+//SPIFlash flash(FLASH_CS, 0xEF40);                                             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
+//OTA<otaFlashBegin, otaFwPiece> ota(&flash, calculateCRC16);                   // OTA handler.
 
 //--- MP3 player ---//
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
@@ -46,9 +46,6 @@ void setup() {
 
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
-
-  Serial.print(F("FLASH"));
-  flash.initialize() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);    // Initialise SPI FLASH.
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
   bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.

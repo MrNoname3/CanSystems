@@ -5,18 +5,27 @@
 
 CircularBuffer<CanHandler::CanFrame, CanHandler::rxBufferSize> CanHandler::rxBuffer;
 
-CanHandler::CanHandler(HardwareSerial& serial, uint8_t csPin, uint8_t intPin, uint8_t ledPin) :
+CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
   localCanId(0),
   eepromHandler(&localCanId),
-  ledPin(ledPin)
+  ledPin(ledPin),
+  flash(flashCsPin, flashJedecId)
 {
   wdt_enable(WDTO_2S);                        // Enable WDT timer.
-  CAN.setPins(csPin, intPin);
+  CAN.setPins(canCsPin, canIntPin);
   pinMode(ledPin, OUTPUT);
 }
 
-bool CanHandler::begin(uint32_t canBaud) {
+void CanHandler::begin(uint32_t canBaud) {
+  const bool beginResult = beginSimple(canBaud);
+  if(!beginResult) {
+    serialPort.println(F("Init ERROR!"));
+    restartMCU();
+  }
+}
+
+bool CanHandler::beginSimple(uint32_t canBaud) {
   static constexpr uint16_t fwVersion = GIT_COMMIT_COUNT;
   static constexpr uint32_t gitHash = GIT_COMMIT_HASH;
   {
@@ -46,6 +55,7 @@ bool CanHandler::begin(uint32_t canBaud) {
   {
     serialPort.print(F("CAN: "));
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
+    CAN.setSPIFrequency(4E6);
     const bool canBeginResult = CAN.begin(canBaud) == 1;
     canBeginResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
     if(!canBeginResult) { return false; }
@@ -71,13 +81,28 @@ bool CanHandler::begin(uint32_t canBaud) {
       0,
       0
     };
-    send(CanCmd::RESTART, versionInfo);
+    const bool sendResult = send(CanCmd::RESTART, versionInfo);
+    if(!sendResult) { return false; }
+  }
+  {
+    serialPort.print(F("FLASH: "));
+    const bool flashInitResult = flash.initialize();
+    flashInitResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+    if(!flashInitResult) { return false; }
   }
   wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }
 
-bool CanHandler::loop() {
+void CanHandler::loop() {
+  const bool loopResult = loopSimple();
+  if(!loopResult) {
+    serialPort.println(F("Loop ERROR!"));
+    restartMCU();
+  }
+}
+
+bool CanHandler::loopSimple() {
   static uint32_t pingTimer = millis();
   if(!rxBuffer.isEmpty()) {
     pingTimer = millis();                                         // Ping timer reload.
