@@ -79,11 +79,11 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 /// @brief Handles the I2C humidity&temperature sensor and the analog light sensor.
 inline void handleSensors() __attribute__((always_inline));
 
-/// @brief Put the given data to RGB LED queue.
+/// @brief Send the given data to the RGB LED(s).
 /// @param red Value of red color: 0-255.
 /// @param green Value of green color: 0-255.
 /// @param blue Value of blue color: 0-255.
-void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue);
+void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue);
 
 /// @brief Calculates the 16bit CRC (XModem) of the given data.
 /// @param data Data whose CRC value should be calculated.

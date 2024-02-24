@@ -8,7 +8,6 @@ uint16_t errorCode = 0;                                                       //
 
 //--- WS2812 RGB LED ---//
 NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip(RGB_LED_NUM, RGB_PIN);  // Setup LED strip.
-CircularBuffer<RGBValues, 3> RGBColorBuffer;                                  // Queue for RGB values.
 
 //--- Button ---//
 PushButton Button(300, 500, 70);                                              // Object to handle pushbutton events.
@@ -50,7 +49,7 @@ void setup() {
   bitSet(ADCSRA, ADPS1);
   bitClear(ADCSRA, ADPS0);
 
-  MP3Player.attachRGBController(addToRGBQueue);                               // Add RGB LED controller to MP3 driver.
+  MP3Player.attachRGBController(setRgbLed);                               // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                       // Set MP3 player volume.
 
   MP3Player.play(1);
@@ -89,14 +88,6 @@ void loop() {
   canHandler.loop();
 
 /*
-  
-  case CanCmd::RGB_LED: {
-    addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
-    sendCanResponse(&canFrameOut);
-  } break;
-
-  case CanCmd::BUTTON_EVENT: { } break;
-
   case CanCmd::FILET_START: {
     const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
     Serial.print(F("OTA:"));
@@ -126,12 +117,6 @@ void loop() {
     ota.end();
   } break;
 
-  case CanCmd::PLAY_MP3: {
-    MP3Player.play((uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8))); // Add selected song to queue.
-    MP3Player.volume(canFrameIn.data[2]);                                 // Set volume.
-    sendCanResponse(&canFrameOut);
-  } break;
-
   case CanCmd::READ_HUM_TEMP_LDR: {
     canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
     canFrameOut.data[1] = highByte(temperature);
@@ -141,12 +126,6 @@ void loop() {
     sendCanResponse(&canFrameOut);
   } break;
 */
-  //--- Handling RGB LEDs ---//
-  if(RGBColorBuffer.isEmpty() == false) {                                   // Check RGB color buffer.
-    RGBValues RGBColor = RGBColorBuffer.pop();                              // Get a color set from the queue.
-    ledStrip.ClearTo(RgbColor(RGBColor.red, RGBColor.green, RGBColor.blue));  // Set the same color for all RGB LED.
-    ledStrip.Show();                                                        // Send color data to RGB LED strip.
-  }
 
   //--- Handle temperature and humidity sensors ---//
   handleSensors();
@@ -156,7 +135,18 @@ void loop() {
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
-
+  switch(command) {
+    case static_cast<uint16_t>(CanCmd::RGB_LED): {
+      setRgbLed(data[0], data[1], data[2]);
+      canHandler.send(static_cast<uint16_t>(CanCmd::RGB_LED));
+    } break;
+    case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
+      const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8))};
+      MP3Player.play(songNum);                                  // Add selected song to queue.
+      MP3Player.volume(data[2]);                                // Set volume.
+      canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
+    } break;
+  };
 }
 
 void handleSensors() {
@@ -199,12 +189,9 @@ void handleSensors() {
   }
 }
 
-void addToRGBQueue(const uint8_t red, const uint8_t green, const uint8_t blue) {
-  RGBValues RGBColor;
-  RGBColor.red = red;                                     // Set color values.
-  RGBColor.green = green;
-  RGBColor.blue = blue;
-  RGBColorBuffer.put(RGBColor);                           // Add to queue.
+void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue) {
+  ledStrip.ClearTo(RgbColor(red, green, blue));
+  ledStrip.Show();
 }
 
 uint16_t calculateCRC16(const uint8_t* data, uint16_t length) {
