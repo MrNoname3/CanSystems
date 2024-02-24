@@ -34,6 +34,7 @@ SerialIR swSerial(RS232_RX, RS232_TX);
 void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   canHandler.ledOn();
+  canHandler.addCanCallback(canMessageArrived);
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
   digitalWrite(EXT_SENSOR_EN, HIGH);
@@ -76,23 +77,19 @@ void loop() {
   }
 
   //--- Button press handling ---//
-  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);  // Check button actual state.
-  if(buttonState > 0) {                                                       // Filter unvalid states.
-    //CanFrame canFrameOut;                                                     // CAN frame to send.
-    //canFrameOut.canId.from = settings.canAddress;                             // Set frame ID for outgoing message.
-    //canFrameOut.canId.cmd = static_cast<uint16_t>(CanCmd::BUTTON_EVENT);
-    //canFrameOut.canId.to_ = broadcastAddress;
-
-    Serial.print(F("Button event: "));                                        // Debug prints.
+  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);
+  if(buttonState > 0) {
+    Serial.print(F("Button event: "));
     Serial.println(buttonState);
-
-    //sendCanResponse(&canFrameOut);                                            // Send answer.
+    const uint8_t canData[8] = { buttonState, 0, 0, 0, 0, 0, 0, 0 };
+    canHandler.send(CanHandler::CanCmd::BUTTON_EVENT, canData);
   }
 
+  //--- Processing CAN frames ---//
   canHandler.loop();
 
 /*
-  //--- Processing the frames ---//
+  
   case CanCmd::RGB_LED: {
     addToRGBQueue(canFrameIn.data[0], canFrameIn.data[1], canFrameIn.data[2]);  // Add color values to queue.
     sendCanResponse(&canFrameOut);
@@ -156,6 +153,10 @@ void loop() {
 
   //--- Handling MP3 player ---//
   MP3Player.spin();
+}
+
+void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
+
 }
 
 void handleSensors() {

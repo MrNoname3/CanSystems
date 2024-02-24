@@ -44,11 +44,14 @@ public:
   void loop();
   bool send(uint16_t command, const uint8_t (&data)[8]) const;
   bool send(uint16_t command) const;
+  bool send(CanCmd command, const uint8_t (&data)[8]) const;
+  bool send(CanCmd command) const;
   void ledOn();
   void ledOff();
   void ledToggle();
   /// @brief Reset the MCU.
   void restartMCU();
+  void addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8]));
 
   CanHandler(const CanHandler&) = delete;                       // Define copy constructor.
   CanHandler& operator=(const CanHandler&) = delete;            // Define copy assignment operator.
@@ -58,8 +61,6 @@ public:
 private:
   inline bool beginSimple(uint32_t canBaud);
   inline bool loopSimple();
-  bool send(CanCmd command, const uint8_t (&data)[8]) const;
-  bool send(CanCmd command) const;
   static inline void rxInterrupt(int packetsNum) __attribute__((optimize("-O3")));
 
   static constexpr uint16_t masterCanId = 10U;
@@ -72,6 +73,7 @@ private:
   const uint8_t ledPin;
   SPIFlash flash;
   static CircularBuffer<CanFrame, rxBufferSize> rxBuffer;       // Ringbuffer of received CAN frames.
+  void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr;
 };
 
 #endif // CAN_HANDLER_HPP

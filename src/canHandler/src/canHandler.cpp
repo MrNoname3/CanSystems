@@ -111,6 +111,11 @@ bool CanHandler::loopSimple() {
     switch(static_cast<uint16_t>(canFrame.cmd)) {
       case static_cast<uint16_t>(CanCmd::PING): { send(CanCmd::PING); } break;
       case static_cast<uint16_t>(CanCmd::RESTART): { restartMCU(); } break;
+      default: {
+        if(canCallback != nullptr) {
+          canCallback(static_cast<uint16_t>(canFrame.cmd), canFrame.data);
+        }
+      } break;
     }
   }
   if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
@@ -171,4 +176,8 @@ void CanHandler::restartMCU() {
   serialPort.flush();                                 // Sends out data from serial buffer, before reset.
   wdt_enable(WDTO_15MS);                              // Setup watchdog timer.
   while(true) { };                                    // Let the WDT restart the MCU.
+}
+
+void CanHandler::addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
+  this->canCallback = canCallback;                    // Store function pointer locally.
 }
