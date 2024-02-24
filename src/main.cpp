@@ -35,7 +35,7 @@ SerialIR swSerial(RS232_RX, RS232_TX);
 
 //--- Setup section ---//
 void setup() {
-  Serial.begin(115200);                                                       // Open serial port with the given baudrate.
+  Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
   canHandler.ledOn();
@@ -43,26 +43,13 @@ void setup() {
 
   Serial.println(F("*************************"));
   Serial.println(F("Starting..."));                                           // Serial debug print.
-  Serial.print(F("CPP: "));
-  Serial.println(__cplusplus);
-  Serial.print(F("FW: "));
-  Serial.println(SW_VERSION);
-  Serial.print(F("Fuses: "));
-  Serial.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
-  Serial.print(SPACER);
-  Serial.print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
-  Serial.print(SPACER);
-  Serial.print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
-  Serial.print(SPACER);
-  Serial.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
+  canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
 
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
 
   Serial.print(F("FLASH"));
   flash.initialize() ? Serial.println(OK_STATE) : Serial.println(ERR_STATE);    // Initialise SPI FLASH.
-
-  canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
 
   analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
   bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.

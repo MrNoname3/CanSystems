@@ -1,6 +1,7 @@
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
 #include <avr/wdt.h>                          /// Watchdog timer library.
+#include <avr/boot.h>                         /// Reading fuses.
 
 CircularBuffer<CanHandler::CanFrame, CanHandler::rxBufferSize> CanHandler::rxBuffer;
 
@@ -16,6 +17,23 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t csPin, uint8_t intPin, ui
 }
 
 bool CanHandler::begin(uint32_t canBaud) {
+  {
+    const char* SPACER = "|";
+    serialPort.print(F("CPP: "));
+    serialPort.println(__cplusplus);
+    serialPort.print(F("FW: "));
+    serialPort.println(GIT_COMMIT_COUNT);
+    serialPort.print(F("GIT: "));
+    serialPort.println(GIT_COMMIT_HASH, HEX);
+    serialPort.print(F("Fuses: "));
+    serialPort.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
+    serialPort.print(SPACER);
+    serialPort.print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
+    serialPort.print(SPACER);
+    serialPort.print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
+    serialPort.print(SPACER);
+    serialPort.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
+  }
   {
     serialPort.print(F("Address: "));
     const bool eepromDataValid = eepromHandler.load();

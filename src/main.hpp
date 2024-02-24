@@ -4,7 +4,6 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include "canHandler/src/canHandler.hpp"
-#include <avr/boot.h>                         /// Reading fuses.
 #include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
 #include "CircularBuffer.hpp"                 /// Circular buffer class.
@@ -15,10 +14,8 @@
 #include "serialIR.hpp"
 
 //--- Constants ---//
-static constexpr const char* SW_VERSION             = "V1.0.0";     // Actual software version.
 static constexpr const char* OK_STATE               = ": [ OK ]";   // OK status.
 static constexpr const char* ERR_STATE              = ": [ ERR ]";  // Error status.
-static constexpr const char* SPACER                 = " | ";        // Spacer for listings.
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
 
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
