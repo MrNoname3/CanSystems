@@ -3,8 +3,8 @@
 
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <HardwareSerial.h>
-#include "eepromHandler.hpp"                  /// EEPROM wrapper class.
-#include "../../CircularBuffer/src/CircularBuffer.hpp"  /// Circular buffer class.
+#include "../../eepromHandler/src/eepromHandler.hpp"      /// EEPROM wrapper class.
+#include "../../CircularBuffer/src/CircularBuffer.hpp"    /// Circular buffer class.
 #include <SPIFlash.h>                         /// SPI FLASH module driver.
 
 class CanHandler final {
