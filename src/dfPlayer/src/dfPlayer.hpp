@@ -4,7 +4,8 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <SoftwareSerial.h>                   /// Arduino software serial lib.
 #include "DFPlayerMiniFast.h"                 /// DFPlayerMini driver lib.
-#include "CircularBuffer/src/CircularBuffer.hpp"  /// Circular buffer class.
+#include "../../CircularBuffer/src/CircularBuffer.hpp"  /// Circular buffer class.
+#include "../../rgbLedWrapper/src/rgbLedWrapper.hpp"    /// RGB LED controller class.
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
@@ -17,7 +18,7 @@ public:
   /// @param INTpin Device playing interrupt pin: LOW->playing.
   /// @param debug Enable debug prints.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
+  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
     bool debug = false, uint32_t timeout = 10);
 
   /// @brief Destructor of the object.
@@ -30,13 +31,6 @@ public:
   /// @brief Put song number in the play queue.
   /// @param song Number of the song.
   void play(uint16_t song);
-
-  /// @brief Attach an RGB LED controller function to use with MP3 player.
-  /// @param RGBController Pointer of the RGB LED controller function.
-  void attachRGBController(void (*RGBController)(const uint8_t, const uint8_t, const uint8_t));
-
-  /// @brief Detach the RGB LED controller function.
-  void detachRGBController();
 
   /// @brief Handles the state machine for playing.
   /// Need to be called periodically.
@@ -87,6 +81,7 @@ private:
   uint32_t playDelayTimer = 0;                        // Timer for delay between songs.
   uint32_t playTimeoutTimer = 0;                      // Playing timeout time.
 
+  RgbLedWrapper& rgbLed;
   SoftwareSerial swSerial;                            // Software serial object.
   const uint8_t RXpin;                                // Software serial RX pin.
   const uint8_t TXpin;                                // Software serial TX pin.
@@ -98,6 +93,5 @@ private:
 
   PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.
   CircularBuffer<uint16_t, 5> playingQueue;           // MP3 playing queue.
-  void (*RGBController)(const uint8_t, const uint8_t, const uint8_t) = nullptr;   // RGB LED controller function pointer.
 };
 #endif // DFPLAYER_HPP

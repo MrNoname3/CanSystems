@@ -4,9 +4,9 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
 #include "canHandler/src/canHandler.hpp"
-#include <NeoPixelBus.h>                      /// WS2812 LED driver library.
+#include "rgbLedWrapper/src/rgbLedWrapper.hpp"
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
-#include "DFPlayer.hpp"                       /// MP3 player driver library.
+#include "dfPlayer/src/dfPlayer.hpp"          /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"
 //#include "ota.hpp"                            /// OTA byte stream handler.
 #include "serialIR.hpp"
@@ -29,23 +29,7 @@ static constexpr uint8_t EXT_SENSOR_EN              = 17;           // External 
 static constexpr uint8_t RS232_RX                   = 15;           // RS232 serial RX pin. (A2)
 static constexpr uint8_t RS232_TX                   = 16;           // RS232 serial TX pin. (A1)
 
-//--- Structs ---//
-
-/// @brief Color values for RGB LED.
-struct __attribute__((packed))
-RGBValues {
-  uint8_t red = 0;
-  uint8_t green = 0;
-  uint8_t blue = 0;
-};
-
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
-
-/// @brief Send the given data to the RGB LED(s).
-/// @param red Value of red color: 0-255.
-/// @param green Value of green color: 0-255.
-/// @param blue Value of blue color: 0-255.
-void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue);
 
 #endif // MAIN_HPP

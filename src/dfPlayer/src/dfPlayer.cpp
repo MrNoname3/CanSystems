@@ -3,8 +3,15 @@
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 
-DFPlayer::DFPlayer(uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, bool debug, uint32_t timeout) : 
-  swSerial(RXpin, TXpin), RXpin(RXpin), TXpin(TXpin), ENpin(ENpin), INTpin(INTpin), debug(debug) {
+DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, bool debug, uint32_t timeout) : 
+  rgbLed(rgbLed),
+  swSerial(RXpin, TXpin),
+  RXpin(RXpin),
+  TXpin(TXpin),
+  ENpin(ENpin),
+  INTpin(INTpin),
+  debug(debug)
+{
   swSerial.begin(9600);                               // Open software serial port.
   pinMode(this->ENpin, OUTPUT);                       // Set pin modes.
   pinMode(this->INTpin, INPUT_PULLUP);
@@ -24,14 +31,6 @@ void DFPlayer::play(uint16_t song) {
   this->playingQueue.put(song);                       // Put value to playing queue.
 }
 
-void DFPlayer::attachRGBController(void (*RGBController)(const uint8_t, const uint8_t, const uint8_t)) {
-  this->RGBController = RGBController;                // Store controller function pointer locally.
-}
-
-void DFPlayer::detachRGBController() {
-  this->RGBController = NULL;                         // Clear locally stored controller function pointer.
-}
-
 void DFPlayer::spin() {
 
   switch(playingState) {
@@ -39,7 +38,7 @@ void DFPlayer::spin() {
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
         if(debug) { Serial.println(F("IDLE")); }
-        if(RGBController != NULL) { RGBController(redValue, greenValue, blueValue); }
+        rgbLed.setColor(redValue, greenValue, blueValue);
         playingState = PlayingStates::TURN_ON;
       }
     } break;
@@ -121,7 +120,7 @@ void DFPlayer::spin() {
       digitalWrite(this->RXpin, LOW);                           // Set RX line in LOW state. (It's noisy.)
       detachInt();                                              // Detach interrupt.
       enablePlay = false;                                       // Disable interrupt flag.
-      if(RGBController != NULL) { RGBController(0, 0, 0); }     // Set RGB LED color.
+      rgbLed.clear();
       playingState = PlayingStates::IDLE;
     } break;
 

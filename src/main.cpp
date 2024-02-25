@@ -1,28 +1,20 @@
 #include "main.hpp"
 
-//--- CAN handler ---//
+//--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
-
-//--- WS2812 RGB LED ---//
-NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip(RGB_LED_NUM, RGB_PIN);  // Setup LED strip.
-
-//--- Button ---//
 PushButton Button(300, 500, 70);                                              // Object to handle pushbutton events.
+RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
+static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
+AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
+DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                 // Object to handle MP3 player device.
+
+SerialIR swSerial(RS232_RX, RS232_TX);
 
 //--- SPI and OTA ---//
 //static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
 //static constexpr uint8_t otaFwPiece = 4;                                      // Size of FW chunks in bytes.
 //SPIFlash flash(FLASH_CS, 0xEF40);                                             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
 //OTA<otaFlashBegin, otaFwPiece> ota(&flash, calculateCRC16);                   // OTA handler.
-
-//--- MP3 player ---//
-DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
-
-//--- Temperature, humidity and light ---//
-static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
-AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
-
-SerialIR swSerial(RS232_RX, RS232_TX);
 
 //--- Setup section ---//
 void setup() {
@@ -33,9 +25,7 @@ void setup() {
   delay(1);
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
-  ledStrip.Begin();                                                           // Clear LEDs
-  ledStrip.Show();                                                            // and show it.
-  MP3Player.attachRGBController(setRgbLed);                                   // Add RGB LED controller to MP3 driver.
+  rgbLed.begin();
   MP3Player.volume(15);                                                       // Set MP3 player volume.
   MP3Player.play(1);
   ambientSensor.begin();
@@ -58,8 +48,10 @@ void loop() {
     canHandler.send(CanCmd::BUTTON_EVENT, canData);
   }
 
-  //--- Processing CAN frames ---//
   canHandler.loop();
+  ambientSensor.loop();
+  MP3Player.spin();
+}
 
 /*
   case CanCmd::FILET_START: {
@@ -92,18 +84,10 @@ void loop() {
   } break;
 */
 
-  //--- Handle temperature and humidity sensors ---//
-  //handleSensors();
-  ambientSensor.loop();
-
-  //--- Handling MP3 player ---//
-  MP3Player.spin();
-}
-
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
-      setRgbLed(data[0], data[1], data[2]);
+      rgbLed.setColor(data[0], data[1], data[2]);
       canHandler.send(static_cast<uint16_t>(CanCmd::RGB_LED));
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
@@ -113,9 +97,4 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
     } break;
   };
-}
-
-void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue) {
-  ledStrip.ClearTo(RgbColor(red, green, blue));
-  ledStrip.Show();
 }
