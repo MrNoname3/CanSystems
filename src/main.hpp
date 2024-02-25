@@ -57,10 +57,4 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 /// @param blue Value of blue color: 0-255.
 void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue);
 
-/// @brief Calculates the 16bit CRC (XModem) of the given data.
-/// @param data Data whose CRC value should be calculated.
-/// @param length Given data length in bytes.
-/// @return Returns with the calculated CRC value.
-uint16_t calculateCRC16(const uint8_t* data, uint16_t length);
-
 #endif // MAIN_HPP

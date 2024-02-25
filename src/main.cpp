@@ -31,7 +31,6 @@ void setup() {
   canHandler.addCanCallback(canMessageArrived);
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
-  digitalWrite(EXT_SENSOR_EN, HIGH);
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
   ledStrip.Begin();                                                           // Clear LEDs
@@ -40,6 +39,7 @@ void setup() {
   MP3Player.volume(15);                                                       // Set MP3 player volume.
   MP3Player.play(1);
   ambientSensor.begin();
+  digitalWrite(EXT_SENSOR_EN, HIGH);
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
@@ -118,29 +118,4 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue) {
   ledStrip.ClearTo(RgbColor(red, green, blue));
   ledStrip.Show();
-}
-
-uint16_t calculateCRC16(const uint8_t* data, uint16_t length) {
-  constexpr uint16_t polynomial = 0x1021;
-  uint16_t crc = 0;
-  for(uint16_t i = 0; i < length; i++) {
-    crc ^= ((uint16_t)data[i] << 8);
-    for(uint8_t j = 0; j < 8; j++) {
-      if(crc & 0x8000) {
-        crc = (crc << 1) ^ polynomial;
-      }
-      else {
-        crc <<= 1;
-      }
-    }
-  }
-  return crc;
-}
-
-inline int analogReadFast(uint8_t ADCpin) {
-  uint8_t ADCSRAoriginal = ADCSRA;
-  ADCSRA = (ADCSRA & B11111000) | 4;
-  int adc = analogRead(ADCpin);
-  ADCSRA = ADCSRAoriginal;
-  return adc;
 }
