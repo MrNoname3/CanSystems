@@ -5,7 +5,7 @@
 
 class Crc16 final {
   public:
-    explicit Crc16(uint16_t initValue = 0xFFFF, uint16_t polynomial = 0x1021);
+    explicit Crc16(uint16_t initValue = 0, uint16_t polynomial = 0x1021);
     ~Crc16() = default;
     void next(uint8_t value);
     void next(const uint8_t* values, uint32_t length);
