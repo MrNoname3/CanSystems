@@ -16,10 +16,8 @@ public:
   /// @param TXpin_ Software serial TX pin.
   /// @param ENpin Device turn on/off switch pin.
   /// @param INTpin Device playing interrupt pin: LOW->playing.
-  /// @param debug Enable debug prints.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin,
-    bool debug = false, uint32_t timeout = 10);
+  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, uint32_t timeout = 10);
 
   /// @brief Destructor of the object.
   virtual ~DFPlayer() = default;
@@ -43,9 +41,7 @@ public:
   DFPlayer& operator=(const DFPlayer&) = delete;            // Define copy assignment operator.
   DFPlayer(DFPlayer&&) = delete;                            // Define move constructor.
   DFPlayer& operator=(DFPlayer&&) = delete;                 // Define move assignment operator.
-
 private:
-
   /// @brief Attach interrupt to the given interrupt pin.
   void attachInt() const ;
 
@@ -88,7 +84,6 @@ private:
   const uint8_t ENpin;                                // Device turn on/off switch pin.
   const uint8_t INTpin;                               // Device playing interrupt pin: LOW->playing.
   uint8_t volume_ = 5;                                // Volume value. Default: 5.
-  bool debug = false;                                 // Enable debug prints.
   static volatile bool enablePlay;                    // Interrupt flag. If true, device is ready to play.
 
   PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.

@@ -3,14 +3,13 @@
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 
-DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, bool debug, uint32_t timeout) : 
+DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t ENpin, uint8_t INTpin, uint32_t timeout) : 
   rgbLed(rgbLed),
   swSerial(RXpin, TXpin),
   RXpin(RXpin),
   TXpin(TXpin),
   ENpin(ENpin),
-  INTpin(INTpin),
-  debug(debug)
+  INTpin(INTpin)
 {
   swSerial.begin(9600);                               // Open software serial port.
   pinMode(this->ENpin, OUTPUT);                       // Set pin modes.
@@ -18,7 +17,7 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t 
   digitalWrite(this->ENpin, LOW);                     // Set pin states.
   digitalWrite(this->TXpin, LOW);
   digitalWrite(this->RXpin, LOW);
-  DFPlayerMiniFast::begin(swSerial, debug, timeout);  // Call base class constructor.
+  DFPlayerMiniFast::begin(swSerial, false, timeout);
 }
 
 void DFPlayer::volume(uint8_t volume_) {
@@ -37,14 +36,12 @@ void DFPlayer::spin() {
 
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
-        if(debug) { Serial.println(F("IDLE")); }
         rgbLed.setColor(redValue, greenValue, blueValue);
         playingState = PlayingStates::TURN_ON;
       }
     } break;
 
     case PlayingStates::TURN_ON: {
-      if(debug) { Serial.println(F("TURN_ON")); }
       digitalWrite(this->TXpin, HIGH);                          // Set TX line in HIGH state.
       digitalWrite(this->RXpin, HIGH);                          // Set RX line in HIGH state.
       digitalWrite(this->ENpin, HIGH);                          // Turn on device.
@@ -54,13 +51,11 @@ void DFPlayer::spin() {
 
     case PlayingStates::WAIT_FOR_BOOT: {
       if(millis()- bootTimer >= bootTime) {                     // Check timer.
-        if(debug) { Serial.println(F("WAIT_FOR_BOOT")); }
         playingState = PlayingStates::SET_VOLUME;
       }
     } break;
 
     case PlayingStates::SET_VOLUME: {
-      if(debug) { Serial.println(F("SET_VOLUME")); }
       DFPlayerMiniFast::volume(volume_);                        // Set volume trough base class.
       cmdExecTimer = millis();                                  // Start timer.
       playingState = PlayingStates::WAIT_FOR_CMD;
@@ -68,13 +63,11 @@ void DFPlayer::spin() {
 
     case PlayingStates::WAIT_FOR_CMD: {
       if(millis() - cmdExecTimer >= cmdExecTime) {              // Check timer.
-        if(debug) { Serial.println(F("WAIT_FOR_CMD")); }
         playingState = PlayingStates::PLAY;
       }
     } break;
 
     case PlayingStates::PLAY: {
-      if(debug) { Serial.println(F("PLAY")); }
       this->attachInt();                                        // Attach interrupt.
       DFPlayerMiniFast::play(playingQueue.pop());               // Play next song from queue.
       playTimeoutTimer = millis();                              // Start timer.
@@ -83,19 +76,16 @@ void DFPlayer::spin() {
 
     case PlayingStates::WAIT_FOR_PLAY: {
       if(enablePlay) {                                          // Wait for interrupt.
-        if(debug) { Serial.println(F("WAIT_FOR_PLAY")); }
         enablePlay = false;                                     // Disable interrupt flag.
         playingState = PlayingStates::CHECK_QUEUE;
       }
       if(millis() - playTimeoutTimer >= playTimeoutTime) {      // Check timeout timer.
-        if(debug) { Serial.println(F("TIMEOUT")); }
         DFPlayerMiniFast::stop();                               // Stop playing.
         playingState = PlayingStates::CHECK_QUEUE;
       }
     } break;
 
     case PlayingStates::CHECK_QUEUE: {
-      if(debug) { Serial.println(F("CHECK_QUEUE")); }
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
         playDelayTimer = millis();                              // Start timer.
         playingState = PlayingStates::PLAYING_DELAY;
@@ -107,14 +97,12 @@ void DFPlayer::spin() {
 
     case PlayingStates::PLAYING_DELAY: {
       if(millis() - playDelayTimer >= playDelayTime) {          // Check timer.
-        if(debug) { Serial.println(F("PLAYING_DELAY")); }
         enablePlay = false;                                     // Disable interrupt flag.
         playingState = PlayingStates::PLAY;
       }
     } break;
 
     case PlayingStates::TURN_OFF: {
-      if(debug) { Serial.println(F("TURN_OFF")); }
       digitalWrite(this->ENpin, LOW);                           // Turn on device.
       digitalWrite(this->TXpin, LOW);                           // Set TX line in LOW state. (It's noisy.)
       digitalWrite(this->RXpin, LOW);                           // Set RX line in LOW state. (It's noisy.)
