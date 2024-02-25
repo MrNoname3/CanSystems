@@ -2,7 +2,9 @@
 
 RgbLedWrapper::RgbLedWrapper(const uint8_t ledNumber, const uint8_t ledPin) :
   ledStrip(ledNumber, ledPin)
-{
+{}
+
+void RgbLedWrapper::begin() {
   ledStrip.Begin();               // Clear LEDs and show it.
   ledStrip.Show();
 }

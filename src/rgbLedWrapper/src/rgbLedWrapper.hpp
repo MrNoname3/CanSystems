@@ -9,6 +9,7 @@ public:
   RgbLedWrapper(const uint8_t ledNumber, const uint8_t ledPin);
    /// @brief Destructor of the object.
   ~RgbLedWrapper() = default;
+  void begin();
   /// @brief Send the given data to the RGB LED(s).
   /// @param red Value of red color: 0-255.
   /// @param green Value of green color: 0-255.
