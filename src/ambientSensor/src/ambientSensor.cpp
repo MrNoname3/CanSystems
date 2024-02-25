@@ -19,11 +19,8 @@ void AmbientSensor::begin() {
   serialPort.print(F("SI7021: "));
   const bool si7021BeginResult = si7021.begin();
   si7021BeginResult ? serialPort.println(CanHandler::OK_STATE) : serialPort.println(CanHandler::ERR_STATE);
-  //if(!si7021BeginResult) {
-    //measurePeriod = 0;
-    //return;
-  //}
-  //si7021.setPrecision(0x81);                                                  // Set humtemp sensor reading resolution.
+  if(!si7021BeginResult) { return; }
+  si7021.setHeater(false);
 }
 
 void AmbientSensor::loop() {
@@ -54,6 +51,12 @@ void AmbientSensor::loop() {
       0,
       0
     };
-    //canHandler.send(, data);
+    canHandler.send(CanCmd::READ_HUM_TEMP_LDR, data);
+    serialPort.print(F("L:"));
+    serialPort.print(lightValue);
+    serialPort.print(F(", T:"));
+    serialPort.print(temperature);
+    serialPort.print(F(", H:"));
+    serialPort.println(humidity);
   }
 }

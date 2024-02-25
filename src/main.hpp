@@ -39,15 +39,6 @@ RGBValues {
   uint8_t blue = 0;
 };
 
-//--- Enums ---//
-
-/// @brief Base command list for nodes.
-enum class CanCmd : uint16_t {
-  RGB_LED,                                    // Set WS2812 RGB LED color.
-  PLAY_MP3,                                   // Play MP3 file.
-  READ_HUM_TEMP_LDR,                          // Read humidity, temperature and light value.
-};
-
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 

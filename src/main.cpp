@@ -55,7 +55,7 @@ void loop() {
     Serial.print(F("Button event: "));
     Serial.println(buttonState);
     const uint8_t canData[8] = { buttonState, 0, 0, 0, 0, 0, 0, 0 };
-    canHandler.send(CanHandler::CanCmd::BUTTON_EVENT, canData);
+    canHandler.send(CanCmd::BUTTON_EVENT, canData);
   }
 
   //--- Processing CAN frames ---//

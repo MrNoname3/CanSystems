@@ -3,6 +3,7 @@
 
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <HardwareSerial.h>
+#include "canCommands.hpp"
 #include "../../eepromHandler/src/eepromHandler.hpp"      /// EEPROM wrapper class.
 #include "../../CircularBuffer/src/CircularBuffer.hpp"    /// Circular buffer class.
 #include <SPIFlash.h>                         /// SPI FLASH module driver.
@@ -11,16 +12,6 @@ class CanHandler final {
 public:
   static constexpr const char* OK_STATE               = "[OK]";   // OK status.
   static constexpr const char* ERR_STATE              = "[ERR]";  // Error status.
-
-  /// @brief Base command list for nodes.
-  enum class CanCmd : uint16_t {
-    PING = 0,                                   // Ping command.
-    RESTART,                                    // Node reset command.
-    BUTTON_EVENT,                               // Get button event type.
-    FILET_START,                                // Init file transfer process.
-    FILET_SEND,                                 // Send file pieces.
-    FILET_END                                   // File transfer process ended.
-  };
 
   struct __attribute__((packed))
   CanFrame {                                    // CAN frame.

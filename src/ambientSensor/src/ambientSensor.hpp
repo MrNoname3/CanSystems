@@ -25,5 +25,4 @@ private:
   const uint8_t lightPin;
   const uint32_t measurePeriod;
 };
-
 #endif // AMBIENT_SENSOR_HPP
