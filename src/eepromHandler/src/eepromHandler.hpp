@@ -3,15 +3,14 @@
 
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <EEPROM.h>                           /// EEPROM access library.
+#include "../../crc16/src/crc16.hpp"
 
 /// @brief This class is a wrapper for EEPROM storing and reading.
 /// @tparam T Datatype which will be stored.
 /// @tparam eepromAddress This is the EEPROM address where we want to store our data. 
 template<class T, uint16_t eepromAddress>
 class EEPROMHandler {
-
 public:
-
   /// @brief Constructor of EEPROM handler class.
   EEPROMHandler() = default;
 
@@ -35,7 +34,7 @@ public:
   static bool save(T* data) {
     EEPROMData eepromData;
     eepromData.data = *data;
-    eepromData.crc = calCrc(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
+    eepromData.crc = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
 
     // Perform EEPROM write operation.
     EEPROM.put(eepromAddress, eepromData);
@@ -68,7 +67,7 @@ public:
     // Check CRC.
     uint16_t crcReceived = eepromData.crc;
     eepromData.crc = 0;
-    uint16_t crcCalculated = calCrc(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
+    uint16_t crcCalculated = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
 
     if(crcReceived == crcCalculated) {
       *data = eepromData.data;
@@ -81,48 +80,19 @@ public:
 
   /// @brief Size of the stored frame.
   /// @return Returns the data frame size which is stored in EEPROM.
-  static constexpr uint16_t getDataSize() {
-    return sizeof(EEPROMData);
-  }
-
-  /// @brief Calculates the 16bit CRC (XModem) of the given data.
-  /// @param data Data whose CRC value should be calculated.
-  /// @param length Given data length in bytes.
-  /// @return Returns with the calculated CRC value.
-  static uint16_t calCrc(const uint8_t* data, uint16_t length) {
-    constexpr uint16_t polynomial = 0x1021;
-    uint16_t crc = 0;
-    for(uint16_t i = 0; i < length; i++) {
-      crc ^= ((uint16_t)data[i] << 8);
-      for(uint8_t j = 0; j < 8; j++) {
-        if(crc & 0x8000) {
-          crc = (crc << 1) ^ polynomial;
-        }
-        else {
-          crc <<= 1;
-        }
-      }
-    }
-    return crc;
-  }
+  static constexpr uint16_t getDataSize() { return sizeof(EEPROMData); }
 
   EEPROMHandler(const EEPROMHandler&) = delete;               // Define copy constructor.
   EEPROMHandler& operator=(const EEPROMHandler&) = delete;    // Define copy assignment operator.
   EEPROMHandler(EEPROMHandler&&) = delete;                    // Define move constructor.
   EEPROMHandler& operator=(EEPROMHandler&&) = delete;         // Define move assignment operator.
-
 private:
-
   T* data;                                      // Pointer of user datatype.
-
   struct __attribute__((packed)) 
   EEPROMData {                                  // Data frame to stored in EEPROM.
     uint16_t crc;                               // Data struct CRC value.
     T data;                                     // Data type template.
     EEPROMData() : crc(0) { }
   };
-
 };
-
-
 #endif // EEPROM_HANDLER_HPP
