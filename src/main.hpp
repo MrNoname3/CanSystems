@@ -6,7 +6,6 @@
 #include "canHandler/src/canHandler.hpp"
 #include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
-#include "CircularBuffer.hpp"                 /// Circular buffer class.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
 #include <SI7021.h>                           /// Temperature and humidity sensor driver.
 //#include "ota.hpp"                            /// OTA byte stream handler.

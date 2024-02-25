@@ -4,7 +4,7 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <SoftwareSerial.h>                   /// Arduino software serial lib.
 #include "DFPlayerMiniFast.h"                 /// DFPlayerMini driver lib.
-#include "CircularBuffer.hpp"                 /// Circular buffer class.
+#include "CircularBuffer/src/CircularBuffer.hpp"  /// Circular buffer class.
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
