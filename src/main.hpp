@@ -7,13 +7,11 @@
 #include <NeoPixelBus.h>                      /// WS2812 LED driver library.
 #include <PushButtonClicks.h>                 /// Pushbutton events library.
 #include "DFPlayer.hpp"                       /// MP3 player driver library.
-#include <SI7021.h>                           /// Temperature and humidity sensor driver.
+#include "ambientSensor/src/ambientSensor.hpp"
 //#include "ota.hpp"                            /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//
-static constexpr const char* OK_STATE               = ": [ OK ]";   // OK status.
-static constexpr const char* ERR_STATE              = ": [ ERR ]";  // Error status.
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
 
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
@@ -50,33 +48,8 @@ enum class CanCmd : uint16_t {
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature and light value.
 };
 
-/// @brief Error types.
-enum class errorTypes : uint8_t {
-  ERR_I2C_READ_TIMEOUT = 0,                   // I2C read timeout.
-  ERR_I2C_SENSOR_INIT,                        // I2C sensor init failed.
-  ERR_CAN_INIT,                               // CAN init failed.
-  ERR_CAN_ID_SET,                             // CAN ID setup method failed.
-  ERR_CAN_DATA_WRITE,                         // CAN data write method failed.
-  ERR_CAN_ENDPACKET,                          // CAN endpacket method failed.
-  ERR_UNHANDLED_COMMAND,                      // Unhandled command in state machine.
-
-  LAST_ELEMENT                                // Last element of enum!
-};
-
-/// @brief States of SI7021 reads.
-enum class si7021States : uint8_t {
-  IDLE = 0,
-  READ_TEMPERATURE,
-  READ_HUMIDITY,
-
-  LAST_ELEMENT
-};
-
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
-
-/// @brief Handles the I2C humidity&temperature sensor and the analog light sensor.
-inline void handleSensors() __attribute__((always_inline));
 
 /// @brief Send the given data to the RGB LED(s).
 /// @param red Value of red color: 0-255.
@@ -89,7 +62,5 @@ void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue);
 /// @param length Given data length in bytes.
 /// @return Returns with the calculated CRC value.
 uint16_t calculateCRC16(const uint8_t* data, uint16_t length);
-
-inline int analogReadFast(uint8_t ADCpin) __attribute__((always_inline));
 
 #endif // MAIN_HPP

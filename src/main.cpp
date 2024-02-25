@@ -3,9 +3,6 @@
 //--- CAN handler ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
 
-//--- Variables ---//
-uint16_t errorCode = 0;                                                       // Store occured error codes.
-
 //--- WS2812 RGB LED ---//
 NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip(RGB_LED_NUM, RGB_PIN);  // Setup LED strip.
 
@@ -22,10 +19,8 @@ PushButton Button(300, 500, 70);                                              //
 DFPlayer MP3Player(DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                         // Object to handle MP3 player device.
 
 //--- Temperature, humidity and light ---//
-SI7021 si7021;                                                                // I2C humidity and temperature sensor driver.
-int16_t temperature = 0;                                                      // Temperature value.
-uint16_t humidity = 0;                                                        // Humidity value.
-uint8_t light = 0;                                                            // Light value.
+static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
+AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 
 SerialIR swSerial(RS232_RX, RS232_TX);
 
@@ -37,35 +32,14 @@ void setup() {
   pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
   digitalWrite(EXT_SENSOR_EN, HIGH);
-
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
-
   ledStrip.Begin();                                                           // Clear LEDs
   ledStrip.Show();                                                            // and show it.
-
-  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
-  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
-  bitSet(ADCSRA, ADPS1);
-  bitClear(ADCSRA, ADPS0);
-
-  MP3Player.attachRGBController(setRgbLed);                               // Add RGB LED controller to MP3 driver.
+  MP3Player.attachRGBController(setRgbLed);                                   // Add RGB LED controller to MP3 driver.
   MP3Player.volume(15);                                                       // Set MP3 player volume.
-
   MP3Player.play(1);
-
-  Wire.setClock(400000);                                                      // Set I2C bus speed.
-  Wire.setWireTimeout(10000, true);                                           // Set I2C timeout to 10ms.
-  Serial.print(F("HumTemp"));                                                 // Serial debug print.
-  if(si7021.begin()) {                                                        // Initialize the I2C sensor and ping it.
-    Serial.println(OK_STATE);                                                 // If init ok, print OK.
-  }
-  else {
-    Serial.println(ERR_STATE);                                                // If can't init, print ERROR.
-    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_SENSOR_INIT)); // Set error flag.
-  }
-  si7021.setPrecision(0x81);                                                  // Set humtemp sensor reading resolution.
-
+  ambientSensor.begin();
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
@@ -116,19 +90,11 @@ void loop() {
   case CanCmd::FILET_END: {
     ota.end();
   } break;
-
-  case CanCmd::READ_HUM_TEMP_LDR: {
-    canFrameOut.data[0] = lowByte(temperature);                           // Set values for response.
-    canFrameOut.data[1] = highByte(temperature);
-    canFrameOut.data[2] = lowByte(humidity);
-    canFrameOut.data[3] = highByte(humidity);
-    canFrameOut.data[4] = light;
-    sendCanResponse(&canFrameOut);
-  } break;
 */
 
   //--- Handle temperature and humidity sensors ---//
-  handleSensors();
+  //handleSensors();
+  ambientSensor.loop();
 
   //--- Handling MP3 player ---//
   MP3Player.spin();
@@ -147,46 +113,6 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
     } break;
   };
-}
-
-void handleSensors() {
-  static si7021States sensorState = si7021States::READ_TEMPERATURE;         // Sensor reading state.
-  constexpr uint8_t adcInputFilterAlpha = 10;                               // Complementer filter ALPHA value.
-  uint8_t lightRaw = analogRead(LDR_PIN) >> 2;                              // Analog read and map from 10bit to 8bit.
-  light = ((adcInputFilterAlpha * lightRaw) + (100 - adcInputFilterAlpha) * light) / 100; // Complementer filter calculation.
-
-  switch(sensorState) {
-    case si7021States::IDLE : {
-      constexpr uint16_t sensorReadingTime = 60000;
-      static uint32_t sensorReadingTimer = 0;                               // Sensor reading timer.
-
-      if(millis() - sensorReadingTimer >= sensorReadingTime) {              // Check timer.
-        sensorState = si7021States::READ_TEMPERATURE;
-        sensorReadingTimer = millis();                                      // Reload timer.
-      }
-    } break;
-
-    case si7021States::READ_TEMPERATURE: {
-      temperature = si7021.getCelsiusHundredths();                          // Read temperature.
-      sensorState = si7021States::READ_HUMIDITY;
-    } break;
-
-    case si7021States::READ_HUMIDITY: {
-      humidity = si7021.getHumidityPercent();                               // Read humidity.
-      sensorState = si7021States::IDLE;
-    } break;
-
-    default: {
-      sensorState = si7021States::IDLE;
-    } break;
-  }
-
-  if(Wire.getWireTimeoutFlag()) {
-    temperature = humidity = 0;                                             // Delete (possible) unvalid values.
-    bitSet(errorCode, static_cast<uint8_t>(errorTypes::ERR_I2C_READ_TIMEOUT));  // Set error flag.
-    Wire.clearWireTimeoutFlag();                                            // Clear I2C timeout flag.
-    Serial.println(F("I2C timeout occured!"));
-  }
 }
 
 void setRgbLed(const uint8_t red, const uint8_t green, const uint8_t blue) {
