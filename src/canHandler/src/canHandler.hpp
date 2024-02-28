@@ -5,7 +5,6 @@
 #include <HardwareSerial.h>
 #include "canCommands.hpp"
 #include "../../eepromHandler/src/eepromHandler.hpp"      /// EEPROM wrapper class.
-#include "../../CircularBuffer/src/CircularBuffer.hpp"    /// Circular buffer class.
 #include <SPIFlash.h>                         /// SPI FLASH module driver.
 
 class CanHandler final {
@@ -52,7 +51,7 @@ public:
 private:
   inline bool beginSimple(uint32_t canBaud);
   inline bool loopSimple();
-  static inline void rxInterrupt(int packetsNum) __attribute__((optimize("-O3")));
+  static inline void rxInterrupt();
 
   static constexpr uint16_t masterCanId = 10U;
   static constexpr uint8_t rxBufferSize = 5;
@@ -63,7 +62,7 @@ private:
   EEPROMHandler<uint16_t, 0> eepromHandler;
   const uint8_t ledPin;
   SPIFlash flash;
-  static CircularBuffer<CanFrame, rxBufferSize> rxBuffer;       // Ringbuffer of received CAN frames.
+  static volatile uint8_t intCount;
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr;
 };
 
