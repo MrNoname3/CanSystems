@@ -2,7 +2,7 @@
 
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
-PushButton Button(300, 500, 70);                                              // Object to handle pushbutton events.
+PushButton Button(250U, 500U, 70U, false);                                    // Object to handle pushbutton events.
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
@@ -42,7 +42,7 @@ void loop() {
   //--- Button press handling ---//
   uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);
   if(buttonState > 0) {
-    Serial.print(F("Button event: "));
+    Serial.print(F("Btn: "));
     Serial.println(buttonState);
     const uint8_t canData[8] = { buttonState, 0, 0, 0, 0, 0, 0, 0 };
     canHandler.send(CanCmd::BUTTON_EVENT, canData);

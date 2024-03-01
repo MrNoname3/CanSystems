@@ -2,18 +2,17 @@
 #define MAIN_HPP
 
 //--- Headers ---//
-#include <Arduino.h>                          /// Arduino libraries header.
-#include "canHandler/src/canHandler.hpp"
-#include "rgbLedWrapper/src/rgbLedWrapper.hpp"
-#include <PushButtonClicks.h>                 /// Pushbutton events library.
-#include "dfPlayer/src/dfPlayer.hpp"          /// MP3 player driver library.
-#include "ambientSensor/src/ambientSensor.hpp"
-//#include "ota.hpp"                            /// OTA byte stream handler.
+#include <Arduino.h>                                                /// Arduino libraries header.
+#include "canHandler/src/canHandler.hpp"                            /// CAN handler library.
+#include "rgbLedWrapper/src/rgbLedWrapper.hpp"                      /// RGB LED driver wrapper.
+#include "pushButtonHandler/src/PushButtonClicks.hpp"               /// Pushbutton events library.
+#include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
+#include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
+//#include "ota.hpp"                                                  /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
-
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
 static constexpr uint8_t LED                        = 4;            // Pin of the LED.
 static constexpr uint8_t CAN_CS                     = 10;           // CS pin of the SPI CAN controller.
