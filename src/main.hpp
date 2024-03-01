@@ -5,7 +5,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "canHandler/src/canHandler.hpp"                            /// CAN handler library.
 #include "rgbLedWrapper/src/rgbLedWrapper.hpp"                      /// RGB LED driver wrapper.
-#include "pushButtonHandler/src/PushButtonClicks.hpp"               /// Pushbutton events library.
+#include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
 #include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
 //#include "ota.hpp"                                                  /// OTA byte stream handler.
@@ -18,7 +18,7 @@ static constexpr uint8_t LED                        = 4;            // Pin of th
 static constexpr uint8_t CAN_CS                     = 10;           // CS pin of the SPI CAN controller.
 static constexpr uint8_t CAN_INT                    = 2;            // Interrupt pin of the SPI CAN controller.
 static constexpr uint8_t FLASH_CS                   = 8;            // SPI FLASH CS pin.
-static constexpr uint8_t BUTTON                     = 20;           // Pushbutton pin. (A6)
+static constexpr uint8_t BUTTON_PIN                 = 20;           // Pushbutton pin. (A6)
 static constexpr uint8_t DFP_EN                     = 9;            // DFPlayer switch pin.
 static constexpr uint8_t DFP_BUSY                   = 3;            // DFPlayer busy pin.
 static constexpr uint8_t DFP_TX                     = 5;            // DFPlayer serial RX pin.
@@ -30,5 +30,7 @@ static constexpr uint8_t RS232_TX                   = 16;           // RS232 ser
 
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
+
+void btnEventHandling(const uint8_t& event);
 
 #endif // MAIN_HPP

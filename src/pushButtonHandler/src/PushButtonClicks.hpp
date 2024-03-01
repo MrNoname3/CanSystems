@@ -12,6 +12,8 @@ public:
   /// @param debounceTime Button press debounce time.
   /// @param buttonPolarity Button pressed polarity.
   PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounceTime, bool buttonPolarity);
+  /// @brief Destructor of the object.
+  ~PushButton() = default;
   /// @brief Checks for events.
   /// @param currentMillis Time source, like millis() function.
   /// @param currentPinStatus Actual pin status from a digitalRead() function.

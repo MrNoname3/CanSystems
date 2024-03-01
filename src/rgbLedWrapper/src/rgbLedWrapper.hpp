@@ -7,7 +7,7 @@
 class RgbLedWrapper final {
 public:
   RgbLedWrapper(const uint8_t ledNumber, const uint8_t ledPin);
-   /// @brief Destructor of the object.
+  /// @brief Destructor of the object.
   ~RgbLedWrapper() = default;
   void begin();
   /// @brief Send the given data to the RGB LED(s).

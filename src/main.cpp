@@ -2,11 +2,11 @@
 
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
-PushButton Button(250U, 500U, 70U, false);                                    // Object to handle pushbutton events.
+PushButtonHandler buttonHandler(Serial, canHandler, BUTTON_PIN);
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
-DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);                 // Object to handle MP3 player device.
+DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 
 SerialIR swSerial(RS232_RX, RS232_TX);
 
@@ -25,6 +25,7 @@ void setup() {
   delay(1);
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
+  buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   MP3Player.volume(15);                                                       // Set MP3 player volume.
   MP3Player.play(1);
@@ -39,16 +40,8 @@ void loop() {
     Serial.println(swSerial.read());
   }
 
-  //--- Button press handling ---//
-  uint8_t buttonState = Button.buttonCheck(millis(), analogRead(BUTTON) > 511 ? HIGH : LOW);
-  if(buttonState > 0) {
-    Serial.print(F("Btn: "));
-    Serial.println(buttonState);
-    const uint8_t canData[8] = { buttonState, 0, 0, 0, 0, 0, 0, 0 };
-    canHandler.send(CanCmd::BUTTON_EVENT, canData);
-  }
-
   canHandler.loop();
+  buttonHandler.loop();
   ambientSensor.loop();
   MP3Player.spin();
 }
@@ -98,3 +91,5 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
     } break;
   };
 }
+
+void btnEventHandling(const uint8_t& event) {}
