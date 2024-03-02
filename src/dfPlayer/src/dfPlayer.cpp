@@ -1,5 +1,5 @@
 #include "dfPlayer.hpp"
-
+#include <Arduino.h>                                                /// Arduino libraries header.
 
 volatile bool DFPlayer::enablePlay = false;           // Set value for static variable.
 

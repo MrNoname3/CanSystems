@@ -1,9 +1,9 @@
 #ifndef AMBIENT_SENSOR_HPP
 #define AMBIENT_SENSOR_HPP
 
-#include <Arduino.h>                          /// Arduino libraries header.
+#include <stdint.h>
 #include "canHandler/src/canHandler.hpp"
-#include <SI7021.h>                           /// Temperature and humidity sensor driver.
+#include <SI7021.h>                                                 /// Temperature and humidity sensor driver.
 #include <HardwareSerial.h>
 
 class AmbientSensor final {

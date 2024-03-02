@@ -1,8 +1,8 @@
 #ifndef EEPROM_HANDLER_HPP
 #define EEPROM_HANDLER_HPP
 
-#include <Arduino.h>                          /// Arduino libraries header.
-#include <EEPROM.h>                           /// EEPROM access library.
+#include <stdint.h>
+#include <EEPROM.h>                                                 /// EEPROM access library.
 #include "../../crc16/src/crc16.hpp"
 
 /// @brief This class is a wrapper for EEPROM storing and reading.
@@ -12,11 +12,11 @@ template<class T, uint16_t eepromAddress>
 class EEPROMHandler final {
 public:
   /// @brief Constructor of EEPROM handler class.
-  EEPROMHandler() = default;
+  EEPROMHandler() : data() {}
 
   /// @brief Constructor of EEPROM handler class with pointer to the data.
   /// @param data The pointer of the data, which we want to 'save to' / 'load from' EEPROM.
-  EEPROMHandler(T* data) : data(data) { }
+  EEPROMHandler(T* data) : data(data) {}
 
   /// @brief Default destructor.
   virtual ~EEPROMHandler() = default;
@@ -92,7 +92,7 @@ private:
   EEPROMData {                                  // Data frame to stored in EEPROM.
     uint16_t crc;                               // Data struct CRC value.
     T data;                                     // Data type template.
-    EEPROMData() : crc(0) { }
+    EEPROMData() : crc(0), data() {}
   };
 };
 #endif // EEPROM_HANDLER_HPP

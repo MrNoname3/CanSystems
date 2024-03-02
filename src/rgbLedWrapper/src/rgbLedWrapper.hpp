@@ -2,7 +2,7 @@
 #define RGB_LED_WRAPPER_HPP
 
 #include <stdint.h>
-#include <NeoPixelBus.h>                      /// WS2812 LED driver library.
+#include <NeoPixelBus.h>                                            /// WS2812 LED driver library.
 
 class RgbLedWrapper final {
 public:

@@ -1,11 +1,11 @@
 #ifndef CAN_HANDLER_HPP
 #define CAN_HANDLER_HPP
 
-#include <Arduino.h>                          /// Arduino libraries header.
+#include <stdint.h>
 #include <HardwareSerial.h>
 #include "canCommands.hpp"
-#include "../../eepromHandler/src/eepromHandler.hpp"      /// EEPROM wrapper class.
-#include <SPIFlash.h>                         /// SPI FLASH module driver.
+#include "../../eepromHandler/src/eepromHandler.hpp"                /// EEPROM wrapper class.
+#include <SPIFlash.h>                                               /// SPI FLASH module driver.
 
 class CanHandler final {
 public:

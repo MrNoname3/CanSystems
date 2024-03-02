@@ -1,4 +1,5 @@
 #include "ambientSensor.hpp"
+#include <Wire.h>
 
 AmbientSensor::AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
   si7021(),

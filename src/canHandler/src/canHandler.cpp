@@ -1,7 +1,8 @@
 #include "canHandler.hpp"
-#include <CAN.h>                              /// CAN controller library.
-#include <avr/wdt.h>                          /// Watchdog timer library.
-#include <avr/boot.h>                         /// Reading fuses.
+#include <Arduino.h>                                                /// Arduino libraries header.
+#include <CAN.h>                                                    /// CAN controller library.
+#include <avr/wdt.h>                                                /// Watchdog timer library.
+#include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0;
 
