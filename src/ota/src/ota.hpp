@@ -3,9 +3,7 @@
 
 #include <stdint.h>
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
-//#include <avr/wdt.h>                                                /// Watchdog timer library.
 #include "../../crc16/src/crc16.hpp"                                /// CRC16 calculator class.
-//#include "Reset/DeviceReset.hpp"
 
 /// @brief OTA update handler class.
 /// @tparam flashBlockNumber FLASH begin address: flashBlockNumber * 32KB.
@@ -34,7 +32,7 @@ public:
     if(fwSize == 0) { return false; }                               // No firmware to write, return early.
     constexpr uint16_t maxAllowedSize = 31U * 1024U;                // Max flash size is 32Kb - 1Kb for bootloader.
     if(fwSize > maxAllowedSize) { return false; }                   // Check fw size.
-    flash.blockErase32K(flashBlockBeginAddress);                    // Attempt to erase the FLASH block.
+    clear();                                                        // Attempt to erase the FLASH block.
     this->fwSize = fwSize;                                          // Save FW size.
     this->fwCrc = fwCrc;                                            // Store FW CRC.
     flashWritePointer = 0;                                          // Reset write pointer.
@@ -47,12 +45,11 @@ public:
   /// @return Retruns with the result.
   bool storeNextData(uint16_t dataAddress, const uint8_t (&fwData)[fwPieceSize]) {
     if(flashWritePointer >= fwSize) { return false; }               // Check for overwrites.
-    if(flashWritePointer != dataAddress) { return false; } // Check if the dataAddress matches the expected address.
+    if(flashWritePointer != dataAddress) { return false; }          // Check if the dataAddress matches the expected address.
 
     // Calculate valid data size, this only matters if less bytes remains than fwPieceSize.
     const uint16_t remainingBytes = fwSize - flashWritePointer;
     const uint8_t expectedDataSize = remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize;
-    //wdt_reset();                                                    // Reset the watchdog timer.
 
     // Iterates trough the received FW bytes.
     for(uint8_t i = 0; i < expectedDataSize; i++) {
@@ -70,25 +67,11 @@ public:
     return true;
   }
 
-  /// @brief Make a FW upgrade after store and check everything.
-  /// @return If it returns, something went wrong. On success it should end with WDT reset.
-  bool upgrade() {
-    bool ret = validityCheck();                                     // Check FW validity.
-    if(ret) {
-      end();                                                        // On success -> restart the MCU to prefer OTA.
-    }
-    else {
-      stop();                                                       // On failure -> wipe every stored data.
-    }
-    return ret;
-  }
-
   /// @brief Check the validity of the stored bytes.
   /// @return Returns true if everything is OK.
   bool validityCheck() {
     if(flashWritePointer != fwSize) { return false; }               // Check if FW is fully stored.
     Crc16 calculatedCrc;
-    //wdt_reset();                                                    // Reset the watchdog timer.
 
     // Calculate the CRC of the whole stored FW.
     for(uint16_t flashReadPointer = 0; flashReadPointer < fwSize; flashReadPointer++) {
@@ -118,17 +101,8 @@ public:
     return false;
   }
 
-  /// @brief Restart the MCU after OTA FW update process.
-  void end() {
-    fwSize = 0;
-    flashWritePointer = 0;                                          // Reset write pointer.
-    //DeviceReset::reset();
-  }
-
-  /// @brief Stop the OTA FW update process if something went wrong.
-  void stop() {
-    fwSize = 0;
-    flashWritePointer = 0;                                          // Reset write pointer.
+  /// @brief Clears the OTA FW update process.
+  void clear() {
     flash.blockErase32K(flashBlockBeginAddress);                    // Attempt to erase the FLASH block.
   }
 
