@@ -9,7 +9,7 @@
 /// @tparam T Datatype which will be stored.
 /// @tparam eepromAddress This is the EEPROM address where we want to store our data. 
 template<class T, uint16_t eepromAddress>
-class EEPROMHandler {
+class EEPROMHandler final {
 public:
   /// @brief Constructor of EEPROM handler class.
   EEPROMHandler() = default;

@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /// @brief This class processes button pressing.
-class PushButton {
+class PushButton final {
 public:
   /// @brief Set parameters for button press processing.
   /// @param deadTime Pause processing after the last event.

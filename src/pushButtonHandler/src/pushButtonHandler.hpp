@@ -6,7 +6,7 @@
 #include "canHandler/src/canHandler.hpp"
 #include <HardwareSerial.h>
 
-class PushButtonHandler {
+class PushButtonHandler final {
 public:
   PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, const uint8_t buttonPin);
   /// @brief Destructor of the object.

@@ -9,7 +9,7 @@
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
-class DFPlayer : private DFPlayerMiniFast {
+class DFPlayer final : private DFPlayerMiniFast {
 public:
   /// @brief Constructor of DFPlayerMini derived class.
   /// @param RXpin_ Software serial RX pin.
