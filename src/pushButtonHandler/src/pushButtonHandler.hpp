@@ -8,7 +8,7 @@
 
 class PushButtonHandler final {
 public:
-  PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, const uint8_t buttonPin);
+  PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, uint8_t buttonPin);
   /// @brief Destructor of the object.
   ~PushButtonHandler() = default;
   void loop();

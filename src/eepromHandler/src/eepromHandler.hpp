@@ -16,7 +16,7 @@ public:
 
   /// @brief Constructor of EEPROM handler class with pointer to the data.
   /// @param data The pointer of the data, which we want to 'save to' / 'load from' EEPROM.
-  EEPROMHandler(T* data) : data(data) {}
+  explicit EEPROMHandler(T* data) : data(data) {}
 
   /// @brief Default destructor.
   virtual ~EEPROMHandler() = default;

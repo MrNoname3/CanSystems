@@ -17,7 +17,7 @@ public:
   /// @param ENpin Device turn on/off switch pin.
   /// @param INTpin Device playing interrupt pin: LOW->playing.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, uint32_t timeout = 10);
+  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, uint32_t timeout = 10U);
 
   /// @brief Destructor of the object.
   virtual ~DFPlayer() = default;

@@ -5,7 +5,7 @@
 
 class ExternalSensor final {
 public:
-  ExternalSensor(const uint8_t sensorEnablePin);
+  explicit ExternalSensor(uint8_t sensorEnablePin);
   /// @brief Destructor of the object.
   ~ExternalSensor() = default;
   void on() const;

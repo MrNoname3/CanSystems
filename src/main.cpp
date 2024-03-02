@@ -22,13 +22,13 @@ void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
-  delay(1);
+  delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
-  MP3Player.volume(15);                                                       // Set MP3 player volume.
-  MP3Player.play(1);
+  MP3Player.volume(15U);                                                      // Set MP3 player volume.
+  MP3Player.play(1U);
   ambientSensor.begin();
   extSensor.on();
   Serial.println(F("********\r\nLooping..."));

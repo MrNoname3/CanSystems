@@ -21,12 +21,12 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t 
 }
 
 void DFPlayer::volume(uint8_t volume_) {
-  volume_ &= 30;                                      // Protect variable from high value.
+  volume_ &= 30U;                                     // Protect variable from high value.
   this->volume_ = volume_;                            // Save value.
 }
 
 void DFPlayer::play(uint16_t song) {
-  song &= 9999;                                       // Protect variable from high value.
+  song &= 9999U;                                      // Protect variable from high value.
   this->playingQueue.put(song);                       // Put value to playing queue.
 }
 

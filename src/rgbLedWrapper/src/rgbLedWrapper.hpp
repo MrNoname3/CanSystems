@@ -6,7 +6,7 @@
 
 class RgbLedWrapper final {
 public:
-  RgbLedWrapper(const uint8_t ledNumber, const uint8_t ledPin);
+  RgbLedWrapper(uint8_t ledNumber, uint8_t ledPin);
   /// @brief Destructor of the object.
   ~RgbLedWrapper() = default;
   void begin();
@@ -14,7 +14,7 @@ public:
   /// @param red Value of red color: 0-255.
   /// @param green Value of green color: 0-255.
   /// @param blue Value of blue color: 0-255.
-  void setColor(const uint8_t red, const uint8_t green, const uint8_t blue);
+  void setColor(uint8_t red, uint8_t green, uint8_t blue);
   void clear();
 
   RgbLedWrapper(const RgbLedWrapper&) = delete;                       // Define copy constructor.

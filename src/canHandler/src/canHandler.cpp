@@ -8,7 +8,7 @@ volatile uint8_t CanHandler::intCount = 0;
 
 CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
-  localCanId(0),
+  localCanId(0U),
   eepromHandler(&localCanId),
   ledPin(ledPin),
   flash(flashCsPin, flashJedecId)

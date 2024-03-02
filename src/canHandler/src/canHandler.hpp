@@ -47,7 +47,6 @@ public:
   CanHandler& operator=(const CanHandler&) = delete;            // Define copy assignment operator.
   CanHandler(CanHandler&&) = delete;                            // Define move constructor.
   CanHandler& operator=(CanHandler&&) = delete;                 // Define move assignment operator.
-
 private:
   inline bool beginSimple(uint32_t canBaud);
   inline bool loopSimple();
@@ -65,5 +64,4 @@ private:
   static volatile uint8_t intCount;
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr;
 };
-
 #endif // CAN_HANDLER_HPP
