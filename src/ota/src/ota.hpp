@@ -13,17 +13,15 @@
 template<uint16_t flashBlockNumber, uint8_t fwPieceSize>
 class OTA final {
 public:
-  // Data struct for OTA update.
-  struct __attribute__((packed)) 
-  FwPiece {
-    uint16_t dataAddress;                                           // Serial number of the OTA FW piece.
-    uint8_t fwData[fwPieceSize];                                    // FW bytes.
-    FwPiece() : dataAddress(0), fwData{0} { }
-  };
-
   /// @brief Constructor of OTA handler class.
   /// @param flash Pointer of the SPI FLASH handler object.
-  OTA(SPIFlash& flash) : flash(flash), firstFwBytes{0}, fwSize(0), fwCrc(0), flashWritePointer(0) { }
+  OTA(SPIFlash& flash) :
+    flash(flash),
+    firstFwBytes{0},
+    fwSize(0),
+    fwCrc(0),
+    flashWritePointer(0)
+  {}
 
   /// @brief Default destructor.
   virtual ~OTA() = default;
@@ -34,7 +32,7 @@ public:
   /// @return Retruns with the result.
   bool start(uint16_t fwSize, uint16_t fwCrc) {
     if(fwSize == 0) { return false; }                               // No firmware to write, return early.
-    constexpr uint16_t maxAllowedSize = 31 * 1024;                  // Max flash size is 32Kb - 1Kb for bootloader.
+    constexpr uint16_t maxAllowedSize = 31U * 1024U;                // Max flash size is 32Kb - 1Kb for bootloader.
     if(fwSize > maxAllowedSize) { return false; }                   // Check fw size.
     flash.blockErase32K(flashBlockBeginAddress);                    // Attempt to erase the FLASH block.
     this->fwSize = fwSize;                                          // Save FW size.
@@ -44,11 +42,12 @@ public:
   }
 
   /// @brief Store the new FW pieces to FLASH from top to bottom.
-  /// @param fwPiece Struct which contains the data for FW update.
+  /// @param dataAddress Contains the data for FW update.
+  /// @param fwData Contains the data for FW update.
   /// @return Retruns with the result.
-  bool storeNextData(FwPiece* fwPiece) {
+  bool storeNextData(uint16_t dataAddress, const uint8_t (&fwData)[fwPieceSize]) {
     if(flashWritePointer >= fwSize) { return false; }               // Check for overwrites.
-    if(flashWritePointer != fwPiece->dataAddress) { return false; } // Check if the dataAddress matches the expected address.
+    if(flashWritePointer != dataAddress) { return false; } // Check if the dataAddress matches the expected address.
 
     // Calculate valid data size, this only matters if less bytes remains than fwPieceSize.
     const uint16_t remainingBytes = fwSize - flashWritePointer;
@@ -59,11 +58,11 @@ public:
     for(uint8_t i = 0; i < expectedDataSize; i++) {
       // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
       if(flashWritePointer < sizeof(firstFwBytes)) {
-        firstFwBytes[i] = fwPiece->fwData[i];
+        firstFwBytes[i] = fwData[i];
       }
       else {
         // Save the other bytes to the FLASH.
-        flash.writeByte(flashBlockBeginAddress + flashWritePointer, fwPiece->fwData[i]);
+        flash.writeByte(flashBlockBeginAddress + flashWritePointer, fwData[i]);
       }
       flashWritePointer++;
       if(flashWritePointer > fwSize) { return false; }              // Check for overwrites.
