@@ -11,12 +11,6 @@ const ExternalSensor extSensor(EXT_SENSOR_EN);
 
 SerialIR swSerial(RS232_RX, RS232_TX);
 
-//--- SPI and OTA ---//
-//static constexpr uint8_t otaFlashBegin = 0;                                   // Flash begin address for OTA.
-//static constexpr uint8_t otaFwPiece = 4;                                      // Size of FW chunks in bytes.
-//SPIFlash flash(FLASH_CS, 0xEF40);                                             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
-//OTA<otaFlashBegin, otaFwPiece> ota(&flash, calculateCRC16);                   // OTA handler.
-
 //--- Setup section ---//
 void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.

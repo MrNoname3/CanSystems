@@ -9,7 +9,6 @@
 #include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
 #include "externalSensor/src/externalSensor.hpp"                    /// External temperature and humidity sensor library.
-//#include "ota.hpp"                                                  /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//
