@@ -1,12 +1,13 @@
 #include "main.hpp"
 
 //--- Driver objects ---//
-CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED, FLASH_CS);
+CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, BUTTON_PIN);
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
+const ExternalSensor extSensor(EXT_SENSOR_EN);
 
 SerialIR swSerial(RS232_RX, RS232_TX);
 
@@ -21,7 +22,6 @@ void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
-  pinMode(EXT_SENSOR_EN, OUTPUT);                                             // External sensor enable pin -> output.
   delay(1);
   Serial.println(F("\r\n********\r\nStarting..."));
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
@@ -30,7 +30,7 @@ void setup() {
   MP3Player.volume(15);                                                       // Set MP3 player volume.
   MP3Player.play(1);
   ambientSensor.begin();
-  digitalWrite(EXT_SENSOR_EN, HIGH);
+  extSensor.on();
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }

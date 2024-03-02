@@ -8,13 +8,14 @@
 #include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
 #include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
+#include "externalSensor/src/externalSensor.hpp"                    /// External temperature and humidity sensor library.
 //#include "ota.hpp"                                                  /// OTA byte stream handler.
 #include "serialIR.hpp"
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19;           // Number of RGB LED's.
 static constexpr uint8_t RGB_PIN                    = 7;            // LED DATA PIN
-static constexpr uint8_t LED                        = 4;            // Pin of the LED.
+static constexpr uint8_t LED_PIN                    = 4;            // Pin of the LED.
 static constexpr uint8_t CAN_CS                     = 10;           // CS pin of the SPI CAN controller.
 static constexpr uint8_t CAN_INT                    = 2;            // Interrupt pin of the SPI CAN controller.
 static constexpr uint8_t FLASH_CS                   = 8;            // SPI FLASH CS pin.
