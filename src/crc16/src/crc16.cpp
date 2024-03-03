@@ -2,6 +2,7 @@
 
 Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
   crc_(initValue),
+  initValue_(initValue),
   polynomial_(polynomial)
 {}
 
@@ -24,6 +25,8 @@ void Crc16::next(const uint8_t* values, uint32_t length) {
 }
 
 uint16_t Crc16::get() const { return crc_; }
+
+void Crc16::reset() { crc_ = initValue_; }
 
 uint16_t Crc16::calculate(const uint8_t *data, uint32_t length) {
   Crc16 crc;

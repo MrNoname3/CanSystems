@@ -10,6 +10,7 @@ class Crc16 final {
     void next(uint8_t value);
     void next(const uint8_t* values, uint32_t length);
     uint16_t get() const;
+    void reset();
     static uint16_t calculate(const uint8_t *data, uint32_t length);
 
     Crc16(const Crc16&) = delete;                       // Define copy constructor.
@@ -17,7 +18,8 @@ class Crc16 final {
     Crc16(Crc16&&) = delete;                            // Define move constructor.
     Crc16& operator=(Crc16&&) = delete;                 // Define move assignment operator.
   private:
-    uint16_t crc_;                                      // CRC16 starting value.
+    uint16_t crc_;                                      // CRC16 value.
+    const uint16_t initValue_;                          // CRC initial value.
     const uint16_t polynomial_;                         // CRC16 polynomial.
   };
 #endif // CRC16_HPP
