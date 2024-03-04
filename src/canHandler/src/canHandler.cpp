@@ -122,6 +122,39 @@ bool CanHandler::loopSimple() {
       switch(static_cast<uint16_t>(canFrame.cmd)) {
         case static_cast<uint16_t>(CanCmd::PING): { send(CanCmd::PING); } break;
         case static_cast<uint16_t>(CanCmd::RESTART): { restartMCU(); } break;
+        case static_cast<uint16_t>(CanCmd::OTA_START): {
+          const uint16_t otaFlashBegin =
+            static_cast<uint16_t>(canFrame.data[0]) << 0U |
+            static_cast<uint16_t>(canFrame.data[1]) << 8U;
+          const uint32_t fwSize =
+            static_cast<uint32_t>(canFrame.data[2]) << 0U |
+            static_cast<uint32_t>(canFrame.data[3]) << 8U |
+            static_cast<uint32_t>(canFrame.data[4]) << 16U |
+            static_cast<uint32_t>(canFrame.data[5]) << 24U;
+          const uint16_t fwCrc =
+            static_cast<uint16_t>(canFrame.data[6]) << 0U |
+            static_cast<uint16_t>(canFrame.data[7]) << 8U;
+          Serial.print(F("OTA start: "));
+          const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
+          otaStartResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+        } break;
+        case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+          Serial.println(F("OTA store: "));
+          const uint32_t dataAddress =
+            static_cast<uint32_t>(canFrame.data[0]) << 0U |
+            static_cast<uint32_t>(canFrame.data[1]) << 8U |
+            static_cast<uint32_t>(canFrame.data[2]) << 16U |
+            static_cast<uint32_t>(canFrame.data[3]) << 24U;
+          const uint8_t fwData[ota.fwPieceSize] = {
+            canFrame.data[4],
+            canFrame.data[5],
+            canFrame.data[6],
+            canFrame.data[7]
+          };
+          const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
+          otaStoreResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+        } break;
+        case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
         default: {
           if(canCallback != nullptr) {
             canCallback(static_cast<uint16_t>(canFrame.cmd), canFrame.data);
@@ -130,6 +163,7 @@ bool CanHandler::loopSimple() {
       }
     }
   }
+  ota.run();
   if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
     ledOn();                                                      // If yes, turn on the LED.
   }

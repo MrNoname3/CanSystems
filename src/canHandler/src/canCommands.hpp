@@ -8,9 +8,9 @@ enum class CanCmd : uint16_t {
   PING = 0,                                   // Ping command.
   RESTART,                                    // Node reset command.
   BUTTON_EVENT,                               // Get button event type.
-  FILET_START,                                // Init file transfer process.
-  FILET_SEND,                                 // Send file pieces.
-  FILET_END,                                  // File transfer process ended.
+  OTA_START,                                  // Init FW file transfer.
+  OTA_SEND,                                   // Send FW file pieces.
+  OTA_END,                                    // FW transfer process ended.
 
   RGB_LED = 32,                               // Set WS2812 RGB LED color.
   PLAY_MP3,                                   // Play MP3 file.

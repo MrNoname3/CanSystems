@@ -5,106 +5,37 @@
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
 #include "../../crc16/src/crc16.hpp"                                /// CRC16 calculator class.
 
-/// @brief OTA update handler class.
-/// @tparam flashBlockNumber FLASH begin address: flashBlockNumber * 32KB.
-/// @tparam fwPieceSize The size of FW chunks in bytes.
-template<uint16_t flashBlockNumber, uint8_t fwPieceSize>
-class OTA final {
-public:
-  /// @brief Constructor of OTA handler class.
-  /// @param flash Pointer of the SPI FLASH handler object.
-  OTA(SPIFlash& flash) :
-    flash(flash),
-    firstFwBytes{0},
-    fwSize(0),
-    fwCrc(0),
-    flashWritePointer(0)
-  {}
+#ifndef FW_PIECE_SIZE
+#define FW_PIECE_SIZE 4U
+#endif
 
+class OTA final {
+private:
+  static constexpr uint16_t flashBlockTobytes = 32U * 1024U;
+#ifndef PROGRAM_MEMORY_SIZE
+  static_assert(false, "PROGRAM_MEMORY_SIZE macro is not defined!");
+#else
+  // Program memory size is: MAX_FLASH_SIZE - 1Kb for the bootloader.
+  static constexpr uint32_t programMemorySize = static_cast<uint32_t>(PROGRAM_MEMORY_SIZE);
+#endif
+public:
+  static_assert(FW_PIECE_SIZE < UINT8_MAX, "FW_PIECE_SIZE macro is too large!");
+  static constexpr uint8_t fwPieceSize = static_cast<uint8_t>(FW_PIECE_SIZE);
+  enum class OtaState : uint8_t {
+    IDLE = 0,
+    START,
+    STORE,
+    CHECK,
+    VALID,
+    INVALID
+  };
+
+  OTA(SPIFlash& flash);
   /// @brief Default destructor.
   virtual ~OTA() = default;
-
-  /// @brief Start the OTA update process.
-  /// @param fwSize Size of the new FW.
-  /// @param fwCrc CRC16 of the new FW.
-  /// @return Retruns with the result.
-  bool start(uint16_t fwSize, uint16_t fwCrc) {
-    if(fwSize == 0) { return false; }                               // No firmware to write, return early.
-    constexpr uint16_t maxAllowedSize = 31U * 1024U;                // Max flash size is 32Kb - 1Kb for bootloader.
-    if(fwSize > maxAllowedSize) { return false; }                   // Check fw size.
-    clear();                                                        // Attempt to erase the FLASH block.
-    this->fwSize = fwSize;                                          // Save FW size.
-    this->fwCrc = fwCrc;                                            // Store FW CRC.
-    flashWritePointer = 0;                                          // Reset write pointer.
-    return true;                                                    // Return success.
-  }
-
-  /// @brief Store the new FW pieces to FLASH from top to bottom.
-  /// @param dataAddress Contains the data for FW update.
-  /// @param fwData Contains the data for FW update.
-  /// @return Retruns with the result.
-  bool storeNextData(uint16_t dataAddress, const uint8_t (&fwData)[fwPieceSize]) {
-    if(flashWritePointer >= fwSize) { return false; }               // Check for overwrites.
-    if(flashWritePointer != dataAddress) { return false; }          // Check if the dataAddress matches the expected address.
-
-    // Calculate valid data size, this only matters if less bytes remains than fwPieceSize.
-    const uint16_t remainingBytes = fwSize - flashWritePointer;
-    const uint8_t expectedDataSize = remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize;
-
-    // Iterates trough the received FW bytes.
-    for(uint8_t i = 0; i < expectedDataSize; i++) {
-      // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
-      if(flashWritePointer < sizeof(firstFwBytes)) {
-        firstFwBytes[i] = fwData[i];
-      }
-      else {
-        // Save the other bytes to the FLASH.
-        flash.writeByte(flashBlockBeginAddress + flashWritePointer, fwData[i]);
-      }
-      flashWritePointer++;
-      if(flashWritePointer > fwSize) { return false; }              // Check for overwrites.
-    }
-    return true;
-  }
-
-  /// @brief Check the validity of the stored bytes.
-  /// @return Returns true if everything is OK.
-  bool validityCheck() {
-    if(flashWritePointer != fwSize) { return false; }               // Check if FW is fully stored.
-    Crc16 calculatedCrc;
-
-    // Calculate the CRC of the whole stored FW.
-    for(uint16_t flashReadPointer = 0; flashReadPointer < fwSize; flashReadPointer++) {
-      uint8_t readedByte = 0;
-      // Read the first bytes from the memory.
-      if(flashReadPointer < sizeof(firstFwBytes)) {
-        readedByte = firstFwBytes[flashReadPointer];
-      }
-      else {
-        // Read the other bytes from FLASH.
-        readedByte = flash.readByte(flashBlockBeginAddress + flashReadPointer);
-      }
-      calculatedCrc.next(readedByte);                               // Calculate CRC for the readed bytes.
-    }
-
-    if(fwCrc != calculatedCrc.get()) { return false; }              // Check CRC match.
-
-    // If everything is good, write the remaining bytes from memory to FLASH and read it back.
-    uint8_t dataReadBack[sizeof(firstFwBytes)] = { 0 };
-    flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
-    flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
-
-    // Compares the read-back bytes with the original.
-    if(memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0) {
-      return true;
-    }
-    return false;
-  }
-
-  /// @brief Clears the OTA FW update process.
-  void clear() {
-    flash.blockErase32K(flashBlockBeginAddress);                    // Attempt to erase the FLASH block.
-  }
+  bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
+  bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
+  OtaState run();
 
   OTA(const OTA&) = delete;                                         // Define copy constructor.
   OTA& operator=(const OTA&) = delete;                              // Define copy assignment operator.
@@ -113,11 +44,13 @@ public:
 private:
   SPIFlash& flash;                                                  // Pointer to SPI FLASH handler.
   uint8_t firstFwBytes[2];                                          // Save FW first bytes to memory.
-  uint16_t fwSize;                                                  // Size of the FW.
+  uint32_t fwSize;                                                  // Size of the FW.
   uint16_t fwCrc;                                                   // CRC16 of the FW.
-  uint16_t flashWritePointer;                                       // Stores the actual FLASH write address.
+  uint32_t flashPointer;                                            // Stores the actual FLASH write/read address.
+  Crc16 crc16;
   // Calculate the begin address of the FLASH. (FLASH is used in 32KB chunks by this class.)
   // The 0. chunk must contain the OTA FW for this device and the other chunks can contain anything else.
-  static constexpr uint32_t flashBlockBeginAddress = flashBlockNumber * 32 * 1024;
+  uint32_t flashBlockBeginAddress;
+  OtaState otaState;
 };
 #endif // OTA_HPP

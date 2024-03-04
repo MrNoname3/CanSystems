@@ -64,9 +64,6 @@ private:
   SPIFlash flash;
   static volatile uint8_t intCount;
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr;
-  static constexpr uint8_t otaFlashBegin = 0;                   // Flash begin address for OTA.
-  static constexpr uint8_t otaFwPiece = 4;                      // Size of FW chunks in bytes.
-  OTA<otaFlashBegin, otaFwPiece> ota  ;                         // OTA handler.
-
+  OTA ota;                                                      // OTA handler.
 };
 #endif // CAN_HANDLER_HPP

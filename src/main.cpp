@@ -40,37 +40,6 @@ void loop() {
   MP3Player.spin();
 }
 
-/*
-  case CanCmd::FILET_START: {
-    const uint16_t fwSize =  (uint16_t)(canFrameIn.data[0] | (canFrameIn.data[1] << 8));
-    Serial.print(F("OTA:"));
-    if(ota.start(fwSize)) {
-      Serial.println(OK_STATE);
-      sendCanResponse(&canFrameOut);
-    }
-    else {
-      Serial.println(ERR_STATE);
-    }
-  } break;
-
-  case CanCmd::FILET_SEND: {
-    Serial.println(F("Store:"));
-    if(ota.storeNextData(reinterpret_cast<OTA<otaFlashBegin, otaFwPiece>::FwPiece*>(canFrameIn.data))) {
-      Serial.println(OK_STATE);
-    }
-    else {
-      Serial.println(ERR_STATE);
-    }
-    canFrameOut.data[0] = lowByte(ota.getAddressW());
-    canFrameOut.data[1] = highByte(ota.getAddressW());
-    sendCanResponse(&canFrameOut);
-  } break;
-
-  case CanCmd::FILET_END: {
-    ota.end();
-  } break;
-*/
-
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
