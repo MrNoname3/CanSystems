@@ -28,6 +28,11 @@ public:
     CanFrame() : extId(), data{0} {}
   };
 
+  enum class Response : uint8_t {
+    NACK = 0,
+    ACK
+  };
+
   CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin);
   /// @brief Destructor of the object.
   ~CanHandler() = default;
@@ -37,6 +42,7 @@ public:
   bool send(uint16_t command) const;
   bool send(CanCmd command, const uint8_t (&data)[8]) const;
   bool send(CanCmd command) const;
+  bool send(CanCmd command, Response response);
   void ledOn();
   void ledOff();
   void ledToggle();

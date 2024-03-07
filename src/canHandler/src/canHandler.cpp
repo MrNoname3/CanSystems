@@ -137,6 +137,7 @@ bool CanHandler::loopSimple() {
           Serial.print(F("OTA start: "));
           const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
           otaStartResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+          if(!otaStartResult) { send(CanCmd::OTA_START, Response::NACK); }
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_SEND): {
           Serial.println(F("OTA store: "));
@@ -153,6 +154,7 @@ bool CanHandler::loopSimple() {
           };
           const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
           otaStoreResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+          send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
         default: {
@@ -163,7 +165,14 @@ bool CanHandler::loopSimple() {
       }
     }
   }
-  ota.run();
+  static OTA::OtaState lastOtaState = OTA::OtaState::IDLE;
+  const OTA::OtaState otaState = ota.run();
+  if(lastOtaState == OTA::OtaState::START && otaState == OTA::OtaState::STORE) {
+    send(CanCmd::OTA_START, Response::ACK);
+  }
+  if(otaState == OTA::OtaState::VALID) { send(CanCmd::OTA_END, Response::ACK); }
+  if(otaState == OTA::OtaState::INVALID) { send(CanCmd::OTA_END, Response::NACK); }
+  lastOtaState = otaState;
   if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
     ledOn();                                                      // If yes, turn on the LED.
   }
@@ -196,6 +205,11 @@ bool CanHandler::send(uint16_t command) const {
 
 bool CanHandler::send(CanCmd command) const {
   return send(static_cast<uint16_t>(command));
+}
+
+bool CanHandler::send(CanCmd command, Response response) {
+  const uint8_t data[8] = { static_cast<uint8_t>(response), 0, 0, 0, 0, 0, 0, 0 };
+  return send(command, data);
 }
 
 void CanHandler::rxInterrupt() { intCount++; }
