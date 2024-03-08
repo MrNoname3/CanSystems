@@ -9,6 +9,11 @@
 #include "../../ota/src/ota.hpp"
 
 class CanHandler final {
+private:
+#ifdef NEW_CAN_ADDRESS
+  static_assert(NEW_CAN_ADDRESS < 1023, "New CAN address must be less than 1023!");
+  static constexpr uint16_t newCanAddress = static_cast<uint16_t>(NEW_CAN_ADDRESS);
+#endif
 public:
   static constexpr const char* OK_STATE               = "[OK]";   // OK status.
   static constexpr const char* ERR_STATE              = "[ERR]";  // Error status.

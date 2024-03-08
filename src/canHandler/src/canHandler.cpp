@@ -51,6 +51,10 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
     serialPort.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
   }
   {
+#ifdef NEW_CAN_ADDRESS
+    localCanId = newCanAddress;
+    eepromHandler.save();
+#endif
     serialPort.print(F("Address: "));
     const bool eepromDataValid = eepromHandler.load();
     eepromDataValid ? serialPort.println(localCanId) : serialPort.println(ERR_STATE);
