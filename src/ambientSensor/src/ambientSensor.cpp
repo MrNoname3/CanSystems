@@ -53,11 +53,11 @@ void AmbientSensor::loop() {
       0U
     };
     canHandler.send(CanCmd::READ_HUM_TEMP_LDR, data);
-    serialPort.print(F("L:"));
-    serialPort.print(lightValue);
-    serialPort.print(F(", T:"));
+    serialPort.print(F("T:"));
     serialPort.print(temperature);
     serialPort.print(F(", H:"));
-    serialPort.println(humidity);
+    serialPort.print(humidity);
+    serialPort.print(F(", L:"));
+    serialPort.println(lightValue);
   }
 }
