@@ -7,6 +7,7 @@
 #include <vector>
 #include "../../connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
+#include "canCommands.hpp"
 
 class CanHandler final {
 public:
@@ -74,7 +75,7 @@ public:
 public:
   class Crc16 final {
   public:
-    explicit Crc16(uint16_t initValue = 0xFFFF, uint16_t polynomial = 0x1021);
+    explicit Crc16(uint16_t initValue = 0U, uint16_t polynomial = 0x1021U);
     ~Crc16() = default;
     void next(uint8_t value);
     void next(const uint8_t* values, uint32_t length);
@@ -124,15 +125,6 @@ public:
     CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
-    /// @brief Base command list for nodes.
-    enum class CanCmd : uint16_t {
-      PING = 0,                              // Ping command.
-      RESTART,                               // Node restart command.
-      BUTTON_EVENT,                          // Button event occured.
-      OTA_START,                             // Init OTA process.
-      OTA_SEND,                              // Stream FW bytes to OTA handler.
-      OTA_END                                // OTA process ended.
-    };
     virtual bool init() = 0;
     virtual bool run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;

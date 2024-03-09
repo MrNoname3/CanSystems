@@ -6,16 +6,14 @@
 
 class CanAlertDriver final : protected CanHandler::CanComBase {
 public:
-  enum class CanCmd : uint16_t {
-    READ_HUM_TEMP_LDR
-  };
   CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
   ~CanAlertDriver() = default;
 protected:
   virtual bool init() override;
   virtual bool run() override;
   virtual void canFrameReceived(CanHandler::CanFrame& canFrame) override;
-
+  static constexpr uint8_t dataOutBufSize = 96;
+  static const char PROGMEM HUM_TEMP_LDR_FRAME[];
 };
 
 #endif // CAN_ALERT_DRIVER_HPP
