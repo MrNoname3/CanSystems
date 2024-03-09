@@ -254,7 +254,7 @@ bool Connectivity::beginSimple(Interface interface) {
 #ifdef ESP8266
     const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"VCC\":%hu""}"), cppVersion, fwVersion, gitHash, ESP.getVcc());
 #elif defined ESP32
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x""}"), cppVersion, fwVersion, gitHash);
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\"}"), cppVersion, fwVersion, gitHash);
 #endif
     const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
     if(!versionStringValid) { return false; }
