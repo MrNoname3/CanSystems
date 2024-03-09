@@ -11,6 +11,7 @@
 class CanHandler final {
 private:
 #ifdef NEW_CAN_ADDRESS
+  #warning "NEW_CAN_ADDRESS is defined!"
   static_assert(NEW_CAN_ADDRESS < 1023, "New CAN address must be less than 1023!");
   static constexpr uint16_t newCanAddress = static_cast<uint16_t>(NEW_CAN_ADDRESS);
 #endif
