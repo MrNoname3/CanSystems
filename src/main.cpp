@@ -9,7 +9,7 @@ AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 
-SerialIR swSerial(RS232_RX, RS232_TX);
+//SerialIR swSerial(RS232_RX, RS232_TX);
 
 //--- Setup section ---//
 void setup() {
@@ -21,8 +21,8 @@ void setup() {
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
-  MP3Player.volume(15U);                                                      // Set MP3 player volume.
-  MP3Player.play(1U);
+  //MP3Player.volume(15U);                                                      // Set MP3 player volume.
+  //MP3Player.play(1U);
   ambientSensor.begin();
   extSensor.on();
   Serial.println(F("********\r\nLooping..."));
@@ -30,9 +30,9 @@ void setup() {
 }
 
 void loop() {
-  while(swSerial.available() > 0) {
-    Serial.println(swSerial.read());
-  }
+  //while(swSerial.available() > 0) {
+  //  Serial.println(swSerial.read());
+  //}
 
   canHandler.loop();
   buttonHandler.loop();
