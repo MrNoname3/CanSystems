@@ -3,7 +3,7 @@
 
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
-#include "connectivity.hpp"
+#include "connectivity/src/connectivity.hpp"
 #include "radiation/src/radiation.hpp"
 #include "rfHandler/src/rfHandler.hpp"
 #include "canHandler/src/canHandler.hpp"

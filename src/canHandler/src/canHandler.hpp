@@ -5,7 +5,7 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <HardwareSerial.h>
 #include <vector>
-#include "../../connectivity.hpp"
+#include "../../connectivity/src/connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include "canCommands.hpp"
 
