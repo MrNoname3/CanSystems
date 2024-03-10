@@ -15,6 +15,8 @@ private:
   static_assert(NEW_CAN_ADDRESS < 1023, "New CAN address must be less than 1023!");
   static constexpr uint16_t newCanAddress = static_cast<uint16_t>(NEW_CAN_ADDRESS);
 #endif
+  static_assert(MASTER_CAN_ADDRESS < 1023, "Master CAN address must be less than 1023!");
+  static constexpr uint16_t masterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
 public:
   static constexpr const char* OK_STATE               = "[OK]";   // OK status.
   static constexpr const char* ERR_STATE              = "[ERR]";  // Error status.
@@ -66,9 +68,8 @@ private:
   static inline void rxInterrupt();
   bool sendFwVersion();
 
-  static constexpr uint16_t masterCanId = 10U;
-  static constexpr uint8_t rxBufferSize = 5;
-  static constexpr uint16_t pingTime = 1500;                    // Ping timeot time in ms.
+  static constexpr uint8_t rxBufferSize = 5U;
+  static constexpr uint16_t pingTime = 1500U;                   // Ping timeot time in ms.
   static constexpr uint16_t flashJedecId = 0xEF40U;             // SPI FLASH driver. (0xEF40 -> Windbond 64mbit flash.)
   HardwareSerial& serialPort;
   uint16_t localCanId;
