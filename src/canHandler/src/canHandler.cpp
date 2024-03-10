@@ -2,6 +2,7 @@
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
 #include <ArduinoJson.h>                      /// Handle JSON files.
+#include "../../crc16/src/crc16.hpp"
 
 QueueHandle_t CanHandler::canRxQueue = nullptr;
 const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
@@ -102,38 +103,6 @@ CanHandler::SoftwareTimer::SoftwareTimer(uint32_t time) : time_(time), start_tim
 bool CanHandler::SoftwareTimer::isExpired() { return (millis() - start_time_ >= time_); }
 
 void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
-
-//////////////////// -- CRC16 class-- ////////////////////
-
-CanHandler::Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
-  crc_(initValue),
-  polynomial_(polynomial) {}
-
-void CanHandler::Crc16::next(uint8_t value) {
-    crc_ ^= ((uint16_t)value << 8);
-    for (int i = 0; i < 8; i++) {
-      if (crc_ & 0x8000) {
-        crc_ = (crc_ << 1) ^ polynomial_;
-      }
-      else {
-        crc_ <<= 1;
-      }
-    }
-  }
-
-  void CanHandler::Crc16::next(const uint8_t* values, uint32_t length) {
-    for (uint32_t i = 0; i < length; i++) {
-      next(values[i]);
-    }
-  }
-
-  uint16_t CanHandler::Crc16::get() const { return crc_; }
-
-  uint16_t CanHandler::Crc16::calculate(const uint8_t *data, uint32_t length) {
-    CanHandler::Crc16 crc;
-    crc.next(data, length);
-    return crc.get();
-  }
 
 //////////////////// -- CanFileTransfer class-- ////////////////////
 
