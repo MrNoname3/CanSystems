@@ -132,7 +132,6 @@ public:
     void sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
     void sendCanCmd(CanCmd command) const;
     void sendCanCmd(uint16_t command) const;
-    bool sendResponse(Response resp, uint16_t cmd, const uint8_t (&data)[8]);
   private:
     bool beginPriv();
     bool loopPriv();
@@ -152,6 +151,13 @@ public:
     bool nodeAlive_;
     CanFileTransfer* canFileTransfer;
     static const char PROGMEM CAN_BASE_PREFIX[];
+    static const char PROGMEM STATUS_ONLINE[];
+    static const char PROGMEM STATUS_OFFLINE[];
+    static const char PROGMEM STATUS_RESTARTED[];
+    static const char PROGMEM STATUS_FRAME[];
+    static const char PROGMEM BUTTON_FRAME[];
+    static const char PROGMEM FW_VERSION_FRAME[];
+    static const char PROGMEM OTA_FRAME[];
   };
 
 };

@@ -12,7 +12,6 @@
 #else
 #include <pgmspace.h>
 #endif
-#include <cstring>
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -998,16 +997,6 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);
       }
       if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
-      if(command == Command::EXT_FILE_DT_END) {
-        static constexpr const uint8_t jsonSize = 40;
-        char jsonBuf[jsonSize] = { '\0' };
-        const int32_t jsonBufRealSize = snprintf_P(jsonBuf, sizeof(jsonBuf), PSTR("{""\"File\":\"%s\"""}"), externalFileName);
-        const bool jsonBufValid = (jsonBufRealSize >= 0 && jsonBufRealSize < static_cast<int32_t>(sizeof(jsonBuf)));
-        if(!jsonBufValid) { return; }
-        const char* className = std::strtok(externalFileName, "_");
-        if(className == nullptr) { return; }
-        conn.receiveMqttMessage(className, reinterpret_cast<uint8_t*>(&jsonBuf), strlen(jsonBuf));
-      }
     } break;
   };
 }

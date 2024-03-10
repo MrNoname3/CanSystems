@@ -7,6 +7,7 @@
 enum class CanCmd : uint16_t {
   PING = 0,                                   // Ping command.
   RESTART,                                    // Node reset command.
+  FW_VERSION,                                 // Get node firmware version.
   BUTTON_EVENT,                               // Get button event type.
   OTA_START,                                  // Init FW file transfer.
   OTA_SEND,                                   // Send FW file pieces.
