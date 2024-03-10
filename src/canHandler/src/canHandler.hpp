@@ -64,6 +64,7 @@ private:
   inline bool beginSimple(uint32_t canBaud);
   inline bool loopSimple();
   static inline void rxInterrupt();
+  bool sendFwVersion();
 
   static constexpr uint16_t masterCanId = 10U;
   static constexpr uint8_t rxBufferSize = 5;

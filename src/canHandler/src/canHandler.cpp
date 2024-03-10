@@ -5,6 +5,8 @@
 #include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0;
+static constexpr uint16_t fwVersion = GIT_COMMIT_COUNT;
+static constexpr uint32_t gitHash = GIT_COMMIT_HASH;
 
 CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
@@ -30,8 +32,6 @@ void CanHandler::begin(uint32_t canBaud) {
 }
 
 bool CanHandler::beginSimple(uint32_t canBaud) {
-  static constexpr uint16_t fwVersion = GIT_COMMIT_COUNT;
-  static constexpr uint32_t gitHash = GIT_COMMIT_HASH;
   {
     static constexpr uint32_t cppVersion = __cplusplus;
     const char* SPACER = "|";
@@ -78,17 +78,7 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
     if(!setFilterResult) { return false; }
   }
   {
-    static constexpr uint8_t versionInfo[8] = {
-      static_cast<uint8_t>((fwVersion >> 0) & 0xFF),
-      static_cast<uint8_t>((fwVersion >> 8) & 0xFF),
-      static_cast<uint8_t>((gitHash >> 0) & 0xFF),
-      static_cast<uint8_t>((gitHash >> 8) & 0xFF),
-      static_cast<uint8_t>((gitHash >> 16) & 0xFF),
-      static_cast<uint8_t>((gitHash >> 24) & 0xFF),
-      0,
-      0
-    };
-    const bool sendResult = send(CanCmd::RESTART, versionInfo);
+    const bool sendResult = send(CanCmd::RESTART) && sendFwVersion();
     if(!sendResult) { return false; }
   }
   {
@@ -126,6 +116,7 @@ bool CanHandler::loopSimple() {
       switch(static_cast<uint16_t>(canFrame.cmd)) {
         case static_cast<uint16_t>(CanCmd::PING): { send(CanCmd::PING); } break;
         case static_cast<uint16_t>(CanCmd::RESTART): { restartMCU(); } break;
+        case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
         case static_cast<uint16_t>(CanCmd::OTA_START): {
           const uint16_t otaFlashBegin =
             static_cast<uint16_t>(canFrame.data[0]) << 0U |
@@ -233,4 +224,18 @@ void CanHandler::restartMCU() {
 
 void CanHandler::addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
   this->canCallback = canCallback;                    // Store function pointer locally.
+}
+
+bool CanHandler::sendFwVersion() {
+  static constexpr uint8_t versionInfo[8] = {
+    static_cast<uint8_t>((fwVersion >> 0) & 0xFF),
+    static_cast<uint8_t>((fwVersion >> 8) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 0) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 8) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 16) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 24) & 0xFF),
+    0,
+    0
+  };
+  return send(CanCmd::FW_VERSION, versionInfo);
 }
