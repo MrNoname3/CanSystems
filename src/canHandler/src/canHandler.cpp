@@ -70,7 +70,7 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
   }
   { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
     const uint16_t deviceAddress = localCanId;
-    const uint32_t mask = 0x7FF;                    // Mask for lower 10 bits (0b1111111111).
+    const uint32_t mask = 0x3FFU;                   // Mask for lower 10 bits (0b1111111111).
     const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
     serialPort.print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
