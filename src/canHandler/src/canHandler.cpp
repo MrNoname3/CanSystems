@@ -136,17 +136,17 @@ bool CanHandler::loopSimple() {
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_SEND): {
           Serial.println(F("OTA store: "));
-          const uint32_t dataAddress =
-            static_cast<uint32_t>(canFrame.data[0]) << 0U |
-            static_cast<uint32_t>(canFrame.data[1]) << 8U |
-            static_cast<uint32_t>(canFrame.data[2]) << 16U |
-            static_cast<uint32_t>(canFrame.data[3]) << 24U;
           const uint8_t fwData[ota.fwPieceSize] = {
-            canFrame.data[4],
-            canFrame.data[5],
-            canFrame.data[6],
-            canFrame.data[7]
+            canFrame.data[0],
+            canFrame.data[1],
+            canFrame.data[2],
+            canFrame.data[3]
           };
+          const uint32_t dataAddress =
+            static_cast<uint32_t>(canFrame.data[4]) << 0U |
+            static_cast<uint32_t>(canFrame.data[5]) << 8U |
+            static_cast<uint32_t>(canFrame.data[6]) << 16U |
+            static_cast<uint32_t>(canFrame.data[7]) << 24U;
           const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
           otaStoreResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
           send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
