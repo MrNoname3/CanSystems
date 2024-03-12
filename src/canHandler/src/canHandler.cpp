@@ -142,23 +142,26 @@ bool CanHandler::CanFileTransfer::getNextFrame(uint8_t (&dataFrame)[8]) {
   if(fileSize == 0) { return false; }
   if(!receivedFile) { return false; }
   if(firstFrame) {
-    dataFrame[0] = static_cast<uint8_t>((fileCrc >> 0) & 0xFF);       // Lower byte.
-    dataFrame[1] = static_cast<uint8_t>((fileCrc >> 8) & 0xFF);       // Upper byte.
+    dataFrame[0] = static_cast<uint8_t>((storageNumber >> 0) & 0xFF); // Lower byte.
+    dataFrame[1] = static_cast<uint8_t>((storageNumber >> 8) & 0xFF); // Upper byte.
     dataFrame[2] = static_cast<uint8_t>((fileSize >> 0) & 0xFF);      // Lowest byte.
     dataFrame[3] = static_cast<uint8_t>((fileSize >> 8) & 0xFF);
     dataFrame[4] = static_cast<uint8_t>((fileSize >> 16) & 0xFF);
     dataFrame[5] = static_cast<uint8_t>((fileSize >> 24) & 0xFF);     // Highest byte.
-    dataFrame[6] = static_cast<uint8_t>((storageNumber >> 0) & 0xFF); // Lower byte.
-    dataFrame[7] = static_cast<uint8_t>((storageNumber >> 8) & 0xFF); // Upper byte.
+    dataFrame[6] = static_cast<uint8_t>((fileCrc >> 0) & 0xFF);       // Lower byte.
+    dataFrame[7] = static_cast<uint8_t>((fileCrc >> 8) & 0xFF);       // Upper byte.
     firstFrame = false;
     return true;
   }
-  constexpr uint8_t pieceSize = 7U;
+  constexpr uint8_t pieceSize = 4U;
   const uint32_t remainingFileSize = receivedFile.available();
   const uint8_t bytesNumber = remainingFileSize >= pieceSize ? pieceSize : remainingFileSize;
   if(remainingFileSize == 0) { return false; }
   receivedFile.readBytes(reinterpret_cast<char*>(&dataFrame), bytesNumber);
-  dataFrame[7] = frameNumber;
+  dataFrame[4] = static_cast<uint8_t>((fileSize >> 0) & 0xFF);
+  dataFrame[5] = static_cast<uint8_t>((fileSize >> 8) & 0xFF);
+  dataFrame[6] = static_cast<uint8_t>((fileSize >> 16) & 0xFF);
+  dataFrame[7] = static_cast<uint8_t>((fileSize >> 24) & 0xFF);
   frameNumber++;
   return true;
 }

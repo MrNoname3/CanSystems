@@ -90,7 +90,7 @@ public:
   private:
     File receivedFile;
     bool firstFrame;
-    uint8_t frameNumber;
+    uint32_t frameNumber;
     uint16_t storageNumber;
     char fileName[28];
     uint32_t fileSize;
