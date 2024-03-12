@@ -10,6 +10,9 @@
 #include "canCommands.hpp"
 
 class CanHandler final {
+private:
+  static_assert(MASTER_CAN_ADDRESS < 1023, "Master CAN address must be less than 1023!");
+  static constexpr uint16_t localCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
 public:
   class CanComBase;
 
@@ -122,7 +125,7 @@ public:
     virtual bool loop() override;
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
     bool sendFilePiece(CanCmd command);
-    static constexpr uint16_t localCanId = 10U;
+    //static constexpr uint16_t localCanId = 10U;
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
     CanHandler& canHandler;

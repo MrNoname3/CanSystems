@@ -17,6 +17,14 @@ bool CanHandler::begin(uint32_t canBaud) {
   serialPort.printf_P(PSTR("%sInit:%s\r\n"), CAN_PREFIX, (canBeginResult ? OK_STATE : ERR_STATE));
   if(!canBeginResult) { return false; }
   CAN.onReceive(rxInterrupt);
+  { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
+    const uint16_t deviceAddress = localCanId;
+    const uint32_t mask = 0x3FFU;                   // Mask for lower 10 bits (0b1111111111).
+    const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
+    const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
+    serialPort.printf_P(PSTR("%sFilter:%s\r\n"), CAN_PREFIX, (setFilterResult ? OK_STATE : ERR_STATE));
+    if(!setFilterResult) { return false; }
+  }
   canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));  // Create FIFO queue for RX CAN packets.
   const bool rxQueueResult = canRxQueue != nullptr;             // Check queue creation.
   canTxQueue = xQueueCreate(canTxQueueSize, sizeof(CanFrame));  // Create FIFO queue for TX CAN packets.
@@ -345,7 +353,7 @@ void CanHandler::CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[
 
 void CanHandler::CanComBase::sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
   CanFrame canFrame;
-  canFrame.from = localCanId;
+  canFrame.from = canHandler.localCanId;
   canFrame.to = nodeCanId;
   canFrame.cmd = command;
   memcpy(canFrame.data, data, sizeof(data));
