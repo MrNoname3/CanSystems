@@ -103,3 +103,5 @@ OTA::OtaState OTA::run() {
   }
   return otaState;
 }
+
+bool OTA::isOwnFw() const { return (flashBlockBeginAddress == 0); }

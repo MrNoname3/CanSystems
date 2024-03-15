@@ -129,13 +129,12 @@ bool CanHandler::loopSimple() {
           const uint16_t fwCrc =
             static_cast<uint16_t>(canFrame.data[6]) << 0U |
             static_cast<uint16_t>(canFrame.data[7]) << 8U;
-          Serial.print(F("OTA start: "));
+          serialPort.print(F("OTA start: "));
           const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
           otaStartResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
           if(!otaStartResult) { send(CanCmd::OTA_START, Response::NACK); }
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-          Serial.println(F("OTA store: "));
           const uint8_t fwData[ota.fwPieceSize] = {
             canFrame.data[0],
             canFrame.data[1],
@@ -148,7 +147,7 @@ bool CanHandler::loopSimple() {
             static_cast<uint32_t>(canFrame.data[6]) << 16U |
             static_cast<uint32_t>(canFrame.data[7]) << 24U;
           const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
-          otaStoreResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+          if(!otaStoreResult) { serialPort.println(F("OTA storing failed!")); }
           send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
@@ -165,8 +164,17 @@ bool CanHandler::loopSimple() {
   if(lastOtaState == OTA::OtaState::START && otaState == OTA::OtaState::STORE) {
     send(CanCmd::OTA_START, Response::ACK);
   }
-  if(otaState == OTA::OtaState::VALID) { send(CanCmd::OTA_END, Response::ACK); }
-  if(otaState == OTA::OtaState::INVALID) { send(CanCmd::OTA_END, Response::NACK); }
+  if(otaState == OTA::OtaState::VALID) {
+    send(CanCmd::OTA_END, Response::ACK);
+    serialPort.print(F("Storing: "));
+    serialPort.println(OK_STATE);
+    if(ota.isOwnFw()) { restartMCU(); }
+  }
+  if(otaState == OTA::OtaState::INVALID) {
+    send(CanCmd::OTA_END, Response::NACK);
+    serialPort.print(F("Storing: "));
+    serialPort.println(ERR_STATE);
+  }
   lastOtaState = otaState;
   if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
     ledOn();                                                      // If yes, turn on the LED.

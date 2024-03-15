@@ -36,6 +36,7 @@ public:
   bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
   bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
   OtaState run();
+  bool isOwnFw() const;
 
   OTA(const OTA&) = delete;                                         // Define copy constructor.
   OTA& operator=(const OTA&) = delete;                              // Define copy assignment operator.
