@@ -17,6 +17,7 @@ RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 #elif defined PROJECT_CAN
 CanHandler canHandler(Serial);
 CanAlertDriver canAlert1(canHandler, 26, iotConn, "alert1");
+CanAlertDriver canAlert2(canHandler, 27, iotConn, "alert2");
 #endif
 
 void setup() {
