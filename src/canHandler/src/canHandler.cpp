@@ -130,6 +130,7 @@ CanHandler::CanFileTransfer::CanFileTransfer(const char* fileName) :
   fileSize = receivedFile.size();
   Crc16 crc16;
   while(receivedFile.available() > 0) { crc16.next(receivedFile.read()); }
+  receivedFile.seek(0, SeekSet);
   fileCrc = crc16.get();
 }
 
@@ -157,12 +158,12 @@ bool CanHandler::CanFileTransfer::getNextFrame(uint8_t (&dataFrame)[8]) {
   const uint32_t remainingFileSize = receivedFile.available();
   const uint8_t bytesNumber = remainingFileSize >= pieceSize ? pieceSize : remainingFileSize;
   if(remainingFileSize == 0) { return false; }
-  receivedFile.readBytes(reinterpret_cast<char*>(&dataFrame), bytesNumber);
-  dataFrame[4] = static_cast<uint8_t>((fileSize >> 0) & 0xFF);
-  dataFrame[5] = static_cast<uint8_t>((fileSize >> 8) & 0xFF);
-  dataFrame[6] = static_cast<uint8_t>((fileSize >> 16) & 0xFF);
-  dataFrame[7] = static_cast<uint8_t>((fileSize >> 24) & 0xFF);
-  frameNumber++;
+  receivedFile.read(dataFrame, bytesNumber);
+  dataFrame[4] = static_cast<uint8_t>((frameNumber >> 0) & 0xFF);
+  dataFrame[5] = static_cast<uint8_t>((frameNumber >> 8) & 0xFF);
+  dataFrame[6] = static_cast<uint8_t>((frameNumber >> 16) & 0xFF);
+  dataFrame[7] = static_cast<uint8_t>((frameNumber >> 24) & 0xFF);
+  frameNumber += bytesNumber;
   return true;
 }
 
@@ -280,7 +281,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-      const bool fileTransferResult = sendFilePiece(CanCmd::OTA_START);
+      const bool fileTransferResult = sendFilePiece(CanCmd::OTA_SEND);
       if(!fileTransferResult) {
         canHandler.serialPort.printf_P(PSTR("%sGetting file piece failed at %s!\r\n"),
           CAN_BASE_PREFIX, MqttComBase::getClassId());
@@ -320,7 +321,7 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   const bool isFileMsg = cmdJson.containsKey(F("File"));
   if(isFileMsg) {
     const char* fileName = cmdJson[F("File")].as<const char*>();
-    if(canFileTransfer != nullptr) { return; }
+    if(canFileTransfer != nullptr) { delete canFileTransfer; }
     if(fileName == nullptr) { return; }
     canFileTransfer = new CanFileTransfer(fileName);
     const bool fileTransferStartResult = sendFilePiece(CanCmd::OTA_START);
