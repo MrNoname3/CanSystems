@@ -10,8 +10,9 @@ const char CanAlertDriver::HUM_TEMP_LDR_FRAME[] PROGMEM = {
   "}"
 };
 
-CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
-  CanComBase::CanComBase(canHandler, canId, connectivity, classID)
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID, float tempOffset) :
+  CanComBase::CanComBase(canHandler, canId, connectivity, classID),
+  tempOffset(tempOffset)
 {}
 
 bool CanAlertDriver::init() { return true; }
@@ -22,7 +23,7 @@ void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
   const uint16_t command = canFrame.cmd;
   switch(command) {
     case static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR): {
-      const float temperature = static_cast<float>((static_cast<uint16_t>(canFrame.data[0]) << 0) | (static_cast<uint16_t>(canFrame.data[1]) << 8)) / 100.0F;
+      const float temperature = static_cast<float>((static_cast<uint16_t>(canFrame.data[0]) << 0) | (static_cast<uint16_t>(canFrame.data[1]) << 8)) / 100.0F + tempOffset;
       const uint16_t humidity = (static_cast<uint16_t>(canFrame.data[2]) << 0) | (static_cast<uint16_t>(canFrame.data[3]) << 8);
       const uint8_t light = canFrame.data[4];
       char dataOut[dataOutBufSize] = { '\0' };
