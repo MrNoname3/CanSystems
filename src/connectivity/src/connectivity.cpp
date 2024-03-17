@@ -12,6 +12,7 @@
 #else
 #include <pgmspace.h>
 #endif
+#include "../../crc32/src/crc32.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -588,38 +589,6 @@ bool Connectivity::TimeTracker::isGoalReached() {
   return (getElapsedTime() >= goalTime_);
 }
 
-//////////////////// -- CRC32 class-- ////////////////////
-
-Connectivity::Crc32::Crc32(uint32_t initValue, uint32_t polynomial) :
-  crc_(initValue),
-  polynomial_(polynomial) {}
-
-void Connectivity::Crc32::next(uint8_t value) {
-    crc_ ^= (uint32_t)value;
-    for(uint8_t i = 0; i < 8; i++) {
-      if(crc_ & 1) {
-        crc_ = (crc_ >> 1) ^ polynomial_;
-      }
-      else {
-        crc_ >>= 1;
-      }
-    }
-  }
-
-  void Connectivity::Crc32::next(const uint8_t* values, uint32_t length) {
-    for (uint32_t i = 0; i < length; i++) {
-      next(values[i]);
-    }
-  }
-
-  uint32_t Connectivity::Crc32::get() const { return ~crc_; } // Final CRC32 value is complemented
-
-  uint32_t Connectivity::Crc32::calculate(const uint8_t *data, uint16_t length) {
-    Connectivity::Crc32 crc;
-    crc.next(data, length);
-    return crc.get();
-  }
-
 //////////////////// -- Base64 class-- ////////////////////
 
 uint32_t Connectivity::Base64::encodedLength(uint32_t plainLength) {
@@ -866,7 +835,7 @@ bool Connectivity::DataTransfer::checkValidity() {
   const bool fileSizeOk = (receivedFile.size() == this->fileSize_);
   if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
   if(!fileSizeOk) { receivedFile.close(); return false; }
-  Connectivity::Crc32 crc32;
+  Crc32 crc32;
   while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
   const uint32_t calcFileCrc32 = crc32.get();
   const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
