@@ -229,13 +229,13 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       MqttComBase::messageSend(dataOut);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
-    case static_cast<uint16_t>(CanCmd::OTA_SEND):
+    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+      const Response response = static_cast<Response>(canFrame.data[0]);
+      transferState = (response == Response::ACK) ? TransferState::STORE : TransferState::INVALID;
+    } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
-      const bool sendResult = feedOta(command, canFrame.data);
-      if(!sendResult) {
-        canHandler.serialPort.printf_P(PSTR("%sFile storing error at %s!\r\n"),
-          CAN_BASE_PREFIX, MqttComBase::getClassId());
-      }
+      const Response response = static_cast<Response>(canFrame.data[0]);
+      transferState = (response == Response::ACK) ? TransferState::VALID : TransferState::INVALID;
     } break;
     default: { canFrameReceived(canFrame); } break;
   }
@@ -258,8 +258,9 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   if(isFileMsg) {
     const char* fileName = cmdJson[F("File")].as<const char*>();
     const bool fileTransferStartResult = startOta(fileName);
-    canHandler.serialPort.printf_P(PSTR("%sFile transfer starts to %s:%s\r\n"), CAN_BASE_PREFIX,
+    canHandler.serialPort.printf_P(PSTR("%sFile transfer starts to \"%s\":%s\r\n"), CAN_BASE_PREFIX,
       MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+    if(!fileTransferStartResult) { transferState = TransferState::INVALID; }
     return;
   }
   const bool isCanMsg = cmdJson.containsKey(F("Command")) && cmdJson.containsKey(F("Data"));
@@ -316,21 +317,6 @@ bool CanHandler::CanComBase::startOta(const char* fileName) {
   frameNumber = 0;
   transferState = TransferState::START;
   return true;
-}
-
-bool CanHandler::CanComBase::feedOta(uint16_t command, uint8_t (&dataFrame)[8]) {
-  const Response response = static_cast<Response>(dataFrame[0]);
-  const bool retValue = static_cast<bool>(dataFrame[0]);
-  switch(command) {
-    case static_cast<uint16_t>(CanCmd::OTA_START):
-    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-      transferState = (response == Response::ACK) ? TransferState::STORE : TransferState::INVALID;
-    } break;
-    case static_cast<uint16_t>(CanCmd::OTA_END): {
-      transferState = (response == Response::ACK) ? TransferState::VALID : TransferState::INVALID;
-    } break;
-  }
-  return retValue;
 }
 
 void CanHandler::CanComBase::runOta() {
@@ -403,7 +389,7 @@ void CanHandler::CanComBase::runOta() {
           MqttComBase::getIsoTime(), otaStatus ? F("OK") : F("ERR"));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(dataOutValid) { MqttComBase::messageSend(dataOut); }
-        canHandler.serialPort.printf_P(PSTR("%sFile transfer for %s:%s\r\n"), CAN_BASE_PREFIX,
+        canHandler.serialPort.printf_P(PSTR("%sFile transfer for \"%s\":%s\r\n"), CAN_BASE_PREFIX,
           MqttComBase::getClassId(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
       }
       transferState = TransferState::IDLE;

@@ -121,7 +121,6 @@ public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
 
     bool startOta(const char* fileName);
-    bool feedOta(uint16_t command, uint8_t (&dataFrame)[8]);
     void runOta();
 
     static constexpr uint32_t pingTime = 500U;
