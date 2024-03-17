@@ -8,6 +8,7 @@
 #include "../../connectivity/src/connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include "canCommands.hpp"
+#include "../../crc16/src/crc16.hpp"
 
 class CanHandler final {
 private:
@@ -78,23 +79,42 @@ public:
 public:
   class CanFileTransfer {
   public:
-    CanFileTransfer(const char* fileName);
+    enum class TransferState : uint8_t {
+      IDLE = 0,
+      START,
+      START_ACK,
+      STORE,
+      STORE_ACK,
+      END_ACK,
+      VALID,
+      INVALID
+    };
+    enum class Response : uint8_t {
+      NACK = 0,
+      ACK
+    };
+    CanFileTransfer(CanComBase& canComBase);
     /// @brief Destructor of the object.
-    virtual ~CanFileTransfer();
-    bool getNextFrame(uint8_t (&dataFrame)[8]);
+    virtual ~CanFileTransfer() = default;
+    bool start(const char* fileName);
+    bool feed(uint16_t command, uint8_t (&dataFrame)[8]);
+    TransferState run();
 
     CanFileTransfer(const CanFileTransfer&) = delete;                       // Define copy constructor.
     CanFileTransfer& operator=(const CanFileTransfer&) = delete;            // Define copy assignment operator.
     CanFileTransfer(CanFileTransfer&&) = delete;                            // Define move constructor.
     CanFileTransfer& operator=(CanFileTransfer&&) = delete;                 // Define move assignment operator.
   private:
+    void* operator new(size_t size);              // Disable new operator.
+    CanComBase& canComBase;
     File receivedFile;
-    bool firstFrame;
     uint32_t frameNumber;
     uint16_t storageNumber;
     char fileName[28];
     uint32_t fileSize;
     uint16_t fileCrc;
+    TransferState transferState;
+    Crc16 crc16;
   };
 
 public:
@@ -112,10 +132,10 @@ public:
     virtual bool init() = 0;
     virtual bool run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
-    void sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
-    void sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
-    void sendCanCmd(CanCmd command) const;
-    void sendCanCmd(uint16_t command) const;
+    bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
+    bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
+    bool sendCanCmd(CanCmd command) const;
+    bool sendCanCmd(uint16_t command) const;
   private:
     bool beginPriv();
     bool loopPriv();
@@ -124,8 +144,6 @@ public:
     virtual bool begin() override;
     virtual bool loop() override;
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
-    bool sendFilePiece(CanCmd command);
-    //static constexpr uint16_t localCanId = 10U;
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
     CanHandler& canHandler;
@@ -133,7 +151,7 @@ public:
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
     bool nodeAlive_;
-    CanFileTransfer* canFileTransfer;
+    CanFileTransfer canFileTransfer;
     static const char PROGMEM CAN_BASE_PREFIX[];
     static const char PROGMEM STATUS_ONLINE[];
     static const char PROGMEM STATUS_OFFLINE[];
