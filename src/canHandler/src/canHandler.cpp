@@ -111,110 +111,6 @@ bool CanHandler::SoftwareTimer::isExpired() { return (millis() - start_time_ >= 
 
 void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
 
-//////////////////// -- CanFileTransfer class-- ////////////////////
-
-CanHandler::CanFileTransfer::CanFileTransfer(CanComBase& canComBase) :
-  canComBase(canComBase),
-  receivedFile(),
-  frameNumber(0),
-  storageNumber(0),
-  transferState(TransferState::IDLE)
-{}
-
-bool CanHandler::CanFileTransfer::start(const char* fileName) {
-  if(fileName == nullptr) { return false; }
-  const uint32_t fileNameLength = strnlen(fileName, sizeof(this->fileName));
-  if(fileNameLength == 0 || fileNameLength >= sizeof(this->fileName)) { return false; }
-  memccpy(this->fileName, fileName, '\0', sizeof(this->fileName));
-  if(!LittleFS.exists(this->fileName)) { return false; }
-  if(receivedFile.name() != nullptr) { receivedFile.close(); }
-  receivedFile = LittleFS.open(FPSTR(this->fileName), "r");
-  if(receivedFile.name() == nullptr) {
-    receivedFile.close();
-    return false;
-  }
-  fileSize = receivedFile.size();
-  if(fileSize == 0) { return false; }
-  crc16.reset();
-  frameNumber = 0;
-  transferState = TransferState::START;
-  return true;
-}
-
-bool CanHandler::CanFileTransfer::feed(uint16_t command, uint8_t (&dataFrame)[8]) {
-  const Response response = static_cast<Response>(dataFrame[0]);
-  const bool retValue = static_cast<bool>(dataFrame[0]);
-  switch(command) {
-    case static_cast<uint16_t>(CanCmd::OTA_START):
-    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-      transferState = (response == Response::ACK) ? TransferState::STORE : TransferState::INVALID;
-    } break;
-    case static_cast<uint16_t>(CanCmd::OTA_END): {
-      transferState = (response == Response::ACK) ? TransferState::VALID : TransferState::INVALID;
-    } break;
-  }
-  return retValue;
-}
-
-CanHandler::CanFileTransfer::TransferState CanHandler::CanFileTransfer::run() {
-  switch(transferState) {
-    case TransferState::IDLE: {} break;
-    case TransferState::START: {
-      if(receivedFile.available() > 0) {
-        crc16.next(receivedFile.read());
-      }
-      else {
-        receivedFile.seek(0, SeekSet);
-        fileCrc = crc16.get();
-        const uint8_t canData[8] = {
-          static_cast<uint8_t>((storageNumber >> 0) & 0xFF),  // Lower byte.
-          static_cast<uint8_t>((storageNumber >> 8) & 0xFF),  // Upper byte.
-          static_cast<uint8_t>((fileSize >> 0) & 0xFF),       // Lowest byte.
-          static_cast<uint8_t>((fileSize >> 8) & 0xFF),
-          static_cast<uint8_t>((fileSize >> 16) & 0xFF),
-          static_cast<uint8_t>((fileSize >> 24) & 0xFF),      // Highest byte.
-          static_cast<uint8_t>((fileCrc >> 0) & 0xFF),        // Lower byte.
-          static_cast<uint8_t>((fileCrc >> 8) & 0xFF),        // Upper byte.
-        };
-        const bool sendResult = canComBase.sendCanFrame(CanCmd::OTA_START, canData);
-        transferState = sendResult ? TransferState::START_ACK : TransferState::INVALID;
-      }
-    } break;
-    case TransferState::START_ACK: {} break;
-    case TransferState::STORE: {
-      constexpr uint8_t pieceSize = 4U;
-      const uint32_t remainingFileSize = receivedFile.available();
-      if(remainingFileSize == 0) {
-        transferState = TransferState::END_ACK;
-        break;
-      }
-      const uint8_t bytesNumber = remainingFileSize >= pieceSize ? pieceSize : remainingFileSize;
-      uint8_t canData[8] = { 0 };
-      receivedFile.read(canData, bytesNumber);
-      canData[4] = static_cast<uint8_t>((frameNumber >> 0) & 0xFF);
-      canData[5] = static_cast<uint8_t>((frameNumber >> 8) & 0xFF);
-      canData[6] = static_cast<uint8_t>((frameNumber >> 16) & 0xFF);
-      canData[7] = static_cast<uint8_t>((frameNumber >> 24) & 0xFF);
-      frameNumber += bytesNumber;
-      const bool sendResult = canComBase.sendCanFrame(CanCmd::OTA_SEND, canData);
-      transferState = sendResult ? TransferState::STORE_ACK : transferState = TransferState::INVALID;
-    } break;
-    case TransferState::STORE_ACK: {} break;
-    case TransferState::END_ACK: {} break;
-    case TransferState::VALID:
-    case TransferState::INVALID: {
-      receivedFile.close();
-      frameNumber = 0;
-      storageNumber = 0;
-      fileSize = 0;
-      crc16.reset();
-      memset(fileName, '\0', sizeof(fileName));
-      transferState = TransferState::IDLE;
-    } break;
-  }
-  return transferState;
-}
-
 //////////////////// -- CanComBase class-- ////////////////////
 
 const char CanHandler::CanComBase::CAN_BASE_PREFIX[] PROGMEM            = "[CANB] ";
@@ -254,7 +150,10 @@ CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Conne
   pingTimer(pingTime),
   alertTimer(alertTime),
   nodeAlive_(true),
-  canFileTransfer(*this)
+  receivedFile(),
+  frameNumber(0),
+  storageNumber(0),
+  transferState(TransferState::IDLE)
 {
   canHandler.registerCallback(this);
 }
@@ -283,7 +182,7 @@ bool CanHandler::CanComBase::loopPriv() {
     if(!dataOutValid) { return false; }
     MqttComBase::messageSend(dataOut);
   }
-  const CanFileTransfer::TransferState transferState =  canFileTransfer.run();
+  const CanComBase::TransferState transferState = runOta();
   (void)transferState;
   return run();
 }
@@ -331,14 +230,14 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-      const bool sendResult = canFileTransfer.feed(command, canFrame.data);
+      const bool sendResult = feedOta(command, canFrame.data);
       if(!sendResult) {
         canHandler.serialPort.printf_P(PSTR("%sFile storing error at %s!\r\n"),
           CAN_BASE_PREFIX, MqttComBase::getClassId());
       }
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
-      const bool otaStatus = canFileTransfer.feed(command, canFrame.data);
+      const bool otaStatus = feedOta(command, canFrame.data);
       static constexpr const uint8_t dataOutBufSize = 64;
       char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME,
@@ -369,7 +268,7 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   const bool isFileMsg = cmdJson.containsKey(F("File"));
   if(isFileMsg) {
     const char* fileName = cmdJson[F("File")].as<const char*>();
-    const bool fileTransferStartResult = canFileTransfer.start(fileName);
+    const bool fileTransferStartResult = startOta(fileName);
     canHandler.serialPort.printf_P(PSTR("%sFile transfer starts to %s:%s\r\n"), CAN_BASE_PREFIX,
       MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     return;
@@ -407,5 +306,104 @@ bool CanHandler::CanComBase::sendCanCmd(CanCmd command) const {
 bool CanHandler::CanComBase::sendCanCmd(uint16_t command) const {
   uint8_t data[8] = { 0 };
   return sendCanFrame(command, data);
+}
+
+bool CanHandler::CanComBase::startOta(const char* fileName) {
+  if(fileName == nullptr) { return false; }
+  const uint32_t fileNameLength = strnlen(fileName, sizeof(this->fileName));
+  if(fileNameLength == 0 || fileNameLength >= sizeof(this->fileName)) { return false; }
+  memccpy(this->fileName, fileName, '\0', sizeof(this->fileName));
+  if(!LittleFS.exists(this->fileName)) { return false; }
+  if(receivedFile.name() != nullptr) { receivedFile.close(); }
+  receivedFile = LittleFS.open(FPSTR(this->fileName), "r");
+  if(receivedFile.name() == nullptr) {
+    receivedFile.close();
+    return false;
+  }
+  fileSize = receivedFile.size();
+  if(fileSize == 0) { return false; }
+  crc16.reset();
+  frameNumber = 0;
+  transferState = TransferState::START;
+  return true;
+}
+
+bool CanHandler::CanComBase::feedOta(uint16_t command, uint8_t (&dataFrame)[8]) {
+  const Response response = static_cast<Response>(dataFrame[0]);
+  const bool retValue = static_cast<bool>(dataFrame[0]);
+  switch(command) {
+    case static_cast<uint16_t>(CanCmd::OTA_START):
+    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+      transferState = (response == Response::ACK) ? TransferState::STORE : TransferState::INVALID;
+    } break;
+    case static_cast<uint16_t>(CanCmd::OTA_END): {
+      transferState = (response == Response::ACK) ? TransferState::VALID : TransferState::INVALID;
+    } break;
+  }
+  return retValue;
+}
+
+CanHandler::CanComBase::TransferState CanHandler::CanComBase::runOta() {
+  switch(transferState) {
+    case TransferState::IDLE: {} break;
+    case TransferState::START: {
+      const uint32_t remainingBytes = receivedFile.available();
+      if(remainingBytes > 0U) {
+        constexpr uint8_t bufferSize = 64U;
+        uint8_t readBuffer[bufferSize] = { 0 };
+        const uint8_t readLength = remainingBytes >= bufferSize ? bufferSize : remainingBytes;
+        receivedFile.read(readBuffer, readLength);
+        crc16.next(readBuffer, readLength);
+      }
+      else {
+        receivedFile.seek(0, SeekSet);
+        fileCrc = crc16.get();
+        const uint8_t canData[8] = {
+          static_cast<uint8_t>((storageNumber >> 0) & 0xFF),  // Lower byte.
+          static_cast<uint8_t>((storageNumber >> 8) & 0xFF),  // Upper byte.
+          static_cast<uint8_t>((fileSize >> 0) & 0xFF),       // Lowest byte.
+          static_cast<uint8_t>((fileSize >> 8) & 0xFF),
+          static_cast<uint8_t>((fileSize >> 16) & 0xFF),
+          static_cast<uint8_t>((fileSize >> 24) & 0xFF),      // Highest byte.
+          static_cast<uint8_t>((fileCrc >> 0) & 0xFF),        // Lower byte.
+          static_cast<uint8_t>((fileCrc >> 8) & 0xFF),        // Upper byte.
+        };
+        const bool sendResult = sendCanFrame(CanCmd::OTA_START, canData);
+        transferState = sendResult ? TransferState::START_ACK : TransferState::INVALID;
+      }
+    } break;
+    case TransferState::START_ACK: {} break;
+    case TransferState::STORE: {
+      constexpr uint8_t pieceSize = 4U;
+      const uint32_t remainingFileSize = receivedFile.available();
+      if(remainingFileSize == 0U) {
+        transferState = TransferState::END_ACK;
+        break;
+      }
+      const uint8_t bytesNumber = remainingFileSize >= pieceSize ? pieceSize : remainingFileSize;
+      uint8_t canData[8] = { 0 };
+      receivedFile.read(canData, bytesNumber);
+      canData[4] = static_cast<uint8_t>((frameNumber >> 0) & 0xFF);
+      canData[5] = static_cast<uint8_t>((frameNumber >> 8) & 0xFF);
+      canData[6] = static_cast<uint8_t>((frameNumber >> 16) & 0xFF);
+      canData[7] = static_cast<uint8_t>((frameNumber >> 24) & 0xFF);
+      frameNumber += bytesNumber;
+      const bool sendResult = sendCanFrame(CanCmd::OTA_SEND, canData);
+      transferState = sendResult ? TransferState::STORE_ACK : transferState = TransferState::INVALID;
+    } break;
+    case TransferState::STORE_ACK: {} break;
+    case TransferState::END_ACK: {} break;
+    case TransferState::VALID:
+    case TransferState::INVALID: {
+      receivedFile.close();
+      frameNumber = 0;
+      storageNumber = 0;
+      fileSize = 0;
+      crc16.reset();
+      memset(fileName, '\0', sizeof(fileName));
+      transferState = TransferState::IDLE;
+    } break;
+  }
+  return transferState;
 }
 #endif // PROJECT_CAN

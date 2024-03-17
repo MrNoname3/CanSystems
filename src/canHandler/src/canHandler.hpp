@@ -77,47 +77,6 @@ public:
   };
 
 public:
-  class CanFileTransfer {
-  public:
-    enum class TransferState : uint8_t {
-      IDLE = 0,
-      START,
-      START_ACK,
-      STORE,
-      STORE_ACK,
-      END_ACK,
-      VALID,
-      INVALID
-    };
-    enum class Response : uint8_t {
-      NACK = 0,
-      ACK
-    };
-    CanFileTransfer(CanComBase& canComBase);
-    /// @brief Destructor of the object.
-    virtual ~CanFileTransfer() = default;
-    bool start(const char* fileName);
-    bool feed(uint16_t command, uint8_t (&dataFrame)[8]);
-    TransferState run();
-
-    CanFileTransfer(const CanFileTransfer&) = delete;                       // Define copy constructor.
-    CanFileTransfer& operator=(const CanFileTransfer&) = delete;            // Define copy assignment operator.
-    CanFileTransfer(CanFileTransfer&&) = delete;                            // Define move constructor.
-    CanFileTransfer& operator=(CanFileTransfer&&) = delete;                 // Define move assignment operator.
-  private:
-    void* operator new(size_t size);              // Disable new operator.
-    CanComBase& canComBase;
-    File receivedFile;
-    uint32_t frameNumber;
-    uint16_t storageNumber;
-    char fileName[28];
-    uint32_t fileSize;
-    uint16_t fileCrc;
-    TransferState transferState;
-    Crc16 crc16;
-  };
-
-public:
   class CanComBase : protected Connectivity::MqttComBase {
   public:
     friend class CanHandler;
@@ -126,6 +85,11 @@ public:
     CanComBase(CanComBase&&) = delete;                            // Define move constructor.
     CanComBase& operator=(CanComBase&&) = delete;                 // Define move assignment operator.
   protected:
+    enum class Response : uint8_t {
+      NACK = 0,
+      ACK
+    };
+
     CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
@@ -137,6 +101,17 @@ public:
     bool sendCanCmd(CanCmd command) const;
     bool sendCanCmd(uint16_t command) const;
   private:
+    enum class TransferState : uint8_t {
+      IDLE = 0,
+      START,
+      START_ACK,
+      STORE,
+      STORE_ACK,
+      END_ACK,
+      VALID,
+      INVALID
+    };
+
     bool beginPriv();
     bool loopPriv();
     void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
@@ -144,6 +119,11 @@ public:
     virtual bool begin() override;
     virtual bool loop() override;
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+
+    bool startOta(const char* fileName);
+    bool feedOta(uint16_t command, uint8_t (&dataFrame)[8]);
+    TransferState runOta();
+
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
     CanHandler& canHandler;
@@ -151,7 +131,6 @@ public:
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
     bool nodeAlive_;
-    CanFileTransfer canFileTransfer;
     static const char PROGMEM CAN_BASE_PREFIX[];
     static const char PROGMEM STATUS_ONLINE[];
     static const char PROGMEM STATUS_OFFLINE[];
@@ -160,6 +139,16 @@ public:
     static const char PROGMEM BUTTON_FRAME[];
     static const char PROGMEM FW_VERSION_FRAME[];
     static const char PROGMEM OTA_FRAME[];
+
+    File receivedFile;
+    uint32_t frameNumber;
+    uint16_t storageNumber;
+    char fileName[28];
+    uint32_t fileSize;
+    uint16_t fileCrc;
+    TransferState transferState;
+    Crc16 crc16;
+    void* operator new(size_t size);              // Disable new operator.
   };
 
 };
