@@ -7,12 +7,8 @@
 #include <Update.h>
 #include <esp_task_wdt.h>
 #endif
-#if (defined(__AVR__) || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_SAM))
-#include <avr/pgmspace.h>
-#else
-#include <pgmspace.h>
-#endif
 #include "../../crc32/src/crc32.hpp"
+#include "../../base64/src/base64.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -589,116 +585,6 @@ bool Connectivity::TimeTracker::isGoalReached() {
   return (getElapsedTime() >= goalTime_);
 }
 
-//////////////////// -- Base64 class-- ////////////////////
-
-uint32_t Connectivity::Base64::encodedLength(uint32_t plainLength) {
-  int32_t n = plainLength;
-  return (n + 2 - ((n + 2) % 3)) / 3 * 4;
-}
-
-uint32_t Connectivity::Base64::decodedLength(const uint8_t input[], uint32_t inputLength) {
-  int32_t i = 0;
-  int32_t numEq = 0;
-  for(i = inputLength - 1; input[i] == '='; i--) { numEq++; }
-  return ((6 * inputLength) / 8) - numEq;
-}
-
-uint32_t Connectivity::Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0;
-  int32_t encodedLength_ = 0;
-  uint8_t A3[3];
-  uint8_t A4[4];
-
-  while(inputLength--) {
-    A3[i++] = *(input++);
-    if(i == 3) {
-      fromA3ToA4(A4, A3);
-      for(i = 0; i < 4; i++) {
-        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[i]]);
-      }
-      i = 0;
-    }
-  }
-  if(i) {
-    int32_t j = 0;
-    for(j = i; j < 3; j++) {
-      A3[j] = '\0';
-    }
-    fromA3ToA4(A4, A3);
-    for(j = 0; j < i + 1; j++) {
-      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[j]]);
-    }
-    while((i++ < 3)) {
-      output[encodedLength_++] = '=';
-    }
-  }
-  output[encodedLength_] = '\0';
-  return encodedLength_;
-}
-
-uint32_t Connectivity::Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0;
-  uint32_t decodedLength_ = 0;
-  uint8_t A3[3];
-  uint8_t A4[4];
-
-  while(inputLength--) {
-    if(*input == '=') { break; }
-    A4[i++] = *(input++);
-    if(i == 4) {
-      for(i = 0; i < 4; i++) {
-        A4[i] = lookupTable(A4[i]);
-      }
-      fromA4ToA3(A3, A4);
-      for(i = 0; i < 3; i++) {
-        output[decodedLength_++] = A3[i];
-      }
-      i = 0;
-    }
-  }
-  if(i) {
-    int32_t j = 0;
-    for(j = i; j < 4; j++) {
-      A4[j] = '\0';
-    }
-    for(j = 0; j < 4; j++) {
-      A4[j] = lookupTable(A4[j]);
-    }
-    fromA4ToA3(A3, A4);
-    for(j = 0; j < i - 1; j++) {
-      output[decodedLength_++] = A3[j];
-    }
-  }
-  output[decodedLength_] = '\0';
-  return decodedLength_;
-}
-
-void Connectivity::Base64::fromA3ToA4(uint8_t* A4, const uint8_t* A3) {
-  A4[0] = (A3[0] & 0xfc) >> 2;
-  A4[1] = ((A3[0] & 0x03) << 4) + ((A3[1] & 0xf0) >> 4);
-  A4[2] = ((A3[1] & 0x0f) << 2) + ((A3[2] & 0xc0) >> 6);
-  A4[3] = (A3[2] & 0x3f);
-}
-
-void Connectivity::Base64::fromA4ToA3(uint8_t* A3, const uint8_t* A4) {
-  A3[0] = (A4[0] << 2) + ((A4[1] & 0x30) >> 4);
-  A3[1] = ((A4[1] & 0xf) << 4) + ((A4[2] & 0x3c) >> 2);
-  A3[2] = ((A4[2] & 0x3) << 6) + A4[3];
-}
-
-uint8_t Connectivity::Base64::lookupTable(char c) {
-  if(c >='A' && c <='Z') { return c - 'A'; }
-  if(c >='a' && c <='z') { return c - 71; }
-  if(c >='0' && c <='9') { return c + 4; }
-  if(c == '+') { return 62; }
-  if(c == '/') { return 63; }
-  return -1;
-}
-
-const char Connectivity::Base64::base64AlphabetTable_[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  "abcdefghijklmnopqrstuvwxyz"
-  "0123456789+/";
-
 //////////////////// -- DataTransfer class-- ////////////////////
 
 const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
@@ -783,12 +669,12 @@ bool Connectivity::DataTransfer::storeBase64(uint32_t filePieceNumber, const cha
   if(filePieceB64Size == 0) { return false; }
 
   uint8_t decodedData[receivedFilePieceSize];
-  const uint32_t decodedPreSize = Connectivity::Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
+  const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > sizeof(decodedData)) {
     if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile piece size error!\r\n"), FILE_TRANSFER_PREFIX); }
     return false;
   }
-  const uint32_t decodedPostSize = Connectivity::Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
+  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
   if(decodedPreSize != decodedPostSize) {
     if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), FILE_TRANSFER_PREFIX); }
     return false;
