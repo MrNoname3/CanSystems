@@ -122,7 +122,7 @@ public:
 
     bool startOta(const char* fileName);
     bool feedOta(uint16_t command, uint8_t (&dataFrame)[8]);
-    TransferState runOta();
+    void runOta();
 
     static constexpr uint32_t pingTime = 500U;
     static constexpr uint32_t alertTime = 1000U;
@@ -140,6 +140,7 @@ public:
     static const char PROGMEM FW_VERSION_FRAME[];
     static const char PROGMEM OTA_FRAME[];
 
+    void* operator new(size_t size);              // Disable new operator.
     File receivedFile;
     uint32_t frameNumber;
     uint16_t storageNumber;
@@ -148,7 +149,8 @@ public:
     uint16_t fileCrc;
     TransferState transferState;
     Crc16 crc16;
-    void* operator new(size_t size);              // Disable new operator.
+    static constexpr uint32_t otaTimeoutTime = 2U * 60U * 1000U;
+    SoftwareTimer otaTimeoutTimer;
   };
 
 };

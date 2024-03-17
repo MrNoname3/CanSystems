@@ -153,7 +153,8 @@ CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Conne
   receivedFile(),
   frameNumber(0),
   storageNumber(0),
-  transferState(TransferState::IDLE)
+  transferState(TransferState::IDLE),
+  otaTimeoutTimer(otaTimeoutTime)
 {
   canHandler.registerCallback(this);
 }
@@ -182,8 +183,7 @@ bool CanHandler::CanComBase::loopPriv() {
     if(!dataOutValid) { return false; }
     MqttComBase::messageSend(dataOut);
   }
-  const CanComBase::TransferState transferState = runOta();
-  (void)transferState;
+  runOta();
   return run();
 }
 
@@ -229,24 +229,13 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       MqttComBase::messageSend(dataOut);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
-    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+    case static_cast<uint16_t>(CanCmd::OTA_SEND):
+    case static_cast<uint16_t>(CanCmd::OTA_END): {
       const bool sendResult = feedOta(command, canFrame.data);
       if(!sendResult) {
         canHandler.serialPort.printf_P(PSTR("%sFile storing error at %s!\r\n"),
           CAN_BASE_PREFIX, MqttComBase::getClassId());
       }
-    } break;
-    case static_cast<uint16_t>(CanCmd::OTA_END): {
-      const bool otaStatus = feedOta(command, canFrame.data);
-      static constexpr const uint8_t dataOutBufSize = 64;
-      char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME,
-        MqttComBase::getIsoTime(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
-      const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return; }
-      MqttComBase::messageSend(dataOut);
-      canHandler.serialPort.printf_P(PSTR("%sFile transfer for %s:%s\r\n"), CAN_BASE_PREFIX,
-        MqttComBase::getClassId(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     } break;
     default: { canFrameReceived(canFrame); } break;
   }
@@ -312,6 +301,7 @@ bool CanHandler::CanComBase::startOta(const char* fileName) {
   if(fileName == nullptr) { return false; }
   const uint32_t fileNameLength = strnlen(fileName, sizeof(this->fileName));
   if(fileNameLength == 0 || fileNameLength >= sizeof(this->fileName)) { return false; }
+  if(fileName[0] != '/') { return false; }
   memccpy(this->fileName, fileName, '\0', sizeof(this->fileName));
   if(!LittleFS.exists(this->fileName)) { return false; }
   if(receivedFile.name() != nullptr) { receivedFile.close(); }
@@ -343,9 +333,12 @@ bool CanHandler::CanComBase::feedOta(uint16_t command, uint8_t (&dataFrame)[8]) 
   return retValue;
 }
 
-CanHandler::CanComBase::TransferState CanHandler::CanComBase::runOta() {
+void CanHandler::CanComBase::runOta() {
+  if(otaTimeoutTimer.isExpired()) {
+    transferState = TransferState::IDLE;
+  }
   switch(transferState) {
-    case TransferState::IDLE: {} break;
+    case TransferState::IDLE: { otaTimeoutTimer.reload(); } break;
     case TransferState::START: {
       const uint32_t remainingBytes = receivedFile.available();
       if(remainingBytes > 0U) {
@@ -374,6 +367,7 @@ CanHandler::CanComBase::TransferState CanHandler::CanComBase::runOta() {
     } break;
     case TransferState::START_ACK: {} break;
     case TransferState::STORE: {
+      otaTimeoutTimer.reload();
       constexpr uint8_t pieceSize = 4U;
       const uint32_t remainingFileSize = receivedFile.available();
       if(remainingFileSize == 0U) {
@@ -401,9 +395,19 @@ CanHandler::CanComBase::TransferState CanHandler::CanComBase::runOta() {
       fileSize = 0;
       crc16.reset();
       memset(fileName, '\0', sizeof(fileName));
+      {
+        const bool otaStatus = (transferState == TransferState::VALID);
+        static constexpr const uint8_t dataOutBufSize = 64;
+        char dataOut[dataOutBufSize] = { '\0' };
+        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME,
+          MqttComBase::getIsoTime(), otaStatus ? F("OK") : F("ERR"));
+        const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
+        if(dataOutValid) { MqttComBase::messageSend(dataOut); }
+        canHandler.serialPort.printf_P(PSTR("%sFile transfer for %s:%s\r\n"), CAN_BASE_PREFIX,
+          MqttComBase::getClassId(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+      }
       transferState = TransferState::IDLE;
     } break;
   }
-  return transferState;
 }
 #endif // PROJECT_CAN
