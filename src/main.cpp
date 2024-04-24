@@ -43,7 +43,7 @@ void loop() {
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
-      rgbLed.setColor(data[0], data[1], data[2]);
+      rgbLed.setColor(data[0], data[1], data[2], true);
       canHandler.send(static_cast<uint16_t>(CanCmd::RGB_LED));
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
@@ -55,4 +55,14 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   };
 }
 
-void btnEventHandling(const uint8_t& event) {}
+void btnEventHandling(const uint8_t& event) {
+  switch(event) {
+    case 3: {
+      rgbLed.setColor(50U, 50U, 50U, true);
+    } break;
+    case 4: {
+      rgbLed.clear();
+    } break;
+    default: {} break;
+  }
+}

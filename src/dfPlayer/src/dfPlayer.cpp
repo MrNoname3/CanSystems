@@ -36,7 +36,7 @@ void DFPlayer::spin() {
 
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
-        rgbLed.setColor(redValue, greenValue, blueValue);
+        rgbLed.setColor(redValue, greenValue, blueValue, false);
         playingState = PlayingStates::TURN_ON;
       }
     } break;
@@ -108,7 +108,8 @@ void DFPlayer::spin() {
       digitalWrite(this->RXpin, LOW);                           // Set RX line in LOW state. (It's noisy.)
       detachInt();                                              // Detach interrupt.
       enablePlay = false;                                       // Disable interrupt flag.
-      rgbLed.clear();
+      //rgbLed.clear();
+      rgbLed.loadColor();
       playingState = PlayingStates::IDLE;
     } break;
 
