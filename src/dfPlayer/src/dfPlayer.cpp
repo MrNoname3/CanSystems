@@ -20,14 +20,10 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin, uint8_t TXpin, uint8_t 
   DFPlayerMiniFast::begin(swSerial, false, timeout);
 }
 
-void DFPlayer::volume(uint8_t volume_) {
-  volume_ &= 30U;                                     // Protect variable from high value.
-  this->volume_ = volume_;                            // Save value.
-}
-
-void DFPlayer::play(uint16_t song) {
-  song &= 9999U;                                      // Protect variable from high value.
-  this->playingQueue.put(song);                       // Put value to playing queue.
+void DFPlayer::play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) {
+  track &= 9999U;                                     // Protect variables from high value.
+  volume &= 30U;
+  this->playingQueue.put(PlayQueueItem(track, volume, red, green, blue)); // Put item to playing queue.
 }
 
 void DFPlayer::spin() {
@@ -36,7 +32,6 @@ void DFPlayer::spin() {
 
     case PlayingStates::IDLE: {
       if(playingQueue.isEmpty() == false) {                     // Check playing queue.
-        rgbLed.setColor(redValue, greenValue, blueValue, false);
         playingState = PlayingStates::TURN_ON;
       }
     } break;
@@ -56,7 +51,8 @@ void DFPlayer::spin() {
     } break;
 
     case PlayingStates::SET_VOLUME: {
-      DFPlayerMiniFast::volume(volume_);                        // Set volume trough base class.
+      DFPlayerMiniFast::volume(playingQueue.peek().volume);     // Set volume trough base class.
+      rgbLed.setColor(playingQueue.peek().red, playingQueue.peek().green, playingQueue.peek().blue, false);
       cmdExecTimer = millis();                                  // Start timer.
       playingState = PlayingStates::WAIT_FOR_CMD;
     } break;
@@ -69,7 +65,7 @@ void DFPlayer::spin() {
 
     case PlayingStates::PLAY: {
       this->attachInt();                                        // Attach interrupt.
-      DFPlayerMiniFast::play(playingQueue.pop());               // Play next song from queue.
+      DFPlayerMiniFast::play(playingQueue.pop().track);         // Play next song from queue.
       playTimeoutTimer = millis();                              // Start timer.
       playingState = PlayingStates::WAIT_FOR_PLAY;
     } break;
@@ -98,7 +94,7 @@ void DFPlayer::spin() {
     case PlayingStates::PLAYING_DELAY: {
       if(millis() - playDelayTimer >= playDelayTime) {          // Check timer.
         enablePlay = false;                                     // Disable interrupt flag.
-        playingState = PlayingStates::PLAY;
+        playingState = PlayingStates::SET_VOLUME;
       }
     } break;
 

@@ -48,8 +48,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
       const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8))};
-      MP3Player.play(songNum);                                  // Add selected song to queue.
-      MP3Player.volume(data[2]);                                // Set volume.
+      MP3Player.play(songNum, data[2], data[3], data[4], data[5]);
       canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
     } break;
   };

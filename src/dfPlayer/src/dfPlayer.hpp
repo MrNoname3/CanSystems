@@ -10,6 +10,18 @@
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
 class DFPlayer final : private DFPlayerMiniFast {
+private:
+  struct __attribute__((packed))
+  PlayQueueItem {
+    uint16_t track;
+    uint8_t volume;
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+    PlayQueueItem() : track(0), volume(0), red(0), green(0), blue(0) {}
+    PlayQueueItem(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) :
+      track(track), volume(volume), red(red), green(green), blue(blue) {}
+  };
 public:
   /// @brief Constructor of DFPlayerMini derived class.
   /// @param RXpin_ Software serial RX pin.
@@ -22,13 +34,13 @@ public:
   /// @brief Destructor of the object.
   virtual ~DFPlayer() = default;
 
-  /// @brief Set MP3 player volume.
-  /// @param volume_ Volume, value: 0-30.
-  void volume(uint8_t volume_);
-
-  /// @brief Put song number in the play queue.
-  /// @param song Number of the song.
-  void play(uint16_t song);
+  /// @brief Add a new track to the playing queue.
+  /// @param track Number of the track.
+  /// @param volume Volume, value: 0-30.
+  /// @param red Red color value of the LED strip.
+  /// @param green Green color value of the LED strip.
+  /// @param blue Blue color value of the LED strip.
+  void play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue);
 
   /// @brief Handles the state machine for playing.
   /// Need to be called periodically.
@@ -65,12 +77,9 @@ private:
     TURN_OFF,                       // Turn hardware off.
   };
 
-  static constexpr uint8_t redValue = 0;              // If enabled, this color values are
-  static constexpr uint8_t greenValue = 50;           // set for RGB LED during sound playing.
-  static constexpr uint8_t blueValue = 200;
   static constexpr uint16_t bootTime = 1000;          // MP3 player boot time.
   static constexpr uint8_t cmdExecTime = 120;         // Command execution time.
-  static constexpr uint16_t playDelayTime = 500;      // Time for delay between songs.
+  static constexpr uint16_t playDelayTime = 400;      // Time for delay between songs.
   static constexpr uint16_t playTimeoutTime = 10000;  // Playing timeout time.
   uint32_t bootTimer = 0;                             // MP3 player boot timer.
   uint32_t cmdExecTimer = 0;                          // Command execution timer.
@@ -83,10 +92,9 @@ private:
   const uint8_t TXpin;                                // Software serial TX pin.
   const uint8_t ENpin;                                // Device turn on/off switch pin.
   const uint8_t INTpin;                               // Device playing interrupt pin: LOW->playing.
-  uint8_t volume_ = 5;                                // Volume value. Default: 5.
   static volatile bool enablePlay;                    // Interrupt flag. If true, device is ready to play.
 
   PlayingStates playingState = PlayingStates::IDLE;   // Set state for state machine.
-  CircularBuffer<uint16_t, 5> playingQueue;           // MP3 playing queue.
+  CircularBuffer<PlayQueueItem, 5> playingQueue;      // MP3 playing queue.
 };
 #endif // DFPLAYER_HPP
