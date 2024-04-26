@@ -22,6 +22,10 @@ public:
   /// @return Returns with the element.
   T pop();
 
+  /// @brief Gets an element from the buffer without removing it.
+  /// @return Returns with the latest element.
+  T peek() const;
+
   /// @brief Resets the buffer to its initial state.
   void clear();
 
@@ -70,6 +74,14 @@ T CircularBuffer<T, buffSize>::pop() {
   tail = (tail + 1) % buffSize;
   full = false;
   return result;
+}
+
+template<class T, uint16_t buffSize>
+T CircularBuffer<T, buffSize>::peek() const {
+  // Handle empty buffer case, with return a default value.
+  if(isEmpty()) { return T(); }
+  // If the buffer is not empty, return the element at the tail index.
+  return buffer[tail];
 }
 
 template<class T, uint16_t buffSize>
