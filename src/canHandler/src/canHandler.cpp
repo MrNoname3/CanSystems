@@ -2,6 +2,7 @@
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
 #include <ArduinoJson.h>                      /// Handle JSON files.
+#include <cstdlib>
 
 QueueHandle_t CanHandler::canRxQueue = nullptr;
 const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
@@ -266,7 +267,11 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   const bool isCanMsg = cmdJson.containsKey(F("Command")) && cmdJson.containsKey(F("Data"));
   if(isCanMsg) {
     const uint16_t command = cmdJson[F("Command")].as<uint16_t>();
-    const uint64_t canData64 = cmdJson[F("Data")].as<uint64_t>();
+    const char* canDataStr = cmdJson[F("Data")].as<const char*>();
+    if(canDataStr == nullptr) { return; }
+    char* endPtr = nullptr;
+    const uint64_t canData64 = std::strtoull(canDataStr, &endPtr, 16);
+    if(*endPtr != '\0') { return; }
     uint8_t canData[8] = { 0 };
     memcpy(canData, &canData64, sizeof(canData));
     sendCanFrame(command, canData);
