@@ -32,4 +32,6 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
 
+void measureMaxLoopTime();
+
 #endif // MAIN_HPP

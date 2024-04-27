@@ -30,6 +30,7 @@ void loop() {
   buttonHandler.loop();
   ambientSensor.loop();
   mp3Player.spin();
+  //measureMaxLoopTime();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
@@ -54,5 +55,17 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
       rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
     } break;
     default: {} break;
+  }
+}
+
+void measureMaxLoopTime() {
+  static uint32_t maxLoopTime = 1U;
+  static uint32_t lastLoopTime = millis();
+  uint32_t actualLoopTime = millis() - lastLoopTime;
+  lastLoopTime = millis();
+  if(actualLoopTime > maxLoopTime) {
+    maxLoopTime = actualLoopTime;
+    Serial.print(F("Max loop time: "));
+    Serial.println(maxLoopTime);
   }
 }
