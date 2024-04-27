@@ -77,10 +77,10 @@ private:
     TURN_OFF,                       // Turn hardware off.
   };
 
-  static constexpr uint16_t bootTime = 1000;          // MP3 player boot time.
-  static constexpr uint8_t cmdExecTime = 120;         // Command execution time.
-  static constexpr uint16_t playDelayTime = 400;      // Time for delay between songs.
-  static constexpr uint16_t playTimeoutTime = 10000;  // Playing timeout time.
+  static constexpr uint16_t bootTime = 1000U;         // MP3 player boot time.
+  static constexpr uint8_t cmdExecTime = 120U;        // Command execution time.
+  static constexpr uint16_t playDelayTime = 400U;     // Time for delay between songs.
+  static constexpr uint16_t playTimeoutTime = 10000U; // Playing timeout time.
   uint32_t bootTimer = 0;                             // MP3 player boot timer.
   uint32_t cmdExecTimer = 0;                          // Command execution timer.
   uint32_t playDelayTimer = 0;                        // Timer for delay between songs.

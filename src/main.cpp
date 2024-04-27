@@ -4,7 +4,7 @@
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, BUTTON_PIN);
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
-static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
+static constexpr uint32_t measureTimeMs = static_cast<uint32_t>(15UL * 60UL * 1000UL);
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);

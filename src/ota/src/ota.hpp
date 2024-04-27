@@ -11,7 +11,7 @@
 
 class OTA final {
 private:
-  static constexpr uint16_t flashBlockTobytes = 32U * 1024U;
+  static constexpr uint16_t flashBlockTobytes = static_cast<uint16_t>(32U * 1024U);
 #ifndef PROGRAM_MEMORY_SIZE
   static_assert(false, "PROGRAM_MEMORY_SIZE macro is not defined!");
 #else

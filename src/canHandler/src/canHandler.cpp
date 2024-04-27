@@ -5,8 +5,8 @@
 #include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0;
-static constexpr uint16_t fwVersion = GIT_COMMIT_COUNT;
-static constexpr uint32_t gitHash = GIT_COMMIT_HASH;
+static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);
+static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);
 
 CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
@@ -33,7 +33,7 @@ void CanHandler::begin(uint32_t canBaud) {
 
 bool CanHandler::beginSimple(uint32_t canBaud) {
   {
-    static constexpr uint32_t cppVersion = __cplusplus;
+    constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);
     const char* SPACER = "|";
     serialPort.print(F("CPP: "));
     serialPort.println(cppVersion);
