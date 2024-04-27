@@ -59,7 +59,7 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 }
 
 void measureMaxLoopTime() {
-  static uint32_t maxLoopTime = 1U;
+  static uint32_t maxLoopTime = 1UL;
   static uint32_t lastLoopTime = millis();
   uint32_t actualLoopTime = millis() - lastLoopTime;
   lastLoopTime = millis();

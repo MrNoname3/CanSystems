@@ -7,19 +7,19 @@ Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
 {}
 
 void Crc16::next(uint8_t value) {
-  crc_ ^= ((uint16_t)value << 8);
+  crc_ ^= ((uint16_t)value << 8U);
   for(uint8_t i = 0U; i < 8U; i++) {
-    if(crc_ & 0x8000) {
-      crc_ = (crc_ << 1) ^ polynomial_;
+    if(crc_ & 0x8000U) {
+      crc_ = (crc_ << 1U) ^ polynomial_;
     }
     else {
-      crc_ <<= 1;
+      crc_ <<= 1U;
     }
   }
 }
 
 void Crc16::next(const uint8_t* values, uint32_t length) {
-  for(uint32_t i = 0; i < length; i++) {
+  for(uint32_t i = 0UL; i < length; i++) {
     next(values[i]);
   }
 }

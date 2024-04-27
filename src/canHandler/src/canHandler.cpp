@@ -70,7 +70,7 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
   }
   { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
     const uint16_t deviceAddress = localCanId;
-    const uint32_t mask = 0x3FFU;                   // Mask for lower 10 bits (0b1111111111).
+    const uint32_t mask = 0x3FFUL;                  // Mask for lower 10 bits (0b1111111111).
     const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
     serialPort.print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
@@ -185,9 +185,9 @@ bool CanHandler::loopSimple() {
 
 bool CanHandler::send(uint16_t command, const uint8_t (&data)[8]) const {
   const uint32_t extId =
-    ((static_cast<uint32_t>(masterCanId) & 0x3FF) << 0) |
-    ((static_cast<uint32_t>(command) & 0x1FF) << 10) |
-    ((static_cast<uint32_t>(localCanId) & 0x3FF) << 19);
+    ((static_cast<uint32_t>(masterCanId) & 0x3FF) << 0U) |
+    ((static_cast<uint32_t>(command) & 0x1FF) << 10U) |
+    ((static_cast<uint32_t>(localCanId) & 0x3FF) << 19U);
   const bool beginPacketResult = CAN.beginExtendedPacket(extId) > 0;
   if(!beginPacketResult) { return false; }
   const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0;

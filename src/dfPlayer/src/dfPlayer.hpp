@@ -29,7 +29,7 @@ public:
   /// @param ENpin Device turn on/off switch pin.
   /// @param INTpin Device playing interrupt pin: LOW->playing.
   /// @param timeout Set device answer timeout in ms.
-  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, uint32_t timeout = 10U);
+  DFPlayer(RgbLedWrapper& rgbLed, uint8_t RXpin_, uint8_t TXpin_, uint8_t ENpin, uint8_t INTpin, uint32_t timeout = 10UL);
 
   /// @brief Destructor of the object.
   virtual ~DFPlayer() = default;
@@ -81,10 +81,10 @@ private:
   static constexpr uint8_t cmdExecTime = 120U;        // Command execution time.
   static constexpr uint16_t playDelayTime = 400U;     // Time for delay between songs.
   static constexpr uint16_t playTimeoutTime = 10000U; // Playing timeout time.
-  uint32_t bootTimer = 0;                             // MP3 player boot timer.
-  uint32_t cmdExecTimer = 0;                          // Command execution timer.
-  uint32_t playDelayTimer = 0;                        // Timer for delay between songs.
-  uint32_t playTimeoutTimer = 0;                      // Playing timeout time.
+  uint32_t bootTimer = 0UL;                           // MP3 player boot timer.
+  uint32_t cmdExecTimer = 0UL;                        // Command execution timer.
+  uint32_t playDelayTimer = 0UL;                      // Timer for delay between songs.
+  uint32_t playTimeoutTimer = 0UL;                    // Playing timeout time.
 
   RgbLedWrapper& rgbLed;
   SoftwareSerial swSerial;                            // Software serial object.
