@@ -16,7 +16,7 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
   flash(flashCsPin, flashJedecId),
   ota(flash)
 {
-  wdt_enable(WDTO_2S);                        // Enable WDT timer.
+  wdt_enable(WDTO_250MS);                           // Enable WDT timer.
   CAN.setPins(canCsPin, -1);
   pinMode(canIntPin, INPUT);
   pinMode(ledPin, OUTPUT);
