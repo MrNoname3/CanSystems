@@ -54,13 +54,12 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   };
 }
 
-void btnEventHandling(const uint8_t& event) {
-  switch(event) {
-    case 3: {
-      rgbLed.setColor(50U, 50U, 50U, true);
-    } break;
-    case 4: {
-      rgbLed.clear();
+void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
+  switch(btnEvent) {
+    case PushButtonHandler::BtnEvent::LONG_PRESS: {
+      static bool rgbLedState = false;
+      rgbLedState = !rgbLedState;
+      rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
     } break;
     default: {} break;
   }

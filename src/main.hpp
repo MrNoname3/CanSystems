@@ -31,6 +31,6 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 
-void btnEventHandling(const uint8_t& event);
+void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
 
 #endif // MAIN_HPP
