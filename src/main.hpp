@@ -9,7 +9,6 @@
 #include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
 #include "externalSensor/src/externalSensor.hpp"                    /// External temperature and humidity sensor library.
-#include "serialIR.hpp"
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19U;          // Number of RGB LED's.

@@ -6,10 +6,8 @@ PushButtonHandler buttonHandler(Serial, canHandler, BUTTON_PIN);
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 static constexpr uint32_t measureTimeMs = 1U * 60U * 1000U;
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
-DFPlayer MP3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
+DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-
-//SerialIR swSerial(RS232_RX, RS232_TX);
 
 //--- Setup section ---//
 void setup() {
@@ -21,8 +19,6 @@ void setup() {
   canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
-  //MP3Player.volume(15U);                                                      // Set MP3 player volume.
-  //MP3Player.play(1U);
   ambientSensor.begin();
   extSensor.on();
   Serial.println(F("********\r\nLooping..."));
@@ -30,14 +26,10 @@ void setup() {
 }
 
 void loop() {
-  //while(swSerial.available() > 0) {
-  //  Serial.println(swSerial.read());
-  //}
-
   canHandler.loop();
   buttonHandler.loop();
   ambientSensor.loop();
-  MP3Player.spin();
+  mp3Player.spin();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
@@ -48,7 +40,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
       const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8))};
-      MP3Player.play(songNum, data[2], data[3], data[4], data[5]);
+      mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
     } break;
   };
