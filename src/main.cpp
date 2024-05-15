@@ -9,6 +9,14 @@ AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 
+//--- Array of function pointers ---//
+void (*methodCallers[])() = {
+  []() { canHandler.loop(); },
+  []() { buttonHandler.loop(); },
+  []() { ambientSensor.loop(); },
+  []() { mp3Player.spin(); }
+};
+
 //--- Setup section ---//
 void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
@@ -26,10 +34,7 @@ void setup() {
 }
 
 void loop() {
-  canHandler.loop();
-  buttonHandler.loop();
-  ambientSensor.loop();
-  mp3Player.spin();
+  for(void (*caller)() : methodCallers) { caller(); }
   //measureMaxLoopTime();
 }
 
