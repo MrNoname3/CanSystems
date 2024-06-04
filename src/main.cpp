@@ -11,11 +11,11 @@ const ExternalSensor extSensor(EXT_SENSOR_EN);
 
 //--- Array of function pointers ---//
 void (*methodCallers[])() = {
-  []() { canHandler.loop(); },
   []() { buttonHandler.loop(); },
   []() { ambientSensor.loop(); },
   []() { mp3Player.spin(); }
 };
+static constexpr uint8_t numMethods = sizeof(methodCallers) / sizeof(*methodCallers);
 
 //--- Setup section ---//
 void setup() {
@@ -34,7 +34,10 @@ void setup() {
 }
 
 void loop() {
-  for(void (*caller)() : methodCallers) { caller(); }
+  canHandler.loop();
+  static uint8_t methodIndex = 0U;
+  methodCallers[methodIndex++]();
+  if(methodIndex >= numMethods) { methodIndex = 0U; }
   //measureMaxLoopTime();
 }
 
