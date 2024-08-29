@@ -1,4 +1,3 @@
-#ifdef PROJECT_CAN
 #ifndef CAN_HANDLER_HPP
 #define CAN_HANDLER_HPP
 
@@ -154,4 +153,3 @@ public:
 
 };
 #endif // CAN_HANDLER_HPP
-#endif // PROJECT_CAN

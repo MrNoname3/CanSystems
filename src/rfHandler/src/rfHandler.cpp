@@ -1,4 +1,3 @@
-#ifdef PROJECT_RAD_RF
 #include "rfHandler.hpp"
 #include <ArduinoJson.h>                      /// Handle JSON files.
 
@@ -71,4 +70,3 @@ void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
   if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
   if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
 }
-#endif // PROJECT_RAD_RF

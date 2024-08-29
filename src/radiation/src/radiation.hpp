@@ -1,4 +1,3 @@
-#ifdef PROJECT_RAD_RF
 #ifndef RADIATION_HPP
 #define RADIATION_HPP
 
@@ -40,4 +39,3 @@ private:
   static const char PROGMEM CPM_MSG_FRAME[];
 };
 #endif // RADIATION_HPP
-#endif // PROJECT_RAD_RF

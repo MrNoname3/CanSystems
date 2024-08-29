@@ -1,4 +1,3 @@
-#ifdef PROJECT_RAD_RF
 #include "radiation.hpp"
 
 volatile uint16_t Radiation::cpm = 0;
@@ -56,4 +55,3 @@ void Radiation::measure() {
   measureDone = true;
   sei();
 }
-#endif // PROJECT_RAD_RF

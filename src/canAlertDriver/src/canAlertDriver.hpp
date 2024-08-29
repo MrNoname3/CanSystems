@@ -1,4 +1,3 @@
-#ifdef PROJECT_CAN
 #ifndef CAN_ALERT_DRIVER_HPP
 #define CAN_ALERT_DRIVER_HPP
 
@@ -19,4 +18,3 @@ private:
 };
 
 #endif // CAN_ALERT_DRIVER_HPP
-#endif // PROJECT_CAN

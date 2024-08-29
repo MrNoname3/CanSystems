@@ -1,4 +1,3 @@
-#ifdef PROJECT_CAN
 #include "canAlertDriver.hpp"
 
 const char CanAlertDriver::HUM_TEMP_LDR_FRAME[] PROGMEM = {
@@ -35,5 +34,3 @@ void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
     default: {} break;
   }
 }
-
-#endif // PROJECT_CAN

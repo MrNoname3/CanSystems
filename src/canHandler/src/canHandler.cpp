@@ -1,4 +1,3 @@
-#ifdef PROJECT_CAN
 #include "canHandler.hpp"
 #include <CAN.h>                              /// CAN controller library.
 #include <ArduinoJson.h>                      /// Handle JSON files.
@@ -401,4 +400,3 @@ void CanHandler::CanComBase::runOta() {
     } break;
   }
 }
-#endif // PROJECT_CAN
