@@ -1,6 +1,14 @@
 #ifndef CONNECTIVITY_HPP
 #define CONNECTIVITY_HPP
 
+#include <stdint.h>
+#ifndef MQTT_MAX_PACKET_SIZE
+#error "MQTT_MAX_PACKET_SIZE is not defined!"
+#endif
+// Check MQTT packet size for proper operation.
+static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024;
+static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
+
 #include <Arduino.h>                          /// Arduino libraries header.
 #ifdef ESP8266
 #include <ESP8266WiFi.h>                      /// Wifi driver.
