@@ -16,7 +16,7 @@ Connectivity iotConn(Serial, SPI_CS, LED, false);
 
 void setup() {
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
-  iotConn.begin(Connectivity::Interface::ETHERNET, true);
+  iotConn.begin(Connectivity::Interface::WIFI, true);
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
 }
 
