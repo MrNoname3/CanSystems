@@ -1,6 +1,14 @@
 #ifndef CONNECTIVITY_HPP
 #define CONNECTIVITY_HPP
 
+#include <stdint.h>
+#ifndef MQTT_MAX_PACKET_SIZE
+#error "MQTT_MAX_PACKET_SIZE is not defined!"
+#endif
+// Check MQTT packet size for proper operation.
+static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024;
+static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
+
 #include <Arduino.h>                          /// Arduino libraries header.
 #ifdef ESP8266
 #include <ESP8266WiFi.h>                      /// Wifi driver.
@@ -224,78 +232,6 @@ public:
   TimeTracker timeTracker;
   TimeTracker loopTimeTracker;
 
-public:
-  class Crc32 final {
-  public:
-    explicit Crc32(uint32_t initValue = 0xFFFFFFFF, uint32_t polynomial = 0xEDB88320);
-    ~Crc32() = default;
-
-    void next(uint8_t value);
-
-    void next(const uint8_t* values, uint32_t length);
-
-    uint32_t get() const;
-
-    static uint32_t calculate(const uint8_t *data, uint16_t length);
-
-    Crc32(const Crc32&) = delete;                       // Define copy constructor.
-    Crc32& operator=(const Crc32&) = delete;            // Define copy assignment operator.
-    Crc32(Crc32&&) = delete;                            // Define move constructor.
-    Crc32& operator=(Crc32&&) = delete;                 // Define move assignment operator.
-
-  private:
-    uint32_t crc_;                                      // CRC32 starting value.
-    const uint32_t polynomial_;                         // CRC32 polynomial.
-  };
-
-public:
-  /// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
-  class Base64 final {
-  public:
-    Base64() = delete;
-    ~Base64() = delete;
-
-  public:
-    /// @brief Calculates length of base64 string needed for a given number of binary bytes.
-    /// @param plainLength Amount of binary data in bytes.
-    /// @return Number of base64 characters needed to encode input_length bytes of binary data.
-    static uint32_t encodedLength(uint32_t plainLength);
-
-    /// @brief Calculates number of bytes of binary data in a base64 string.
-    /// @param input Base64-encoded null-terminated string.
-    /// @param inputLength Number of bytes to read from input pointer.
-    /// @return Number of bytes of binary data in input.
-    static uint32_t decodedLength(const uint8_t input[], uint32_t inputLength);
-
-    /// @brief Converts an array of bytes to a base64 null-terminated string.
-    /// @param input Pointer to input data.
-    /// @param output Pointer to output string. Null terminator will be added automatically.
-    /// @param inputLength Number of bytes to read from input pointer.
-    /// @return Length of encoded string in bytes (not including null terminator).
-    static uint32_t encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength);
-
-    /// @brief Converts a base64 null-terminated string to an array of bytes.
-    /// @param input Pointer to input string.
-    /// @param output Pointer to output array.
-    /// @param inputLength - Number of bytes to read from input pointer.
-    /// @return Number of bytes in the decoded binary.
-    static uint32_t decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength);
-
-  private:
-    static inline void fromA3ToA4(uint8_t* A4, const uint8_t* A3);
-    static inline void fromA4ToA3(uint8_t* A3, const uint8_t* A4);
-    static inline uint8_t lookupTable(char c);
-
-  public:
-    Base64(const Base64&) = delete;                       // Define copy constructor.
-    Base64& operator=(const Base64&) = delete;            // Define copy assignment operator.
-    Base64(Base64&&) = delete;                            // Define move constructor.
-    Base64& operator=(Base64&&) = delete;                 // Define move assignment operator.
-
-  private:
-    static const char PROGMEM base64AlphabetTable_[];
-  };
-
 private:
   class DataTransfer final {
   public:
@@ -340,27 +276,25 @@ private:
 public:
   class MqttComBase {
   public:
+    friend class Connectivity;
     enum class Response : uint8_t {
       NACK = 0,
-      ACK,
+      ACK
     };
+    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
+    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
+    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
+    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
   protected:
     MqttComBase(Connectivity& connectivity, const char* classID);
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
     const char* getIsoTime();
-  public:
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
     virtual bool begin() = 0;
     virtual bool loop() = 0;
     const char* getClassId() const;
-
-    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
-    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
-    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
-    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
-  protected:
     Connectivity& conn;
   private:
     char classId[16];

@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 template<class T, uint16_t buffSize> 
-class CircularBuffer {
+class CircularBuffer final {
 public:
   /// @brief Constructor of a multitype static size circular buffer.
   /// @param T Selected datatype.

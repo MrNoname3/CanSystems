@@ -8,4 +8,5 @@ logs/device-monitor-*
 notes.*
 data/cert/*
 data/config/*
+data/*.bin
 src/server.hpp

@@ -1,7 +1,7 @@
 #ifndef RFHANDLER_HPP
 #define RFHANDLER_HPP
 
-#include "../../connectivity.hpp"
+#include "../../connectivity/src/connectivity.hpp"
 #include <Arduino.h>                          /// Arduino libraries header.
 #include "RCSwitch.h"                         /// RF driver library.
 

@@ -1,7 +1,7 @@
 #ifndef RADIATION_HPP
 #define RADIATION_HPP
 
-#include "../../connectivity.hpp"
+#include "../../connectivity/src/connectivity.hpp"
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 
