@@ -286,7 +286,7 @@ bool Connectivity::startWifi() {
   serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? OK_STATE : ERR_STATE);
   if(!wifiFile) { wifiFile.close(); return retVal; }
 
-  StaticJsonDocument<256> wifiJson;
+  JsonDocument wifiJson;
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(deSerResult) {
@@ -801,7 +801,7 @@ Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   externalFileName{'\0'} {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
-  StaticJsonDocument<512> cmdJson;
+  JsonDocument cmdJson;
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
