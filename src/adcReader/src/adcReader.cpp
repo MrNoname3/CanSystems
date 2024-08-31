@@ -69,18 +69,15 @@ bool AdcReader::loop() {
     } break;
     case MeasureStates::MEASURE_DELAY: {
       if((millis() - measureTimer) >= measureTime) {
-        if((channel == maxChannelNumber) && enableSending) {
-          if(millis() - mqttSendTimer >= mqttSendTime) {
-            mqttSendTimer = millis();
-            //Serial.printf_P(PSTR("ADC: %hd | %hd | %hd | %hd\r\n"), adcValues[0], adcValues[1], adcValues[2], adcValues[3]);
-            char dataOut[dataOutBufSize] = { '\0' };
-            const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
-              adcValues[0], adcValues[1], adcValues[2], adcValues[3],
-              ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
-            const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-            if(!dataOutValid) { return false; }
-            MqttComBase::messageSend(dataOut);
-          }
+        if((channel == maxChannelNumber) && enableSending && (millis() - mqttSendTimer >= mqttSendTime)) {
+          mqttSendTimer = millis();
+          char dataOut[dataOutBufSize] = { '\0' };
+          const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
+            adcValues[0], adcValues[1], adcValues[2], adcValues[3],
+            ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
+          const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
+          if(!dataOutValid) { return false; }
+          MqttComBase::messageSend(dataOut);
         }
         channel = (channel + 1) & maxChannelNumber;
         measureState = MeasureStates::REQUEST_ADC;
