@@ -14,7 +14,7 @@ public:
     AN3
   };
 
-  AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t address = 0x48);
+  AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t sdaPin = SDA, uint8_t sclPin = SCL, uint8_t address = 0x48);
 
   /// @brief Destructor of the object.
   virtual ~AdcReader() = default;

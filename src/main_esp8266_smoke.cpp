@@ -6,7 +6,9 @@
 //--- Constants ---//
 static constexpr const uint8_t LED                    = D8;           // Status LED.
 static constexpr const uint8_t SPI_CS                 = D0;           // Ethernet shield SPI CS.
-static constexpr const uint8_t ADC_RDY                = D3;           // ADC ready signal.
+static constexpr const uint8_t ADC_RDY                = D2;           // ADC ready signal.
+static constexpr const uint8_t I2C_SDA                = D4;
+static constexpr const uint8_t I2C_SCL                = D3;
 
 //--- Variables ---//
 const char separator[] PROGMEM = "******************************************************";
@@ -15,7 +17,7 @@ const char separator[] PROGMEM = "**********************************************
 Connectivity iotConn(Serial, SPI_CS, LED, false);
 
 //--- MQTT handler objects ---//
-AdcReader adcReader(iotConn, "adcreader", 50U, ADC_RDY);
+AdcReader adcReader(iotConn, "adcreader", 50U, ADC_RDY, I2C_SDA, I2C_SCL);
 
 void setup() {
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);

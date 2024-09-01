@@ -9,7 +9,7 @@ const char AdcReader::MQTT_MSG_FRAME[] PROGMEM = {
   "}"
 };
 
-AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t address) :
+AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t sdaPin, uint8_t sclPin, uint8_t address) :
   MqttComBase(connectivity, classID),
   ADS(address),
   measureTime(measureTime),
@@ -25,7 +25,7 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t m
   adsReadWdTimer(0)
 {
   pinMode(rdyPin, INPUT_PULLUP);
-  Wire.begin();
+  Wire.begin(sdaPin, sclPin);
 }
 
 bool AdcReader::begin() {
