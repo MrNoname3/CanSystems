@@ -20,7 +20,9 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t m
   measureTimer(0),
   enableSending(false),
   mqttSendTime(0),
-  mqttSendTimer(0)
+  mqttSendTimer(0),
+  adsReadWdTime(measureTime * analogChannels),
+  adsReadWdTimer(0)
 {
   pinMode(rdyPin, INPUT_PULLUP);
   Wire.begin();
@@ -58,6 +60,7 @@ bool AdcReader::loop() {
     } break;
     case MeasureStates::REQUEST_ADC: {
       ADS.requestADC(channel);
+      adsReadWdTimer = millis();
       measureState = MeasureStates::IDLE;
     } break;
     case MeasureStates::STORE_DATA: {
@@ -83,6 +86,11 @@ bool AdcReader::loop() {
         measureState = MeasureStates::REQUEST_ADC;
       }
     } break;
+  }
+  if(millis() - adsReadWdTimer >= adsReadWdTime) {
+    adsReadWdTimer = millis();
+    measureState = MeasureStates::REQUEST_ADC;
+    return false;
   }
   return ADS.getError() == ADS1X15_OK ? true : false;
 }

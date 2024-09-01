@@ -62,6 +62,8 @@ private:
   bool enableSending;
   uint32_t mqttSendTime;
   uint32_t mqttSendTimer;
+  const uint32_t adsReadWdTime;
+  uint32_t adsReadWdTimer;
   static constexpr uint8_t maxChannelNumber = analogChannels - 1;   // Channels: 0-3.
   static constexpr uint8_t dataOutBufSize = 128;
   static const char PROGMEM MQTT_MSG_FRAME[];
