@@ -26,6 +26,14 @@ public:
   Mq135Handler& operator=(Mq135Handler&&) = delete;                 // Define move assignment operator.
 
 private:
+  // Gas sensor calibration values:
+  static constexpr float sensorVoltage = 5.0f;
+  static constexpr uint8_t adcResolution = 12U;
+  static constexpr uint8_t adcPin = -1;
+  static constexpr float ratioMQ135CleanAir =  3.6f;      // RS/R0 = 3.6 ppm.
+  static constexpr float rlValue = 1.0f;
+  static constexpr float r0Value = 43.47f;
+
   // Exponential regression:
   static constexpr float gasEquationValues[][2] = {
     {605.18f, -3.937f},  // CO
@@ -71,9 +79,7 @@ private:
   uint8_t readIndex;
   float gasValues[numGases];
 
-  static constexpr float ratioMQ135CleanAir =  3.6f;      // RS/R0 = 3.6 ppm 
   static constexpr uint8_t dataOutBufSize = 128;
   static const char PROGMEM MQTT_MSG_FRAME[];
 };
-
 #endif // MQ135_HANDLER_HPP

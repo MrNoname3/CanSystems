@@ -19,22 +19,20 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
   MqttComBase(connectivity, classID),
   adcReader(adcReader),
   channel(channel),
-  mq135("", 5.0f, 12, -1, ""),
+  mq135("", sensorVoltage, adcResolution, adcPin, ""),
   measureTime(measureTime),
   gasReadState(GasReadState::IDLE),
   readIndex(0),
   gasValues{0.0f}
   {
     mq135.setRegressionMethod(1);
-    mq135.setRL(1.0f);
-    //mq135.setR0(1.2f);
-    //mq135.setR0(21.18f);
-    mq135.setR0(43.47f);
+    mq135.setRL(rlValue);
   }
 
   bool Mq135Handler::begin() {
     bool ret = true;
     readIndex = 0;
+    mq135.setR0(r0Value);
     gasReadState = GasReadState::IDLE;
     measureTimer = millis();
     return ret;
@@ -67,8 +65,6 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
         }
       } break;
       case GasReadState::SEND: {
-        //Serial.printf_P(PSTR("\r\nCO: %.2f ppm\r\nAlcohol: %.2f ppm\r\nCO2: %.2f ppm\r\nToluene: %.2f ppm\r\nNH4: %.2f ppm\r\nAcetone: %.2f ppm\r\n"),
-        //  gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
         char dataOut[dataOutBufSize] = { '\0' };
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
           gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
