@@ -22,7 +22,8 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t m
   mqttSendTime(0),
   mqttSendTimer(0),
   adsReadWdTime(measureTime * analogChannels),
-  adsReadWdTimer(0)
+  adsReadWdTimer(0),
+  valuesReady(false)
 {
   pinMode(rdyPin, INPUT_PULLUP);
   Wire.begin(sdaPin, sclPin);
@@ -40,12 +41,14 @@ bool AdcReader::begin() {
     measureState = MeasureStates::REQUEST_ADC;
   }
   adcReady = false;
+  valuesReady = false;
   mqttSendTimer = millis();
   const bool adsHasError = ADS.getError() != ADS1X15_OK;
   return initAdc && !adsHasError;
 }
 
 void AdcReader::end() {
+  valuesReady = false;
   detachInterrupt(digitalPinToInterrupt(rdyPin));
   measureState = MeasureStates::IDLE;
 }
@@ -66,13 +69,16 @@ bool AdcReader::loop() {
     case MeasureStates::STORE_DATA: {
       if(ADS.isReady()) {
         adcValues[channel] = ADS.getValue();
+        if(channel == maxChannelNumber) {
+          valuesReady = true;
+        }
         measureTimer = millis();
         measureState = MeasureStates::MEASURE_DELAY;
       }
     } break;
     case MeasureStates::MEASURE_DELAY: {
       if((millis() - measureTimer) >= measureTime) {
-        if((channel == maxChannelNumber) && enableSending && (millis() - mqttSendTimer >= mqttSendTime)) {
+        if(valuesReady && enableSending && (millis() - mqttSendTimer >= mqttSendTime)) {
           mqttSendTimer = millis();
           char dataOut[dataOutBufSize] = { '\0' };
           const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
@@ -113,6 +119,10 @@ void AdcReader::enableMqttSending(uint32_t interval) {
 
 void AdcReader::disableMqttSending() {
   enableSending = false;
+}
+
+bool AdcReader::readyToRead() {
+  return valuesReady;
 }
 
 void AdcReader::intHandler() {

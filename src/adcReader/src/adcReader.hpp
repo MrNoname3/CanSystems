@@ -35,6 +35,8 @@ public:
 
   void disableMqttSending();
 
+  bool readyToRead();
+
   AdcReader(const AdcReader&) = delete;                       // Define copy constructor.
   AdcReader& operator=(const AdcReader&) = delete;            // Define copy assignment operator.
   AdcReader(AdcReader&&) = delete;                            // Define move constructor.
@@ -64,6 +66,7 @@ private:
   uint32_t mqttSendTimer;
   const uint32_t adsReadWdTime;
   uint32_t adsReadWdTimer;
+  bool valuesReady;
   static constexpr uint8_t maxChannelNumber = analogChannels - 1;   // Channels: 0-3.
   static constexpr uint8_t dataOutBufSize = 128;
   static const char PROGMEM MQTT_MSG_FRAME[];
