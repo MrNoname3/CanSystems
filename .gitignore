@@ -7,3 +7,4 @@ platformio-device-monitor-*
 logs/device-monitor-*
 notes.txt
 audio
+scripts/__pycache__
