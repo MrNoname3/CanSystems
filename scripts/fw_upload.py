@@ -16,13 +16,13 @@ def convert_elf_to_bin(source, target, env):
 def upload():
     # Get the project directory (root of the PlatformIO project)
     project_dir = env.subst("$PROJECT_DIR")
-    
+
     # Get the build directory (relative to project_dir)
     build_dir = env.subst("$BUILD_DIR").replace(project_dir + os.sep, "")
-    
+
     # Get the firmware name (relative path)
     firmware_name = env.subst("$PROGNAME") + ".bin"
-    
+
     # Combine the relative build directory and firmware name
     firmware_relative_path = os.path.join(build_dir, firmware_name)
     print("Firmware relative path:", firmware_relative_path)
@@ -48,20 +48,28 @@ def upload():
         "git_dirty": git_dirty
     }
 
-    new_firmware_name = f"{environment_name}_{git_commit_count}_{git_dirty}.bin"
+    # Prepare firmware name
+    new_firmware_name = f"{environment_name}_{git_hash}_{git_commit_count}_{git_dirty}.bin"
     print("FW name:", new_firmware_name)
 
-    # Upload the file to the webserver with JSON payload
+    # Upload URL
     upload_url = "http://127.0.0.1:11880/upload-firmware"
 
     try:
+        # Open the firmware file
         with open(firmware_relative_path, 'rb') as f:
-            files = {'file': (new_firmware_name, f)}
-            response = requests.post(upload_url, files=files, json=json_payload)
+            # Upload file with the filename in headers
+            headers = {
+                'X-Filename': new_firmware_name,  # Custom header for the filename
+                'Content-Type': 'application/octet-stream'  # Specify binary content
+            }
             
+            # Send the file as binary data (without multipart form)
+            response = requests.post(upload_url, data=f, headers=headers)
+
         # Check for successful upload
         if response.status_code == 200:
-            print(f"Successfully uploaded firmware with metadata to {upload_url}")
+            print(f"Successfully uploaded firmware to {upload_url}")
         else:
             print(f"Failed to upload firmware. Status code: {response.status_code}")
 
