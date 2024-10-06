@@ -69,11 +69,11 @@ void loop() {
   const uint32_t spinUpTime = 100U;
   static uint8_t pwmValue = 0U;
   static uint32_t runningTimer = 0U;
-  const uint32_t runningTime = 20000U;
+  const uint32_t runningTime = 40000U;
   static uint32_t spinDownTimer = 0U;
   const uint32_t spinDownTime = 300U;
   static uint32_t irrigationTimer = 0U;
-  const uint32_t irrigationTime = 3600000U;
+  const uint32_t irrigationTime = 1800000U;
 
   if(millis() - irrigationTimer > irrigationTime) {
     irrigation = true;
@@ -84,7 +84,8 @@ void loop() {
     case IrrigationState::IDLE: {
       if(irrigation == true) {
         Serial.println("Irrigation");
-        pwmValue = 190U;
+        //pwmValue = 190U;
+        pwmValue = 255U;
         spinUpTimer = millis();
         irrigationState = IrrigationState::SPINUP;
       }
