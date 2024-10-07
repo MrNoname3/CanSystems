@@ -19,7 +19,7 @@ public:
     FIVE_PRESS,
     LAST_ELEMENT
   };
-  PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, uint8_t buttonPin);
+  PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, bool (*buttonReader)());
   /// @brief Destructor of the object.
   ~PushButtonHandler() = default;
   void loop();
@@ -31,7 +31,7 @@ public:
 private:
   HardwareSerial& serialPort;
   const CanHandler& canHandler;
-  const uint8_t buttonPin;
+  bool (*readButtonValue)();
   static constexpr uint8_t deadTime = 250U;
   static constexpr uint16_t longPressTime = 500U;
   static constexpr uint8_t debounceTime = 70U;

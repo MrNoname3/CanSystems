@@ -1,17 +1,17 @@
 #include "pushButtonHandler.hpp"
 #include <Arduino.h>
 
-PushButtonHandler::PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, const uint8_t buttonPin) :
+PushButtonHandler::PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, bool (*buttonReader)()) :
   serialPort(serial),
   canHandler(canHandler),
-  buttonPin(buttonPin),
+  readButtonValue(buttonReader),
   button(deadTime, longPressTime, debounceTime, buttonPolarity),
   btnCallback(nullptr)
 {
 }
 
 void PushButtonHandler::loop() {
-  const uint8_t event = button.buttonCheck(millis(), analogRead(buttonPin) > 511 ? HIGH : LOW);
+  const uint8_t event = readButtonValue == nullptr ? 0U : button.buttonCheck(millis(), readButtonValue());
   const bool eventValid = event > 0U;
   if(eventValid) {
     serialPort.print(F("Btn: "));
