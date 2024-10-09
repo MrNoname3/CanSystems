@@ -23,6 +23,7 @@ static constexpr uint8_t CURRENT_SENSOR             = A7;           // Analog pi
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
+void analogSetup();
 void measureMaxLoopTime();
 
 //--- Driver objects ---//
@@ -39,6 +40,7 @@ void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
+  analogSetup();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
   pinMode(BUTTON_PIN, INPUT_PULLUP);                                          // Set button pin as input with pullup resistor.
@@ -64,6 +66,13 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   switch(btnEvent) {
     default: {} break;
   }
+}
+
+void analogSetup() {
+  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
+  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
+  bitSet(ADCSRA, ADPS1);
+  bitClear(ADCSRA, ADPS0);
 }
 
 void measureMaxLoopTime() {

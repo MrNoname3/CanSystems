@@ -8,10 +8,6 @@ AmbientSensor::AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uin
   lightPin(lightPin),
   measurePeriod(measurePeriod)
 {
-  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
-  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
-  bitSet(ADCSRA, ADPS1);
-  bitClear(ADCSRA, ADPS0);
   Wire.setClock(400000U);                                                     // Set I2C bus speed.
   Wire.setWireTimeout(20000U, true);                                          // Set I2C timeout to 20ms.
 }

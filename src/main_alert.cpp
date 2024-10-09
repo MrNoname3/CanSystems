@@ -28,6 +28,7 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
+void analogSetup();
 void measureMaxLoopTime();
 
 //--- Driver objects ---//
@@ -48,6 +49,7 @@ void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
+  analogSetup();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
   for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
@@ -88,6 +90,13 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
     } break;
     default: {} break;
   }
+}
+
+void analogSetup() {
+  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
+  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
+  bitSet(ADCSRA, ADPS1);
+  bitClear(ADCSRA, ADPS0);
 }
 
 void measureMaxLoopTime() {
