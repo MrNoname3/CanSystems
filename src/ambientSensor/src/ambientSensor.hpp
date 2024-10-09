@@ -5,14 +5,15 @@
 #include "canHandler/src/canHandler.hpp"
 #include <SI7021.h>                                                 /// Temperature and humidity sensor driver.
 #include <HardwareSerial.h>
+#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
 
-class AmbientSensor final {
+class AmbientSensor final : public TaskRunner {
 public:
   AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod);
   /// @brief Destructor of the object.
   ~AmbientSensor() = default;
-  void begin();
-  void loop();
+  virtual void init() override;
+  virtual void run() override;
 
   AmbientSensor(const AmbientSensor&) = delete;                       // Define copy constructor.
   AmbientSensor& operator=(const AmbientSensor&) = delete;            // Define copy assignment operator.

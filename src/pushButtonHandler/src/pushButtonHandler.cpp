@@ -10,7 +10,7 @@ PushButtonHandler::PushButtonHandler(HardwareSerial& serial, const CanHandler& c
 {
 }
 
-void PushButtonHandler::loop() {
+void PushButtonHandler::run() {
   const uint8_t event = readButtonValue == nullptr ? 0U : button.buttonCheck(millis(), readButtonValue());
   const bool eventValid = event > 0U;
   if(eventValid) {

@@ -3,6 +3,7 @@
 #include "canHandler/src/canHandler.hpp"                            /// CAN handler library.
 #include "rgbLedWrapper/src/rgbLedWrapper.hpp"                      /// RGB LED driver wrapper.
 #include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
+#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
@@ -29,6 +30,10 @@ CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 
+//--- Handling tasks ---//
+TaskRunner *taskRunner[] = {&canHandler, &buttonHandler};
+static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
+
 //--- Setup section ---//
 void setup() {
   Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
@@ -36,8 +41,8 @@ void setup() {
   canHandler.addCanCallback(canMessageArrived);
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
   pinMode(BUTTON_PIN, INPUT_PULLUP);                                          // Set button pin as input with pullup resistor.
+  for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   Serial.println(F("********\r\nLooping..."));
@@ -45,8 +50,9 @@ void setup() {
 }
 
 void loop() {
-  canHandler.loop();
-  buttonHandler.loop();
+  static uint8_t currentTask = 0U;
+  taskRunner[currentTask]->run();
+  currentTask = (currentTask + 1U) % taskNum;
   //measureMaxLoopTime();
 }
 

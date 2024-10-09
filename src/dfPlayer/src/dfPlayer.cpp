@@ -26,7 +26,7 @@ void DFPlayer::play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, 
   this->playingQueue.put(PlayQueueItem(track, volume, red, green, blue)); // Put item to playing queue.
 }
 
-void DFPlayer::spin() {
+void DFPlayer::run() {
 
   switch(playingState) {
 

@@ -16,7 +16,7 @@ AmbientSensor::AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uin
   Wire.setWireTimeout(20000U, true);                                          // Set I2C timeout to 20ms.
 }
 
-void AmbientSensor::begin() {
+void AmbientSensor::init() {
   serialPort.print(F("SI7021: "));
   const bool si7021BeginResult = si7021.begin();
   si7021BeginResult ? serialPort.println(CanHandler::OK_STATE) : serialPort.println(CanHandler::ERR_STATE);
@@ -24,7 +24,7 @@ void AmbientSensor::begin() {
   si7021.setHeater(false);
 }
 
-void AmbientSensor::loop() {
+void AmbientSensor::run() {
   static uint8_t lightValue = 0U;
   { // Complementer filter calculation.
     static constexpr uint8_t adcInputFilterAlpha = 10U;                         // Complementer filter ALPHA value.

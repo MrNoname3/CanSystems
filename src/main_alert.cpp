@@ -6,6 +6,7 @@
 #include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
 #include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
 #include "externalSensor/src/externalSensor.hpp"                    /// External temperature and humidity sensor library.
+#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19U;          // Number of RGB LED's.
@@ -38,13 +39,9 @@ AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 
-//--- Array of function pointers ---//
-void (*methodCallers[])() = {
-  []() { buttonHandler.loop(); },
-  []() { ambientSensor.loop(); },
-  []() { mp3Player.spin(); }
-};
-static constexpr uint8_t numMethods = sizeof(methodCallers) / sizeof(*methodCallers);
+//--- Handling tasks ---//
+TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player};
+static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
 
 //--- Setup section ---//
 void setup() {
@@ -53,20 +50,18 @@ void setup() {
   canHandler.addCanCallback(canMessageArrived);
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  canHandler.begin(500E3);                                                    // Set CAN speed to 500Kb/s.
+  for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
-  ambientSensor.begin();
   extSensor.on();
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
 void loop() {
-  canHandler.loop();
-  static uint8_t methodIndex = 0U;
-  methodCallers[methodIndex++]();
-  if(methodIndex >= numMethods) { methodIndex = 0U; }
+  static uint8_t currentTask = 0U;
+  taskRunner[currentTask]->run();
+  currentTask = (currentTask + 1U) % taskNum;
   //measureMaxLoopTime();
 }
 

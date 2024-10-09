@@ -7,8 +7,9 @@
 #include "../../eepromHandler/src/eepromHandler.hpp"                /// EEPROM wrapper class.
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
 #include "../../ota/src/ota.hpp"
+#include "taskRunner/src/taskRunner.hpp"
 
-class CanHandler final {
+class CanHandler final : public TaskRunner {
 private:
 #ifdef NEW_CAN_ADDRESS
   #warning "NEW_CAN_ADDRESS is defined!"
@@ -44,8 +45,9 @@ public:
   CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin);
   /// @brief Destructor of the object.
   ~CanHandler() = default;
+  virtual void init() override { begin(500000U); }             // Set CAN speed to 500Kb/s.
   void begin(uint32_t canBaud);
-  void loop();
+  virtual void run() override;
   bool send(uint16_t command, const uint8_t (&data)[8]) const;
   bool send(uint16_t command) const;
   bool send(CanCmd command, const uint8_t (&data)[8]) const;

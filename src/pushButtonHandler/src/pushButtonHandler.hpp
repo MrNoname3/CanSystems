@@ -5,8 +5,9 @@
 #include "PushButtonClicks.hpp"
 #include "canHandler/src/canHandler.hpp"
 #include <HardwareSerial.h>
+#include "taskRunner/src/taskRunner.hpp"
 
-class PushButtonHandler final {
+class PushButtonHandler final : public TaskRunner {
 public:
   enum class BtnEvent : uint8_t {
     NONE = 0,
@@ -22,7 +23,8 @@ public:
   PushButtonHandler(HardwareSerial& serial, const CanHandler& canHandler, bool (*buttonReader)());
   /// @brief Destructor of the object.
   ~PushButtonHandler() = default;
-  void loop();
+  virtual void init() override {};
+  virtual void run() override;
   void addBtnCallback(void (*btnCallback)(BtnEvent btnEvent));
   PushButtonHandler(const PushButtonHandler&) = delete;               // Define copy constructor.
   PushButtonHandler& operator=(const PushButtonHandler&) = delete;    // Define copy assignment operator.

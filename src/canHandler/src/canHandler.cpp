@@ -91,7 +91,7 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
   return true;
 }
 
-void CanHandler::loop() {
+void CanHandler::run() {
   const bool loopResult = loopSimple();
   if(!loopResult) {
     serialPort.println(F("Loop ERROR!"));

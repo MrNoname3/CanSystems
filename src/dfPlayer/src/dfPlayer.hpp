@@ -6,10 +6,11 @@
 #include "DFPlayerMiniFast.h"                                       /// DFPlayerMini driver lib.
 #include "../../CircularBuffer/src/CircularBuffer.hpp"              /// Circular buffer class.
 #include "../../rgbLedWrapper/src/rgbLedWrapper.hpp"                /// RGB LED controller class.
+#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.
-class DFPlayer final : private DFPlayerMiniFast {
+class DFPlayer final : private DFPlayerMiniFast, public TaskRunner {
 private:
   struct __attribute__((packed))
   PlayQueueItem {
@@ -42,9 +43,11 @@ public:
   /// @param blue Blue color value of the LED strip.
   void play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue);
 
+  virtual void init() override {};
+
   /// @brief Handles the state machine for playing.
   /// Need to be called periodically.
-  void spin();
+  virtual void run() override;
 
   /// @brief Print occured errors.
   using DFPlayerMiniFast::printError;
