@@ -4,6 +4,7 @@
 #include "rgbLedWrapper/src/rgbLedWrapper.hpp"                      /// RGB LED driver wrapper.
 #include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
 #include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
+#include "pcf8574/src/pcf8574.hpp"                                  /// I2C GPIO expander.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
@@ -30,6 +31,7 @@ void measureMaxLoopTime();
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
+PCF8574 pcf(0x27);
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler};
@@ -47,6 +49,9 @@ void setup() {
   for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
+  Serial.print(F("PCF8574: "));
+  const bool pcfAvailable = pcf.begin();
+  Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
