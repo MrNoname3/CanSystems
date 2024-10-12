@@ -27,6 +27,10 @@ bool PCF8574::read(uint8_t &value) {
   return result;
 }
 
+uint8_t PCF8574::getRegisterValue() {
+  return registerValue;
+}
+
 bool PCF8574::setAsInput(Pin pin) {
   return digitalWrite(pin, PinState::H);                  // Input mode is just a HIGH state (high state is always pull-up).
 }

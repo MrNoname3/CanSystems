@@ -34,6 +34,7 @@ public:
   bool begin();
   bool write(uint8_t reg);
   bool read(uint8_t &value);
+  uint8_t getRegisterValue();
 
   bool setAsInput(Pin pin);
   bool digitalWrite(Pin pin, PinState pinState);
