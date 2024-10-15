@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <EEPROM.h>                                                 /// EEPROM access library.
-#include "../../crc16/src/crc16.hpp"
+#include "crc16.hpp"
 
 /// @brief This class is a wrapper for EEPROM storing and reading.
 /// @tparam T Datatype which will be stored.

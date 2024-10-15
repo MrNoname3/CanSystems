@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <SoftwareSerial.h>                                         /// Arduino software serial lib.
 #include "DFPlayerMiniFast.h"                                       /// DFPlayerMini driver lib.
-#include "../../CircularBuffer/src/CircularBuffer.hpp"              /// Circular buffer class.
-#include "../../rgbLedWrapper/src/rgbLedWrapper.hpp"                /// RGB LED controller class.
-#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
+#include "CircularBuffer.hpp"                                       /// Circular buffer class.
+#include "rgbLedWrapper.hpp"                                        /// RGB LED controller class.
+#include "taskRunner.hpp"                                           /// Task runner class.
 
 /// @brief Derived class for interacting with DFPlayerMini MP3 player with
 /// playing queue and external turn on/off possibility with a PFET.

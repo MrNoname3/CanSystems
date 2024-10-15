@@ -2,8 +2,8 @@
 #define PUMP_CONTROL_HPP
 
 #include <stdint.h>
-#include "taskRunner/src/taskRunner.hpp"
-#include "pcf8574/src/pcf8574.hpp"
+#include "taskRunner.hpp"
+#include "pcf8574.hpp"
 
 class PumpControl final : public TaskRunner {
 public:

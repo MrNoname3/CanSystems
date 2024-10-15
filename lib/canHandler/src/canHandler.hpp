@@ -4,10 +4,10 @@
 #include <stdint.h>
 #include <HardwareSerial.h>
 #include "canCommands.hpp"
-#include "../../eepromHandler/src/eepromHandler.hpp"                /// EEPROM wrapper class.
+#include "eepromHandler.hpp"                                        /// EEPROM wrapper class.
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
-#include "../../ota/src/ota.hpp"
-#include "taskRunner/src/taskRunner.hpp"
+#include "ota.hpp"
+#include "taskRunner.hpp"
 
 class CanHandler final : public TaskRunner {
 private:

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
-#include "../../crc16/src/crc16.hpp"                                /// CRC16 calculator class.
+#include "crc16.hpp"                                                /// CRC16 calculator class.
 
 #ifndef FW_PIECE_SIZE
 #define FW_PIECE_SIZE 4U

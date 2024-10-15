@@ -1,12 +1,12 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
-#include "canHandler/src/canHandler.hpp"                            /// CAN handler library.
-#include "rgbLedWrapper/src/rgbLedWrapper.hpp"                      /// RGB LED driver wrapper.
-#include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
-#include "dfPlayer/src/dfPlayer.hpp"                                /// MP3 player driver library.
-#include "ambientSensor/src/ambientSensor.hpp"                      /// Sensor handelr library.
-#include "externalSensor/src/externalSensor.hpp"                    /// External temperature and humidity sensor library.
-#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
+#include "canHandler.hpp"                                           /// CAN handler library.
+#include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
+#include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
+#include "dfPlayer.hpp"                                             /// MP3 player driver library.
+#include "ambientSensor.hpp"                                        /// Sensor handelr library.
+#include "externalSensor.hpp"                                       /// External temperature and humidity sensor library.
+#include "taskRunner.hpp"                                           /// Task runner class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19U;          // Number of RGB LED's.

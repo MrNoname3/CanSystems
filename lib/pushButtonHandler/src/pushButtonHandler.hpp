@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 #include "PushButtonClicks.hpp"
-#include "canHandler/src/canHandler.hpp"
+#include "canHandler.hpp"
 #include <HardwareSerial.h>
-#include "taskRunner/src/taskRunner.hpp"
+#include "taskRunner.hpp"
 
 class PushButtonHandler final : public TaskRunner {
 public:

@@ -2,10 +2,10 @@
 #define AMBIENT_SENSOR_HPP
 
 #include <stdint.h>
-#include "canHandler/src/canHandler.hpp"
+#include "canHandler.hpp"
 #include <SI7021.h>                                                 /// Temperature and humidity sensor driver.
 #include <HardwareSerial.h>
-#include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
+#include "taskRunner.hpp"                                           /// Task runner class.
 
 class AmbientSensor final : public TaskRunner {
 public:
