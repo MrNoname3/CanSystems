@@ -5,6 +5,7 @@
 #include "pushButtonHandler/src/pushButtonHandler.hpp"              /// Pushbutton events library.
 #include "taskRunner/src/taskRunner.hpp"                            /// Task runner class.
 #include "pcf8574/src/pcf8574.hpp"                                  /// I2C GPIO expander.
+#include "pumpControl/src/pumpControl.hpp"                          /// Pump control class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
