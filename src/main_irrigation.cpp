@@ -33,6 +33,7 @@ CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
+PumpControl pc(pcf, PUMP_PWM, FLOW_INT);
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler};
