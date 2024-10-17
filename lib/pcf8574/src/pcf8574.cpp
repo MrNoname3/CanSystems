@@ -6,7 +6,7 @@ PCF8574::PCF8574(uint8_t address, TwoWire &wire) :
   registerValue(0xFFU)
 {}
 
-bool PCF8574::begin() {
+bool PCF8574::begin() const {
   wire.begin();
   wire.setClock(clockSpeed);
   wire.beginTransmission(address);
@@ -21,14 +21,14 @@ bool PCF8574::write(uint8_t reg) {
   return result;
 }
 
-bool PCF8574::read(uint8_t &value) {
+bool PCF8574::read(uint8_t &value) const {
   const bool result = (wire.requestFrom(address, 1U) > 0U);
   if(result) { value = wire.read(); }
   return result;
 }
 
-uint8_t PCF8574::getRegisterValue() {
-  return registerValue;
+const uint8_t PCF8574::getRegisterValue() const {
+  return static_cast<const uint8_t>(registerValue);
 }
 
 bool PCF8574::setAsInput(Pin pin) {
@@ -45,7 +45,7 @@ bool PCF8574::digitalWrite(Pin pin, PinState pinState) {
   return write(registerValue);
 }
 
-PCF8574::PinState PCF8574::digitalRead(Pin pin) {
+PCF8574::PinState PCF8574::digitalRead(Pin pin) const {
   uint8_t value = 0;
   const bool result = read(value);
   if(!result) { return PinState::E; }

@@ -31,14 +31,14 @@ public:
   PCF8574(uint8_t address, TwoWire &wire = Wire);
   ~PCF8574() = default;
 
-  bool begin();
+  bool begin() const;
   bool write(uint8_t reg);
-  bool read(uint8_t &value);
-  uint8_t getRegisterValue();
+  bool read(uint8_t &value) const;
+  const uint8_t getRegisterValue() const;
 
   bool setAsInput(Pin pin);
   bool digitalWrite(Pin pin, PinState pinState);
-  PinState digitalRead(Pin pin);
+  PinState digitalRead(Pin pin) const;
   bool toggleState(Pin pin);
 
   PCF8574(const PCF8574&) = delete;               // Copy constructor deleted
