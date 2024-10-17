@@ -7,7 +7,7 @@
 
 class PumpControl final : public TaskRunner {
 public:
-  PumpControl(const PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin);
+  PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin);
   ~PumpControl() = default;
 
   virtual void init() override;
@@ -18,9 +18,17 @@ public:
   PumpControl(PumpControl&&) = delete;                    // Define move constructor.
   PumpControl& operator=(PumpControl&&) = delete;         // Define move assignment operator.
 private:
-  static void irqHandler();
+  enum class CH : uint8_t {
+    CHANNEL1 = 1U << 0U,
+    CHANNEL2 = 1U << 1U,
+    CHANNEL3 = 1U << 2U,
+    CHANNEL4 = 1U << 3U
+  };
 
-  const PCF8574& pcf;
+  static void irqHandler();
+  bool selectChannel(CH channel);
+
+  PCF8574& pcf;
   const uint8_t pwmPin;
   const uint8_t intPin;
   static volatile uint16_t flowCounter;
