@@ -28,6 +28,10 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
 void analogSetup();
 void measureMaxLoopTime();
 
+//--- Asserts ---//
+static_assert(digitalPinToInterrupt(CAN_INT) != (-1), "CAN modul interrupt input pin is not interrupt capable!");
+static_assert(digitalPinToInterrupt(FLOW_INT) != (-1), "Flow sensor interrupt input pin is not interrupt capable!");
+
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
@@ -36,7 +40,7 @@ PCF8574 pcf(0x27);
 PumpControl pc(pcf, PUMP_PWM, FLOW_INT);
 
 //--- Handling tasks ---//
-TaskRunner *taskRunner[] = {&canHandler, &buttonHandler};
+TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc};
 static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
 
 //--- Setup section ---//
