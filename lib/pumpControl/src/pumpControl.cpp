@@ -43,6 +43,9 @@ void PumpControl::run() {
           irrigationState = IrrigationState::ERROR;
         }
       }
+      if(error > 0U && reportError != nullptr) {
+        reportError(getError());
+      }
     } break;
     case IrrigationState::RUN: {
       const uint32_t irrigationTime = irrigationQueue.peek().duration * (uint8_t)60U * (uint16_t)1000U;
@@ -90,9 +93,6 @@ void PumpControl::run() {
     case IrrigationState::ERROR: {
       digitalWrite(pwmPin, 0U);
       irrigationQueue.pop();
-      if(reportError != nullptr) {
-        reportError(getError());
-      }
       irrigationState = IrrigationState::IDLE;
     } break;
   };
@@ -101,18 +101,24 @@ void PumpControl::run() {
 void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) {
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(irrigationInfo, pwmValue, repeatNum));
+  } else {
+    setError(ERROR::QUEUE_FULL);
   }
 }
 
 void PumpControl::createIrrigation(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) {
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum));
+  } else {
+    setError(ERROR::QUEUE_FULL);
   }
 }
 
 void PumpControl::createIrrigation(IrrigationQueueElement irrigationElement) {
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(irrigationElement);
+  } else {
+    setError(ERROR::QUEUE_FULL);
   }
 }
 

@@ -66,7 +66,8 @@ private:
     CH_SELECT     = 1 << 0U,
     FLOW          = 1 << 1U,
     OVER_CURRENT  = 1 << 2U,
-    UNDER_CURRENT = 1 << 3U
+    UNDER_CURRENT = 1 << 3U,
+    QUEUE_FULL    = 1 << 4U
   };
 
   static void irqHandler();

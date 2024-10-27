@@ -58,19 +58,26 @@ void setup() {
   Serial.print(F("PCF8574: "));
   const bool pcfAvailable = pcf.begin();
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
+  if(!pcfAvailable) { canHandler.restartMCU(); }                                // If not, restart MCU.
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
 void loop() {
-  static uint8_t currentTask = 0U;
-  taskRunner[currentTask]->run();
-  currentTask = (currentTask + 1U) % taskNum;
-  //measureMaxLoopTime();
+  taskRunner[0]->run();                                                       // Run the CAN handler task in every loop.
+  static uint8_t currentTask = 1U;                                            // Start from task 1.
+  taskRunner[currentTask]->run();                                             // Run tasks in round-robin manner.
+  currentTask = (currentTask % (taskNum - 1U)) + 1U;                          // Iterate over tasks from 1 to taskNum - 1.
+  // measureMaxLoopTime();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
-  
+  switch(command) {
+    case static_cast<uint16_t>(CanCmd::IRRIGATION): {
+      pc.createIrrigation(data[0], data[1], data[2]);
+      canHandler.send(static_cast<uint16_t>(CanCmd::IRRIGATION));
+    } break;
+  }
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
