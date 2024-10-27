@@ -18,7 +18,7 @@ static constexpr uint8_t BUTTON_PIN                 = 6U;           // Pushbutto
 static constexpr uint8_t FLOW_INT                   = 3U;           // Interrupt pin of the flow sensor.
 static constexpr uint8_t PUMP_PWM                   = 5U;           // PWM pin of the pump.
 static constexpr uint8_t ANALOG_EN                  = 9U;           // Analog power and multiplexer IC enable pin.
-static constexpr uint8_t ANALOG_CHS[4]        = {A0, A2, A3, A4};   // Analog multiplexer channel select pins.
+static constexpr uint8_t ANALOG_CHS[4]        = {A0, A1, A2, A3};   // Analog multiplexer channel select pins.
 static constexpr uint8_t MOISTURE_SENSOR            = A6;           // Analog pin for moisture sensor.
 static constexpr uint8_t CURRENT_SENSOR             = A7;           // Analog pin for current sensor.
 
@@ -29,15 +29,15 @@ void analogSetup();
 void measureMaxLoopTime();
 
 //--- Asserts ---//
-static_assert(digitalPinToInterrupt(CAN_INT) != (-1), "CAN modul interrupt input pin is not interrupt capable!");
-static_assert(digitalPinToInterrupt(FLOW_INT) != (-1), "Flow sensor interrupt input pin is not interrupt capable!");
+static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
+static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow sensor interrupt input pin is not interrupt capable!");
 
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
-PumpControl pc(pcf, PUMP_PWM, FLOW_INT);
+PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR);
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc};
