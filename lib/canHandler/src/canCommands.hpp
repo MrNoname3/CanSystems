@@ -16,5 +16,8 @@ enum class CanCmd : uint16_t {
   RGB_LED = 32,                               // Set WS2812 RGB LED color.
   PLAY_MP3,                                   // Play MP3 file.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature and light value.
+
+  IRRIGATION = 33,                            // Start irrigation.
+  IRRIGATION_ERROR,                           // Error during irrigation.
 };
 #endif

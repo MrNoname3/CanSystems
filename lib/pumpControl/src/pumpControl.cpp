@@ -3,7 +3,7 @@
 
 volatile uint16_t PumpControl::flowCounter = 0U;
 
-PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin) :
+PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode)) :
   pcf(pcf8574),
   pwmPin(pwmPin),
   intPin(intPin),
@@ -14,7 +14,8 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
   analogValue(0U),
   irrigationTimer(0U),
   errorCheckTimer(0U),
-  error(0U)
+  error(0U),
+  reportError(reportError)
 {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
@@ -89,11 +90,12 @@ void PumpControl::run() {
     case IrrigationState::ERROR: {
       digitalWrite(pwmPin, 0U);
       irrigationQueue.pop();
+      if(reportError != nullptr) {
+        reportError(getError());
+      }
       irrigationState = IrrigationState::IDLE;
-      // Send error code.
     } break;
   };
-
 }
 
 void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) {

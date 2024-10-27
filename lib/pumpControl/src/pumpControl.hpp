@@ -8,7 +8,7 @@
 
 class PumpControl final : public TaskRunner {
 public:
-  PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin);
+  PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode));
   ~PumpControl() = default;
 
   virtual void init() override;
@@ -89,5 +89,6 @@ private:
   static constexpr uint16_t errorCheckTime = 1000U;
   uint32_t errorCheckTimer;
   uint8_t error;
+  void (*reportError)(uint8_t errCode);
 };
 #endif //PUMP_CONTROL_HPP

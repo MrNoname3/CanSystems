@@ -37,7 +37,7 @@ CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
-PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR);
+PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR, [](uint8_t errCode){canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});});
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc};
