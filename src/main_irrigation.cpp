@@ -52,13 +52,14 @@ void setup() {
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
   pinMode(BUTTON_PIN, INPUT_PULLUP);                                          // Set button pin as input with pullup resistor.
-  for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
+  taskRunner[0]->init();                                                      // Initialize CAN handler.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   Serial.print(F("PCF8574: "));
   const bool pcfAvailable = pcf.begin();
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
-  if(!pcfAvailable) { canHandler.restartMCU(); }                                // If not, restart MCU.
+  if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
+  for(uint8_t i = 1; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
