@@ -62,12 +62,14 @@ private:
   };
 
   enum class ERROR : uint8_t {
-    NONE          = 0U,
-    CH_SELECT     = 1 << 0U,
-    FLOW          = 1 << 1U,
-    OVER_CURRENT  = 1 << 2U,
-    UNDER_CURRENT = 1 << 3U,
-    QUEUE_FULL    = 1 << 4U
+    NONE          = 0U,           // No error.
+    CH_SELECT     = 1 << 0U,      // Channel select error.
+    FLOW_STUCK    = 1 << 1U,      // Flow meter stuck error.
+    FLOW_OVERRUN  = 1 << 2U,      // Flow meter counts, when it should not.
+    PUMP_OVERRUN  = 1 << 3U,      // Pump takes current, when it should not.
+    PUMP_OC       = 1 << 4U,      // Pump overcurrent error.
+    PUMP_UC       = 1 << 5U,      // Pump undercurrent error.
+    QUEUE_FULL    = 1 << 6U       // Irrigation queue is full.
   };
 
   static void irqHandler();
@@ -91,5 +93,6 @@ private:
   uint32_t errorCheckTimer;
   uint8_t error;
   void (*reportError)(uint8_t errCode);
+  static constexpr uint8_t maxAllowedStandbyCurrent = 100U; // mA
 };
 #endif //PUMP_CONTROL_HPP

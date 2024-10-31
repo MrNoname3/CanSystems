@@ -43,6 +43,14 @@ void PumpControl::run() {
           irrigationState = IrrigationState::ERROR;
         }
       }
+      if(flowCounter > 0U) {
+        setError(ERROR::FLOW_OVERRUN);
+        irrigationState = IrrigationState::ERROR;
+      }
+      // if(calculateCurrent() > maxAllowedStandbyCurrent) {
+      //   setError(ERROR::PUMP_OVERRUN);
+      //   irrigationState = IrrigationState::ERROR;
+      // }
       if(error > 0U && reportError != nullptr) {
         reportError(getError());
       }
@@ -50,6 +58,7 @@ void PumpControl::run() {
     case IrrigationState::RUN: {
       const uint32_t irrigationTime = irrigationQueue.peek().duration * (uint8_t)60U * (uint16_t)1000U;
       if(millis() - irrigationTimer > irrigationTime) {
+        prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
         if(millis() - errorCheckTimer > errorCheckTime) {
@@ -59,20 +68,18 @@ void PumpControl::run() {
             if(flowCheckSuccess) {
               prevFlowCounter = flowCounter;
             } else {
-              setError(ERROR::FLOW);
+              setError(ERROR::FLOW_STUCK);
               irrigationState = IrrigationState::ERROR;
             }
           }
           if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
-            // const uint16_t maxAllowedCurrent = ;
-            // const uint16_t minAllowedCurrent = ;
             // const int16_t actualCurrent = calculateCurrent();
-            // if(actualCurrent < minAllowedCurrent) {
-            //   setError(ERROR::OVER_CURRENT);
+            // if(actualCurrent < maxAllowedStandbyCurrent) {
+            //   setError(ERROR::PUMP_UC);
             //   irrigationState = IrrigationState::ERROR;
             // }
-            // if(actualCurrent > maxAllowedCurrent) {
-            //   setError(ERROR::UNDER_CURRENT);
+            // if(actualCurrent > ?) {
+            //   setError(ERROR::PUMP_OC);
             //   irrigationState = IrrigationState::ERROR;
             // }
           }
