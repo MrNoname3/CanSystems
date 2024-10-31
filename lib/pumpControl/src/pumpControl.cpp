@@ -81,17 +81,21 @@ void PumpControl::run() {
     } break;
     case IrrigationState::STOP: {
       IrrigationQueueElement actualElement = irrigationQueue.pop();
-      if(actualElement.channel != irrigationQueue.peek().channel) {
-        digitalWrite(pwmPin, 0U);
-      }
       if(actualElement.repeatNum > 0U) {
         actualElement.repeatNum--;
         createIrrigation(actualElement);
       }
+      if(irrigationQueue.isEmpty()) {
+        digitalWrite(pwmPin, LOW);
+      } else {
+        if(actualElement.channel != irrigationQueue.peek().channel) {
+          digitalWrite(pwmPin, LOW);
+        }
+      }
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::ERROR: {
-      digitalWrite(pwmPin, 0U);
+      digitalWrite(pwmPin, LOW);
       irrigationQueue.pop();
       irrigationState = IrrigationState::IDLE;
     } break;
