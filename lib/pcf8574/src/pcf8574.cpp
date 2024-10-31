@@ -31,13 +31,14 @@ const uint8_t PCF8574::getRegisterValue() const {
   return static_cast<const uint8_t>(registerValue);
 }
 
-bool PCF8574::setAsInput(Pin pin) {
-  return digitalWrite(pin, PinState::H);                  // Input mode is just a HIGH state (high state is always pull-up).
+bool PCF8574::setAsInput(uint8_t pin) {
+  return digitalWrite(pin, 1U);                           // Input mode is just a HIGH state (high state is always pull-up).
 }
 
-bool PCF8574::digitalWrite(Pin pin, PinState pinState) {
-  const uint8_t mask = 1U << static_cast<uint8_t>(pin);   // Bit mask for the pin.
-  if (pinState != PinState::L) {
+bool PCF8574::digitalWrite(uint8_t pin, uint8_t pinState) {
+  if(pin > 7U) { return false; }                          // Validate pin range (0-7).
+  const uint8_t mask = 1U << pin;                         // Bit mask directly using pin (0-7).
+  if (pinState > 0U) {
     registerValue |= mask;                                // Set pin high.
   } else {
     registerValue &= ~mask;                               // Set pin low.
@@ -45,15 +46,15 @@ bool PCF8574::digitalWrite(Pin pin, PinState pinState) {
   return write(registerValue);
 }
 
-PCF8574::PinState PCF8574::digitalRead(Pin pin) const {
-  uint8_t value = 0;
-  const bool result = read(value);
-  if(!result) { return PinState::E; }
-  const bool state = (value & (1U << static_cast<uint8_t>(pin))) == 0;
-  return state ? PinState::H : PinState::L;
+uint8_t PCF8574::digitalRead(uint8_t pin) const {
+  uint8_t value = 0U;
+  if(!read(value) || pin > 7U) { return -1; }
+  return (value & (1U << static_cast<uint8_t>(pin))) > 0U ? 1U : 0U;
 }
 
-bool PCF8574::toggleState(Pin pin) {
-  const uint8_t mask = 1U << static_cast<uint8_t>(pin);   // Bit mask for the pin.
-  return write(registerValue ^ mask);                     // Toggle the pin by XORing the bit.
+bool PCF8574::toggleState(uint8_t pin) {
+  if(pin > 7U) { return false; }                          // Validate pin range (0-7).
+  const uint8_t mask = 1U << pin;                         // Bit mask directly using pin (0-7).
+  registerValue ^= mask;                                  // Toggle the pin by XORing the bit.
+  return write(registerValue);
 }

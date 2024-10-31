@@ -6,28 +6,6 @@
 
 class PCF8574 final {
 public:
-  enum class PinDir : uint8_t {
-    IN = 0,
-    OUT
-  };
-
-  enum class PinState : uint8_t {
-    L = 0,    // Low.
-    H,        // High.
-    E         // Error.
-  };
-
-  enum class Pin : uint8_t {
-    D0 = 0,
-    D1,
-    D2,
-    D3,
-    D4,
-    D5,
-    D6,
-    D7
-  };
-
   PCF8574(uint8_t address, TwoWire &wire = Wire);
   ~PCF8574() = default;
 
@@ -36,10 +14,10 @@ public:
   bool read(uint8_t &value) const;
   const uint8_t getRegisterValue() const;
 
-  bool setAsInput(Pin pin);
-  bool digitalWrite(Pin pin, PinState pinState);
-  PinState digitalRead(Pin pin) const;
-  bool toggleState(Pin pin);
+  bool setAsInput(uint8_t pin);
+  bool digitalWrite(uint8_t pin, uint8_t pinState);
+  uint8_t digitalRead(uint8_t pin) const;
+  bool toggleState(uint8_t pin);
 
   PCF8574(const PCF8574&) = delete;               // Copy constructor deleted
   PCF8574& operator=(const PCF8574&) = delete;    // Copy assignment operator deleted
@@ -52,5 +30,4 @@ private:
   TwoWire &wire;
   uint8_t registerValue;
 };
-
 #endif // PCF8574_HPP
