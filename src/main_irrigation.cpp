@@ -6,6 +6,7 @@
 #include "taskRunner.hpp"                                           /// Task runner class.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "pumpControl.hpp"                                          /// Pump control class.
+#include "multiplexer.hpp"                                          /// Analog multiplexer class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
@@ -38,6 +39,7 @@ PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
 PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR, [](uint8_t errCode){canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});});
+Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc};
