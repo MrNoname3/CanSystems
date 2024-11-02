@@ -7,6 +7,7 @@
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "pumpControl.hpp"                                          /// Pump control class.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
+#include "moistureReader.hpp"                                       /// Moisture sensor reader class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
@@ -22,6 +23,8 @@ static constexpr uint8_t ANALOG_EN                  = 9U;           // Analog po
 static constexpr uint8_t ANALOG_CHS[4]        = {A0, A1, A2, A3};   // Analog multiplexer channel select pins.
 static constexpr uint8_t MOISTURE_SENSOR            = A6;           // Analog pin for moisture sensor.
 static constexpr uint8_t CURRENT_SENSOR             = A7;           // Analog pin for current sensor.
+static constexpr uint8_t MOISTURE_CH[8] = {0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U}; // Moisture sensor channel numbers.
+static constexpr uint8_t MOISTURE_CH_NUM = sizeof(MOISTURE_CH) / sizeof(*MOISTURE_CH); // Number of moisture sensors.
 
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
@@ -40,9 +43,10 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
 PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR, [](uint8_t errCode){canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});});
 Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
+MoistureReader<MOISTURE_CH_NUM> moistureReader(analogMultiplexer, MOISTURE_CH, 5U, [](const uint8_t (&data)[8]){canHandler.send(CanCmd::MOISTURE_DATA, data);});
 
 //--- Handling tasks ---//
-TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc};
+TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc, &moistureReader};
 static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
 
 //--- Setup section ---//

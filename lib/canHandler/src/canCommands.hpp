@@ -19,5 +19,6 @@ enum class CanCmd : uint16_t {
 
   IRRIGATION = 33,                            // Start irrigation.
   IRRIGATION_ERROR,                           // Error during irrigation.
+  MOISTURE_DATA,                              // Moisture level.
 };
 #endif
