@@ -13,6 +13,7 @@ public:
 
   virtual void init() override;
   virtual void run() override;
+  void triggerImmediateMeasurement();
 
   // Delete copy and move constructors/assignment operators
   MoistureReader(const MoistureReader&) = delete;

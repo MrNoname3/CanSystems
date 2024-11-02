@@ -48,15 +48,9 @@ void MoistureReader<N>::run() {
           const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0) & 0xFF);
           const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8) & 0xFF);
           dataSender({channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U});
-          // Serial.print(readIndex);
-          // Serial.print(" ");
-          // Serial.print(channels[readIndex]);
-          // Serial.print(" ");
-          // Serial.println(moistureValue);
         }
         readIndex++;
         if(readIndex >= channelNum) {
-          // Serial.println();
           readIndex = 0U;
           multiplexer.disableRead();
           readState = ReadState::IDLE;
@@ -66,6 +60,11 @@ void MoistureReader<N>::run() {
       }
     } break;
   };
+}
+
+template<uint8_t N>
+void MoistureReader<N>::triggerImmediateMeasurement() {
+  readTimer = millis() - readTimeMs;
 }
 
 template<uint8_t N>
