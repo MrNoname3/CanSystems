@@ -10,6 +10,8 @@ public:
   Multiplexer(uint8_t readPin, uint8_t enablePin, const uint8_t (&chSelectPins)[numSelectPins]);
   ~Multiplexer() = default;
 
+  // Sets the channel by configuring select pins based on 4-bit channel value.
+  void selectChannel(uint8_t channel) const;
   // Enables the multiplexer for reading.
   void enableRead() const;
   // Disables the multiplexer after reading.
@@ -18,6 +20,8 @@ public:
   uint16_t analogReadSimple(uint8_t channel) const;
   // Reads the selected channel without toggling enable pin.
   uint16_t analogReadAdvanced(uint8_t channel) const;
+  // Reads the previously selected channel without toggling enable pin.
+  uint16_t analogReadAdvanced() const;
 
   Multiplexer(const Multiplexer&) = delete;
   Multiplexer& operator=(const Multiplexer&) = delete;
@@ -25,9 +29,6 @@ public:
   Multiplexer& operator=(Multiplexer&&) = delete;
 
 private:
-  // Sets the channel by configuring select pins based on 4-bit channel value.
-  void selectChannel(uint8_t channel) const;
-
   const uint8_t readPin;
   const uint8_t enablePin;
   const uint8_t (&chSelectPins)[numSelectPins];

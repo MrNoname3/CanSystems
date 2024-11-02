@@ -41,3 +41,7 @@ uint16_t Multiplexer::analogReadAdvanced(uint8_t channel) const {
   selectChannel(channel);
   return analogRead(readPin);
 }
+
+uint16_t Multiplexer::analogReadAdvanced() const {
+  return analogRead(readPin);
+}
