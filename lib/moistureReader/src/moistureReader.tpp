@@ -1,8 +1,8 @@
 template<uint8_t N>
-MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint16_t readTimeMin, void (*dataSender)(const uint8_t (&data)[8])) :
+MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8])) :
   multiplexer(multiplexer),
   channels(channels),
-  readTimeMs(static_cast<uint32_t>(readTimeMin * 60UL * 1000UL)),
+  readTime(readTime),
   readTimer(0UL),
   dataSender(dataSender),
   sensorWakeupTimer(0UL),
@@ -23,7 +23,7 @@ template<uint8_t N>
 void MoistureReader<N>::run() {
   switch(readState) {
     case ReadState::IDLE: {
-      if(millis() - readTimer > readTimeMs) {
+      if(millis() - readTimer > readTime) {
         readTimer = millis();
         multiplexer.enableRead();
         sensorWakeupTimer = millis();
@@ -64,7 +64,7 @@ void MoistureReader<N>::run() {
 
 template<uint8_t N>
 void MoistureReader<N>::triggerImmediateMeasurement() {
-  readTimer = millis() - readTimeMs;
+  readTimer = millis() - readTime;
 }
 
 template<uint8_t N>

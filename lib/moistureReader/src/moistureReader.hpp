@@ -8,7 +8,7 @@
 template<uint8_t N>
 class MoistureReader final : public TaskRunner {
 public:
-  MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint16_t readTimeMin, void (*dataSender)(const uint8_t (&data)[8]));
+  MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8]));
   ~MoistureReader() = default;
 
   virtual void init() override;
@@ -34,7 +34,7 @@ private:
   static constexpr uint8_t channelNum = N;
   const Multiplexer& multiplexer;
   const uint8_t (&channels)[N];
-  const uint32_t readTimeMs;
+  const uint32_t readTime;
   uint32_t readTimer;
   void (*dataSender)(const uint8_t (&data)[8]);
   static constexpr uint16_t sensorWakeupTime = static_cast<uint16_t>(10U * 1000U);  // 10 seconds.

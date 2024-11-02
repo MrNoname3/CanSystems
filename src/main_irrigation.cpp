@@ -24,7 +24,7 @@ static constexpr uint8_t ANALOG_CHS[4]        = {A0, A1, A2, A3};   // Analog mu
 static constexpr uint8_t MOISTURE_SENSOR            = A6;           // Analog pin for moisture sensor.
 static constexpr uint8_t CURRENT_SENSOR             = A7;           // Analog pin for current sensor.
 static constexpr uint8_t MOISTURE_CH[8] = {0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U}; // Moisture sensor channel numbers.
-static constexpr uint8_t MOISTURE_CH_NUM = sizeof(MOISTURE_CH) / sizeof(*MOISTURE_CH); // Number of moisture sensors.
+static constexpr uint8_t MOISTURE_CH_NUM = sizeof(MOISTURE_CH) / sizeof(*MOISTURE_CH);  // Number of moisture sensors.
 
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
@@ -41,9 +41,25 @@ CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
-PumpControl pc(pcf, PUMP_PWM, FLOW_INT, CURRENT_SENSOR, [](uint8_t errCode){canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});});
+PumpControl pc(
+  pcf,
+  PUMP_PWM,
+  FLOW_INT,
+  CURRENT_SENSOR,
+  [](uint8_t errCode) {
+    canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});
+  }
+);
 Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
-MoistureReader<MOISTURE_CH_NUM> moistureReader(analogMultiplexer, MOISTURE_CH, 5U, [](const uint8_t (&data)[8]){canHandler.send(CanCmd::MOISTURE_DATA, data);});
+static constexpr uint32_t moistureReadingTime = static_cast<uint32_t>(8U * 60U * 60U * 1000UL); // Moisture reading interval in Ms.
+MoistureReader<MOISTURE_CH_NUM> moistureReader(
+  analogMultiplexer,
+  MOISTURE_CH,
+  moistureReadingTime,
+  [](const uint8_t (&data)[8]) {
+    canHandler.send(CanCmd::MOISTURE_DATA, data);
+  }
+);
 
 //--- Handling tasks ---//
 TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc, &moistureReader};
@@ -84,11 +100,18 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       pc.createIrrigation(data[0], data[1], data[2]);
       canHandler.send(static_cast<uint16_t>(CanCmd::IRRIGATION));
     } break;
+    case static_cast<uint16_t>(CanCmd::MOISTURE_DATA): {
+      moistureReader.triggerImmediateMeasurement();
+      canHandler.send(static_cast<uint16_t>(CanCmd::MOISTURE_DATA));
+    } break;
   }
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   switch(btnEvent) {
+    case PushButtonHandler::BtnEvent::TWO_PRESS: {
+      moistureReader.triggerImmediateMeasurement();
+    } break;
     default: {} break;
   }
 }
