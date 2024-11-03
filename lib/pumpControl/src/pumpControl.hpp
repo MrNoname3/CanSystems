@@ -16,6 +16,7 @@ public:
   void createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum);
   void createIrrigation(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum);
   int16_t calculateCurrent() const;
+  void addLimitSwitch(uint8_t channel, bool (*limitSwitch)());
 
   PumpControl(const PumpControl&) = delete;               // Define copy constructor.
   PumpControl& operator=(const PumpControl&) = delete;    // Define copy assignment operator.
@@ -44,7 +45,7 @@ private:
     {
     }
     IrrigationQueueElement(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) :
-      channel(channel &= 3U),
+      channel(channel &= channelSafetyMask),
       duration(duration & 7U),
       checkFlow(static_cast<uint8_t>(checkFlow)),
       checkCurrent(static_cast<uint8_t>(checkCurrent)),
@@ -79,13 +80,15 @@ private:
   const uint8_t getError();
   void createIrrigation(IrrigationQueueElement irrigationElement);
 
+  static constexpr uint8_t channelCount = 4U;
+  static constexpr uint8_t channelSafetyMask = channelCount - 1U;
   PCF8574& pcf;
   const uint8_t pwmPin;
   const uint8_t intPin;
   const uint8_t currentSensePin;
   static volatile uint16_t flowCounter;
   uint16_t prevFlowCounter;
-  CircularBuffer<IrrigationQueueElement, 4> irrigationQueue;
+  CircularBuffer<IrrigationQueueElement, channelCount> irrigationQueue;
   IrrigationState irrigationState;
   uint16_t analogValue;
   uint32_t irrigationTimer;
@@ -94,5 +97,6 @@ private:
   uint8_t error;
   void (*reportError)(uint8_t errCode);
   static constexpr uint8_t maxAllowedStandbyCurrent = 100U; // mA
+  bool (*limitSwitches[channelCount])();
 };
 #endif //PUMP_CONTROL_HPP

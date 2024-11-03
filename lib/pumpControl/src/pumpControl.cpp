@@ -15,7 +15,8 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
   irrigationTimer(0U),
   errorCheckTimer(0U),
   error(0U),
-  reportError(reportError)
+  reportError(reportError),
+  limitSwitches{nullptr}
 {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
@@ -56,8 +57,10 @@ void PumpControl::run() {
       }
     } break;
     case IrrigationState::RUN: {
-      const uint32_t irrigationTime = irrigationQueue.peek().duration * (uint8_t)60U * (uint16_t)1000U;
-      if(millis() - irrigationTimer > irrigationTime) {
+      const uint32_t irrigationTime = static_cast<uint32_t>(irrigationQueue.peek().duration * 60U * 1000UL);
+      const uint8_t actualCh = irrigationQueue.peek().channel;
+      const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
+      if((millis() - irrigationTimer > irrigationTime) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
@@ -146,7 +149,6 @@ int16_t PumpControl::calculateCurrent() const {
   return static_cast<int16_t>(currentMA);
 }
 
-
 void PumpControl::irqHandler() {
   flowCounter++;
 }
@@ -177,4 +179,9 @@ const uint8_t PumpControl::getError() {
   const uint8_t err = error;
   error = 0U;
   return err;
+}
+
+void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
+  channel &= channelSafetyMask;
+  limitSwitches[channel] = limitSwitch;
 }
