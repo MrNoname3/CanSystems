@@ -7,6 +7,7 @@
 volatile uint8_t CanHandler::intCount = 0;
 static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);
 static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);
+static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);
 
 CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
@@ -41,6 +42,8 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
     serialPort.println(fwVersion);
     serialPort.print(F("GIT: "));
     serialPort.println(gitHash, HEX);
+    serialPort.print(F("Dirty: "));
+    serialPort.println(gitDirty);
     serialPort.print(F("Fuses: "));
     serialPort.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
     serialPort.print(SPACER);
@@ -242,7 +245,7 @@ bool CanHandler::sendFwVersion() {
     static_cast<uint8_t>((gitHash >> 8) & 0xFF),
     static_cast<uint8_t>((gitHash >> 16) & 0xFF),
     static_cast<uint8_t>((gitHash >> 24) & 0xFF),
-    0,
+    gitDirty,
     0
   };
   return send(CanCmd::FW_VERSION, versionInfo);
