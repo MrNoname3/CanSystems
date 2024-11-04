@@ -4,6 +4,7 @@
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
 #include "taskRunner.hpp"                                           /// Task runner class.
+#include "common.hpp"                                               /// Common definitions and functions.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "pumpControl.hpp"                                          /// Pump control class.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
@@ -51,11 +52,10 @@ PumpControl pc(
   }
 );
 Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
-static constexpr uint32_t moistureReadingTime = static_cast<uint32_t>(8U * 60U * 60U * 1000UL); // Moisture reading interval in Ms.
 MoistureReader<MOISTURE_CH_NUM> moistureReader(
   analogMultiplexer,
   MOISTURE_CH,
-  moistureReadingTime,
+  TimeConverter::hrToMs(8U),                                                  // Moisture measurement interval.
   [](const uint8_t (&data)[8]) {
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
