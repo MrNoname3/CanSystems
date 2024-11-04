@@ -1,5 +1,6 @@
 #include "pumpControl.hpp"
 #include <Arduino.h>
+#include "common.hpp"
 
 volatile uint16_t PumpControl::flowCounter = 0U;
 
@@ -57,10 +58,9 @@ void PumpControl::run() {
       }
     } break;
     case IrrigationState::RUN: {
-      const uint32_t irrigationTime = static_cast<uint32_t>(irrigationQueue.peek().duration * 60U * 1000UL);
       const uint8_t actualCh = irrigationQueue.peek().channel;
       const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if((millis() - irrigationTimer > irrigationTime) || limitSwitchReached) {
+      if((millis() - irrigationTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
@@ -184,4 +184,13 @@ const uint8_t PumpControl::getError() {
 void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
   channel &= channelSafetyMask;
   limitSwitches[channel] = limitSwitch;
+}
+
+void PumpControl::skipActualIrrigation() {
+  irrigationTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
+}
+
+void PumpControl::skipAllIrrigations() {
+  skipActualIrrigation();
+  irrigationQueue.clear();
 }

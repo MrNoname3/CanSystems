@@ -17,6 +17,8 @@ public:
   void createIrrigation(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum);
   int16_t calculateCurrent() const;
   void addLimitSwitch(uint8_t channel, bool (*limitSwitch)());
+  void skipActualIrrigation();
+  void skipAllIrrigations();
 
   PumpControl(const PumpControl&) = delete;               // Define copy constructor.
   PumpControl& operator=(const PumpControl&) = delete;    // Define copy assignment operator.
