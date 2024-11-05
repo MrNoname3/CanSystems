@@ -189,8 +189,3 @@ void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
 void PumpControl::skipActualIrrigation() {
   irrigationTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
 }
-
-void PumpControl::skipAllIrrigations() {
-  skipActualIrrigation();
-  irrigationQueue.clear();
-}

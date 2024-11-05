@@ -18,7 +18,6 @@ public:
   int16_t calculateCurrent() const;
   void addLimitSwitch(uint8_t channel, bool (*limitSwitch)());
   void skipActualIrrigation();
-  void skipAllIrrigations();
 
   PumpControl(const PumpControl&) = delete;               // Define copy constructor.
   PumpControl& operator=(const PumpControl&) = delete;    // Define copy assignment operator.
