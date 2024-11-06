@@ -11,13 +11,14 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
   currentSensePin(currentSensePin),
   prevFlowCounter(0U),
   irrigationQueue(),
-  irrigationState(IrrigationState::IDLE),
+  irrigationState(IrrigationState::CALIBRATION),
   analogValue(0U),
   irrigationTimer(0U),
   errorCheckTimer(0U),
   error(0U),
   reportError(reportError),
-  limitSwitches{nullptr}
+  limitSwitches{nullptr},
+  calibrationValue(0U)
 {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
@@ -25,7 +26,7 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
 }
 
 void PumpControl::init() {
-
+  irrigationTimer = millis();
 }
 
 void PumpControl::run() {
@@ -109,6 +110,15 @@ void PumpControl::run() {
       irrigationQueue.pop();
       irrigationState = IrrigationState::IDLE;
     } break;
+    case IrrigationState::CALIBRATION: {
+      if(millis() - irrigationTimer > TimeConverter::secToMs(5U)) {
+        const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
+        if(static_cast<uint16_t>(abs(calValue)) < 20U) {
+          calibrationValue = calValue;
+        }
+        irrigationState = IrrigationState::IDLE;
+      }
+    } break;
   };
 }
 
@@ -163,7 +173,7 @@ bool PumpControl::selectChannel(uint8_t channel) const {
 void PumpControl::filterAnalogValue() {
   // Complement filter calculation.
   static constexpr uint8_t adcInputFilterAlpha = 10U;     // Complement filter ALPHA value.
-  const uint16_t rawAnalogValue = analogRead(currentSensePin);
+  const uint16_t rawAnalogValue = static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue);
   analogValue = ((adcInputFilterAlpha * rawAnalogValue) + (100U - adcInputFilterAlpha) * (uint32_t)analogValue) / 100U;
 }
 

@@ -60,7 +60,8 @@ private:
     IDLE = 0,
     RUN,
     STOP,
-    ERROR
+    ERROR,
+    CALIBRATION
   };
 
   enum class ERROR : uint8_t {
@@ -99,5 +100,6 @@ private:
   void (*reportError)(uint8_t errCode);
   static constexpr uint8_t maxAllowedStandbyCurrent = 100U; // mA
   bool (*limitSwitches[channelCount])();
+  int16_t calibrationValue;
 };
 #endif //PUMP_CONTROL_HPP
