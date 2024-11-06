@@ -107,7 +107,9 @@ void PumpControl::run() {
     } break;
     case IrrigationState::ERROR: {
       digitalWrite(pwmPin, LOW);
-      irrigationQueue.pop();
+      if(!irrigationQueue.isEmpty()) {
+        irrigationQueue.pop();
+      }
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::CALIBRATION: {
@@ -200,4 +202,9 @@ void PumpControl::skipActualIrrigation() {
   if(irrigationState == IrrigationState::RUN) {
     eventTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
   }
+}
+
+void PumpControl::skipAllIrrigations() {
+  irrigationQueue.clear();
+  irrigationState = IrrigationState::ERROR;
 }
