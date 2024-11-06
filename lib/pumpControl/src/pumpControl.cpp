@@ -197,5 +197,7 @@ void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
 }
 
 void PumpControl::skipActualIrrigation() {
-  eventTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
+  if(irrigationState == IrrigationState::RUN) {
+    eventTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
+  }
 }
