@@ -13,7 +13,7 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
   irrigationQueue(),
   irrigationState(IrrigationState::CALIBRATION),
   analogValue(0U),
-  irrigationTimer(0U),
+  eventTimer(0U),
   errorCheckTimer(0U),
   error(0U),
   reportError(reportError),
@@ -26,7 +26,7 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
 }
 
 void PumpControl::init() {
-  irrigationTimer = millis();
+  eventTimer = millis();
 }
 
 void PumpControl::run() {
@@ -37,7 +37,7 @@ void PumpControl::run() {
         const bool chSelectionSuccess = selectChannel(irrigationQueue.peek().channel);
         if(chSelectionSuccess) {
           analogWrite(pwmPin, irrigationQueue.peek().pwmValue);
-          irrigationTimer = millis();
+          eventTimer = millis();
           errorCheckTimer = millis();
           prevFlowCounter = flowCounter = 0U;
           irrigationState = IrrigationState::RUN;
@@ -61,7 +61,7 @@ void PumpControl::run() {
     case IrrigationState::RUN: {
       const uint8_t actualCh = irrigationQueue.peek().channel;
       const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if((millis() - irrigationTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
+      if((millis() - eventTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
@@ -111,7 +111,7 @@ void PumpControl::run() {
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::CALIBRATION: {
-      if(millis() - irrigationTimer > TimeConverter::secToMs(5U)) {
+      if(millis() - eventTimer > TimeConverter::secToMs(5U)) {
         const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
         if(static_cast<uint16_t>(abs(calValue)) < 20U) {
           calibrationValue = calValue;
@@ -197,5 +197,5 @@ void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
 }
 
 void PumpControl::skipActualIrrigation() {
-  irrigationTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
+  eventTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
 }

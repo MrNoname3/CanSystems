@@ -93,7 +93,7 @@ private:
   CircularBuffer<IrrigationQueueElement, channelCount> irrigationQueue;
   IrrigationState irrigationState;
   uint16_t analogValue;
-  uint32_t irrigationTimer;
+  uint32_t eventTimer;
   static constexpr uint16_t errorCheckTime = 1000U;
   uint32_t errorCheckTimer;
   uint8_t error;
