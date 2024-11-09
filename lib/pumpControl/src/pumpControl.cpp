@@ -45,15 +45,16 @@ void PumpControl::run() {
           setError(ERROR::CH_SELECT);
           irrigationState = IrrigationState::ERROR;
         }
+      } else {
+        if(flowCounter > 0U) {
+          setError(ERROR::FLOW_OVERRUN);
+          irrigationState = IrrigationState::ERROR;
+        }
+        if(abs(calculateCurrent()) > maxAllowedStandbyCurrent) {
+          setError(ERROR::PUMP_OVERRUN);
+          irrigationState = IrrigationState::ERROR;
+        }
       }
-      if(flowCounter > 0U) {
-        setError(ERROR::FLOW_OVERRUN);
-        irrigationState = IrrigationState::ERROR;
-      }
-      // if(calculateCurrent() > maxAllowedStandbyCurrent) {
-      //   setError(ERROR::PUMP_OVERRUN);
-      //   irrigationState = IrrigationState::ERROR;
-      // }
       if(error > 0U && reportError != nullptr) {
         reportError(getError());
       }
@@ -77,11 +78,11 @@ void PumpControl::run() {
             }
           }
           if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
-            // const int16_t actualCurrent = calculateCurrent();
-            // if(actualCurrent < maxAllowedStandbyCurrent) {
-            //   setError(ERROR::PUMP_UC);
-            //   irrigationState = IrrigationState::ERROR;
-            // }
+            const uint16_t actualCurrent = abs(calculateCurrent());
+            if(actualCurrent < maxAllowedStandbyCurrent) {
+              setError(ERROR::PUMP_UC);
+              irrigationState = IrrigationState::ERROR;
+            }
             // if(actualCurrent > ?) {
             //   setError(ERROR::PUMP_OC);
             //   irrigationState = IrrigationState::ERROR;
