@@ -39,7 +39,7 @@ static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow senso
 
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
-PushButtonHandler buttonHandler(Serial, canHandler, [](){return static_cast<bool>(digitalRead(BUTTON_PIN));});
+PushButtonHandler buttonHandler(Serial, canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
 PumpControl pc(
@@ -47,7 +47,7 @@ PumpControl pc(
   PUMP_PWM,
   FLOW_INT,
   CURRENT_SENSOR,
-  [](uint8_t errCode) {
+  [](uint8_t errCode) -> void {
     canHandler.send(CanCmd::IRRIGATION_ERROR, {0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode});
   }
 );
@@ -56,7 +56,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
   analogMultiplexer,
   MOISTURE_CH,
   TimeConverter::hrToMs(8U),                                                  // Moisture measurement interval.
-  [](const uint8_t (&data)[8]) {
+  [](const uint8_t (&data)[8]) -> void {
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
 );
