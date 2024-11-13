@@ -18,7 +18,8 @@ PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8
   error(0U),
   reportError(reportError),
   limitSwitches{nullptr},
-  calibrationValue(0U)
+  calibrationValue(0U),
+  safetyIrrigation{}
 {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
@@ -40,12 +41,14 @@ void PumpControl::run() {
           eventTimer = millis();
           errorCheckTimer = millis();
           prevFlowCounter = flowCounter = 0U;
+          resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
           irrigationState = IrrigationState::RUN;
         } else {
           setError(ERROR::CH_SELECT);
           irrigationState = IrrigationState::ERROR;
         }
       } else {
+        checkSafetyIrrigations();
         if(flowCounter > 0U) {
           setError(ERROR::FLOW_OVERRUN);
           irrigationState = IrrigationState::ERROR;
@@ -95,6 +98,7 @@ void PumpControl::run() {
       IrrigationQueueElement actualElement = irrigationQueue.pop();
       if(actualElement.repeatNum > 0U) {
         actualElement.repeatNum--;
+        checkSafetyIrrigations();
         createIrrigation(actualElement);
       }
       if(irrigationQueue.isEmpty()) {
@@ -208,4 +212,25 @@ void PumpControl::skipActualIrrigation() {
 void PumpControl::skipAllIrrigations() {
   irrigationQueue.clear();
   irrigationState = IrrigationState::ERROR;
+}
+
+void PumpControl::checkSafetyIrrigations() {
+  for(uint8_t i = 0U; i < channelCount; ++i) {
+    if((safetyIrrigation[i].time > 0U) && (millis() - safetyIrrigation[i].timer > TimeConverter::minToMs(safetyIrrigation[i].time))) {
+      createIrrigation(safetyIrrigation[i].irrigation);
+    }
+  }
+}
+
+void PumpControl::addSafetyIrrigation(uint16_t time, uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) {
+  channel &= channelSafetyMask;
+  safetyIrrigation[channel] = SafetyIrrigationElement(
+    time,
+    millis(),
+    IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum)
+  );
+}
+
+void PumpControl::resetSafetyIrrigationTimer(uint8_t channel) {
+  safetyIrrigation[channel].timer = millis();
 }

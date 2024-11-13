@@ -19,6 +19,7 @@ public:
   void addLimitSwitch(uint8_t channel, bool (*limitSwitch)());
   void skipActualIrrigation();
   void skipAllIrrigations();
+  void addSafetyIrrigation(uint16_t time, uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum);
 
   PumpControl(const PumpControl&) = delete;               // Define copy constructor.
   PumpControl& operator=(const PumpControl&) = delete;    // Define copy assignment operator.
@@ -57,6 +58,20 @@ private:
     }
   };
 
+  struct __attribute__((packed))
+  SafetyIrrigationElement {
+    uint16_t time;
+    uint32_t timer;
+    IrrigationQueueElement irrigation;
+    SafetyIrrigationElement() : time(0U), timer(0U), irrigation{} {}
+    SafetyIrrigationElement(uint32_t time, uint32_t timer, IrrigationQueueElement irrigation) :
+      time(time),
+      timer(timer),
+      irrigation(irrigation)
+    {
+    }
+  };
+
   enum class IrrigationState : uint8_t {
     IDLE = 0,
     RUN,
@@ -82,6 +97,8 @@ private:
   void setError(ERROR err);
   const uint8_t getError();
   void createIrrigation(IrrigationQueueElement irrigationElement);
+  void checkSafetyIrrigations();
+  void resetSafetyIrrigationTimer(uint8_t channel);
 
   static constexpr uint8_t channelCount = 4U;
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;
@@ -102,5 +119,6 @@ private:
   static constexpr uint8_t maxAllowedStandbyCurrent = 100U; // mA
   bool (*limitSwitches[channelCount])();
   int16_t calibrationValue;
+  SafetyIrrigationElement safetyIrrigation[channelCount];
 };
-#endif //PUMP_CONTROL_HPP
+#endif // PUMP_CONTROL_HPP

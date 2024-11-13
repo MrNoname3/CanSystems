@@ -82,6 +82,8 @@ void setup() {
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
   if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
   for(uint8_t i = 1; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
+  pc.addSafetyIrrigation(2U, 0U, 1U, false, false, 150U, 0U);
+  pc.addSafetyIrrigation(5U, 1U, 2U, false, false, 110U, 1U);
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
