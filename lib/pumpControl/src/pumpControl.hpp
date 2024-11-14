@@ -221,6 +221,6 @@ private:
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
   SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
-  static constexpr uint8_t irrStartColors[3] = {2U, 2U, 10U};               // RGB LED colors when irrigation started.
+  static constexpr uint8_t irrStartColors[3] = {0U, 5U, 10U};               // RGB LED colors when irrigation started.
 };
 #endif // PUMP_CONTROL_HPP
