@@ -5,6 +5,7 @@
 #include "taskRunner.hpp"                                           /// Task runner class.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "CircularBuffer.hpp"                                       /// Circular buffer class.
+#include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 
 /// @class PumpControl
 /// @brief Controls irrigation pumps, monitors flow rate, and manages irrigation schedules and safety limits.
@@ -12,11 +13,12 @@ class PumpControl final : public TaskRunner {
 public:
   /// @brief Constructor for the PumpControl class.
   /// @param pcf8574 Reference to the I2C GPIO expander.
+  /// @param rgbLed Reference to RGB LED driver object.
   /// @param pwmPin PWM pin for pump control.
   /// @param intPin Interrupt pin for flow sensor.
   /// @param currentSensePin Pin to sense the current.
   /// @param reportError Callback function to report error codes.
-  PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode));
+  PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode));
 
   /// @brief Default destructor.
   ~PumpControl() = default;
@@ -201,6 +203,7 @@ private:
   static constexpr uint8_t channelCount = 4U;                               // Number of irrigation channels.
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;           // Channel mask to prevent memory overlapping.
   PCF8574& pcf;                                                             // Reference to the GPIO expander.
+  RgbLedWrapper& rgbLed;                                                    // Reference to RGB LED driver object.
   const uint8_t pwmPin;                                                     // PWM control pin.
   const uint8_t intPin;                                                     // Flow sensor interrupt pin.
   const uint8_t currentSensePin;                                            // Current sense sensor pin.
@@ -218,5 +221,6 @@ private:
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
   SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
+  static constexpr uint8_t irrStartColors[3] = {2U, 2U, 10U};               // RGB LED colors when irrigation started.
 };
 #endif // PUMP_CONTROL_HPP

@@ -4,8 +4,9 @@
 
 volatile uint16_t PumpControl::flowCounter = 0U;
 
-PumpControl::PumpControl(PCF8574& pcf8574, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode)) :
+PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode)) :
   pcf(pcf8574),
+  rgbLed(rgbLed),
   pwmPin(pwmPin),
   intPin(intPin),
   currentSensePin(currentSensePin),
@@ -43,6 +44,7 @@ void PumpControl::run() {
           errorCheckTimer = actualTime;
           prevFlowCounter = flowCounter = 0U;
           resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
+          rgbLed.setColor(irrStartColors[0], irrStartColors[1], irrStartColors[2], false);
           irrigationState = IrrigationState::RUN;
         } else {
           setError(ERROR::CH_SELECT);
@@ -105,9 +107,11 @@ void PumpControl::run() {
       }
       if(irrigationQueue.isEmpty()) {
         digitalWrite(pwmPin, LOW);
+        rgbLed.clear();
       } else {
         if(actualElement.channel != irrigationQueue.peek().channel) {
           digitalWrite(pwmPin, LOW);
+          rgbLed.clear();
         }
       }
       irrigationState = IrrigationState::IDLE;

@@ -44,6 +44,7 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(0x27);
 PumpControl pc(
   pcf,
+  rgbLed,
   PUMP_PWM,
   FLOW_INT,
   CURRENT_SENSOR,
@@ -82,8 +83,8 @@ void setup() {
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
   if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
   for(uint8_t i = 1; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
-  pc.addSafetyIrrigation(2U, 0U, 1U, false, false, 150U, 0U);
-  pc.addSafetyIrrigation(5U, 1U, 2U, false, false, 110U, 1U);
+  pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
+  pc.addSafetyIrrigation(TimeConverter::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
