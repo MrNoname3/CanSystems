@@ -31,6 +31,7 @@ void PumpControl::init() {
 }
 
 void PumpControl::run() {
+  const uint32_t actualTime = millis();
   filterAnalogValue();
   switch(irrigationState) {
     case IrrigationState::IDLE: {
@@ -38,8 +39,8 @@ void PumpControl::run() {
         const bool chSelectionSuccess = selectChannel(irrigationQueue.peek().channel);
         if(chSelectionSuccess) {
           analogWrite(pwmPin, irrigationQueue.peek().pwmValue);
-          eventTimer = millis();
-          errorCheckTimer = millis();
+          eventTimer = actualTime;
+          errorCheckTimer = actualTime;
           prevFlowCounter = flowCounter = 0U;
           resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
           irrigationState = IrrigationState::RUN;
@@ -53,24 +54,25 @@ void PumpControl::run() {
           setError(ERROR::FLOW_OVERRUN);
           irrigationState = IrrigationState::ERROR;
         }
-        if(abs(calculateCurrent()) > maxAllowedStandbyCurrent) {
+        if(getPositiveCurrent() > maxAllowedStandbyCurrent) {
           setError(ERROR::PUMP_OVERRUN);
           irrigationState = IrrigationState::ERROR;
         }
       }
-      if(error > 0U && reportError != nullptr) {
+      if((error > 0U) && (reportError != nullptr)) {
         reportError(getError());
+        clearError();
       }
     } break;
     case IrrigationState::RUN: {
       const uint8_t actualCh = irrigationQueue.peek().channel;
       const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if((millis() - eventTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
+      if((actualTime - eventTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
-        if(millis() - errorCheckTimer > errorCheckTime) {
-          errorCheckTimer = millis();
+        if(actualTime - errorCheckTimer > errorCheckTime) {
+          errorCheckTimer = actualTime;
           if(static_cast<bool>(irrigationQueue.peek().checkFlow)) {
             const bool flowCheckSuccess = flowCounter > prevFlowCounter;
             if(flowCheckSuccess) {
@@ -81,7 +83,7 @@ void PumpControl::run() {
             }
           }
           if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
-            const uint16_t actualCurrent = abs(calculateCurrent());
+            const uint16_t actualCurrent = getPositiveCurrent();
             if(actualCurrent < maxAllowedStandbyCurrent) {
               setError(ERROR::PUMP_UC);
               irrigationState = IrrigationState::ERROR;
@@ -118,7 +120,7 @@ void PumpControl::run() {
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::CALIBRATION: {
-      if(millis() - eventTimer > TimeConverter::secToMs(5U)) {
+      if(actualTime - eventTimer > TimeConverter::secToMs(5U)) {
         const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
         if(static_cast<uint16_t>(abs(calValue)) < 20U) {
           calibrationValue = calValue;
@@ -166,6 +168,11 @@ int16_t PumpControl::calculateCurrent() const {
   return static_cast<int16_t>(currentMA);
 }
 
+uint16_t PumpControl::getPositiveCurrent() const {
+  const int16_t current = calculateCurrent();
+  return static_cast<uint16_t>(current < 0 ? 0 : current);
+}
+
 void PumpControl::irqHandler() {
   flowCounter++;
 }
@@ -192,10 +199,12 @@ void PumpControl::setError(ERROR err) {
   }
 }
 
-const uint8_t PumpControl::getError() {
-  const uint8_t err = error;
+const uint8_t PumpControl::getError() const {
+  return static_cast<const uint8_t>(error);
+}
+
+void PumpControl::clearError() {
   error = 0U;
-  return err;
 }
 
 void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
