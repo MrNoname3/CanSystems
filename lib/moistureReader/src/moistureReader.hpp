@@ -1,9 +1,10 @@
 #ifndef MOISTURE_READER_HPP
 #define MOISTURE_READER_HPP
 
-#include "stdint.h"
-#include "multiplexer.hpp"
-#include "taskRunner.hpp"
+#include "stdint.h"                                                 /// Standard fixed-width integer types.
+#include "multiplexer.hpp"                                          /// Analog multiplexer class.
+#include "taskRunner.hpp"                                           /// Task runner class.
+#include "common.hpp"                                               /// Common definitions and functions.
 
 template<uint8_t N>
 class MoistureReader final : public TaskRunner {
@@ -35,14 +36,12 @@ private:
   const Multiplexer& multiplexer;
   const uint8_t (&channels)[N];
   const uint32_t readTime;
-  uint32_t readTimer;
+  uint32_t eventTimer;
   void (*dataSender)(const uint8_t (&data)[8]);
-  static constexpr uint16_t sensorWakeupTime = static_cast<uint16_t>(10U * 1000U);  // 10 seconds.
-  uint32_t sensorWakeupTimer;
+  static constexpr uint32_t sensorWakeupTime = TimeConverter::secToMs(10U);         // 10 seconds.
   ReadState readState;
   uint8_t readIndex;
-  static constexpr uint16_t filteringTime = static_cast<uint16_t>(2U * 1000U);      // 2 seconds.
-  uint32_t filteringTimer;
+  static constexpr uint32_t filteringTime = TimeConverter::secToMs(2U);             // 2 seconds.
   uint16_t moistureValue;
 };
 #include "moistureReader.tpp"

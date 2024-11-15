@@ -3,47 +3,43 @@ MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, const uint8_t 
   multiplexer(multiplexer),
   channels(channels),
   readTime(readTime),
-  readTimer(0UL),
+  eventTimer(0UL),
   dataSender(dataSender),
-  sensorWakeupTimer(0UL),
   readState(ReadState::IDLE),
   readIndex(0U),
-  filteringTimer(0UL),
   moistureValue(0U)
-{
-
-}
+{}
 
 template<uint8_t N>
 void MoistureReader<N>::init() {
-  readTimer = millis();
+  eventTimer = millis();
 }
 
 template<uint8_t N>
 void MoistureReader<N>::run() {
+  const uint32_t actualTime = millis();
   switch(readState) {
     case ReadState::IDLE: {
-      if(millis() - readTimer > readTime) {
-        readTimer = millis();
+      if(actualTime - eventTimer > readTime) {
+        eventTimer = actualTime;
         multiplexer.enableRead();
-        sensorWakeupTimer = millis();
         readState = ReadState::WAKEUP;
       }
     } break;
     case ReadState::WAKEUP: {
-      if(millis() - sensorWakeupTimer > sensorWakeupTime) {
+      if(actualTime - eventTimer > sensorWakeupTime) {
         readState = ReadState::SETUP;
       }
     } break;
     case ReadState::SETUP: {
         multiplexer.selectChannel(channels[readIndex]);
-        filteringTimer = millis();
+        eventTimer = actualTime;
         moistureValue = 0U;
         readState = ReadState::READING;
     } break;
     case ReadState::READING: {
       filterAnalogValue();
-      if(millis() - filteringTimer > filteringTime) {
+      if(actualTime - eventTimer > filteringTime) {
         if(dataSender != nullptr) {
           const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0) & 0xFF);
           const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8) & 0xFF);
@@ -64,7 +60,9 @@ void MoistureReader<N>::run() {
 
 template<uint8_t N>
 void MoistureReader<N>::triggerImmediateMeasurement() {
-  readTimer = millis() - readTime;
+  if(readState == ReadState::IDLE) {
+    eventTimer = millis() - readTime;
+  }
 }
 
 template<uint8_t N>
