@@ -90,10 +90,10 @@ void PumpControl::run() {
               setError(ERROR::PUMP_UC);
               irrigationState = IrrigationState::ERROR;
             }
-            // if(actualCurrent > ?) {
-            //   setError(ERROR::PUMP_OC);
-            //   irrigationState = IrrigationState::ERROR;
-            // }
+            if(actualCurrent > maxAllowedCurrent) {
+              setError(ERROR::PUMP_OC);
+              irrigationState = IrrigationState::ERROR;
+            }
           }
         }
       }
@@ -118,6 +118,7 @@ void PumpControl::run() {
     } break;
     case IrrigationState::ERROR: {
       digitalWrite(pwmPin, LOW);
+      rgbLed.clear();
       if(!irrigationQueue.isEmpty()) {
         irrigationQueue.pop();
       }

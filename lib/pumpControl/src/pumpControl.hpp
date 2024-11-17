@@ -218,6 +218,7 @@ private:
   uint8_t error;                                                            // Current error state.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
   static constexpr uint8_t maxAllowedStandbyCurrent = 50U;                  // Maximum standby current in mA.
+  static constexpr uint16_t maxAllowedCurrent = 1000U;                      // Maximum working current in mA.
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
   SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
