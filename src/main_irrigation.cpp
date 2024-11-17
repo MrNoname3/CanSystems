@@ -55,6 +55,7 @@ PumpControl pc(
 Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
 MoistureReader<MOISTURE_CH_NUM> moistureReader(
   analogMultiplexer,
+  rgbLed,
   MOISTURE_CH,
   TimeConverter::hrToMs(8U),                                                  // Moisture measurement interval.
   [](const uint8_t (&data)[8]) -> void {

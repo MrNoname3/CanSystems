@@ -5,11 +5,12 @@
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
 #include "taskRunner.hpp"                                           /// Task runner class.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 
 template<uint8_t N>
 class MoistureReader final : public TaskRunner {
 public:
-  MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8]));
+  MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper& rgbLed, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8]));
   ~MoistureReader() = default;
 
   virtual void init() override;
@@ -34,6 +35,7 @@ private:
 
   static constexpr uint8_t channelNum = N;
   const Multiplexer& multiplexer;
+  RgbLedWrapper& rgbLed;                                                    // Reference to RGB LED driver object.
   const uint8_t (&channels)[N];
   const uint32_t readTime;
   uint32_t eventTimer;
@@ -43,11 +45,14 @@ private:
   uint8_t readIndex;
   static constexpr uint32_t filteringTime = TimeConverter::secToMs(2U);             // 2 seconds.
   uint16_t moistureValue;
+  static constexpr uint8_t readStartColors[3] = {5U, 3U, 0U};               // RGB LED colors when reading started.
+  static constexpr uint32_t readTimeOffset = sensorWakeupTime + channelNum * filteringTime;
 };
 
 template<uint8_t N>
-MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8])) :
+MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper& rgbLed, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8])) :
   multiplexer(multiplexer),
+  rgbLed(rgbLed),
   channels(channels),
   readTime(readTime),
   eventTimer(0UL),
@@ -70,6 +75,7 @@ void MoistureReader<N>::run() {
       if(actualTime - eventTimer > readTime) {
         eventTimer = actualTime;
         multiplexer.enableRead();
+        rgbLed.setColor(readStartColors[0], readStartColors[1], readStartColors[2], false);
         readState = ReadState::WAKEUP;
       }
     } break;
@@ -96,6 +102,8 @@ void MoistureReader<N>::run() {
         if(readIndex >= channelNum) {
           readIndex = 0U;
           multiplexer.disableRead();
+          rgbLed.clear();
+          eventTimer = actualTime - readTimeOffset;
           readState = ReadState::IDLE;
         } else {
           readState = ReadState::SETUP;
