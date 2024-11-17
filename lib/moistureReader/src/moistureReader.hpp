@@ -7,46 +7,65 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 
+/// @brief Handles reading moisture sensor data through an analog multiplexer.
+/// @tparam N Number of channels to read.
 template<uint8_t N>
 class MoistureReader final : public TaskRunner {
 public:
+  static_assert(N > 0U, "MoistureReader requires at least one channel.");
+
+  /// @brief Constructor for the MoistureReader class.
+  /// @param multiplexer Reference to the analog multiplexer object.
+  /// @param rgbLed Reference to the RGB LED wrapper object.
+  /// @param channels Array of multiplexer channels to read from.
+  /// @param readTime Interval between consecutive readings in milliseconds.
+  /// @param dataSender Function pointer to send sensor data.
   MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper& rgbLed, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8]));
+
+  /// @brief Default destructor.
   ~MoistureReader() = default;
 
+  /// @brief Initializes the MoistureReader, setting up its internal timer.
   virtual void init() override;
+
+  /// @brief Executes the state machine to read moisture data.
   virtual void run() override;
+
+  /// @brief Triggers an immediate measurement by resetting the timer.
   void triggerImmediateMeasurement();
 
-  // Delete copy and move constructors/assignment operators
-  MoistureReader(const MoistureReader&) = delete;
-  MoistureReader& operator=(const MoistureReader&) = delete;
-  MoistureReader(MoistureReader&&) = delete;
-  MoistureReader& operator=(MoistureReader&&) = delete;
+  MoistureReader(const MoistureReader&) = delete;               // Define copy constructor.
+  MoistureReader& operator=(const MoistureReader&) = delete;    // Define copy assignment operator.
+  MoistureReader(MoistureReader&&) = delete;                    // Define move constructor.
+  MoistureReader& operator=(MoistureReader&&) = delete;         // Define move assignment operator.
 
 private:
+  /// @brief State machine states for moisture reading.
   enum class ReadState : uint8_t {
-    IDLE = 0U,
-    WAKEUP,
-    SETUP,
-    READING
+    IDLE = 0U,                                // Waiting for the next read cycle.
+    WAKEUP,                                   // Waiting for the sensor wake-up time.
+    SETUP,                                    // Setting up the next multiplexer channel.
+    READING                                   // Filtering and reading analog data.
   };
 
+  /// @brief Applies a complementary filter to the analog moisture value.
   void filterAnalogValue();
 
-  static constexpr uint8_t channelNum = N;
-  const Multiplexer& multiplexer;
-  RgbLedWrapper& rgbLed;                                                    // Reference to RGB LED driver object.
-  const uint8_t (&channels)[N];
-  const uint32_t readTime;
-  uint32_t eventTimer;
-  void (*dataSender)(const uint8_t (&data)[8]);
-  static constexpr uint32_t sensorWakeupTime = TimeConverter::secToMs(10U);         // 10 seconds.
-  ReadState readState;
-  uint8_t readIndex;
-  static constexpr uint32_t filteringTime = TimeConverter::secToMs(2U);             // 2 seconds.
-  uint16_t moistureValue;
-  static constexpr uint8_t readStartColors[3] = {5U, 3U, 0U};               // RGB LED colors when reading started.
-  static constexpr uint32_t readTimeOffset = sensorWakeupTime + channelNum * filteringTime;
+  static constexpr uint8_t channelNum = N;                                  // Number of multiplexer channels.
+  static constexpr uint32_t sensorWakeupTime = TimeConverter::secToMs(10U); // Sensor wake-up time in milliseconds.
+  static constexpr uint32_t filteringTime = TimeConverter::secToMs(2U);     // Filtering duration for analog values in milliseconds.
+  static constexpr uint8_t readStartColors[3] = {5U, 3U, 0U};               // RGB LED color values when a read operation starts.
+  static constexpr uint32_t readTimeOffset = sensorWakeupTime + channelNum * filteringTime; // Time offset to account for wake-up and filtering times.
+
+  const Multiplexer& multiplexer;                                           // Reference to the analog multiplexer object.
+  RgbLedWrapper& rgbLed;                                                    // Reference to the RGB LED wrapper object.
+  const uint8_t (&channels)[channelNum];                                    // Array of channels to read from.
+  const uint32_t readTime;                                                  // Interval between consecutive reads in milliseconds.
+  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  void (*dataSender)(const uint8_t (&data)[8]);                             // Function pointer for sending data.
+  ReadState readState;                                                      // Current state of the moisture reader.
+  uint8_t readIndex;                                                        // Current index of the channel being read.
+  uint16_t moistureValue;                                                   // Filtered analog moisture value.
 };
 
 template<uint8_t N>
