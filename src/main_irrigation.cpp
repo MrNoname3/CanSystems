@@ -100,19 +100,30 @@ void loop() {
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
-    case static_cast<uint16_t>(CanCmd::IRRIGATION): {
+    case static_cast<uint16_t>(CanCmd::ADD_IRRIGATION): {
       pc.createIrrigation(data[0], data[1], data[2]);
-      canHandler.send(static_cast<uint16_t>(CanCmd::IRRIGATION));
+    } break;
+    case static_cast<uint16_t>(CanCmd::SKIP_IRRIGATION): {
+      pc.skipActualIrrigation();
+    } break;
+    case static_cast<uint16_t>(CanCmd::STOP_IRRIGATION): {
+      pc.skipAllIrrigations();
     } break;
     case static_cast<uint16_t>(CanCmd::MOISTURE_DATA): {
       moistureReader.triggerImmediateMeasurement();
-      canHandler.send(static_cast<uint16_t>(CanCmd::MOISTURE_DATA));
     } break;
   }
+  canHandler.send(command);
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   switch(btnEvent) {
+    case PushButtonHandler::BtnEvent::LONG_PRESS: {
+      pc.skipAllIrrigations();
+    } break;
+    case PushButtonHandler::BtnEvent::ONE_PRESS: {
+      pc.skipActualIrrigation();
+    } break;
     case PushButtonHandler::BtnEvent::TWO_PRESS: {
       moistureReader.triggerImmediateMeasurement();
     } break;

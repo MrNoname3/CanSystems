@@ -17,7 +17,9 @@ enum class CanCmd : uint16_t {
   PLAY_MP3,                                   // Play MP3 file.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature and light value.
 
-  IRRIGATION = 33,                            // Start irrigation.
+  ADD_IRRIGATION = 33,                        // Add irrigation task to queue.
+  SKIP_IRRIGATION,                            // Skips the actual irrigation.
+  STOP_IRRIGATION,                            // Stop all irrigation in the queue.
   IRRIGATION_ERROR,                           // Error during irrigation.
   MOISTURE_DATA,                              // Moisture level.
 };
