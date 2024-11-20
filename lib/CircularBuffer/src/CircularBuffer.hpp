@@ -1,48 +1,52 @@
 #ifndef CIRCULAR_BUFFER_HPP
 #define CIRCULAR_BUFFER_HPP
 
-#include <stdint.h>
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
 
-template<class T, uint16_t buffSize> 
+/// @brief Template-based circular buffer for static-sized data storage.
+/// @tparam T The type of elements stored in the buffer.
+/// @tparam buffSize The size of the circular buffer.
+template<class T, uint16_t buffSize>
 class CircularBuffer final {
 public:
-  /// @brief Constructor of a multitype static size circular buffer.
-  /// @param T Selected datatype.
-  /// @param buffSize Selected buffer size.
+  /// @brief Constructs a circular buffer with a fixed size.
   CircularBuffer();
 
-  /// @brief Destructor of the object.
+  /// @brief Destructor for the circular buffer.
   virtual ~CircularBuffer() = default;
 
-  /// @brief Puts an element to the data buffer.
-  /// @param item Element to store.
+  /// @brief Adds an element to the buffer.
+  /// @param item The element to add to the buffer.
+  /// @details Overwrites the oldest element if the buffer is full.
   void put(T item);
 
-  /// @brief Gets an element from the buffer.
-  /// @return Returns with the element.
+  /// @brief Removes and retrieves the oldest element in the buffer.
+  /// @return The oldest element in the buffer.
+  /// @note If the buffer is empty, this function may return a default-constructed element.
   T pop();
 
-  /// @brief Gets an element from the buffer without removing it.
-  /// @return Returns with the latest element.
+  /// @brief Retrieves the oldest element in the buffer without removing it.
+  /// @return The oldest element in the buffer.
+  /// @note Returns a default-constructed element if the buffer is empty.
   T peek() const;
 
-  /// @brief Resets the buffer to its initial state.
+  /// @brief Clears the buffer, resetting it to an empty state.
   void clear();
 
-  /// @brief Checks if the buffer is empty.
-  /// @return Returns true if the buffer is empty.
+  /// @brief Checks whether the buffer is empty.
+  /// @return `true` if the buffer is empty, `false` otherwise.
   bool isEmpty() const;
 
-  /// @brief Checks if the buffer is full.
-  /// @return True, if the buffer is full
+  /// @brief Checks whether the buffer is full.
+  /// @return `true` if the buffer is full, `false` otherwise.
   bool isFull() const;
 
-  /// @brief Checks buffer free capacity.
-  /// @return Returns with the free capacity.
+  /// @brief Retrieves the buffer's total capacity.
+  /// @return The maximum number of elements the buffer can hold.
   uint16_t getCapacity() const;
 
-  /// @brief Checks buffer size.
-  /// @return Returns with the size.
+  /// @brief Retrieves the current number of elements stored in the buffer.
+  /// @return The number of elements currently in the buffer.
   uint16_t getSize() const;
 
   CircularBuffer(const CircularBuffer&) = delete;               // Define copy constructor.
@@ -51,10 +55,10 @@ public:
   CircularBuffer& operator=(CircularBuffer&&) = delete;         // Define move assignment operator.
 
 private:
-  T buffer[buffSize];                         // Data buffer.
-  uint16_t head;                              // Circular buffer write index.
-  uint16_t tail;                              // Circular buffer read index.
-  bool full;                                  // Stores if the buffer full is.
+  T buffer[buffSize];                         // Internal array to store elements.
+  uint16_t head;                              // Index for writing new elements.
+  uint16_t tail;                              // Index for reading the oldest elements.
+  bool full;                                  // Indicates whether the buffer is full.
 };
 
 template<class T, uint16_t buffSize>
