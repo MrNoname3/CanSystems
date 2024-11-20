@@ -213,28 +213,16 @@ bool CanHandler::send(CanCmd command) const {
   return send(static_cast<uint16_t>(command));
 }
 
-bool CanHandler::send(CanCmd command, Response response) {
+bool CanHandler::send(CanCmd command, Response response) const {
   const uint8_t data[8] = { static_cast<uint8_t>(response), 0, 0, 0, 0, 0, 0, 0 };
   return send(command, data);
 }
 
-void CanHandler::rxInterrupt() { intCount++; }
-
-void CanHandler::ledOn() { digitalWrite(ledPin, HIGH); }
-
-void CanHandler::ledOff() { digitalWrite(ledPin, LOW); }
-
-void CanHandler::ledToggle() { digitalWrite(ledPin, !digitalRead(ledPin)); }
-
-void CanHandler::restartMCU() {
+void CanHandler::restartMCU() const {
   serialPort.println(F("Restarting..."));
   serialPort.flush();                                 // Sends out data from serial buffer, before reset.
   wdt_enable(WDTO_15MS);                              // Setup watchdog timer.
   while(true) { };                                    // Let the WDT restart the MCU.
-}
-
-void CanHandler::addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
-  this->canCallback = canCallback;                    // Store function pointer locally.
 }
 
 bool CanHandler::sendFwVersion() {
