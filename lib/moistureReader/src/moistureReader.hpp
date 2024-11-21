@@ -52,8 +52,8 @@ private:
   void filterAnalogValue();
 
   static constexpr uint8_t channelNum = N;                                  // Number of multiplexer channels.
-  static constexpr uint32_t sensorWakeupTime = TimeConverter::secToMs(10U); // Sensor wake-up time in milliseconds.
-  static constexpr uint32_t filteringTime = TimeConverter::secToMs(2U);     // Filtering duration for analog values in milliseconds.
+  static constexpr uint32_t sensorWakeupTime = Time::secToMs(10U);          // Sensor wake-up time in milliseconds.
+  static constexpr uint32_t filteringTime = Time::secToMs(2U);              // Filtering duration for analog values in milliseconds.
   static constexpr uint8_t readStartColors[3] = {5U, 3U, 0U};               // RGB LED color values when a read operation starts.
   static constexpr uint32_t readTimeOffset = sensorWakeupTime + channelNum * filteringTime; // Time offset to account for wake-up and filtering times.
 

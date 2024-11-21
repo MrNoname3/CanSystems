@@ -57,7 +57,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
   analogMultiplexer,
   rgbLed,
   MOISTURE_CH,
-  TimeConverter::hrToMs(8U),                                                  // Moisture measurement interval.
+  Time::hrToMs(8U),                                                           // Moisture measurement interval.
   [](const uint8_t (&data)[8]) -> void {
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
@@ -85,7 +85,7 @@ void setup() {
   if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
   for(uint8_t i = 1; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
-  pc.addSafetyIrrigation(TimeConverter::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
+  pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }

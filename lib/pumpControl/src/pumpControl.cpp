@@ -69,7 +69,7 @@ void PumpControl::run() {
     case IrrigationState::RUN: {
       const uint8_t actualCh = irrigationQueue.peek().channel;
       const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if((actualTime - eventTimer > TimeConverter::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
+      if((actualTime - eventTimer > Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
@@ -125,7 +125,7 @@ void PumpControl::run() {
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::CALIBRATION: {
-      if(actualTime - eventTimer > TimeConverter::secToMs(5U)) {
+      if(actualTime - eventTimer > Time::secToMs(5U)) {
         const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
         if(static_cast<uint16_t>(abs(calValue)) < 20U) {
           calibrationValue = calValue;
@@ -219,7 +219,7 @@ void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
 
 void PumpControl::skipActualIrrigation() {
   if(irrigationState == IrrigationState::RUN) {
-    eventTimer = millis() - TimeConverter::minToMs(irrigationQueue.peek().duration);
+    eventTimer = millis() - Time::minToMs(irrigationQueue.peek().duration);
   }
 }
 
@@ -230,7 +230,7 @@ void PumpControl::skipAllIrrigations() {
 
 void PumpControl::checkSafetyIrrigations() {
   for(uint8_t i = 0U; i < channelCount; ++i) {
-    if((safetyIrrigation[i].time > 0U) && (millis() - safetyIrrigation[i].timer > TimeConverter::minToMs(safetyIrrigation[i].time))) {
+    if((safetyIrrigation[i].time > 0U) && (millis() - safetyIrrigation[i].timer > Time::minToMs(safetyIrrigation[i].time))) {
       createIrrigation(safetyIrrigation[i].irrigation);
     }
   }

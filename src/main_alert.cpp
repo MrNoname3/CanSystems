@@ -33,7 +33,7 @@ void measureMaxLoopTime();
 
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
-PushButtonHandler buttonHandler(Serial, canHandler, [](){return analogRead(BUTTON_PIN) > 500 ? true : false;});
+PushButtonHandler buttonHandler(canHandler, []() -> bool {return analogRead(BUTTON_PIN) > 500 ? true : false;});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 static constexpr uint32_t measureTimeMs = static_cast<uint32_t>(15UL * 60UL * 1000UL);
 AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);

@@ -3,10 +3,8 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
-/// @brief Utility class for converting time units into milliseconds or other units.
-/// @details Provides a collection of `constexpr` static methods to perform
-/// time conversions at compile-time or runtime.
-class TimeConverter {
+/// @brief Utility class for time unit conversions and elapsed time checks.
+class Time {
 public:
   /// @brief Converts hours to milliseconds.
   /// @param hour The number of hours to convert.
@@ -34,6 +32,15 @@ public:
   /// @return The equivalent time in minutes.
   static constexpr uint16_t hrToMin(uint16_t hour) {
     return hour * 60U;
+  }
+
+  /// @brief Checks if a specified duration has elapsed since an event.
+  /// @param currentTime The current time (e.g., from a timer or clock).
+  /// @param eventTimer The time of the event's start.
+  /// @param duration The duration to check against.
+  /// @return `true` if the duration has elapsed, `false` otherwise.
+  static constexpr bool hasElapsed(uint32_t currentTime, uint32_t eventTimer, uint32_t duration) {
+    return (currentTime - eventTimer) > duration;
   }
 };
 #endif // COMMON_HPP
