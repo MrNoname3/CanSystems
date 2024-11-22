@@ -39,6 +39,7 @@ public:
   RgbLedWrapper& operator=(const RgbLedWrapper&) = delete;            // Define copy assignment operator.
   RgbLedWrapper(RgbLedWrapper&&) = delete;                            // Define move constructor.
   RgbLedWrapper& operator=(RgbLedWrapper&&) = delete;                 // Define move assignment operator
+
 private:
   NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip;      // NeoPixelBus object to manage the LED strip.
   uint8_t redColor;                                           // Saved red component value (0-255).

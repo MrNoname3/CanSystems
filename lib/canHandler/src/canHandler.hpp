@@ -8,6 +8,7 @@
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "taskRunner.hpp"                                           /// Base class for task scheduling.
+#include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Handles CAN communication, and OTA updates.
 /// @details The `CanHandler` class manages the CAN communication protocol
@@ -137,19 +138,21 @@ private:
 
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.
-  bool sendFwVersion();
+  bool sendFwVersion() const;
 
-  static constexpr uint8_t rxBufferSize = 5U;                   // Size of the receive buffer.
-  static constexpr uint16_t pingTime = 1500U;                   // Ping timeout in milliseconds.
-  static constexpr uint16_t flashJedecId = 0xEF40U;             // JEDEC ID for Windbond 64Mbit flash.
+  static constexpr uint8_t rxBufferSize = 5U;                               // Size of the receive buffer.
+  static constexpr uint16_t pingTime = Time::secToMs(2U);                   // Ping timeout in milliseconds.
+  static constexpr uint16_t flashJedecId = 0xEF40U;                         // JEDEC ID for Windbond 64Mbit flash.
 
-  HardwareSerial& serialPort;                                   // Reference to the serial driver object.
-  uint16_t localCanId;                                          // Local CAN address.
-  EEPROMHandler<uint16_t, 0> eepromHandler;                     // EEPROM handler for address persistence.
-  const uint8_t ledPin;                                         // LED control pin.
-  SPIFlash flash;                                               // SPI flash module driver object.
-  static volatile uint8_t intCount;                             // Interrupt counter for received CAN frames.
-  void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr;  // Callback function pointer.
-  OTA ota;                                                      // OTA update handler.
+  static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
+  HardwareSerial& serialPort;                                               // Reference to the serial driver object.
+  uint16_t localCanId;                                                      // Local CAN address.
+  EEPROMHandler<uint16_t, 0U> eepromHandler;                                // EEPROM handler for address persistence.
+  const uint8_t ledPin;                                                     // LED control pin.
+  SPIFlash flash;                                                           // SPI flash module driver object.
+  OTA ota;                                                                  // OTA update handler.
+  void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
+  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  OTA::OtaState lastOtaState;                                               // Store last known OTA state.
 };
 #endif // CAN_HANDLER_HPP

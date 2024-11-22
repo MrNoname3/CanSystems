@@ -6,6 +6,7 @@ OTA::OTA(SPIFlash& flash) :
   fwSize(0),
   fwCrc(0),
   flashPointer(0),
+  crc16(),
   flashBlockBeginAddress(0),
   otaState(OtaState::IDLE)
 {}

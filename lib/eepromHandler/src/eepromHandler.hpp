@@ -87,7 +87,7 @@ public:
 
 private:
   /// @brief Data structure representing the stored frame in EEPROM.
-  struct __attribute__((packed)) 
+  struct __attribute__((packed))
   EEPROMData {
     uint16_t crc;                               // CRC16 value of the data.
     T data;                                     // User-defined data type.

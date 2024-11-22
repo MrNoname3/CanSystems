@@ -6,6 +6,7 @@
 #include "taskRunner.hpp"                                           /// Task runner class.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
+#include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Handles reading moisture sensor data through an analog multiplexer.
 /// @tparam N Number of channels to read.
@@ -91,7 +92,7 @@ void MoistureReader<N>::run() {
   const uint32_t actualTime = millis();
   switch(readState) {
     case ReadState::IDLE: {
-      if(actualTime - eventTimer > readTime) {
+      if(Time::hasElapsed(actualTime, eventTimer, readTime)) {
         eventTimer = actualTime;
         multiplexer.enableRead();
         rgbLed.setColor(readStartColors[0], readStartColors[1], readStartColors[2], false);
@@ -99,7 +100,7 @@ void MoistureReader<N>::run() {
       }
     } break;
     case ReadState::WAKEUP: {
-      if(actualTime - eventTimer > sensorWakeupTime) {
+      if(Time::hasElapsed(actualTime, eventTimer, sensorWakeupTime)) {
         readState = ReadState::SETUP;
       }
     } break;
@@ -111,7 +112,7 @@ void MoistureReader<N>::run() {
     } break;
     case ReadState::READING: {
       filterAnalogValue();
-      if(actualTime - eventTimer > filteringTime) {
+      if(Time::hasElapsed(actualTime, eventTimer, filteringTime)) {
         if(dataSender != nullptr) {
           const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0) & 0xFF);
           const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8) & 0xFF);

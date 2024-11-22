@@ -4,7 +4,7 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 /// @brief This class processes button press events with support for long presses and multiple taps.
-/// @details Handles button press event debouncing, timing, and detection of various event types like 
+/// @details Handles button press event debouncing, timing, and detection of various event types like
 /// long presses, single taps, and multiple taps.
 class PushButton final {
 public:

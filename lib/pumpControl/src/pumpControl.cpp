@@ -1,6 +1,5 @@
 #include "pumpControl.hpp"
 #include <Arduino.h>
-#include "common.hpp"
 
 volatile uint16_t PumpControl::flowCounter = 0U;
 
@@ -69,11 +68,11 @@ void PumpControl::run() {
     case IrrigationState::RUN: {
       const uint8_t actualCh = irrigationQueue.peek().channel;
       const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if((actualTime - eventTimer > Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
+      if(Time::hasElapsed(actualTime, eventTimer, Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
         prevFlowCounter = flowCounter = 0U;
         irrigationState = IrrigationState::STOP;
       } else {
-        if(actualTime - errorCheckTimer > errorCheckTime) {
+        if(Time::hasElapsed(actualTime, errorCheckTimer, errorCheckTime)) {
           errorCheckTimer = actualTime;
           if(static_cast<bool>(irrigationQueue.peek().checkFlow)) {
             const bool flowCheckSuccess = flowCounter > prevFlowCounter;
@@ -125,7 +124,7 @@ void PumpControl::run() {
       irrigationState = IrrigationState::IDLE;
     } break;
     case IrrigationState::CALIBRATION: {
-      if(actualTime - eventTimer > Time::secToMs(5U)) {
+      if(Time::hasElapsed(actualTime, eventTimer, Time::secToMs(5U))) {
         const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
         if(static_cast<uint16_t>(abs(calValue)) < 20U) {
           calibrationValue = calValue;

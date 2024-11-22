@@ -6,6 +6,7 @@
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "CircularBuffer.hpp"                                       /// Circular buffer class.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
+#include "common.hpp"                                               /// Common definitions and functions.
 
 /// @class PumpControl
 /// @brief Controls irrigation pumps, monitors flow rate, and manages irrigation schedules and safety limits.
@@ -202,26 +203,27 @@ private:
 
   static constexpr uint8_t channelCount = 4U;                               // Number of irrigation channels.
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;           // Channel mask to prevent memory overlapping.
+  static constexpr uint16_t errorCheckTime = Time::secToMs(1U);             // Error check interval in ms.
+  static constexpr uint8_t maxAllowedStandbyCurrent = 50U;                  // Maximum standby current in mA.
+  static constexpr uint16_t maxAllowedCurrent = 1000U;                      // Maximum working current in mA.
+  static constexpr uint8_t irrStartColors[3] = {0U, 5U, 10U};               // RGB LED colors when irrigation started.
+
+  static volatile uint16_t flowCounter;                                     // Flow counter for water flow sensor measurement.
   PCF8574& pcf;                                                             // Reference to the GPIO expander.
   RgbLedWrapper& rgbLed;                                                    // Reference to RGB LED driver object.
   const uint8_t pwmPin;                                                     // PWM control pin.
   const uint8_t intPin;                                                     // Flow sensor interrupt pin.
   const uint8_t currentSensePin;                                            // Current sense sensor pin.
-  static volatile uint16_t flowCounter;                                     // Flow counter for water flow sensor measurement.
   uint16_t prevFlowCounter;                                                 // Previous flow counter value.
   CircularBuffer<IrrigationQueueElement, channelCount> irrigationQueue;     // Queue for pending irrigation tasks.
   IrrigationState irrigationState;                                          // Current state of the irrigation control.
   uint16_t analogValue;                                                     // Filtered analog value from sensor.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
-  static constexpr uint16_t errorCheckTime = 1000U;                         // Error check interval in ms.
   uint32_t errorCheckTimer;                                                 // Timer variable for error checking.
   uint8_t error;                                                            // Current error state.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
-  static constexpr uint8_t maxAllowedStandbyCurrent = 50U;                  // Maximum standby current in mA.
-  static constexpr uint16_t maxAllowedCurrent = 1000U;                      // Maximum working current in mA.
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
   SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
-  static constexpr uint8_t irrStartColors[3] = {0U, 5U, 10U};               // RGB LED colors when irrigation started.
 };
 #endif // PUMP_CONTROL_HPP

@@ -62,20 +62,20 @@ private:
 };
 
 template<class T, uint16_t buffSize>
-CircularBuffer<T, buffSize>::CircularBuffer() : buffer(), head(0), tail(0), full(false) {}
+CircularBuffer<T, buffSize>::CircularBuffer() : buffer(), head(0U), tail(0U), full(false) {}
 
 template<class T, uint16_t buffSize>
 void CircularBuffer<T, buffSize>::put(T item) {
   buffer[head] = item;
-  head = (head + 1) % buffSize;
-  if(full) { tail = (tail + 1) % buffSize; }
+  head = (head + 1U) % buffSize;
+  if(full) { tail = (tail + 1U) % buffSize; }
   full = (head == tail);
 }
 
 template<class T, uint16_t buffSize>
 T CircularBuffer<T, buffSize>::pop() {
   auto result = buffer[tail];
-  tail = (tail + 1) % buffSize;
+  tail = (tail + 1U) % buffSize;
   full = false;
   return result;
 }
@@ -90,8 +90,8 @@ T CircularBuffer<T, buffSize>::peek() const {
 
 template<class T, uint16_t buffSize>
 void CircularBuffer<T, buffSize>::clear() {
-  head = 0;
-  tail = 0;
+  head = 0U;
+  tail = 0U;
   full = false;
 }
 

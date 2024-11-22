@@ -4,7 +4,7 @@
 #include <avr/wdt.h>                                                /// Watchdog timer library.
 #include <avr/boot.h>                                               /// Reading fuses.
 
-volatile uint8_t CanHandler::intCount = 0;
+volatile uint8_t CanHandler::intCount = 0U;
 static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);
 static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);
 static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);
@@ -15,7 +15,10 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
   eepromHandler(&localCanId),
   ledPin(ledPin),
   flash(flashCsPin, flashJedecId),
-  ota(flash)
+  ota(flash),
+  canCallback(nullptr),
+  eventTimer(0U),
+  lastOtaState(OTA::OtaState::IDLE)
 {
   wdt_enable(WDTO_1S);                            // Enable WDT timer.
   CAN.setPins(canCsPin, -1);
@@ -90,6 +93,7 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
     flashInitResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
     if(!flashInitResult) { return false; }
   }
+  eventTimer = millis();
   wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }
@@ -103,10 +107,10 @@ void CanHandler::run() {
 }
 
 bool CanHandler::loopSimple() {
-  static uint32_t pingTimer = millis();
-  if(intCount > 0) {
+  const uint32_t actualTime = millis();
+  if(intCount > 0U) {
     intCount--;
-    pingTimer = millis();                                         // Ping timer reload.
+    eventTimer = actualTime;
     ledOff();
     const uint8_t canDataDlc = static_cast<uint8_t>(CAN.parsePacket());
     CanFrame canFrame;
@@ -162,7 +166,6 @@ bool CanHandler::loopSimple() {
       }
     }
   }
-  static OTA::OtaState lastOtaState = OTA::OtaState::IDLE;
   const OTA::OtaState otaState = ota.run();
   if(lastOtaState == OTA::OtaState::START && otaState == OTA::OtaState::STORE) {
     send(CanCmd::OTA_START, Response::ACK);
@@ -179,8 +182,8 @@ bool CanHandler::loopSimple() {
     serialPort.println(ERR_STATE);
   }
   lastOtaState = otaState;
-  if(millis() - pingTimer >= pingTime) {                          // Check if ping timer is expired.
-    ledOn();                                                      // If yes, turn on the LED.
+  if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
+    ledOn();
   }
   wdt_reset();                                                    // Reset the watchdog timer.
   return true;
@@ -193,7 +196,7 @@ bool CanHandler::send(uint16_t command, const uint8_t (&data)[8]) const {
     ((static_cast<uint32_t>(localCanId) & 0x3FF) << 19U);
   const bool beginPacketResult = CAN.beginExtendedPacket(extId) > 0;
   if(!beginPacketResult) { return false; }
-  const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0;
+  const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0U;
   if(!packetWriteResult) { return false; }
   const bool endPacketResult = CAN.endPacket() > 0;
   if(!endPacketResult) { return false; }
@@ -205,7 +208,7 @@ bool CanHandler::send(CanCmd command, const uint8_t (&data)[8]) const {
 }
 
 bool CanHandler::send(uint16_t command) const {
-  uint8_t data[8] = { 0 };
+  const uint8_t data[8] = {0U};
   return send(command, data);
 }
 
@@ -214,7 +217,7 @@ bool CanHandler::send(CanCmd command) const {
 }
 
 bool CanHandler::send(CanCmd command, Response response) const {
-  const uint8_t data[8] = { static_cast<uint8_t>(response), 0, 0, 0, 0, 0, 0, 0 };
+  const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
   return send(command, data);
 }
 
@@ -222,19 +225,19 @@ void CanHandler::restartMCU() const {
   serialPort.println(F("Restarting..."));
   serialPort.flush();                                 // Sends out data from serial buffer, before reset.
   wdt_enable(WDTO_15MS);                              // Setup watchdog timer.
-  while(true) { };                                    // Let the WDT restart the MCU.
+  while(true) {};                                     // Let the WDT restart the MCU.
 }
 
-bool CanHandler::sendFwVersion() {
+bool CanHandler::sendFwVersion() const {
   static constexpr uint8_t versionInfo[8] = {
-    static_cast<uint8_t>((fwVersion >> 0) & 0xFF),
-    static_cast<uint8_t>((fwVersion >> 8) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 0) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 8) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 16) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 24) & 0xFF),
+    static_cast<uint8_t>((fwVersion >> 0U) & 0xFF),
+    static_cast<uint8_t>((fwVersion >> 8U) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 0U) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 8U) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 16U) & 0xFF),
+    static_cast<uint8_t>((gitHash >> 24U) & 0xFF),
     gitDirty,
-    0
+    0U
   };
   return send(CanCmd::FW_VERSION, versionInfo);
 }
