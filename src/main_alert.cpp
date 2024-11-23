@@ -3,10 +3,11 @@
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
+#include "taskRunner.hpp"                                           /// Task runner class.
+#include "common.hpp"                                               /// Common definitions and functions.
 #include "dfPlayer.hpp"                                             /// MP3 player driver library.
 #include "ambientSensor.hpp"                                        /// Sensor handelr library.
 #include "externalSensor.hpp"                                       /// External temperature and humidity sensor library.
-#include "taskRunner.hpp"                                           /// Task runner class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 19U;          // Number of RGB LED's.
@@ -31,12 +32,15 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
 void analogSetup();
 void measureMaxLoopTime();
 
+//--- Asserts ---//
+static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
+static_assert(digitalPinToInterrupt(DFP_BUSY) != (NOT_AN_INTERRUPT), "DFPlayer modul interrupt input pin is not interrupt capable!");
+
 //--- Driver objects ---//
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
-PushButtonHandler buttonHandler(canHandler, []() -> bool {return analogRead(BUTTON_PIN) > 500 ? true : false;});
+PushButtonHandler buttonHandler(canHandler, []() -> bool {return (analogRead(BUTTON_PIN) > 500);});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
-static constexpr uint32_t measureTimeMs = static_cast<uint32_t>(15UL * 60UL * 1000UL);
-AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, measureTimeMs);
+AmbientSensor ambientSensor(Serial, canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 
@@ -52,18 +56,20 @@ void setup() {
   analogSetup();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  for(uint8_t i = 0; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
+  taskRunner[0]->init();                                                      // Initialize CAN handler.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   extSensor.on();
+  for(uint8_t i = 1U; i < taskNum; ++i) { taskRunner[i]->init(); }            // Call begin() on each object.
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
 void loop() {
-  static uint8_t currentTask = 0U;
-  taskRunner[currentTask]->run();
-  currentTask = (currentTask + 1U) % taskNum;
+  taskRunner[0]->run();                                                       // Run the CAN handler task in every loop.
+  static uint8_t currentTask = 1U;                                            // Start from task 1.
+  taskRunner[currentTask]->run();                                             // Run tasks in round-robin manner.
+  currentTask = (currentTask % (taskNum - 1U)) + 1U;                          // Iterate over tasks from 1 to taskNum - 1.
   //measureMaxLoopTime();
 }
 
@@ -74,7 +80,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       canHandler.send(static_cast<uint16_t>(CanCmd::RGB_LED));
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
-      const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8))};
+      const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8U))};
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
     } break;

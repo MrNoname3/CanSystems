@@ -83,7 +83,7 @@ void setup() {
   const bool pcfAvailable = pcf.begin();
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
   if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
-  for(uint8_t i = 1; i < taskNum; ++i) { taskRunner[i]->init(); }             // Call begin() on each object.
+  for(uint8_t i = 1U; i < taskNum; ++i) { taskRunner[i]->init(); }            // Call begin() on each object.
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
   Serial.println(F("********\r\nLooping..."));
