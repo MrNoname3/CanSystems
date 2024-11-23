@@ -5,6 +5,7 @@
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "performance.hpp"                                          /// Performance measurement class.
 #include "dfPlayer.hpp"                                             /// MP3 player driver library.
 #include "ambientSensor.hpp"                                        /// Sensor handelr library.
 #include "externalSensor.hpp"                                       /// External temperature and humidity sensor library.
@@ -29,7 +30,7 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void measureMaxLoopTime();
+void maxLoopTimeCallback(uint32_t maxLoopTime);
 
 //--- Asserts ---//
 static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
@@ -42,9 +43,10 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
+Performance performance(maxLoopTimeCallback);
 
 //--- Handling tasks ---//
-Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player};
+Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -77,7 +79,6 @@ void setup() {
 
 void loop() {
   taskHandler.runTasks();
-  //measureMaxLoopTime();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
@@ -95,6 +96,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
+  Serial.print(F("Btn: "));
+  Serial.println(static_cast<uint8_t>(btnEvent));
   switch(btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       static bool rgbLedState = false;
@@ -105,14 +108,7 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   }
 }
 
-void measureMaxLoopTime() {
-  static uint32_t maxLoopTime = 1UL;
-  static uint32_t lastLoopTime = millis();
-  uint32_t actualLoopTime = millis() - lastLoopTime;
-  lastLoopTime = millis();
-  if(actualLoopTime > maxLoopTime) {
-    maxLoopTime = actualLoopTime;
-    Serial.print(F("Max loop time: "));
-    Serial.println(maxLoopTime);
-  }
+void maxLoopTimeCallback(uint32_t maxLoopTime) {
+  Serial.print(F("Max loop time: "));
+  Serial.println(maxLoopTime);
 }

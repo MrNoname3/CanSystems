@@ -5,11 +5,11 @@
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "performance.hpp"                                          /// Performance measurement class.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "pumpControl.hpp"                                          /// Pump control class.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
 #include "moistureReader.hpp"                                       /// Moisture sensor reader class.
-#include "performance.hpp"                                          /// Performance measurement class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
