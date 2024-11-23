@@ -9,6 +9,7 @@
 #include "pumpControl.hpp"                                          /// Pump control class.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
 #include "moistureReader.hpp"                                       /// Moisture sensor reader class.
+#include "performance.hpp"                                          /// Performance measurement class.
 
 //--- Constants ---//
 static constexpr uint8_t RGB_LED_NUM                = 1U;           // Number of RGB LED's.
@@ -30,7 +31,7 @@ static constexpr uint8_t MOISTURE_CH_NUM = sizeof(MOISTURE_CH) / sizeof(*MOISTUR
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void measureMaxLoopTime();
+void maxLoopTimeCallback(uint32_t maxLoopTime);
 
 //--- Asserts ---//
 static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
@@ -61,9 +62,10 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
 );
+Performance performance(maxLoopTimeCallback);
 
 //--- Handling tasks ---//
-Task *task[] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader};
+Task *task[] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -99,7 +101,6 @@ void setup() {
 
 void loop() {
   taskHandler.runTasks();
-  // measureMaxLoopTime();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
@@ -121,6 +122,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
+  Serial.print(F("Btn: "));
+  Serial.println(static_cast<uint8_t>(btnEvent));
   switch(btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       pc.skipAllIrrigations();
@@ -135,14 +138,7 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   }
 }
 
-void measureMaxLoopTime() {
-  static uint32_t maxLoopTime = 1UL;
-  static uint32_t lastLoopTime = millis();
-  uint32_t actualLoopTime = millis() - lastLoopTime;
-  lastLoopTime = millis();
-  if(actualLoopTime > maxLoopTime) {
-    maxLoopTime = actualLoopTime;
-    Serial.print(F("Max loop time: "));
-    Serial.println(maxLoopTime);
-  }
+void maxLoopTimeCallback(uint32_t maxLoopTime) {
+  Serial.print(F("Max loop time: "));
+  Serial.println(maxLoopTime);
 }
