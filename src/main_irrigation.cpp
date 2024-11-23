@@ -30,7 +30,6 @@ static constexpr uint8_t MOISTURE_CH_NUM = sizeof(MOISTURE_CH) / sizeof(*MOISTUR
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void analogSetup();
 void measureMaxLoopTime();
 
 //--- Asserts ---//
@@ -57,7 +56,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
   analogMultiplexer,
   rgbLed,
   MOISTURE_CH,
-  Time::hrToMs(8U),                                                           // Moisture measurement interval.
+  Time::hrToMs(8U),
   [](const uint8_t (&data)[8]) -> void {
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
@@ -70,13 +69,17 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
+  Serial.begin(MONITOR_BAUD);
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
-  analogSetup();
+  Analog::config();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  pinMode(BUTTON_PIN, INPUT_PULLUP);                                          // Set button pin as input with pullup resistor.
+  rgbLed.begin();
+  buttonHandler.addBtnCallback(btnEventHandling);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Serial.print(F("Init: "));
@@ -86,10 +89,10 @@ void setup() {
     Serial.println(initResult, BIN);
     canHandler.restartMCU();
   }
-  buttonHandler.addBtnCallback(btnEventHandling);
-  rgbLed.begin();
+
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
+
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
@@ -130,13 +133,6 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
     } break;
     default: {} break;
   }
-}
-
-void analogSetup() {
-  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
-  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
-  bitSet(ADCSRA, ADPS1);
-  bitClear(ADCSRA, ADPS0);
 }
 
 void measureMaxLoopTime() {

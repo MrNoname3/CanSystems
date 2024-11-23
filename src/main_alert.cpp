@@ -29,7 +29,6 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void analogSetup();
 void measureMaxLoopTime();
 
 //--- Asserts ---//
@@ -47,29 +46,37 @@ const ExternalSensor extSensor(EXT_SENSOR_EN);
 //--- Handling tasks ---//
 Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  Serial.begin(MONITOR_BAUD);                                                 // Open serial port with the given baudrate.
+  Serial.begin(MONITOR_BAUD);
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
-  analogSetup();
+  Analog::config();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  task[0]->init();                                                            // Initialize CAN handler.
-  buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
+  buttonHandler.addBtnCallback(btnEventHandling);
+
   extSensor.on();
-  for(uint8_t i = 1U; i < taskNum; ++i) { task[i]->init(); }                  // Call begin() on each object.
+
+  const uint32_t initResult = taskHandler.initTasks();
+  const bool initSuccess = (initResult == 0U);
+  Serial.print(F("Init: "));
+  Serial.println(initSuccess ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+  if(!initSuccess) {
+    Serial.print(F("Code: "));
+    Serial.println(initResult, BIN);
+    canHandler.restartMCU();
+  }
+
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
 void loop() {
-  task[0]->run();                                                             // Run the CAN handler task in every loop.
-  static uint8_t currentTask = 1U;                                            // Start from task 1.
-  task[currentTask]->run();                                                   // Run tasks in round-robin manner.
-  currentTask = (currentTask % (taskNum - 1U)) + 1U;                          // Iterate over tasks from 1 to taskNum - 1.
+  taskHandler.runTasks();
   //measureMaxLoopTime();
 }
 
@@ -96,13 +103,6 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
     } break;
     default: {} break;
   }
-}
-
-void analogSetup() {
-  analogReference(DEFAULT);                                                   // Setup analog reference to 5V.
-  bitSet(ADCSRA, ADPS2);                                                      // Fast ADC, set prescaler to 16.
-  bitSet(ADCSRA, ADPS1);
-  bitClear(ADCSRA, ADPS0);
 }
 
 void measureMaxLoopTime() {
