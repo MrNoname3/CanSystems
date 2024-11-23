@@ -56,7 +56,8 @@ public:
   void play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue);
 
   /// @brief Initializes the DFPlayer (currently unused).
-  virtual void init() override {};
+  /// @return `true`.
+  virtual bool init() override { return true; };
 
   /// @brief Manages the state machine for track playback.
   /// Should be called periodically in the main loop.

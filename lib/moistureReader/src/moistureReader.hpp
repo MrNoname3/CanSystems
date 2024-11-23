@@ -27,7 +27,8 @@ public:
   ~MoistureReader() = default;
 
   /// @brief Initializes the MoistureReader, setting up its internal timer.
-  virtual void init() override;
+  /// @return `true`.
+  virtual bool init() override;
 
   /// @brief Executes the state machine to read moisture data.
   virtual void run() override;
@@ -83,8 +84,9 @@ MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper&
 {}
 
 template<uint8_t N>
-void MoistureReader<N>::init() {
+bool MoistureReader<N>::init() {
   eventTimer = millis();
+  return true;
 }
 
 template<uint8_t N>

@@ -25,7 +25,8 @@ public:
   ~PumpControl() = default;
 
   /// @brief Initializes the pump control system.
-  virtual void init() override;
+  /// @return `true`.
+  virtual bool init() override;
 
   /// @brief Runs the main irrigation control loop.
   virtual void run() override;

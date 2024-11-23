@@ -67,7 +67,11 @@ public:
 
   /// @brief Initializes the CAN handler.
   /// @details Sets the CAN bus speed to 500 Kb/s.
-  virtual void init() override { begin(500000U); }
+  /// @return `true`.
+  virtual bool init() override {
+    begin(500000U);
+    return true;
+  }
 
   /// @brief Executes the main loop for CAN communication.
   virtual void run() override;

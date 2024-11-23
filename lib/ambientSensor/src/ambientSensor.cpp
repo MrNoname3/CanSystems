@@ -2,9 +2,8 @@
 #include <Wire.h>
 #include "common.hpp"
 
-AmbientSensor::AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
+AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
   si7021(),
-  serialPort(serial),
   canHandler(canHandler),
   lightPin(lightPin),
   measurePeriod(measurePeriod),
@@ -15,13 +14,11 @@ AmbientSensor::AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uin
   Wire.setWireTimeout(20000U, true);                                          // Set I2C timeout to 20ms.
 }
 
-void AmbientSensor::init() {
-  serialPort.print(F("SI7021: "));
+bool AmbientSensor::init() {
   const bool si7021BeginResult = si7021.begin();
-  si7021BeginResult ? serialPort.println(CanHandler::OK_STATE) : serialPort.println(CanHandler::ERR_STATE);
-  if(!si7021BeginResult) { return; }
-  si7021.setHeater(false);
+  if(si7021BeginResult) { si7021.setHeater(false); }
   eventTimer = millis();
+  return si7021BeginResult;
 }
 
 void AmbientSensor::run() {

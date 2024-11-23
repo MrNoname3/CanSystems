@@ -26,8 +26,9 @@ PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin
   attachInterrupt(digitalPinToInterrupt(intPin), irqHandler, FALLING);
 }
 
-void PumpControl::init() {
+bool PumpControl::init() {
   eventTimer = millis();
+  return true;
 }
 
 void PumpControl::run() {

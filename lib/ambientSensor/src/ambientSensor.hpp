@@ -13,17 +13,17 @@
 class AmbientSensor final : public Task {
 public:
   /// @brief Constructor for the AmbientSensor class.
-  /// @param serial HardwareSerial instance for serial communication.
   /// @param canHandler CAN handler instance for communication.
   /// @param lightPin Analog pin for reading light intensity.
   /// @param measurePeriod Time interval for sensor measurements in milliseconds.
-  AmbientSensor(HardwareSerial& serial, CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod);
+  AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod);
 
   /// @brief Destructor for the AmbientSensor object.
   ~AmbientSensor() = default;
 
   /// @brief Initializes the sensor and communication interfaces.
-  virtual void init() override;
+  /// @return `true` if the execution was successfully, `false` otherwise.
+  virtual bool init() override;
 
   /// @brief Periodically reads sensors and sends data via CAN and serial.
   virtual void run() override;
@@ -38,7 +38,6 @@ private:
   void filterAnalogValue();
 
   SI7021 si7021;                                                            // I2C humidity and temperature sensor driver.
-  HardwareSerial& serialPort;                                               // Reference to a HardwareSerial object.
   CanHandler& canHandler;                                                   // Reference to a CAN handler object.
   const uint8_t lightPin;                                                   // Analog pin for light intensity readings.
   const uint32_t measurePeriod;                                             // Measurement interval in milliseconds.
