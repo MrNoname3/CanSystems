@@ -3,7 +3,7 @@
 
 #include "stdint.h"                                                 /// Standard fixed-width integer types.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -11,7 +11,7 @@
 /// @brief Handles reading moisture sensor data through an analog multiplexer.
 /// @tparam N Number of channels to read.
 template<uint8_t N>
-class MoistureReader final : public TaskRunner {
+class MoistureReader final : public Task {
 public:
   static_assert(N > 0U, "MoistureReader requires at least one channel.");
 

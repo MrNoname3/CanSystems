@@ -4,12 +4,12 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "PushButtonClicks.hpp"                                     /// Push button handling class.
 #include "canHandler.hpp"                                           /// CAN handler library.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Handles button press events and communicates them over CAN or via callbacks.
 /// @details The `PushButtonHandler` class processes button press events (e.g., long presses, single taps, multiple taps)
 /// using the `PushButton` class and sends the events via CAN communication or invokes a callback.
-class PushButtonHandler final : public TaskRunner {
+class PushButtonHandler final : public Task {
 public:
   /// @brief Enum representing different button press events.
   enum class BtnEvent : uint8_t {

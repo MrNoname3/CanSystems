@@ -7,13 +7,13 @@
 #include "eepromHandler.hpp"                                        /// EEPROM wrapper class.
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
-#include "taskRunner.hpp"                                           /// Base class for task scheduling.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Handles CAN communication, and OTA updates.
 /// @details The `CanHandler` class manages the CAN communication protocol
 /// for interacting with devices. It also facilitates Over-The-Air updates.
-class CanHandler final : public TaskRunner {
+class CanHandler final : public Task {
 private:
 #ifdef NEW_CAN_ADDRESS
   #warning "NEW_CAN_ADDRESS is defined!"

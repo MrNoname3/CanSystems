@@ -5,12 +5,12 @@
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include <SI7021.h>                                                 /// Temperature and humidity sensor driver.
 #include <HardwareSerial.h>                                         /// Arduino hardware serial lib.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Manages ambient measurements including temperature, humidity, and light intensity.
 /// @details Uses an SI7021 sensor for temperature and humidity readings, an analog pin for light intensity,
 /// and communicates data via CAN and serial output.
-class AmbientSensor final : public TaskRunner {
+class AmbientSensor final : public Task {
 public:
   /// @brief Constructor for the AmbientSensor class.
   /// @param serial HardwareSerial instance for serial communication.

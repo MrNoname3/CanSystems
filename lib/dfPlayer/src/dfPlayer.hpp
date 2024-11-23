@@ -6,12 +6,12 @@
 #include "DFPlayerMiniFast.h"                                       /// DFPlayerMini driver lib.
 #include "CircularBuffer.hpp"                                       /// Circular buffer class.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED controller class.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Handles interaction with a DFPlayerMini MP3 player.
 /// Includes a track-playing queue and external power control via a PFET.
-class DFPlayer final : private DFPlayerMiniFast, public TaskRunner {
+class DFPlayer final : private DFPlayerMiniFast, public Task {
 private:
   /// @brief Represents a single item in the play queue.
   struct __attribute__((packed))

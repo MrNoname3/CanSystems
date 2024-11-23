@@ -3,7 +3,7 @@
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "pumpControl.hpp"                                          /// Pump control class.
@@ -64,8 +64,8 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
 );
 
 //--- Handling tasks ---//
-TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &pc, &moistureReader};
-static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
+Task *task[] = {&canHandler, &buttonHandler, &pc, &moistureReader};
+static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 
 //--- Setup section ---//
 void setup() {
@@ -76,14 +76,14 @@ void setup() {
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
   pinMode(BUTTON_PIN, INPUT_PULLUP);                                          // Set button pin as input with pullup resistor.
-  taskRunner[0]->init();                                                      // Initialize CAN handler.
+  task[0]->init();                                                            // Initialize CAN handler.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   Serial.print(F("PCF8574: "));
   const bool pcfAvailable = pcf.begin();
   Serial.println(pcfAvailable ? CanHandler::OK_STATE : CanHandler::ERR_STATE);  // Check if PCF8574 is available.
   if(!pcfAvailable) { canHandler.restartMCU(); }                              // If not, restart MCU.
-  for(uint8_t i = 1U; i < taskNum; ++i) { taskRunner[i]->init(); }            // Call begin() on each object.
+  for(uint8_t i = 1U; i < taskNum; ++i) { task[i]->init(); }                  // Call begin() on each object.
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
   Serial.println(F("********\r\nLooping..."));
@@ -91,9 +91,9 @@ void setup() {
 }
 
 void loop() {
-  taskRunner[0]->run();                                                       // Run the CAN handler task in every loop.
+  task[0]->run();                                                             // Run the CAN handler task in every loop.
   static uint8_t currentTask = 1U;                                            // Start from task 1.
-  taskRunner[currentTask]->run();                                             // Run tasks in round-robin manner.
+  task[currentTask]->run();                                                   // Run tasks in round-robin manner.
   currentTask = (currentTask % (taskNum - 1U)) + 1U;                          // Iterate over tasks from 1 to taskNum - 1.
   // measureMaxLoopTime();
 }

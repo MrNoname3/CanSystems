@@ -2,7 +2,7 @@
 #define PUMP_CONTROL_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "pcf8574.hpp"                                              /// I2C GPIO expander.
 #include "CircularBuffer.hpp"                                       /// Circular buffer class.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
@@ -10,7 +10,7 @@
 
 /// @class PumpControl
 /// @brief Controls irrigation pumps, monitors flow rate, and manages irrigation schedules and safety limits.
-class PumpControl final : public TaskRunner {
+class PumpControl final : public Task {
 public:
   /// @brief Constructor for the PumpControl class.
   /// @param pcf8574 Reference to the I2C GPIO expander.

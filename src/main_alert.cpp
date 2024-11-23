@@ -3,7 +3,7 @@
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
-#include "taskRunner.hpp"                                           /// Task runner class.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "dfPlayer.hpp"                                             /// MP3 player driver library.
 #include "ambientSensor.hpp"                                        /// Sensor handelr library.
@@ -45,8 +45,8 @@ DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 
 //--- Handling tasks ---//
-TaskRunner *taskRunner[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player};
-static constexpr uint8_t taskNum = sizeof(taskRunner) / sizeof(*taskRunner);
+Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player};
+static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 
 //--- Setup section ---//
 void setup() {
@@ -56,19 +56,19 @@ void setup() {
   analogSetup();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
-  taskRunner[0]->init();                                                      // Initialize CAN handler.
+  task[0]->init();                                                            // Initialize CAN handler.
   buttonHandler.addBtnCallback(btnEventHandling);
   rgbLed.begin();
   extSensor.on();
-  for(uint8_t i = 1U; i < taskNum; ++i) { taskRunner[i]->init(); }            // Call begin() on each object.
+  for(uint8_t i = 1U; i < taskNum; ++i) { task[i]->init(); }                  // Call begin() on each object.
   Serial.println(F("********\r\nLooping..."));
   canHandler.ledOff();
 }
 
 void loop() {
-  taskRunner[0]->run();                                                       // Run the CAN handler task in every loop.
+  task[0]->run();                                                             // Run the CAN handler task in every loop.
   static uint8_t currentTask = 1U;                                            // Start from task 1.
-  taskRunner[currentTask]->run();                                             // Run tasks in round-robin manner.
+  task[currentTask]->run();                                                   // Run tasks in round-robin manner.
   currentTask = (currentTask % (taskNum - 1U)) + 1U;                          // Iterate over tasks from 1 to taskNum - 1.
   //measureMaxLoopTime();
 }
