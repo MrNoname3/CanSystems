@@ -13,7 +13,7 @@
 template<uint8_t N>
 class MoistureReader final : public Task {
 public:
-  static_assert(N > 0U, "MoistureReader requires at least one channel.");
+  static_assert(N > 0U, "MoistureReader requires at least one channel!");
 
   /// @brief Constructor for the MoistureReader class.
   /// @param multiplexer Reference to the analog multiplexer object.
