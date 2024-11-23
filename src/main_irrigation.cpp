@@ -62,7 +62,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
 );
-Performance performance(maxLoopTimeCallback);
+Performance performance(2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};

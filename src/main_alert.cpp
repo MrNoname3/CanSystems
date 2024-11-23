@@ -43,7 +43,7 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-Performance performance(maxLoopTimeCallback);
+Performance performance(2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};

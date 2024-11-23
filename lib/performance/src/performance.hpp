@@ -8,12 +8,14 @@
 /// @brief Performance measurement class to track the execution time of each loop iteration.
 class Performance final : public Task {
 public:
-  /// @brief Constructs a `Performance` object with a callback for maximum loop time.
-  /// @param maxLoopTimeCallback A callback function to be called when a new maximum loop
-  /// time is recorded. The function should accept a single `uint32_t` parameter, which
-  /// represents the maximum loop time in milliseconds.
-  Performance(void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
-    maxLoopTime(1U),
+  /// @brief Constructs a `Performance` object with an initial loop time limit and a callback.
+  /// @param initialLoopTimeLimit The initial maximum loop time limit in milliseconds.
+  /// This value sets a baseline for comparison when tracking loop execution times.
+  /// @param maxLoopTimeCallback A callback function to be called when a new maximum loop 
+  /// time is recorded. The function should accept a single `uint32_t` parameter, which 
+  /// represents the new maximum loop time in milliseconds.
+  Performance(uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
+    maxLoopTime(initialLoopTimeLimit),
     lastLoopTime(0U),
     maxLoopTimeCallback(maxLoopTimeCallback)
   {}
