@@ -205,7 +205,7 @@ private:
   static constexpr uint8_t channelCount = 4U;                               // Number of irrigation channels.
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;           // Channel mask to prevent memory overlapping.
   static constexpr uint16_t errorCheckTime = Time::secToMs(1U);             // Error check interval in ms.
-  static constexpr uint8_t maxAllowedStandbyCurrent = 50U;                  // Maximum standby current in mA.
+  static constexpr uint8_t maxAllowedStandbyCurrent = 100U;                 // Maximum standby current in mA.
   static constexpr uint16_t maxAllowedCurrent = 1000U;                      // Maximum working current in mA.
   static constexpr uint8_t irrStartColors[3] = {0U, 5U, 10U};               // RGB LED colors when irrigation started.
 
