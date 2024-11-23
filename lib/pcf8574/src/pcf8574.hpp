@@ -3,11 +3,12 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Wire.h>                                                   /// I2C driver library.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Class to control a PCF8574 I2C I/O expander.
 /// @details Provides methods to read from and write to the pins of the PCF8574
 /// via I2C communication. Supports pin toggling, input/output configuration, and state reading.
-class PCF8574 final {
+class PCF8574 final : public Task {
 public:
   /// @brief Constructs a PCF8574 instance with the specified I2C address and bus.
   /// @param address The I2C address of the PCF8574 device.
@@ -19,7 +20,10 @@ public:
 
   /// @brief Initializes the PCF8574 device.
   /// @return `true` if the device is successfully initialized, `false` otherwise.
-  bool begin() const;
+  virtual bool init() override;
+
+  /// @brief Provides an empty implementation of the method.
+  virtual void run() override {}
 
   /// @brief Writes a byte to the PCF8574 register.
   /// @param reg The byte to write to the PCF8574.

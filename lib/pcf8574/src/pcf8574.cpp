@@ -6,7 +6,7 @@ PCF8574::PCF8574(uint8_t address, TwoWire &wire) :
   registerValue(0xFFU)
 {}
 
-bool PCF8574::begin() const {
+bool PCF8574::init() {
   wire.begin();
   wire.setClock(clockSpeed);
   wire.beginTransmission(address);
