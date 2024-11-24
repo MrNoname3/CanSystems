@@ -20,7 +20,6 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
   eventTimer(0U),
   lastOtaState(OTA::OtaState::IDLE)
 {
-  wdt_enable(WDTO_1S);                            // Enable WDT timer.
   CAN.setPins(canCsPin, -1);
   pinMode(canIntPin, INPUT);
   pinMode(ledPin, OUTPUT);
@@ -94,7 +93,6 @@ bool CanHandler::beginSimple(uint32_t canBaud) {
     if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
-  wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }
 
@@ -185,7 +183,6 @@ bool CanHandler::loopSimple() {
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
     ledOn();
   }
-  wdt_reset();                                                    // Reset the watchdog timer.
   return true;
 }
 

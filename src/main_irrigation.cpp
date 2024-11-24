@@ -1,5 +1,6 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
+#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
@@ -38,6 +39,7 @@ static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul i
 static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow sensor interrupt input pin is not interrupt capable!");
 
 //--- Driver objects ---//
+WdtHandler wdt(WdtHandler::WDT::T_120MS);
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
@@ -71,6 +73,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
+  wdt.feed();
   Serial.begin(MONITOR_BAUD);
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
@@ -100,6 +103,7 @@ void setup() {
 }
 
 void loop() {
+  wdt.feed();
   taskHandler.runTasks();
 }
 
