@@ -70,7 +70,7 @@ void setup() {
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Serial.print(F("Init: "));
-  Serial.println(initSuccess ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+  Serial.println(initSuccess ? Str::getOkStr() : Str::getErrStr());
   if(!initSuccess) {
     Serial.print(F("Code: "));
     Serial.println(initResult, BIN);

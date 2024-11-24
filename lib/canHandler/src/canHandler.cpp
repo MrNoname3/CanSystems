@@ -5,9 +5,6 @@
 #include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0U;
-static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);
-static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);
-static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);
 
 CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
   serialPort(serial),
@@ -28,23 +25,21 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
 
 bool CanHandler::init(uint32_t canBaud) {
   {
-    constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);
-    const char* SPACER = "|";
     serialPort.print(F("CPP: "));
-    serialPort.println(cppVersion);
+    serialPort.println(Build::getCppVersion());
     serialPort.print(F("FW: "));
-    serialPort.println(fwVersion);
+    serialPort.println(Build::getFwVersion());
     serialPort.print(F("GIT: "));
-    serialPort.println(gitHash, HEX);
+    serialPort.println(Build::getGitHash(), HEX);
     serialPort.print(F("Dirty: "));
-    serialPort.println(gitDirty);
+    serialPort.println(Build::getGitDirty());
     serialPort.print(F("Fuses: "));
     serialPort.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
-    serialPort.print(SPACER);
+    serialPort.print(Str::getSpacerStr());
     serialPort.print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
-    serialPort.print(SPACER);
+    serialPort.print(Str::getSpacerStr());
     serialPort.print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
-    serialPort.print(SPACER);
+    serialPort.print(Str::getSpacerStr());
     serialPort.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
   }
   {
@@ -54,7 +49,7 @@ bool CanHandler::init(uint32_t canBaud) {
 #endif
     serialPort.print(F("Address: "));
     const bool eepromDataValid = eepromHandler.load();
-    eepromDataValid ? serialPort.println(localCanId) : serialPort.println(ERR_STATE);
+    eepromDataValid ? serialPort.println(localCanId) : serialPort.println(Str::getErrStr());
     if(!eepromDataValid) { return false; }
   }
   {
@@ -62,7 +57,7 @@ bool CanHandler::init(uint32_t canBaud) {
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
     const bool canBeginResult = CAN.begin(canBaud) == 1;
-    canBeginResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+    canBeginResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
     if(!canBeginResult) { return false; }
   }
   { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
@@ -71,7 +66,7 @@ bool CanHandler::init(uint32_t canBaud) {
     const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
     serialPort.print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
-    setFilterResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+    setFilterResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
     if(!setFilterResult) { return false; }
   }
   {
@@ -81,7 +76,7 @@ bool CanHandler::init(uint32_t canBaud) {
   {
     serialPort.print(F("FLASH: "));
     const bool flashInitResult = flash.initialize();
-    flashInitResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+    flashInitResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
     if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
@@ -128,7 +123,7 @@ bool CanHandler::loopSimple() {
             static_cast<uint16_t>(canFrame.data[7]) << 8U;
           serialPort.print(F("OTA start: "));
           const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
-          otaStartResult ? serialPort.println(OK_STATE) : serialPort.println(ERR_STATE);
+          otaStartResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
           if(!otaStartResult) { send(CanCmd::OTA_START, Response::NACK); }
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_SEND): {
@@ -163,13 +158,13 @@ bool CanHandler::loopSimple() {
   if(otaState == OTA::OtaState::VALID) {
     send(CanCmd::OTA_END, Response::ACK);
     serialPort.print(F("Storing: "));
-    serialPort.println(OK_STATE);
+    serialPort.println(Str::getOkStr());
     if(ota.isOwnFw()) { return false; } // Trigger MCU restart.
   }
   if(otaState == OTA::OtaState::INVALID) {
     send(CanCmd::OTA_END, Response::NACK);
     serialPort.print(F("Storing: "));
-    serialPort.println(ERR_STATE);
+    serialPort.println(Str::getErrStr());
   }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
@@ -212,13 +207,13 @@ bool CanHandler::send(CanCmd command, Response response) const {
 
 bool CanHandler::sendFwVersion() const {
   static constexpr uint8_t versionInfo[8] = {
-    static_cast<uint8_t>((fwVersion >> 0U) & 0xFF),
-    static_cast<uint8_t>((fwVersion >> 8U) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 0U) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 8U) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 16U) & 0xFF),
-    static_cast<uint8_t>((gitHash >> 24U) & 0xFF),
-    gitDirty,
+    static_cast<uint8_t>((Build::getFwVersion() >> 0U) & 0xFF),
+    static_cast<uint8_t>((Build::getFwVersion() >> 8U) & 0xFF),
+    static_cast<uint8_t>((Build::getGitHash() >> 0U) & 0xFF),
+    static_cast<uint8_t>((Build::getGitHash() >> 8U) & 0xFF),
+    static_cast<uint8_t>((Build::getGitHash() >> 16U) & 0xFF),
+    static_cast<uint8_t>((Build::getGitHash() >> 24U) & 0xFF),
+    Build::getGitDirty(),
     0U
   };
   return send(CanCmd::FW_VERSION, versionInfo);

@@ -23,9 +23,6 @@ private:
   static_assert(MASTER_CAN_ADDRESS < 1023, "Master CAN address must be less than 1023!");
   static constexpr uint16_t masterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
 public:
-  static constexpr const char* OK_STATE               = "[OK]";   // Status indicating success.
-  static constexpr const char* ERR_STATE              = "[ERR]";  // Status indicating failure.
-
   /// @brief Structure representing a CAN frame.
   /// @details Includes an extended CAN ID with 3 parts: receiver address (`to`), command (`cmd`), and sender address (`from`).
   /// Also includes a data payload that can hold up to 8 bytes.
