@@ -1,7 +1,7 @@
 #include "canHandler.hpp"
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <CAN.h>                                                    /// CAN controller library.
-#include <avr/wdt.h>                                                /// Watchdog timer library.
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0U;
@@ -26,15 +26,7 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
   attachInterrupt(digitalPinToInterrupt(canIntPin), rxInterrupt, FALLING);
 }
 
-void CanHandler::begin(uint32_t canBaud) {
-  const bool beginResult = beginSimple(canBaud);
-  if(!beginResult) {
-    serialPort.println(F("Init ERROR!"));
-    restartMCU();
-  }
-}
-
-bool CanHandler::beginSimple(uint32_t canBaud) {
+bool CanHandler::init(uint32_t canBaud) {
   {
     constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);
     const char* SPACER = "|";
@@ -100,7 +92,7 @@ void CanHandler::run() {
   const bool loopResult = loopSimple();
   if(!loopResult) {
     serialPort.println(F("Loop ERROR!"));
-    restartMCU();
+    ResetHandler::restartMCU();
   }
 }
 
@@ -120,7 +112,7 @@ bool CanHandler::loopSimple() {
     if(CAN.packetExtended()) {
       switch(static_cast<uint16_t>(canFrame.cmd)) {
         case static_cast<uint16_t>(CanCmd::PING): { send(CanCmd::PING); } break;
-        case static_cast<uint16_t>(CanCmd::RESTART): { restartMCU(); } break;
+        case static_cast<uint16_t>(CanCmd::RESTART): { return false; } break;  // Trigger MCU restart.
         case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
         case static_cast<uint16_t>(CanCmd::OTA_START): {
           const uint16_t otaFlashBegin =
@@ -172,7 +164,7 @@ bool CanHandler::loopSimple() {
     send(CanCmd::OTA_END, Response::ACK);
     serialPort.print(F("Storing: "));
     serialPort.println(OK_STATE);
-    if(ota.isOwnFw()) { restartMCU(); }
+    if(ota.isOwnFw()) { return false; } // Trigger MCU restart.
   }
   if(otaState == OTA::OtaState::INVALID) {
     send(CanCmd::OTA_END, Response::NACK);
@@ -216,13 +208,6 @@ bool CanHandler::send(CanCmd command) const {
 bool CanHandler::send(CanCmd command, Response response) const {
   const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
   return send(command, data);
-}
-
-void CanHandler::restartMCU() const {
-  serialPort.println(F("Restarting..."));
-  serialPort.flush();                                 // Sends out data from serial buffer, before reset.
-  wdt_enable(WDTO_15MS);                              // Setup watchdog timer.
-  while(true) {};                                     // Let the WDT restart the MCU.
 }
 
 bool CanHandler::sendFwVersion() const {

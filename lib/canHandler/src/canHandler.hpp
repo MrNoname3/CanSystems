@@ -61,16 +61,11 @@ public:
   /// @brief Default destructor.
   ~CanHandler() = default;
 
-  /// @brief Begins CAN communication with the specified baud rate.
-  /// @param canBaud Baud rate for CAN communication.
-  void begin(uint32_t canBaud);
-
   /// @brief Initializes the CAN handler.
   /// @details Sets the CAN bus speed to 500 Kb/s.
   /// @return `true`.
   virtual bool init() override {
-    begin(500000U);
-    return true;
+    return init(500000U);
   }
 
   /// @brief Executes the main loop for CAN communication.
@@ -113,9 +108,6 @@ public:
   /// @brief Toggles the LED state (HIGH to LOW, or LOW to HIGH).
   inline void ledToggle() const { digitalWrite(ledPin, !digitalRead(ledPin)); }
 
-  /// @brief Resets the microcontroller unit (MCU) by triggering a watchdog reset.
-  void restartMCU() const;
-
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
   inline void addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
@@ -131,7 +123,7 @@ private:
   /// @brief Initializes the CAN bus with the specified baud rate.
   /// @param canBaud Baud rate for CAN communication.
   /// @return `true` if successful, `false` otherwise.
-  bool beginSimple(uint32_t canBaud);
+  bool init(uint32_t canBaud);
 
   /// @brief Handles ongoing CAN communication in a non-blocking loop.
   /// @return `true` if successful, `false` otherwise.

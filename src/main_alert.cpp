@@ -1,6 +1,7 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
@@ -73,7 +74,7 @@ void setup() {
   if(!initSuccess) {
     Serial.print(F("Code: "));
     Serial.println(initResult, BIN);
-    canHandler.restartMCU();
+    ResetHandler::restartMCU();
   }
 
   Serial.println(F("********\r\nLooping..."));
