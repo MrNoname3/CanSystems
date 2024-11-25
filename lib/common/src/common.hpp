@@ -1,6 +1,7 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
 
+#include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
@@ -39,6 +40,13 @@ public:
   /// @return The equivalent time in minutes.
   static constexpr uint16_t hrToMin(uint16_t hour) {
     return hour * 60U;
+  }
+
+  /// @brief Converts milliseconds to microseconds.
+  /// @param ms The number of milliseconds to convert.
+  /// @return The equivalent time in microseconds.
+  static constexpr uint32_t msToUs(uint16_t ms) {
+    return ms * 1000UL;
   }
 
   /// @brief Checks if a specified duration has elapsed since an event.
