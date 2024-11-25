@@ -177,9 +177,6 @@ private:
   /// @return True if the channel was successfully selected, false otherwise.
   inline bool selectChannel(uint8_t channel) const;
 
-  /// @brief Filters the analog value of the current sensor.
-  void filterAnalogValue();
-
   /// @brief Sets the error state for the pump control system.
   /// @param err The error to set.
   inline void setError(ERROR err);

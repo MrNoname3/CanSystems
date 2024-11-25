@@ -23,7 +23,7 @@ bool AmbientSensor::init() {
 
 void AmbientSensor::run() {
   const uint32_t actualTime = millis();
-  filterAnalogValue();
+  lightValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(lightPin), lightValue));
   if(!si7021.sensorExists()) { return; }
   if(Time::hasElapsed(actualTime, eventTimer, measurePeriod)) {
     eventTimer = actualTime;
@@ -46,11 +46,4 @@ void AmbientSensor::run() {
     };
     canHandler.send(CanCmd::READ_HUM_TEMP_LDR, data);
   }
-}
-
-void AmbientSensor::filterAnalogValue() {
-  // Complement filter calculation.
-  static constexpr uint8_t adcInputFilterAlpha = 10U;     // Complement filter ALPHA value.
-  const uint16_t rawAnalogValue = static_cast<uint16_t>(analogRead(lightPin));
-  lightValue = ((adcInputFilterAlpha * rawAnalogValue) + (100U - adcInputFilterAlpha) * (uint32_t)lightValue) / 100U;
 }

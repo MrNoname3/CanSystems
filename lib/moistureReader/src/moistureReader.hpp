@@ -113,11 +113,11 @@ void MoistureReader<N>::run() {
         readState = ReadState::READING;
     } break;
     case ReadState::READING: {
-      filterAnalogValue();
+      moistureValue = Analog::complementaryFilter10(multiplexer.analogReadAdvanced(), moistureValue);
       if(Time::hasElapsed(actualTime, eventTimer, filteringTime)) {
         if(dataSender != nullptr) {
-          const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0) & 0xFF);
-          const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8) & 0xFF);
+          const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0U) & 0xFF);
+          const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8U) & 0xFF);
           dataSender({channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U});
         }
         readIndex++;
@@ -140,13 +140,5 @@ void MoistureReader<N>::triggerImmediateMeasurement() {
   if(readState == ReadState::IDLE) {
     eventTimer = millis() - readTime;
   }
-}
-
-template<uint8_t N>
-void MoistureReader<N>::filterAnalogValue() {
-  // Complement filter calculation.
-  static constexpr uint8_t adcInputFilterAlpha = 10U;     // Complement filter ALPHA value.
-  const uint16_t rawAnalogValue = multiplexer.analogReadAdvanced();
-  moistureValue = ((adcInputFilterAlpha * rawAnalogValue) + (100U - adcInputFilterAlpha) * (uint32_t)moistureValue) / 100U;
 }
 #endif // MOISTURE_READER_HPP

@@ -33,7 +33,7 @@ bool PumpControl::init() {
 
 void PumpControl::run() {
   const uint32_t actualTime = millis();
-  filterAnalogValue();
+  analogValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue), analogValue);
   switch(irrigationState) {
     case IrrigationState::IDLE: {
       if(!irrigationQueue.isEmpty()) {
@@ -187,13 +187,6 @@ bool PumpControl::selectChannel(uint8_t channel) const {
   uint8_t newRegValue = actualRegValue & 0xF0;            // Keep high 4 bits, clear low 4 bits.
   newRegValue |= (1U << channel);                         // Apply the new channel selection.
   return pcf.write(newRegValue);
-}
-
-void PumpControl::filterAnalogValue() {
-  // Complement filter calculation.
-  static constexpr uint8_t adcInputFilterAlpha = 10U;     // Complement filter ALPHA value.
-  const uint16_t rawAnalogValue = static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue);
-  analogValue = ((adcInputFilterAlpha * rawAnalogValue) + (100U - adcInputFilterAlpha) * (uint32_t)analogValue) / 100U;
 }
 
 void PumpControl::setError(ERROR err) {
