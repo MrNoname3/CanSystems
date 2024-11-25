@@ -5,13 +5,14 @@
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
 class Time final {
+private:
+  /// @brief Delete constructor.
+  Time() = delete;
+
+  /// @brief Delete destructor.
+  ~Time() = delete;
+
 public:
-  /// @brief Default constructor.
-  Time() = default;
-
-  /// @brief Default destructor.
-  ~Time() = default;
-
   /// @brief Converts hours to milliseconds.
   /// @param hour The number of hours to convert.
   /// @return The equivalent time in milliseconds.
@@ -57,13 +58,14 @@ public:
 
 /// @brief Utility class for configuring and managing analog input settings.
 class Analog final {
+private:
+  /// @brief Delete constructor.
+  Analog() = delete;
+
+  /// @brief Delete destructor.
+  ~Analog() = delete;
+
 public:
-  /// @brief Default constructor.
-  Analog() = default;
-
-  /// @brief Default destructor.
-  ~Analog() = default;
-
   /// @brief Configures the analog input settings.
   /// This function sets up the analog reference voltage to 5V and configures the ADC
   /// for fast sampling by setting the prescaler to 16.
@@ -74,6 +76,24 @@ public:
     bitClear(ADCSRA, ADPS0);
   }
 
+  /// @brief Applies a complementary filter to smooth sensor values.
+  /// @tparam alpha Weight for the new value (0-255).
+  /// @param newValue The latest sensor value.
+  /// @param oldValue The previous smoothed value.
+  /// @return The updated smoothed value.
+  template <uint8_t alpha>
+  static constexpr uint16_t complementaryFilter(uint16_t newValue, uint16_t oldValue) {
+    return static_cast<uint16_t>((static_cast<uint32_t>(alpha) * newValue + static_cast<uint32_t>(255U - alpha) * oldValue) / 255U);
+  }
+
+  /// @brief Applies a complementary filter with a fixed alpha of ~10%.
+  /// @param newValue The latest sensor value.
+  /// @param oldValue The previous smoothed value.
+  /// @return The updated smoothed value.
+  static constexpr uint16_t complementaryFilter10(uint16_t newValue, uint16_t oldValue) {
+    return complementaryFilter<25U>(newValue, oldValue);  // Alpha ~10% (25/255).
+  }
+
   Analog(const Analog&) = delete;                       // Define copy constructor.
   Analog& operator=(const Analog&) = delete;            // Define copy assignment operator.
   Analog(Analog&&) = delete;                            // Define move constructor.
@@ -82,13 +102,14 @@ public:
 
 /// @brief Provides common string constants for status messages and formatting.
 class Str final {
+private:
+  /// @brief Delete constructor.
+  Str() = delete;
+
+  /// @brief Delete destructor.
+  ~Str() = delete;
+
 public:
-  /// @brief Default constructor.
-  Str() = default;
-
-  /// @brief Default destructor.
-  ~Str() = default;
-
   /// @brief Retrieves the "OK" status string.
   /// @return Constant string `"[OK]"`.
   static constexpr const char* getOkStr() { return OK_STR; }
@@ -114,13 +135,14 @@ private:
 
 /// @brief Class to provide build-time metadata and configuration information.
 class Build final {
+private:
+  /// @brief Delete constructor.
+  Build() = delete;
+
+  /// @brief Delete destructor.
+  ~Build() = delete;
+
 public:
-  /// @brief Default constructor.
-  Build() = default;
-
-  /// @brief Default destructor.
-  ~Build() = default;
-
   /// @brief Gets the firmware version.
   /// @return Firmware version derived from `GIT_COMMIT_COUNT`.
   static constexpr const uint16_t getFwVersion() { return fwVersion; }
