@@ -10,8 +10,8 @@ AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t 
   lightValue(0U),
   eventTimer(0U)
 {
-  Wire.setClock(400000U);                                                     // Set I2C bus speed.
-  Wire.setWireTimeout(20000U, true);                                          // Set I2C timeout to 20ms.
+  Wire.setClock(clockSpeed);                        // Set I2C bus speed.
+  Wire.setWireTimeout(Time::msToUs(5U), true);      // Set I2C timeout to 20ms.
 }
 
 bool AmbientSensor::init() {
@@ -23,7 +23,7 @@ bool AmbientSensor::init() {
 
 void AmbientSensor::run() {
   const uint32_t actualTime = millis();
-  lightValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(lightPin), lightValue));
+  lightValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(lightPin)), lightValue);
   if(!si7021.sensorExists()) { return; }
   if(Time::hasElapsed(actualTime, eventTimer, measurePeriod)) {
     eventTimer = actualTime;

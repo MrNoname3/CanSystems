@@ -1,14 +1,17 @@
 #include "pcf8574.hpp"
+#include "common.hpp"
 
 PCF8574::PCF8574(uint8_t address, TwoWire &wire) :
   address(address),
   wire(wire),
   registerValue(0xFFU)
-{}
+{
+  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
+  this->wire.setWireTimeout(Time::msToUs(5U), true);      // Set I2C timeout to 20ms.
+}
 
 bool PCF8574::init() {
   wire.begin();
-  wire.setClock(clockSpeed);
   wire.beginTransmission(address);
   return (wire.endTransmission() == 0U);
 }
