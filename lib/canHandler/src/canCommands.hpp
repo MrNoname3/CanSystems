@@ -19,6 +19,7 @@ enum class CanCmd : uint16_t {
 
   PLAY_MP3 = CBS,                             // Command to play an MP3 file on the node.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature, and light sensor values.
+  HUM_TEMP_I2C_TIMEOUT,                       // Timeout occurred while using the I2C sensor.
 
   ADD_IRRIGATION = CBS,                       // Add a new irrigation task to the queue.
   SKIP_IRRIGATION,                            // Skip the currently scheduled irrigation task.

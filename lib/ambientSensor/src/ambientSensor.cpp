@@ -32,6 +32,7 @@ void AmbientSensor::run() {
     const bool dataInvalid = Wire.getWireTimeoutFlag();
     if(dataInvalid) {
       Wire.clearWireTimeoutFlag();
+      canHandler.send(CanCmd::HUM_TEMP_I2C_TIMEOUT);
       return;
     }
     const uint8_t data[8] = {
