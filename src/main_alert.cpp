@@ -46,7 +46,7 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-Performance performance(2U, maxLoopTimeCallback);
+Performance performance(canHandler, 2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
@@ -90,12 +90,12 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
       rgbLed.setColor(data[0], data[1], data[2], true);
-      canHandler.send(static_cast<uint16_t>(CanCmd::RGB_LED));
+      canHandler.send(command);
     } break;
     case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
       const uint16_t songNum{static_cast<uint16_t>(data[0] | (data[1] << 8U))};
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
-      canHandler.send(static_cast<uint16_t>(CanCmd::PLAY_MP3));
+      canHandler.send(command);
     } break;
   };
 }

@@ -15,6 +15,7 @@ enum class CanCmd : uint16_t {
   OTA_SEND,                                   // Send firmware data chunks for OTA updates.
   OTA_END,                                    // Signal the end of the OTA update process.
   RGB_LED,                                    // Set the color of WS2812 RGB LEDs.
+  LOOP_TIME_MAX,                              // Send maximum loop time in milliseconds.
 
   PLAY_MP3 = CBS,                             // Command to play an MP3 file on the node.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature, and light sensor values.

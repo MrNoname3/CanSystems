@@ -65,7 +65,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
 );
-Performance performance(2U, maxLoopTimeCallback);
+Performance performance(canHandler, 2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
@@ -112,18 +112,21 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::ADD_IRRIGATION): {
       pc.createIrrigation(data[0], data[1], data[2]);
+      canHandler.send(command);
     } break;
     case static_cast<uint16_t>(CanCmd::SKIP_IRRIGATION): {
       pc.skipActualIrrigation();
+      canHandler.send(command);
     } break;
     case static_cast<uint16_t>(CanCmd::STOP_IRRIGATION): {
       pc.skipAllIrrigations();
+      canHandler.send(command);
     } break;
     case static_cast<uint16_t>(CanCmd::MOISTURE_DATA): {
       moistureReader.triggerImmediateMeasurement();
+      canHandler.send(command);
     } break;
   }
-  canHandler.send(command);
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
