@@ -68,7 +68,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
 Performance performance(canHandler, 2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
-Task *task[] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
+Task *task[6] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
