@@ -3,7 +3,7 @@
 #include "common.hpp"
 
 AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
-  si7021(),
+  si7021(Time::msToUs(20U)),
   canHandler(canHandler),
   lightPin(lightPin),
   measurePeriod(measurePeriod),
@@ -14,14 +14,14 @@ AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t 
   event(Event::IDLE)
 {
   Wire.setClock(clockSpeed);                        // Set I2C bus speed.
-  Wire.setWireTimeout(Time::msToUs(20U), true);     // Set I2C timeout to 20ms.
+  Wire.setWireTimeout(Time::msToUs(10U), true);     // Set I2C timeout.
 }
 
 bool AmbientSensor::init() {
-  const bool si7021BeginResult = si7021.begin();
+  const bool si7021BeginResult = si7021.init();
   if(si7021BeginResult) {
     si7021.setHeater(false);
-    si7021.setPrecision(0x81);
+    si7021.setPrecision(SI7021::Precision::T11RH11);
   }
   eventTimer = millis();
   return si7021BeginResult;
@@ -30,7 +30,6 @@ bool AmbientSensor::init() {
 void AmbientSensor::run() {
   const uint32_t actualTime = millis();
   lightValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(lightPin)), lightValue);
-  if(!si7021.sensorExists()) { return; }
   switch(event) {
     case Event::IDLE: {
       if(Time::hasElapsed(actualTime, eventTimer, measurePeriod)) {
@@ -39,21 +38,12 @@ void AmbientSensor::run() {
       };
     } break;
     case Event::READ_TEMPERATURE: {
-      temperature = si7021.getCelsiusHundredths();
-      event = Event::READ_HUMIDITY;
+      event = si7021.getCelsiusHundredths(temperature) ? Event::READ_HUMIDITY : Event::SENSOR_ERROR;
     } break;
     case Event::READ_HUMIDITY: {
-      humidity = si7021.getHumidityPercent();
-      event = Event::SEND_VALUES;
+      event = si7021.getHumidityPercent(humidity) ? Event::SEND_VALUES : Event::SENSOR_ERROR;
     } break;
     case Event::SEND_VALUES: {
-      event = Event::IDLE;
-      const bool dataInvalid = Wire.getWireTimeoutFlag();
-      if(dataInvalid) {
-        Wire.clearWireTimeoutFlag();
-        canHandler.send(CanCmd::HUM_TEMP_I2C_TIMEOUT);
-        return;
-      }
       const uint8_t data[8] = {
         static_cast<uint8_t>((temperature >> 0U) & 0xFF),
         static_cast<uint8_t>((temperature >> 8U) & 0xFF),
@@ -65,6 +55,11 @@ void AmbientSensor::run() {
         0U
       };
       canHandler.send(CanCmd::READ_HUM_TEMP_LDR, data);
+      event = Event::IDLE;
+    } break;
+    case Event::SENSOR_ERROR: {
+      canHandler.send(CanCmd::HUM_TEMP_SENSOR_ERROR);
+      event = Event::IDLE;
     } break;
   };
 }

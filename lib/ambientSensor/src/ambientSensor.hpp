@@ -3,7 +3,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "canHandler.hpp"                                           /// CAN handler library.
-#include <SI7021.h>                                                 /// Temperature and humidity sensor driver.
+#include <SI7021.hpp>                                               /// Temperature and humidity sensor driver.
 #include <HardwareSerial.h>                                         /// Arduino hardware serial lib.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
@@ -39,7 +39,8 @@ private:
     IDLE = 0U,                        // Idle state, waiting for the next action.
     READ_TEMPERATURE,                 // Read temperature from the SI7021 sensor.
     READ_HUMIDITY,                    // Read humidity from the SI7021 sensor.
-    SEND_VALUES                       // Transmit the collected data.
+    SEND_VALUES,                      // Transmit the collected data.
+    SENSOR_ERROR                      // Handle sensor errors.
   };
 
   static constexpr uint32_t clockSpeed = 100000U;                           // Default I2C clock speed in Hz.
