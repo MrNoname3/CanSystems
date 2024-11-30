@@ -107,7 +107,7 @@ bool CanHandler::loopSimple() {
     if(CAN.packetExtended()) {
       switch(static_cast<uint16_t>(canFrame.cmd)) {
         case static_cast<uint16_t>(CanCmd::PING): { send(CanCmd::PING); } break;
-        case static_cast<uint16_t>(CanCmd::RESTART): { return false; } break;  // Trigger MCU restart.
+        case static_cast<uint16_t>(CanCmd::RESTART): { ResetHandler::restartMCU(); } break;
         case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
         case static_cast<uint16_t>(CanCmd::OTA_START): {
           const uint16_t otaFlashBegin =
@@ -159,7 +159,7 @@ bool CanHandler::loopSimple() {
     send(CanCmd::OTA_END, Response::ACK);
     serialPort.print(F("Storing: "));
     serialPort.println(Str::getOkStr());
-    if(ota.isOwnFw()) { return false; } // Trigger MCU restart.
+    if(ota.isOwnFw()) { ResetHandler::restartMCU(); }
   }
   if(otaState == OTA::OtaState::INVALID) {
     send(CanCmd::OTA_END, Response::NACK);
