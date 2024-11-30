@@ -1,9 +1,8 @@
 #include "ambientSensor.hpp"
-#include <Wire.h>
 #include "common.hpp"
 
 AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
-  si7021(Time::msToUs(20U)),
+  si7021(Time::msToUs(10U)),
   canHandler(canHandler),
   lightPin(lightPin),
   measurePeriod(measurePeriod),
@@ -12,10 +11,7 @@ AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t 
   humidity(0U),
   eventTimer(0U),
   event(Event::IDLE)
-{
-  Wire.setClock(clockSpeed);                        // Set I2C bus speed.
-  Wire.setWireTimeout(Time::msToUs(10U), true);     // Set I2C timeout.
-}
+{}
 
 bool AmbientSensor::init() {
   const bool si7021BeginResult = si7021.init();
@@ -44,7 +40,7 @@ void AmbientSensor::run() {
       event = si7021.getHumidityPercent(humidity) ? Event::SEND_VALUES : Event::SENSOR_ERROR;
     } break;
     case Event::SEND_VALUES: {
-      const uint8_t data[8] = {
+      canHandler.send(CanCmd::READ_HUM_TEMP_LDR, (const uint8_t[8]){
         static_cast<uint8_t>((temperature >> 0U) & 0xFF),
         static_cast<uint8_t>((temperature >> 8U) & 0xFF),
         static_cast<uint8_t>((humidity >> 0U) & 0xFF),
@@ -53,8 +49,7 @@ void AmbientSensor::run() {
         static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
         0U,
         0U
-      };
-      canHandler.send(CanCmd::READ_HUM_TEMP_LDR, data);
+      });
       event = Event::IDLE;
     } break;
     case Event::SENSOR_ERROR: {
