@@ -6,9 +6,8 @@
 platformio-device-monitor-*
 logs/device-monitor-*
 notes.txt
-audio
-scripts/__pycache__.pio
-data/cert/*
+audio/*
+scripts/__pycache__
 data/config/*
 data/*.bin
 lib/connectivity/src/server.hpp
