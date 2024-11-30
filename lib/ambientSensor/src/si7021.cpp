@@ -5,8 +5,8 @@ SI7021::SI7021(uint32_t timeoutUs, uint8_t address, TwoWire &wire) :
   wire(wire),
   deviceExists(false)
 {
-  this->wire.setClock(clockSpeed);
-  this->wire.setWireTimeout(timeoutUs, true);
+  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
+  this->wire.setWireTimeout(timeoutUs, true);             // Set I2C timeout.
 }
 
 bool SI7021::init() {

@@ -6,8 +6,8 @@ PCF8574::PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire) :
   registerValue(0xFFU),
   deviceExists(false)
 {
-  this->wire.setClock(clockSpeed);
-  this->wire.setWireTimeout(timeoutUs, true);
+  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
+  this->wire.setWireTimeout(timeoutUs, true);             // Set I2C timeout.
 }
 
 bool PCF8574::init() {
