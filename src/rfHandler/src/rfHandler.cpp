@@ -62,11 +62,18 @@ void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) { return; }
-  const uint64_t rfOutData = rfJson[F("Data")].as<uint64_t>();
-  const uint32_t rfOutBitLength = rfJson[F("Bits")].as<uint32_t>();
-  const uint32_t rfOutProtocol = rfJson[F("Protocol")].as<uint32_t>();
-  const uint32_t rfOutPulseLength = rfJson[F("Pulse")].as<uint32_t>();
-  if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
-  if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
-  if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
+  JsonVariant dataJsonVar = rfJson[F("Data")];
+  JsonVariant bitsJsonVar = rfJson[F("Bits")];
+  JsonVariant protocolJsonVar = rfJson[F("Protocol")];
+  JsonVariant pulseJsonVar = rfJson[F("Pulse")];
+  if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() &&
+    protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
+    const uint64_t rfOutData = dataJsonVar.as<uint64_t>();
+    const uint32_t rfOutBitLength = bitsJsonVar.as<uint32_t>();
+    const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();
+    const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
+    if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
+    if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
+    if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
+  }
 }

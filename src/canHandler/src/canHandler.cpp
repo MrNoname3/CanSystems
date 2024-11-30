@@ -254,19 +254,20 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
       CAN_BASE_PREFIX, MqttComBase::getClassId(), deserializationError.f_str());
     return;
   }
-  const bool isFileMsg = cmdJson.containsKey(F("File"));
-  if(isFileMsg) {
-    const char* fileName = cmdJson[F("File")].as<const char*>();
+  JsonVariant fileJsonVar = cmdJson[F("File")];
+  if(fileJsonVar.is<const char*>()) {
+    const char* fileName = fileJsonVar.as<const char*>();
     const bool fileTransferStartResult = startOta(fileName);
     canHandler.serialPort.printf_P(PSTR("%sFile transfer starts to \"%s\":%s\r\n"), CAN_BASE_PREFIX,
       MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     if(!fileTransferStartResult) { transferState = TransferState::INVALID; }
     return;
   }
-  const bool isCanMsg = cmdJson.containsKey(F("Command")) && cmdJson.containsKey(F("Data"));
-  if(isCanMsg) {
-    const uint16_t command = cmdJson[F("Command")].as<uint16_t>();
-    const char* canDataStr = cmdJson[F("Data")].as<const char*>();
+  JsonVariant commandJsonVar = cmdJson[F("Command")];
+  JsonVariant dataJsonVar = cmdJson[F("Data")];
+  if(commandJsonVar.is<uint16_t>() && dataJsonVar.is<const char*>()) {
+    const uint16_t command = commandJsonVar.as<uint16_t>();
+    const char* canDataStr = dataJsonVar.as<const char*>();
     if(canDataStr == nullptr) { return; }
     char* endPtr = nullptr;
     const uint64_t canData64 = std::strtoull(canDataStr, &endPtr, 16);

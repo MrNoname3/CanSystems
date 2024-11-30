@@ -290,12 +290,13 @@ bool Connectivity::startWifi() {
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(deSerResult) {
-    const bool jsonKeysPresented = wifiJson.containsKey(F("ssid")) && wifiJson.containsKey(F("password"));
-    if(jsonKeysPresented) {
+    JsonVariant ssidJsonVar = wifiJson[F("ssid")];
+    JsonVariant passwordJsonVar = wifiJson[F("password")];
+    if(ssidJsonVar.is<const char*>() && passwordJsonVar.is<const char*>()) {
       constexpr uint8_t maxSsidLength = 48;
       constexpr uint8_t maxPassLength = 48;
-      const char* ssid = wifiJson[F("ssid")].as<const char*>();
-      const char* pass = wifiJson[F("password")].as<const char*>();
+      const char* ssid = ssidJsonVar.as<const char*>();
+      const char* pass = passwordJsonVar.as<const char*>();
       const uint8_t ssidLength = strnlen(ssid, maxSsidLength);
       const uint8_t passLength = strnlen(pass, maxPassLength);
       const bool ssidLengthValid = (ssidLength > 0) && (ssidLength < maxSsidLength);
