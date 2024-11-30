@@ -138,8 +138,8 @@ bool Connectivity::beginSimple(Interface interface) {
     ethInt.setDefault();         // default route set through this interface
     const bool ethInit = ethInt.begin(mac);
 #elif defined ESP32
-  WiFi.onEvent(Connectivity::WiFiEvent);
-  const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
+    WiFi.onEvent(Connectivity::WiFiEvent);
+    const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
 #endif
     serialPort.printf_P(PSTR("%sInitialising ethernet modul:%s\r\n"), ETH_PREFIX, ethInit ? OK_STATE : ERR_STATE);
     if(!ethInit) { return false; }
@@ -276,28 +276,47 @@ bool Connectivity::beginSimple(Interface interface) {
 }
 
 bool Connectivity::startWifi() {
+  bool retVal = false;
   const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
   serialPort.printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
   serialPort.printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
-  if(!wifiFileExists) { return false; }
+  if(!wifiFileExists) { return retVal; }
 
   File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
   serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? OK_STATE : ERR_STATE);
-  if(!wifiFile) { wifiFile.close(); return false; }
+  if(!wifiFile) { wifiFile.close(); return retVal; }
 
-  StaticJsonDocument<256> wifiJson;
+  JsonDocument wifiJson;
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(deSerResult) {
-    const char* ssid = wifiJson[F("ssid")].as<const char*>();
-    const char* pass = wifiJson[F("password")].as<const char*>();
-    WiFi.begin(ssid, pass);
+    const bool jsonKeysPresented = wifiJson.containsKey(F("ssid")) && wifiJson.containsKey(F("password"));
+    if(jsonKeysPresented) {
+      constexpr uint8_t maxSsidLength = 48;
+      constexpr uint8_t maxPassLength = 48;
+      const char* ssid = wifiJson[F("ssid")].as<const char*>();
+      const char* pass = wifiJson[F("password")].as<const char*>();
+      const uint8_t ssidLength = strnlen(ssid, maxSsidLength);
+      const uint8_t passLength = strnlen(pass, maxPassLength);
+      const bool ssidLengthValid = (ssidLength > 0) && (ssidLength < maxSsidLength);
+      const bool passLengthValid = (passLength > 0) && (passLength < maxPassLength);
+      if(ssidLengthValid && passLengthValid) {
+        WiFi.begin(ssid, pass);
+        retVal = true;
+      }
+      else {
+        serialPort.printf_P(PSTR("%sWifi credentials are empty!\r\n"), JSON_PREFIX);
+      }
+    }
+    else {
+      serialPort.printf_P(PSTR("%sKeys are not presented in the file!\r\n"), JSON_PREFIX);
+    }
   }
   else {
     serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, deserializationError.f_str());
   }
   wifiFile.close();
-  return deSerResult;
+  return retVal;
 }
 
 bool Connectivity::connect() {
@@ -782,7 +801,7 @@ Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   externalFileName{'\0'} {}
 
 void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
-  StaticJsonDocument<512> cmdJson;
+  JsonDocument cmdJson;
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {

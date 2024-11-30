@@ -246,7 +246,7 @@ bool CanHandler::CanComBase::begin() { return true; }
 bool CanHandler::CanComBase::loop() { return true; }
 
 void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) {
-  StaticJsonDocument<64> cmdJson;
+  JsonDocument cmdJson;
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {

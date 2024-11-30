@@ -58,7 +58,7 @@ bool RfHandler::loop() {
 }
 
 void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
-  StaticJsonDocument<dataInSize> rfJson;
+  JsonDocument rfJson;
   DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) { return; }
