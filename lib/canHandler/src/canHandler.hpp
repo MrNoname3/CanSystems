@@ -4,10 +4,10 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <HardwareSerial.h>
 #include <vector>
-#include "../../connectivity/src/connectivity.hpp"
+#include "connectivity.hpp"
 #include <LittleFS.h>                         /// Use FLASH filesystem.
 #include "canCommands.hpp"
-#include "../../crc16/src/crc16.hpp"
+#include "crc16.hpp"
 
 class CanHandler final {
 private:

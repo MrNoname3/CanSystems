@@ -1,8 +1,8 @@
 #ifndef MQ135_HANDLER_HPP
 #define MQ135_HANDLER_HPP
 
-#include "../../connectivity/src/connectivity.hpp"
-#include "../../adcReader/src/adcReader.hpp"
+#include "connectivity.hpp"
+#include "adcReader.hpp"
 #include <MQUnifiedsensor.h>
 
 class Mq135Handler final : public Connectivity::MqttComBase {

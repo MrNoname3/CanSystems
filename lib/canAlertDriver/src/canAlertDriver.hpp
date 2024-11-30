@@ -1,7 +1,7 @@
 #ifndef CAN_ALERT_DRIVER_HPP
 #define CAN_ALERT_DRIVER_HPP
 
-#include "../../canHandler/src/canHandler.hpp"
+#include "canHandler.hpp"
 
 class CanAlertDriver final : protected CanHandler::CanComBase {
 public:

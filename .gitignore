@@ -9,4 +9,4 @@ notes.*
 data/cert/*
 data/config/*
 data/*.bin
-src/server.hpp
+lib/connectivity/src/server.hpp

@@ -1,7 +1,7 @@
 #ifndef ADC_READER_HPP
 #define ADC_READER_HPP
 
-#include "../../connectivity/src/connectivity.hpp"
+#include "connectivity.hpp"
 #include <Wire.h>
 #include <ADS1X15.h>
 

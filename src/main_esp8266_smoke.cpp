@@ -1,8 +1,8 @@
 //--- Headers ---//
 #include <Arduino.h>                          /// Arduino libraries header.
-#include "connectivity/src/connectivity.hpp"
-#include "adcReader/src/adcReader.hpp"
-#include "mq135Handler/src/mq135Handler.hpp"
+#include "connectivity.hpp"
+#include "adcReader.hpp"
+#include "mq135Handler.hpp"
 
 //--- Constants ---//
 static constexpr const uint8_t LED                    = D8;           // Status LED.

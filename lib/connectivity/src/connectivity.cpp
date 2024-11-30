@@ -7,8 +7,8 @@
 #include <Update.h>
 #include <esp_task_wdt.h>
 #endif
-#include "../../crc32/src/crc32.hpp"
-#include "../../base64/src/base64.hpp"
+#include "crc32.hpp"
+#include "base64.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
