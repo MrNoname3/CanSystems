@@ -11,9 +11,10 @@
 class PCF8574 final : public Task {
 public:
   /// @brief Constructs a PCF8574 instance with the specified I2C address and bus.
+  /// @param timeoutMs Timeout in microseconds for I2C communication.
   /// @param address The I2C address of the PCF8574 device.
   /// @param wire The `TwoWire` instance representing the I2C bus (defaults to `Wire`).
-  PCF8574(uint8_t address, TwoWire &wire = Wire);
+  PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire = Wire);
 
   /// @brief Destructor of the PCF8574 object.
   ~PCF8574() = default;
@@ -71,5 +72,6 @@ private:
   const uint8_t address;                          // I2C address of the PCF8574 device.
   TwoWire &wire;                                  // Reference to the I2C bus used for communication.
   uint8_t registerValue;                          // Cached register value to track the current pin states.
+  bool deviceExists;                              // Indicates if the device is present on the I2C bus.
 };
 #endif // PCF8574_HPP

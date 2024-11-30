@@ -44,7 +44,7 @@ WdtHandler wdt(WdtHandler::WDT::T_120MS);
 CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
-PCF8574 pcf(0x27);
+PCF8574 pcf(Time::msToUs(5U), 0x27);
 PumpControl pc(
   pcf,
   rgbLed,

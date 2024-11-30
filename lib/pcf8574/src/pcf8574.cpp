@@ -1,30 +1,33 @@
 #include "pcf8574.hpp"
-#include "common.hpp"
 
-PCF8574::PCF8574(uint8_t address, TwoWire &wire) :
+PCF8574::PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire) :
   address(address),
   wire(wire),
-  registerValue(0xFFU)
+  registerValue(0xFFU),
+  deviceExists(false)
 {
-  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
-  this->wire.setWireTimeout(Time::msToUs(5U), true);      // Set I2C timeout to 20ms.
+  this->wire.setClock(clockSpeed);
+  this->wire.setWireTimeout(timeoutUs, true);
 }
 
 bool PCF8574::init() {
   wire.begin();
   wire.beginTransmission(address);
-  return (wire.endTransmission() == 0U);
+  deviceExists = (wire.endTransmission() == 0U);
+  return deviceExists;
 }
 
 bool PCF8574::write(uint8_t reg) {
+  if(!deviceExists) { return false; }
   wire.beginTransmission(address);
   wire.write(reg);
-  const bool result = wire.endTransmission() == 0U;
+  const bool result = (wire.endTransmission() == 0U);
   if(result) { registerValue = reg; }
   return result;
 }
 
 bool PCF8574::read(uint8_t &value) const {
+  if(!deviceExists) { return false; }
   const bool result = (wire.requestFrom(address, 1U) > 0U);
   if(result) { value = wire.read(); }
   return result;
