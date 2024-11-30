@@ -32,7 +32,7 @@ private:
   static constexpr uint8_t adcPin = -1;
   static constexpr float ratioMQ135CleanAir =  3.6f;      // RS/R0 = 3.6 ppm.
   static constexpr float rlValue = 1.0f;
-  static constexpr float r0Value = 43.47f;
+  static constexpr float r0Value = 22.47f;
 
   // Exponential regression:
   static constexpr float gasEquationValues[][2] = {
@@ -79,7 +79,7 @@ private:
   uint8_t readIndex;
   float gasValues[numGases];
 
-  static constexpr uint8_t dataOutBufSize = 128;
+  static constexpr uint8_t dataOutBufSize = 192;
   static const char PROGMEM MQTT_MSG_FRAME[];
 };
 #endif // MQ135_HANDLER_HPP
