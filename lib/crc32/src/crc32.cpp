@@ -7,19 +7,19 @@ Crc32::Crc32(uint32_t initValue, uint32_t polynomial) :
 {}
 
 void Crc32::next(uint8_t value) {
-  crc_ ^= (uint32_t)value;
-  for(uint8_t i = 0; i < 8; i++) {
-    if(crc_ & 1) {
-      crc_ = (crc_ >> 1) ^ polynomial_;
-    }
-    else {
-      crc_ >>= 1;
+  crc_ ^= static_cast<uint32_t>(value);         // XOR the input byte into the CRC.
+  for(uint8_t i = 0U; i < 8U; i++) {
+    if(crc_ & 1U) {                             // Check the least significant bit.
+      crc_ = (crc_ >> 1U) ^ polynomial_;        // XOR with the polynomial if bit is set.
+    } else {
+      crc_ >>= 1U;                              // Otherwise, simply shift right.
     }
   }
 }
 
 void Crc32::next(const uint8_t* values, uint32_t length) {
-  for (uint32_t i = 0; i < length; i++) {
+  if(values == nullptr || length == 0UL) return;
+  for(uint32_t i = 0UL; i < length; i++) {
     next(values[i]);
   }
 }
@@ -28,8 +28,15 @@ uint32_t Crc32::get() const { return ~crc_; }   // Final CRC32 value is compleme
 
 void Crc32::reset() { crc_ = initValue_; }
 
-uint32_t Crc32::calculate(const uint8_t *data, uint32_t length) {
-  Crc32 crc;
+uint32_t Crc32::calculate(const uint8_t *data, uint32_t length, uint32_t initValue, uint32_t polynomial) {
+  if(data == nullptr || length == 0UL) return initValue;
+  Crc32 crc(initValue, polynomial);
   crc.next(data, length);
   return crc.get();
+}
+
+bool Crc32::verify(const uint8_t* data, uint32_t length, uint32_t expected,
+  uint32_t initValue, uint32_t polynomial) {
+  if(data == nullptr || length == 0UL) return expected == initValue;
+  return calculate(data, length, initValue, polynomial) == expected;
 }
