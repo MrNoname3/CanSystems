@@ -1,57 +1,73 @@
 #ifndef BASE64_HPP
 #define BASE64_HPP
 
-#include <stdint.h>
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
 #if (defined(__AVR__) || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_SAM))
-#include <avr/pgmspace.h>
+#include <avr/pgmspace.h>                                           /// PROGMEM compatibility for AVR architectures.
 #else
-#include <pgmspace.h>
+#include <pgmspace.h>                                               /// PROGMEM compatibility for other architectures.
 #endif
 
-/// @brief Base64 encoding and decoding of strings. Uses '+' for 62, '/' for 63, '=' for padding.
+
+/// @brief Provides static methods for Base64 encoding and decoding of binary data.
+/// @details This class supports converting between binary data and its Base64 representation.
+/// It uses '+' (for 62) and '/' (for 63) as special characters for Base64 encoding and '=' for padding.
 class Base64 final {
-public:
+private:
+  /// @brief Private constructor to prevent instantiation of the class.
   Base64() = delete;
+
+  /// @brief Private destructor to prevent instantiation of the class.
   ~Base64() = delete;
 
 public:
-  /// @brief Calculates length of base64 string needed for a given number of binary bytes.
-  /// @param plainLength Amount of binary data in bytes.
-  /// @return Number of base64 characters needed to encode input_length bytes of binary data.
+  /// @brief Calculates the length of a Base64-encoded string for a given number of bytes of input data.
+  /// @param plainLength Number of bytes in the input binary data.
+  /// @return Number of characters required for the Base64-encoded string (excluding null terminator).
   static uint32_t encodedLength(uint32_t plainLength);
 
-  /// @brief Calculates number of bytes of binary data in a base64 string.
-  /// @param input Base64-encoded null-terminated string.
-  /// @param inputLength Number of bytes to read from input pointer.
-  /// @return Number of bytes of binary data in input.
+  /// @brief Calculates the length of the decoded binary data from a Base64-encoded string.
+  /// @param input Pointer to the Base64-encoded null-terminated input data.
+  /// @param inputLength Number of bytes in the input Base64 string.
+  /// @return Number of bytes in the decoded binary data.
   static uint32_t decodedLength(const uint8_t input[], uint32_t inputLength);
 
-  /// @brief Converts an array of bytes to a base64 null-terminated string.
-  /// @param input Pointer to input data.
-  /// @param output Pointer to output string. Null terminator will be added automatically.
-  /// @param inputLength Number of bytes to read from input pointer.
-  /// @return Length of encoded string in bytes (not including null terminator).
+  /// @brief Encodes binary data into a Base64-encoded null-terminated string.
+  /// @param input Pointer to the binary input data.
+  /// @param output Pointer to the buffer where the Base64-encoded string will be written.
+  /// @param inputLength Number of bytes in the input binary data.
+  /// @return Length of the encoded Base64 string (excluding null terminator).
   static uint32_t encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength);
 
-  /// @brief Converts a base64 null-terminated string to an array of bytes.
-  /// @param input Pointer to input string.
-  /// @param output Pointer to output array.
-  /// @param inputLength - Number of bytes to read from input pointer.
-  /// @return Number of bytes in the decoded binary.
+  /// @brief Decodes a Base64-encoded null-terminated string into binary data.
+  /// @param input Pointer to the Base64-encoded input string.
+  /// @param output Pointer to the buffer where the decoded binary data will be written.
+  /// @param inputLength Number of bytes in the input Base64 string.
+  /// @return Number of bytes written to the decoded binary output.
   static uint32_t decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength);
 
-private:
-  static inline void fromA3ToA4(uint8_t* A4, const uint8_t* A3);
-  static inline void fromA4ToA3(uint8_t* A3, const uint8_t* A4);
-  static inline uint8_t lookupTable(char c);
-
-public:
   Base64(const Base64&) = delete;                       // Define copy constructor.
   Base64& operator=(const Base64&) = delete;            // Define copy assignment operator.
   Base64(Base64&&) = delete;                            // Define move constructor.
   Base64& operator=(Base64&&) = delete;                 // Define move assignment operator.
 
 private:
-  static const char PROGMEM base64AlphabetTable_[];
+  /// @brief Converts three bytes of binary data into four Base64 indices.
+  /// @param A4 Pointer to the output array of 4 Base64 indices.
+  /// @param A3 Pointer to the input array of 3 binary bytes.
+  static void fromA3ToA4(uint8_t* A4, const uint8_t* A3);
+
+  /// @brief Converts four Base64 indices into three bytes of binary data.
+  /// @param A3 Pointer to the output array of 3 binary bytes.
+  /// @param A4 Pointer to the input array of 4 Base64 indices.
+  static void fromA4ToA3(uint8_t* A3, const uint8_t* A4);
+
+  /// @brief Looks up the Base64 index corresponding to a given character.
+  /// @param c The Base64 character to convert.
+  /// @return The Base64 index (0-63) corresponding to the input character.
+  /// @note Returns -1 for invalid characters.
+  static uint8_t lookupTable(char c);
+
+  static const char PROGMEM base64AlphabetTable_[];     // Static array containing the Base64 alphabet table in PROGMEM.
 };
 #endif // BASE64_HPP
