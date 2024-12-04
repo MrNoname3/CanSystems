@@ -1,6 +1,7 @@
 #include "connectivity.hpp"
-#include <LittleFS.h>                         /// Use FLASH filesystem.
-#include <ArduinoJson.h>                      /// Handle JSON files.
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include <LittleFS.h>                                               /// Use FLASH filesystem.
+#include <ArduinoJson.h>                                            /// Handle JSON files.
 #ifdef ESP8266
 #include <Updater.h>
 #elif defined ESP32
@@ -89,7 +90,7 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
   const bool conResult = beginSimple(interface);
   serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
   serialPort.printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, conTime.stopTime());
-  if(!conResult && errorHandling) { common.restartESP(); }
+  if(!conResult && errorHandling) { ResetHandler::restartMCU(); }
 }
 
 bool Connectivity::beginSimple(Interface interface) {
@@ -371,7 +372,7 @@ void Connectivity::loop() {
   }
   if(timeTracker.isGoalReached()) {
     serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, timeTracker.getElapsedTime());
-    common.restartESP();
+    ResetHandler::restartMCU();
   }
   if(loopTimeTracker.isGoalReached()) {
     const uint32_t loopTime = loopTimeTracker.stopTime();
@@ -813,7 +814,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   Command command = static_cast<Command>(cmd);
   switch(command) {
     case Command::BLANK: {} break;
-    case Command::RESTART: { restartESP(); } break;
+    case Command::RESTART: { ResetHandler::restartMCU(); } break;
     case Command::FW_DT_START:
     case Command::WIFICFG_DT_START:
     case Command::EXT_FILE_DT_START: {
@@ -871,7 +872,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       if(!validityCheckResult) {
         conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);
       }
-      if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
+      if(validityCheckResult && (command == Command::FW_DT_END)) { ResetHandler::restartMCU(); }
     } break;
   };
 }
@@ -882,11 +883,4 @@ bool Connectivity::Common::loop() { return true; }
 
 void Connectivity::Common::messageSend(const char* payload) const {
   MqttComBase::messageSend(payload);
-}
-
-void Connectivity::Common::restartESP() {
-  conn.serialPort.printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX);
-  conn.serialPort.flush();                            // Sends out data from serial buffer, before reset.
-  ESP.restart();
-  while(true) {};                                     // Prevent doing anything before restart.
 }

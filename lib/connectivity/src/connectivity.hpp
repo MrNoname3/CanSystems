@@ -330,9 +330,6 @@ private:
 
     inline void messageSend(const char* payload) const;
 
-    /// @brief Reset the MCU.
-    void restartESP();
-
   public:
     Common(const Common&) = delete;                       // Define copy constructor.
     Common& operator=(const Common&) = delete;            // Define copy assignment operator.
