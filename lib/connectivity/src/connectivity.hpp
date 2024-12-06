@@ -161,27 +161,6 @@ private:
   static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
 
-private:
-  class WdtWrapper final {
-  public:
-    WdtWrapper() = default;
-    ~WdtWrapper() = default;
-
-    void enableHwWdt();
-    void resetHwWdt();
-    void resetHwWdtIfPossible();
-    void setEnabledResetNumber(uint8_t enabledResetNumber);
-
-    WdtWrapper(const WdtWrapper&) = delete;                       // Define copy constructor.
-    WdtWrapper& operator=(const WdtWrapper&) = delete;            // Define copy assignment operator.
-    WdtWrapper(WdtWrapper&&) = delete;                            // Define move constructor.
-    WdtWrapper& operator=(WdtWrapper&&) = delete;                 // Define move assignment operator.
-
-  private:
-    uint8_t enabledResetNumber_ = 0;
-  };
-  WdtWrapper WdtHandler;
-
 public:
   class DebugLED final {
   public:

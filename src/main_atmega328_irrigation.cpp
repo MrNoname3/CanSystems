@@ -74,7 +74,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  wdt.feed();
+  wdt.resetWatchdog();
   Serial.begin(MONITOR_BAUD);
   canHandler.ledOn();
   canHandler.addCanCallback(canMessageArrived);
@@ -104,7 +104,7 @@ void setup() {
 }
 
 void loop() {
-  wdt.feed();
+  wdt.resetWatchdog();
   taskHandler.runTasks();
 }
 

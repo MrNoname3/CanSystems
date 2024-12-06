@@ -1,4 +1,5 @@
 #include "connectivity.hpp"
+#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
@@ -84,7 +85,7 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
 }
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
-  WdtHandler.enableHwWdt();
+  WdtHandler::enableWatchdog();
   TimeTracker conTime;
   conTime.startTime();
   const bool conResult = beginSimple(interface);
@@ -95,7 +96,6 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
-  WdtHandler.setEnabledResetNumber(4);
   debugLed.startTicker(500);
   serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
   serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
@@ -132,7 +132,7 @@ bool Connectivity::beginSimple(Interface interface) {
 #endif
 
   // Start interface.
-  WdtHandler.resetHwWdtIfPossible();
+  WdtHandler::resetWatchdog();
   if(interface == Interface::ETHERNET) {
     WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
@@ -205,7 +205,7 @@ bool Connectivity::beginSimple(Interface interface) {
 
   // Set time via NTP, as required for x.509 validation.
   yield();
-  WdtHandler.resetHwWdtIfPossible();
+  WdtHandler::resetWatchdog();
   {
     serialPort.printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX);
     configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
@@ -258,7 +258,7 @@ bool Connectivity::beginSimple(Interface interface) {
     common.messageSend(versionString);
   }
 
-  WdtHandler.resetHwWdtIfPossible();
+  WdtHandler::resetWatchdog();
   serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX);
   for(std::size_t i = 0; i < messageMap.size(); ++i) {
     const auto& currentObject = messageMap[i];
@@ -272,7 +272,7 @@ bool Connectivity::beginSimple(Interface interface) {
   }
 
   debugLed.stopTicker();
-  WdtHandler.resetHwWdtIfPossible();
+  WdtHandler::resetWatchdog();
   return true;
 }
 
@@ -383,7 +383,7 @@ void Connectivity::loop() {
 
 bool Connectivity::loopSimple() {
   yield();
-  WdtHandler.resetHwWdt();
+  WdtHandler::resetWatchdog();
 
   static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   const char* intPrefix;
@@ -513,41 +513,6 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
   }
 }
 #endif
-
-//////////////////// -- WDT class-- ////////////////////
-
-void Connectivity::WdtWrapper::enableHwWdt() {
-#ifdef ESP8266
-  wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
-#elif defined ESP32
-  constexpr uint8_t WDT_TIMEOUT = 10;                     // Temout in sec.
-  esp_task_wdt_init(WDT_TIMEOUT, true);                   // Enable panic so ESP32 restarts.
-  esp_task_wdt_add(nullptr);                              // Add current thread to WDT watch.
-#endif
-}
-
-void Connectivity::WdtWrapper::resetHwWdt() {
-  this->enabledResetNumber_ = 0;
-#ifdef ESP8266
-  wdt_reset();
-#elif defined ESP32
-  esp_task_wdt_reset();
-#endif
-}
-
-void Connectivity::WdtWrapper::resetHwWdtIfPossible() {
-  if(this->enabledResetNumber_ > 0) {
-    this->enabledResetNumber_--;
-#ifdef ESP8266
-    wdt_reset();
-#elif defined ESP32
-    esp_task_wdt_reset();
-#endif
-  }
-}
-void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber) {
-  this->enabledResetNumber_ = enabledResetNumber;
-}
 
 //////////////////// -- Debug LED class-- ////////////////////
 
