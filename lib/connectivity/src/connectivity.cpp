@@ -60,11 +60,14 @@ const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONN
 const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
 const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
 
-Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
-  serialPort(serial),
 #ifdef ESP8266
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t ethCS) :
   ethInt(ethCS),
+#elif defined ESP32
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
 #endif
+  serialPort(serial),
+  debugLed(debugLed),
   tcpClient(),
   mqttClient(tcpClient),
   usedInterface(Interface::UNKNOWN),
@@ -73,16 +76,13 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
-  debugLed(dbgLedPin, HIGH),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
   dataTransfer(&serialPort),
   common(*this, "common")
-{
-  serialPort.begin(MONITOR_BAUD);
-  delay(1);
-  serialPort.println();
-}
+{}
+
+
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
   WdtHandler::enableWatchdog();

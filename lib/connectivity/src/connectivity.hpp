@@ -36,8 +36,11 @@ public:
     UNKNOWN
   };
 
-  Connectivity(HardwareSerial& serial, uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState);
-
+#ifdef ESP8266
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t ethCS);
+#elif defined ESP32
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed);
+#endif
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
 
@@ -91,7 +94,6 @@ private:
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
   };
 
-  HardwareSerial& serialPort;
 #ifdef ESP8266
   ENC28J60lwIP ethInt;
 #elif defined ESP32
@@ -107,6 +109,8 @@ private:
   //ETH_CLOCK_GPIO17_OUT - 50MHz clock from internal APLL inverted output on GPIO17 - tested with LAN8720
   static bool ethConnected;
 #endif
+  HardwareSerial& serialPort;
+  DebugLedHandler& debugLed;
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
   Interface usedInterface;
@@ -120,7 +124,6 @@ private:
   static constexpr uint8_t macStringSize = 13;
   std::vector<Connectivity::MqttComBase*> messageMap;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
-  DebugLedHandler debugLed;
 
 public:
   static const char PROGMEM OK_STATE[];

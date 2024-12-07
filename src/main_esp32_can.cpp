@@ -7,8 +7,7 @@
 #include "canAlertDriver.hpp"
 
 //--- Constants ---//
-static constexpr const uint8_t LED                    = 2;            // Status LED.
-static constexpr const uint8_t SPI_CS                 = -1;           // Ethernet shield SPI CS.
+static constexpr uint8_t LED_PIN                    = 2U;           // Pin of the LED.
 
 //--- Functions ---//
 void canTask(void *pvParameters);
@@ -17,8 +16,11 @@ void canTask(void *pvParameters);
 const char separator[] PROGMEM = "******************************************************";
 TaskHandle_t canTaskHandle = nullptr;
 
+//--- Driver objects ---//
+DebugLedHandler debugLed(LED_PIN, HIGH);
+
 //--- Networking ---//
-Connectivity iotConn(Serial, SPI_CS, LED, false);
+Connectivity iotConn(Serial, debugLed);
 
 //--- MQTT handler objects ---//
 CanHandler canHandler(Serial);
@@ -26,6 +28,8 @@ CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
 void setup() {
+  Serial.begin(MONITOR_BAUD);
+  delay(1U);
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
