@@ -1,5 +1,6 @@
 //--- Headers ---//
-#include <Arduino.h>                          /// Arduino libraries header.
+#include <Arduino.h>                                                /// Arduino libraries header.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "connectivity.hpp"
 #include "radiation.hpp"
 #include "rfHandler.hpp"
