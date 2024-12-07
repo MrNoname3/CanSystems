@@ -41,7 +41,7 @@ static_assert(digitalPinToInterrupt(DFP_BUSY) != (NOT_AN_INTERRUPT), "DFPlayer m
 
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_1S);
-DebugLedHandler<HIGH> debugLed(LED_PIN);
+DebugLedHandler debugLed(LED_PIN, HIGH);
 CanHandler canHandler(Serial, debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return (analogRead(BUTTON_PIN) > 500);});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);

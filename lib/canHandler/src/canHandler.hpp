@@ -55,7 +55,7 @@ public:
   /// @param canCsPin Chip select pin for the CAN module.
   /// @param canIntPin Interrupt pin for the CAN module.
   /// @param flashCsPin Chip select pin for the SPI flash.
-  CanHandler(HardwareSerial& serial, DebugLedHandler<1U>& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
+  CanHandler(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
 
   /// @brief Default destructor.
   ~CanHandler() = default;
@@ -132,7 +132,7 @@ private:
 
   static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
   HardwareSerial& serialPort;                                               // Reference to the serial driver object.
-  DebugLedHandler<1U>& debugLed;                                            // Reference to debug LED handler objec
+  DebugLedHandler& debugLed;                                                // Reference to debug LED handler objec
   uint16_t localCanId;                                                      // Local CAN address.
   EEPROMHandler<uint16_t, 0U> eepromHandler;                                // EEPROM handler for address persistence.
   SPIFlash flash;                                                           // SPI flash module driver object.

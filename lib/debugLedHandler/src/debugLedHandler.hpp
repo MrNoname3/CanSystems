@@ -7,66 +7,41 @@
 #include <Ticker.h>                                                 /// Timer interrupt hadnler.
 #endif
 
-/// @brief A platform-agnostic utility class for controlling a debug LED.
-/// @tparam LedOnState Specifies the logic level that turns the LED on.
-/// Use `1` if the LED is active-high, or `0` if the LED is active-low.
-template<uint8_t LedOnState>
+/// @brief A utility class for controlling a debug LED.
 class DebugLedHandler final {
 public:
-  /// @brief Constructor for the debug LED handler.
-  /// @param debugLedPin The pin connected to the debug LED.
-  DebugLedHandler(uint8_t debugLedPin) {
-    addLedPin(debugLedPin);
-  }
+  /// @brief Constructor to initialize the debug LED.
+  /// @param debugLedPin The GPIO pin connected to the LED.
+  /// @param ledOnState The logic level to turn the LED on (`1` for active-high, `0` for active-low).
+  DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState = 1U);
 
   /// @brief Destructor for the debug LED handler.
   ~DebugLedHandler() = default;
 
-  /// @brief Associates a new LED pin for debugging.
-  /// @param debugLedPin The pin connected to the debug LED.
-  static inline void addLedPin(uint8_t debugLedPin) {
-    ledPin = debugLedPin;
-    pinMode(ledPin, OUTPUT);
-    ledOff();
-  }
+  /// @brief Configures the LED pin and its active state.
+  /// @param debugLedPin The GPIO pin connected to the LED.
+  /// @param ledOnState The logic level to turn the LED on.
+  static void setupLedPin(uint8_t debugLedPin, uint8_t ledOnState);
 
   /// @brief Turns the debug LED on.
-  static inline void ledOn() {
-    if(ledPin == invalidPin) {return;}
-    digitalWrite(ledPin, (static_cast<bool>(LedOnState) ? HIGH : LOW));
-  }
+  static void ledOn();
 
   /// @brief Turns the debug LED off.
-  static inline void ledOff() {
-    if(ledPin == invalidPin) {return;}
-    digitalWrite(ledPin, (static_cast<bool>(LedOnState) ? LOW : HIGH));
-  }
+  static void ledOff();
 
 #if defined(__AVR_ATmega328P__)
-  /// @brief Toggles the current state of the debug LED.
-  static inline void ledToggle() {
-    if(ledPin == invalidPin) {return;}
-    digitalWrite(ledPin, !digitalRead(ledPin));
-  }
+  /// @brief Toggles the LED state on AVR platforms.
+  static void ledToggle();
 #elif defined(ESP8266) || defined(ESP32)
-  /// @brief Toggles the current state of the debug LED.
-  static inline IRAM_ATTR void ledToggle() {
-    if(ledPin == invalidPin) {return;}
-    digitalWrite(ledPin, !digitalRead(ledPin));
-  }
+  /// @brief Toggles the LED state on ESP platforms.
+  static IRAM_ATTR void ledToggle();
 
-  /// @brief Starts a periodic blinking mechanism using a hardware timer.
-  /// @param tickIntervalMs The interval, in milliseconds, between LED toggles.
-  void startTicker(uint32_t tickIntervalMs) {
-    ledOff();
-    ledTicker.attach_ms(tickIntervalMs, ledToggle);
-  }
+  /// @brief Starts blinking the LED at a fixed interval.
+  /// @param tickIntervalMs The interval between LED toggles, in milliseconds.
+  void startTicker(uint32_t tickIntervalMs);
 
-  /// @brief Stops the periodic blinking mechanism.
-  void stopTicker() {
-    ledTicker.detach();
-    ledOff();
-  }
+  /// @brief Stops blinking the LED.
+  void stopTicker();
 #endif
 
   DebugLedHandler(const DebugLedHandler&) = delete;                       // Define copy constructor.
@@ -76,11 +51,10 @@ public:
 
 private:
   static constexpr uint8_t invalidPin = 0xFF;                             // Sentinel value indicating no pin is assigned.
-  static uint8_t ledPin;                                                  // The pin connected to the debug LED (ESP).
+  static uint8_t dbgLedPin;                                               // The GPIO pin connected to the LED.
+  static uint8_t dbgLedOnState;                                           // The logic level to turn the LED on.
 #if defined(ESP8266) || defined(ESP32)
   Ticker ledTicker;                                                       // Timer for managing periodic LED toggling.
 #endif
 };
-template<uint8_t LedOnState>
-uint8_t DebugLedHandler<LedOnState>::ledPin = DebugLedHandler<LedOnState>::invalidPin;
 #endif // DEBUG_LED_HANDLER_HPP

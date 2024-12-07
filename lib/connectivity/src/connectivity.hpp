@@ -120,7 +120,7 @@ private:
   static constexpr uint8_t macStringSize = 13;
   std::vector<Connectivity::MqttComBase*> messageMap;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
-  DebugLedHandler<HIGH> debugLed;
+  DebugLedHandler debugLed;
 
 public:
   static const char PROGMEM OK_STATE[];

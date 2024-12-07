@@ -4,11 +4,10 @@
 #include <CAN.h>                                                    /// CAN controller library.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <avr/boot.h>                                               /// Reading fuses.
-#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 
 volatile uint8_t CanHandler::intCount = 0U;
 
-CanHandler::CanHandler(HardwareSerial& serial, DebugLedHandler<1U>& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
+CanHandler::CanHandler(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
   serialPort(serial),
   debugLed(debugLed),
   localCanId(0U),

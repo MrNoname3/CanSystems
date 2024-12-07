@@ -42,7 +42,7 @@ static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow senso
 
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_120MS);
-DebugLedHandler<HIGH> debugLed(LED_PIN);
+DebugLedHandler debugLed(LED_PIN, HIGH);
 CanHandler canHandler(Serial, debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);

@@ -73,7 +73,7 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
-  debugLed(dbgLedPin),
+  debugLed(dbgLedPin, HIGH),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
   dataTransfer(&serialPort),
