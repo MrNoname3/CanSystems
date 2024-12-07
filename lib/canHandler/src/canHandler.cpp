@@ -4,14 +4,15 @@
 #include <CAN.h>                                                    /// CAN controller library.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <avr/boot.h>                                               /// Reading fuses.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 
 volatile uint8_t CanHandler::intCount = 0U;
 
-CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin) :
+CanHandler::CanHandler(HardwareSerial& serial, DebugLedHandler<1U>& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
   serialPort(serial),
+  debugLed(debugLed),
   localCanId(0U),
   eepromHandler(&localCanId),
-  ledPin(ledPin),
   flash(flashCsPin, flashJedecId),
   ota(flash),
   canCallback(nullptr),
@@ -20,7 +21,6 @@ CanHandler::CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntP
 {
   CAN.setPins(canCsPin, -1);
   pinMode(canIntPin, INPUT);
-  pinMode(ledPin, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(canIntPin), rxInterrupt, FALLING);
 }
 
@@ -97,7 +97,7 @@ bool CanHandler::loopSimple() {
   if(intCount > 0U) {
     intCount--;
     eventTimer = actualTime;
-    ledOff();
+    debugLed.ledOff();
     const uint8_t canDataDlc = static_cast<uint8_t>(CAN.parsePacket());
     CanFrame canFrame;
     canFrame.extId = CAN.packetId();
@@ -169,7 +169,7 @@ bool CanHandler::loopSimple() {
   }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
-    ledOn();
+    debugLed.ledOn();
   }
   return true;
 }

@@ -10,6 +10,7 @@
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 
 /// @brief Handles CAN communication, and OTA updates.
 /// @details The `CanHandler` class manages the CAN communication protocol
@@ -50,11 +51,11 @@ public:
 
   /// @brief Constructor for the CAN handler.
   /// @param serial Reference to a `HardwareSerial` object.
+  /// @param debugLed Reference to a `DebugLedHandler` object.
   /// @param canCsPin Chip select pin for the CAN module.
   /// @param canIntPin Interrupt pin for the CAN module.
-  /// @param ledPin LED control pin.
   /// @param flashCsPin Chip select pin for the SPI flash.
-  CanHandler(HardwareSerial& serial, uint8_t canCsPin, uint8_t canIntPin, uint8_t ledPin, uint8_t flashCsPin);
+  CanHandler(HardwareSerial& serial, DebugLedHandler<1U>& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
 
   /// @brief Default destructor.
   ~CanHandler() = default;
@@ -97,15 +98,6 @@ public:
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   bool send(CanCmd command, Response response) const;
 
-  /// @brief Turns on the LED (set to HIGH).
-  inline void ledOn() const { digitalWrite(ledPin, HIGH); }
-
-  /// @brief Turns off the LED (set to LOW).
-  inline void ledOff() const { digitalWrite(ledPin, LOW); }
-
-  /// @brief Toggles the LED state (HIGH to LOW, or LOW to HIGH).
-  inline void ledToggle() const { digitalWrite(ledPin, !digitalRead(ledPin)); }
-
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
   inline void addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
@@ -140,9 +132,9 @@ private:
 
   static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
   HardwareSerial& serialPort;                                               // Reference to the serial driver object.
+  DebugLedHandler<1U>& debugLed;                                            // Reference to debug LED handler objec
   uint16_t localCanId;                                                      // Local CAN address.
   EEPROMHandler<uint16_t, 0U> eepromHandler;                                // EEPROM handler for address persistence.
-  const uint8_t ledPin;                                                     // LED control pin.
   SPIFlash flash;                                                           // SPI flash module driver object.
   OTA ota;                                                                  // OTA update handler.
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.

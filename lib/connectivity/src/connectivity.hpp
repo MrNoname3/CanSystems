@@ -9,21 +9,22 @@
 static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024;
 static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
 
-#include <Arduino.h>                          /// Arduino libraries header.
+#include <Arduino.h>                                                /// Arduino libraries header.
 #ifdef ESP8266
-#include <ESP8266WiFi.h>                      /// Wifi driver.
-#include <ENC28J60lwIP.h>                     /// Ethernet driver.
+#include <ESP8266WiFi.h>                                            /// Wifi driver.
+#include <ENC28J60lwIP.h>                                           /// Ethernet driver.
 #elif defined ESP32
 #include <WiFi.h>
 #include <ETH.h>
 #endif
-#include <WiFiClientSecure.h>                 /// TCP client with SSL.
-#include <PubSubClient.h>                     /// MQTT client.
+#include <WiFiClientSecure.h>                                       /// TCP client with SSL.
+#include <PubSubClient.h>                                           /// MQTT client.
 #include <HardwareSerial.h>
 #include <functional>
-#include <Ticker.h>                           /// Timer interrupt hadnler.
+#include <Ticker.h>                                                 /// Timer interrupt hadnler.
 #include "server.hpp"
 #include <vector>
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 
 class Connectivity final {
 public:
@@ -119,6 +120,7 @@ private:
   static constexpr uint8_t macStringSize = 13;
   std::vector<Connectivity::MqttComBase*> messageMap;
   static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
+  DebugLedHandler<HIGH> debugLed;
 
 public:
   static const char PROGMEM OK_STATE[];
@@ -160,32 +162,6 @@ private:
   static const char PROGMEM MQTT_CONNECT_BAD_CREDENTIALS_STR[];
   static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
-
-public:
-  class DebugLED final {
-  public:
-    DebugLED(uint8_t ledPin, bool ledOnState);
-    virtual ~DebugLED() = default;
-    inline void ledOn();
-    inline void ledOff();
-    void startTicker(uint32_t tickInterval_ms);
-    void stopTicker();
-
-    DebugLED(const DebugLED&) = delete;                       // Define copy constructor.
-    DebugLED& operator=(const DebugLED&) = delete;            // Define copy assignment operator.
-    DebugLED(DebugLED&&) = delete;                            // Define move constructor.
-    DebugLED& operator=(DebugLED&&) = delete;                 // Define move assignment operator.
-
-  private:
-    static IRAM_ATTR void ledToggle();
-    inline void ledHigh();
-    inline void ledLow();
-
-    static uint8_t ledPin_;
-    const bool ledOnState_;
-    Ticker ledTicker;
-  };
-  DebugLED debugLed;
 
 public:
   class TimeTracker final {

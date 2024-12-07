@@ -73,7 +73,7 @@ Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t 
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
-  debugLed(dbgLedPin, dbgLedOnState),
+  debugLed(dbgLedPin),
   timeTracker(deviceResetTime),
   loopTimeTracker(1),
   dataTransfer(&serialPort),
@@ -96,7 +96,7 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
-  debugLed.startTicker(500);
+  debugLed.startTicker(500U);
   serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
   serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
   serialPort.printf_P(PSTR("%sGit hash: %x\r\n"), INIT_PREFIX, gitHash);
@@ -365,7 +365,7 @@ void Connectivity::loop() {
       timeTracker.resetTime();
     } 
     else {
-      debugLed.startTicker(250);
+      debugLed.startTicker(250U);
       timeTracker.startTime();
     }
     serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE"));
@@ -513,40 +513,6 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
   }
 }
 #endif
-
-//////////////////// -- Debug LED class-- ////////////////////
-
-uint8_t Connectivity::DebugLED::ledPin_ = -1;
-
-Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledOnState_(ledOnState) {
-  ledPin_ = ledPin;
-  pinMode(this->ledPin_, OUTPUT);
-}
-
-void Connectivity::DebugLED::ledOn() { this->ledOnState_ ? ledLow() : ledHigh(); }
-
-void Connectivity::DebugLED::ledOff() { this->ledOnState_ ? ledHigh() : ledLow(); }
-
-void Connectivity::DebugLED::startTicker(uint32_t tickInterval_ms) {
-  ledOff();
-  this->ledTicker.attach_ms(tickInterval_ms, ledToggle);
-}
-
-void Connectivity::DebugLED::stopTicker() {
-  this->ledTicker.detach();
-  ledOff();
-}
-
-void Connectivity::DebugLED::ledToggle() {
-  digitalWrite(ledPin_, !digitalRead(ledPin_));   // LED pin toggle.
-}
-
-void Connectivity::DebugLED::ledHigh() {
-  digitalWrite(this->ledPin_, HIGH);                          // LED pin high.
-}
-void Connectivity::DebugLED::ledLow() {
-  digitalWrite(this->ledPin_, LOW);                           // LED pin low.
-}
 
 //////////////////// -- TimeTracker class-- ////////////////////
 

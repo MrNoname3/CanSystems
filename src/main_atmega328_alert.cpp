@@ -2,6 +2,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
@@ -40,7 +41,8 @@ static_assert(digitalPinToInterrupt(DFP_BUSY) != (NOT_AN_INTERRUPT), "DFPlayer m
 
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_1S);
-CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
+DebugLedHandler<HIGH> debugLed(LED_PIN);
+CanHandler canHandler(Serial, debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return (analogRead(BUTTON_PIN) > 500);});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
@@ -57,7 +59,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 void setup() {
   wdt.resetWatchdog();
   Serial.begin(MONITOR_BAUD);
-  canHandler.ledOn();
+  debugLed.ledOn();
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
@@ -78,7 +80,7 @@ void setup() {
   }
 
   Serial.println(F("********\r\nLooping..."));
-  canHandler.ledOff();
+  debugLed.ledOff();
 }
 
 void loop() {

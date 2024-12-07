@@ -2,6 +2,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
@@ -41,7 +42,8 @@ static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow senso
 
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_120MS);
-CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
+DebugLedHandler<HIGH> debugLed(LED_PIN);
+CanHandler canHandler(Serial, debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(Time::msToUs(5U), 0x27);
@@ -76,7 +78,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 void setup() {
   wdt.resetWatchdog();
   Serial.begin(MONITOR_BAUD);
-  canHandler.ledOn();
+  debugLed.ledOn();
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
@@ -100,7 +102,7 @@ void setup() {
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
 
   Serial.println(F("********\r\nLooping..."));
-  canHandler.ledOff();
+  debugLed.ledOff();
 }
 
 void loop() {
