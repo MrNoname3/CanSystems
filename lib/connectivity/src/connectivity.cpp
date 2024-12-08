@@ -7,7 +7,6 @@
 #include <Updater.h>
 #elif defined ESP32
 #include <Update.h>
-#include <esp_task_wdt.h>
 #endif
 #include "crc32.hpp"
 #include "base64.hpp"

@@ -21,7 +21,6 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <PubSubClient.h>                                           /// MQTT client.
 #include <HardwareSerial.h>
 #include <functional>
-#include <Ticker.h>                                                 /// Timer interrupt hadnler.
 #include "server.hpp"
 #include <vector>
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
