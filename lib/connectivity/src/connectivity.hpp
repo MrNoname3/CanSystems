@@ -24,6 +24,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include "server.hpp"
 #include <vector>
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
+#include "common.hpp"                                               /// Common definitions and functions.
 
 class Connectivity final {
 public:
@@ -93,6 +94,11 @@ private:
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
   };
 
+  static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);
+  static constexpr uint8_t macStringSize = 13;
+
+  static bool isDeviceOnline;
+
 #ifdef ESP8266
   ENC28J60lwIP ethInt;
 #elif defined ESP32
@@ -116,13 +122,11 @@ private:
   wl_status_t interfaceStatus;
   MqttCredentials mqttCredentials;
   int8_t mqttState;
-  static bool isDeviceOnline;
   const uint32_t cppVersion;
   const uint16_t fwVersion;
   const uint32_t gitHash;
-  static constexpr uint8_t macStringSize = 13;
+  uint32_t deviceResetTimer;
   std::vector<Connectivity::MqttComBase*> messageMap;
-  static constexpr uint32_t deviceResetTime = 3 * 60 * 60 * 1000;
 
 public:
   static const char PROGMEM OK_STATE[];
@@ -164,30 +168,6 @@ private:
   static const char PROGMEM MQTT_CONNECT_BAD_CREDENTIALS_STR[];
   static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
-
-public:
-  class TimeTracker final {
-  public:
-    explicit TimeTracker(uint32_t goalTime = 0);
-    virtual ~TimeTracker() = default;
-    void startTime();
-    void resetTime();
-    void setGoal(uint32_t goalTime);
-    uint32_t stopTime();
-    uint32_t getElapsedTime();
-    bool isGoalReached();
-
-    TimeTracker(const TimeTracker&) = delete;                       // Define copy constructor.
-    TimeTracker& operator=(const TimeTracker&) = delete;            // Define copy assignment operator.
-    TimeTracker(TimeTracker&&) = delete;                            // Define move constructor.
-    TimeTracker& operator=(TimeTracker&&) = delete;                 // Define move assignment operator.
-
-  private:
-    uint32_t startTime_;
-    uint32_t goalTime_;
-  };
-  TimeTracker timeTracker;
-  TimeTracker loopTimeTracker;
 
 private:
   class DataTransfer final {

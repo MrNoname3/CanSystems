@@ -75,8 +75,7 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
   cppVersion(__cplusplus),
   fwVersion(GIT_COMMIT_COUNT),
   gitHash(GIT_COMMIT_HASH),
-  timeTracker(deviceResetTime),
-  loopTimeTracker(1),
+  deviceResetTimer(0U),
   dataTransfer(&serialPort),
   common(*this, "common")
 {}
@@ -85,11 +84,10 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
   WdtHandler::enableWatchdog();
-  TimeTracker conTime;
-  conTime.startTime();
+  const uint32_t conTime = millis();
   const bool conResult = beginSimple(interface);
   serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
-  serialPort.printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, conTime.stopTime());
+  serialPort.printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, (millis() - conTime));
   if(!conResult && errorHandling) { ResetHandler::restartMCU(); }
 }
 
@@ -354,29 +352,24 @@ bool Connectivity::connect() {
 }
 
 void Connectivity::loop() {
-  loopTimeTracker.startTime();
   const bool loopingResult = loopSimple();
   const bool statusChanged = loopingResult != isDeviceOnline;
+  const uint32_t actualTime = millis();
+  if(loopingResult) {
+    deviceResetTimer = actualTime;
+  }
   if(statusChanged) {
     isDeviceOnline = loopingResult;
     if(isDeviceOnline) {
       debugLed.stopTicker();
-      timeTracker.resetTime();
-    } 
-    else {
+    } else {
       debugLed.startTicker(250U);
-      timeTracker.startTime();
     }
     serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE"));
   }
-  if(timeTracker.isGoalReached()) {
-    serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, timeTracker.getElapsedTime());
+  if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
+    serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, (actualTime - deviceResetTimer));
     ResetHandler::restartMCU();
-  }
-  if(loopTimeTracker.isGoalReached()) {
-    const uint32_t loopTime = loopTimeTracker.stopTime();
-    serialPort.printf_P(PSTR("%sMax loop time is: %ums\r\n"), RUN_PREFIX, loopTime);
-    loopTimeTracker.setGoal(loopTime + 1);
   }
 }
 
@@ -512,29 +505,6 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
   }
 }
 #endif
-
-//////////////////// -- TimeTracker class-- ////////////////////
-
-Connectivity::TimeTracker::TimeTracker(uint32_t goalTime) : startTime_(0), goalTime_(goalTime) {}
-
-void Connectivity::TimeTracker::startTime() { startTime_ = millis(); }
-
-void Connectivity::TimeTracker::resetTime() { startTime_ = 0; }
-
-void Connectivity::TimeTracker::setGoal(uint32_t goalTime) { goalTime_ = goalTime; }
-
-uint32_t Connectivity::TimeTracker::stopTime() { 
-  const uint32_t stoppedTime = getElapsedTime();
-  resetTime();
-  return stoppedTime;
- }
-
-uint32_t Connectivity::TimeTracker::getElapsedTime() { return (millis() - startTime_); }
-
-bool Connectivity::TimeTracker::isGoalReached() {
-  if(startTime_ == 0) { return false; }
-  return (getElapsedTime() >= goalTime_);
-}
 
 //////////////////// -- DataTransfer class-- ////////////////////
 

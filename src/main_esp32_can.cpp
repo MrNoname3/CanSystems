@@ -1,6 +1,8 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "performance.hpp"                                          /// Performance measurement class.
 #include "connectivity.hpp"
 #include "radiation.hpp"
 #include "rfHandler.hpp"
@@ -11,6 +13,7 @@
 static constexpr uint8_t LED_PIN                    = 2U;           // Pin of the LED.
 
 //--- Functions ---//
+void maxLoopTimeCallback(uint32_t maxLoopTime);
 void canTask(void *pvParameters);
 
 //--- Variables ---//
@@ -19,14 +22,18 @@ TaskHandle_t canTaskHandle = nullptr;
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
-
-//--- Networking ---//
+Performance performance(1U, maxLoopTimeCallback);
 Connectivity iotConn(Serial, debugLed);
 
 //--- MQTT handler objects ---//
 CanHandler canHandler(Serial);
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
+
+//--- Handling tasks ---//
+Task *task[1] = {&performance};
+static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {
   Serial.begin(MONITOR_BAUD);
@@ -41,6 +48,7 @@ void setup() {
 }
 
 void loop() {
+  taskHandler.runTasks();
   iotConn.loop();
   vTaskDelay(5);
 }
@@ -54,4 +62,8 @@ void canTask(void *pvParameters) {
     vTaskDelay(5);
   }
   vTaskDelete(nullptr);
+}
+
+void maxLoopTimeCallback(uint32_t maxLoopTime) {
+  Serial.printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
 }

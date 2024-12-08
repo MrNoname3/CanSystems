@@ -74,6 +74,7 @@ private:
   ~Analog() = delete;
 
 public:
+#if defined(__AVR_ATmega328P__)
   /// @brief Configures the analog input settings.
   /// This function sets up the analog reference voltage to 5V and configures the ADC
   /// for fast sampling by setting the prescaler to 16.
@@ -83,6 +84,7 @@ public:
     bitSet(ADCSRA, ADPS1);
     bitClear(ADCSRA, ADPS0);
   }
+#endif
 
   /// @brief Applies a complementary filter to smooth sensor values.
   /// @tparam alpha Weight for the new value (0-255).

@@ -1,6 +1,8 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "performance.hpp"                                          /// Performance measurement class.
 #include "connectivity.hpp"
 #include "adcReader.hpp"
 #include "mq135Handler.hpp"
@@ -12,18 +14,25 @@ static constexpr uint8_t ADC_RDY                    = D2;           // ADC ready
 static constexpr uint8_t I2C_SDA                    = D4;
 static constexpr uint8_t I2C_SCL                    = D3;
 
+//--- Functions ---//
+void maxLoopTimeCallback(uint32_t maxLoopTime);
+
 //--- Variables ---//
 const char separator[] PROGMEM = "******************************************************";
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
-
-//--- Networking ---//
+Performance performance(1U, maxLoopTimeCallback);
 Connectivity iotConn(Serial, debugLed, SPI_CS);
 
 //--- MQTT handler objects ---//
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
+
+//--- Handling tasks ---//
+Task *task[1] = {&performance};
+static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {
   Serial.begin(MONITOR_BAUD);
@@ -35,5 +44,10 @@ void setup() {
 }
 
 void loop() {
+  taskHandler.runTasks();
   iotConn.loop();
+}
+
+void maxLoopTimeCallback(uint32_t maxLoopTime) {
+  Serial.printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
 }
