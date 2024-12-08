@@ -48,7 +48,7 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-Performance performance(canHandler, 3U, maxLoopTimeCallback);
+Performance performance(3U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[5] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
@@ -118,4 +118,11 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
   Serial.print(F("Max loop time: "));
   Serial.println(maxLoopTime);
+  canHandler.send(CanCmd::LOOP_TIME_MAX, {
+    static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),
+    0U, 0U, 0U, 0U
+  });
 }

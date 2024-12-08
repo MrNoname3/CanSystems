@@ -67,7 +67,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     canHandler.send(CanCmd::MOISTURE_DATA, data);
   }
 );
-Performance performance(canHandler, 2U, maxLoopTimeCallback);
+Performance performance(2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[6] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
@@ -151,4 +151,11 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
   Serial.print(F("Max loop time: "));
   Serial.println(maxLoopTime);
+  canHandler.send(CanCmd::LOOP_TIME_MAX, {
+    static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),
+    0U, 0U, 0U, 0U
+  });
 }

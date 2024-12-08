@@ -4,20 +4,17 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
-#include "canHandler.hpp"                                           /// CAN handler library.
 
 /// @brief Performance measurement class to track the execution time of each loop iteration.
 class Performance final : public Task {
 public:
   /// @brief Constructs a `Performance` object with an initial loop time limit and a callback.
-  /// @param canHandler Reference to the CAN handler object for sending maximum loop time events.
   /// @param initialLoopTimeLimit The initial maximum loop time limit in milliseconds.
   /// This value sets a baseline for comparison when tracking loop execution times.
   /// @param maxLoopTimeCallback A callback function to be called when a new maximum loop 
   /// time is recorded. The function should accept a single `uint32_t` parameter, which 
   /// represents the new maximum loop time in milliseconds.
-  Performance(const CanHandler& canHandler, uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
-    canHandler(canHandler),
+  Performance(uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
     maxLoopTime(initialLoopTimeLimit),
     lastLoopTime(0U),
     maxLoopTimeCallback(maxLoopTimeCallback)
@@ -47,13 +44,6 @@ public:
       if(maxLoopTimeCallback != nullptr) {
         maxLoopTimeCallback(maxLoopTime);
       }
-      canHandler.send(CanCmd::LOOP_TIME_MAX, {
-        static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
-        static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
-        static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
-        static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),
-        0U, 0U, 0U, 0U
-      });
     }
   }
 
@@ -63,7 +53,6 @@ public:
   Performance& operator=(Performance&&) = delete;                 // Define move assignment operator.
 
 private:
-  const CanHandler& canHandler;                         // Reference to the CAN handler object.
   uint32_t maxLoopTime;                                 // The maximum loop time recorded in milliseconds.
   uint32_t lastLoopTime;                                // The timestamp of the last loop iteration.
   void (*maxLoopTimeCallback)(uint32_t maxLoopTime);    // The callback function for notifying maximum loop time.
