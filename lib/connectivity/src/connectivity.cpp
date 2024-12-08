@@ -72,9 +72,6 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
   usedInterface(Interface::UNKNOWN),
   interfaceStatus(WL_CONNECTED),
   mqttState(MQTT_CONNECTED),
-  cppVersion(__cplusplus),
-  fwVersion(GIT_COMMIT_COUNT),
-  gitHash(GIT_COMMIT_HASH),
   deviceResetTimer(0U),
   dataTransfer(&serialPort),
   common(*this, "common")
@@ -94,9 +91,10 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
   debugLed.startTicker(500U);
-  serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
-  serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
-  serialPort.printf_P(PSTR("%sGit hash: %x\r\n"), INIT_PREFIX, gitHash);
+  serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, Build::getCppVersion());
+  serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, Build::getFwVersion());
+  serialPort.printf_P(PSTR("%sGIT: %x\r\n"), INIT_PREFIX, Build::getGitHash());
+  serialPort.printf_P(PSTR("%sDirty: %hu\r\n"), INIT_PREFIX, Build::getGitDirty());
 #ifdef ESP8266
   serialPort.printf_P(PSTR("%sInternal VCC: %humV\r\n"), INIT_PREFIX, ESP.getVcc());
 #endif
@@ -244,11 +242,13 @@ bool Connectivity::beginSimple(Interface interface) {
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
 
   {
-    char versionString[64];
+    char versionString[80];
 #ifdef ESP8266
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"VCC\":%hu""}"), cppVersion, fwVersion, gitHash, ESP.getVcc());
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu,\"VCC\":%hu""}"),
+      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ESP.getVcc());
 #elif defined ESP32
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\"}"), cppVersion, fwVersion, gitHash);
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu""}"),
+      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty());
 #endif
     const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
     if(!versionStringValid) { return false; }
