@@ -101,7 +101,10 @@ bool AdcReader::loop() {
   return ADS.getError() == ADS1X15_OK ? true : false;
 }
 
-void AdcReader::messageReceived(uint8_t* payload, uint32_t length) {}
+void AdcReader::messageReceived(uint8_t* payload, uint32_t length) {
+  (void)payload;
+  (void)length;
+}
 
 int16_t AdcReader::analogRead(Channel channel) {
   return adcValues[static_cast<uint8_t>(channel) & maxChannelNumber];

@@ -474,7 +474,7 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
     canHandler.serialPort.printf_P(PSTR("%sDeserialisation failed at %s: %s\r\n"),
-      CAN_BASE_PREFIX, MqttComBase::getClassId(), deserializationError.f_str());
+      CAN_BASE_PREFIX, MqttComBase::getClassId(), reinterpret_cast<const char*>(deserializationError.f_str()));
     return;
   }
   JsonVariant fileJsonVar = cmdJson[F("File")];
@@ -502,7 +502,7 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   }
 }
 
-const uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }
+uint32_t CanHandler::CanComBase::getCanId() const { return nodeCanId; }
 
 bool CanHandler::CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
   return sendCanFrame(static_cast<uint16_t>(command), data);
@@ -597,7 +597,7 @@ void CanHandler::CanComBase::runOta() {
       canData[7] = static_cast<uint8_t>((frameNumber >> 24) & 0xFF);
       frameNumber += bytesNumber;
       const bool sendResult = sendCanFrame(CanCmd::OTA_SEND, canData);
-      transferState = sendResult ? TransferState::STORE_ACK : transferState = TransferState::INVALID;
+      transferState = sendResult ? TransferState::STORE_ACK : TransferState::INVALID;
     } break;
     case TransferState::STORE_ACK: {} break;
     case TransferState::END_ACK: {} break;
@@ -614,7 +614,7 @@ void CanHandler::CanComBase::runOta() {
         static constexpr const uint8_t dataOutBufSize = 64;
         char dataOut[dataOutBufSize] = { '\0' };
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME,
-          MqttComBase::getIsoTime(), otaStatus ? F("OK") : F("ERR"));
+          MqttComBase::getIsoTime(), reinterpret_cast<const char*>(otaStatus ? F("OK") : F("ERR")));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(dataOutValid) { MqttComBase::messageSend(dataOut); }
         canHandler.serialPort.printf_P(PSTR("%sFile transfer for \"%s\":%s\r\n"), CAN_BASE_PREFIX,

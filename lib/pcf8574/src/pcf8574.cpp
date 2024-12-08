@@ -33,7 +33,7 @@ bool PCF8574::read(uint8_t &value) const {
   return result;
 }
 
-const uint8_t PCF8574::getRegisterValue() const {
+uint8_t PCF8574::getRegisterValue() const {
   return static_cast<const uint8_t>(registerValue);
 }
 

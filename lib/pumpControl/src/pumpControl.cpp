@@ -197,7 +197,7 @@ void PumpControl::setError(ERROR err) {
   }
 }
 
-const uint8_t PumpControl::getError() const {
+uint8_t PumpControl::getError() const {
   return static_cast<const uint8_t>(error);
 }
 

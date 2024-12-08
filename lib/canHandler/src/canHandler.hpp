@@ -257,7 +257,7 @@ public:
     bool beginPriv();
     bool loopPriv();
     void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
-    const uint32_t getCanId() const;
+    uint32_t getCanId() const;
     virtual bool begin() override;
     virtual bool loop() override;
     virtual void messageReceived(uint8_t* payload, uint32_t length) override;

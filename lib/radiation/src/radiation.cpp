@@ -44,7 +44,10 @@ bool Radiation::loop() {
   return true;
 }
 
-void Radiation::messageReceived(uint8_t* payload, uint32_t length) {}
+void Radiation::messageReceived(uint8_t* payload, uint32_t length) {
+  (void)payload;
+  (void)length;
+}
 
 void Radiation::counter() { cpm++; }
 

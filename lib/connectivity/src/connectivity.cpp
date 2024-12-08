@@ -87,7 +87,7 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
   const uint32_t conTime = millis();
   const bool conResult = beginSimple(interface);
   serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
-  serialPort.printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, (millis() - conTime));
+  serialPort.printf_P(PSTR("%sInit time was: %lums\r\n"), INIT_PREFIX, (millis() - conTime));
   if(!conResult && errorHandling) { ResetHandler::restartMCU(); }
 }
 
@@ -312,7 +312,7 @@ bool Connectivity::startWifi() {
     }
   }
   else {
-    serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, deserializationError.f_str());
+    serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, reinterpret_cast<const char*>(deserializationError.f_str()));
   }
   wifiFile.close();
   return retVal;
@@ -365,7 +365,7 @@ void Connectivity::loop() {
     } else {
       debugLed.startTicker(250U);
     }
-    serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE"));
+    serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, reinterpret_cast<const char*>(isDeviceOnline ? F("ONLINE") : F("OFFLINE")));
   }
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
     serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, (actualTime - deviceResetTimer));
@@ -707,7 +707,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    conn.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), COMMON_PREFIX, deserializationError.f_str());
+    conn.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), COMMON_PREFIX, reinterpret_cast<const char*>(deserializationError.f_str()));
     return;
   }
   const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();

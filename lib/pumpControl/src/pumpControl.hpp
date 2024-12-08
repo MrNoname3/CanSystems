@@ -48,11 +48,11 @@ public:
 
   /// @brief Calculates the consumed current of the pump.
   /// @return The current value in mA.
-  inline int16_t calculateCurrent() const;
+  int16_t calculateCurrent() const;
 
   /// @brief Calculates only positive current and dont't care with negative ones.
   /// @return Returns the positive current value. In negative case it returns with 0.
-  inline uint16_t getPositiveCurrent() const;
+  uint16_t getPositiveCurrent() const;
 
   /// @brief Adds a limit switch for a specific channel.
   /// @param channel The irrigation channel.
@@ -175,18 +175,18 @@ private:
   /// @brief Selects an irrigation channel for use.
   /// @param channel The channel to select.
   /// @return True if the channel was successfully selected, false otherwise.
-  inline bool selectChannel(uint8_t channel) const;
+  bool selectChannel(uint8_t channel) const;
 
   /// @brief Sets the error state for the pump control system.
   /// @param err The error to set.
-  inline void setError(ERROR err);
+  void setError(ERROR err);
 
   /// @brief Retrieves the current error state.
   /// @return The current error state.
-  inline const uint8_t getError() const;
+  uint8_t getError() const;
 
   /// @brief Clears the current error state.
-  inline void clearError();
+  void clearError();
 
   /// @brief Schedules an irrigation task.
   /// @param irrigationElement The irrigation task details.
@@ -197,7 +197,7 @@ private:
 
   /// @brief Resets the timer used for monitoring safety timers on a specific channel.
   /// @param channel The channel to reset the timer for.
-  inline void resetSafetyIrrigationTimer(uint8_t channel);
+  void resetSafetyIrrigationTimer(uint8_t channel);
 
   static constexpr uint8_t channelCount = 4U;                               // Number of irrigation channels.
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;           // Channel mask to prevent memory overlapping.

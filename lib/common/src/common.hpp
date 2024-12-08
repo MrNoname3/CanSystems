@@ -155,19 +155,19 @@ private:
 public:
   /// @brief Gets the firmware version.
   /// @return Firmware version derived from `GIT_COMMIT_COUNT`.
-  static constexpr const uint16_t getFwVersion() { return fwVersion; }
+  static constexpr uint16_t getFwVersion() { return fwVersion; }
 
   /// @brief Gets the Git commit hash.
   /// @return Git commit hash (`GIT_COMMIT_HASH`).
-  static constexpr const uint32_t getGitHash() { return gitHash; }
+  static constexpr uint32_t getGitHash() { return gitHash; }
 
   /// @brief Checks if the repository has uncommitted changes.
   /// @return `1` if dirty, `0` if clean (`GIT_DIRTY`).
-  static constexpr const uint8_t getGitDirty() { return gitDirty; }
+  static constexpr uint8_t getGitDirty() { return gitDirty; }
 
   /// @brief Gets the C++ standard version used for compilation.
   /// @return Value of the `__cplusplus` macro.
-  static constexpr const uint32_t getCppVersion() { return cppVersion; }
+  static constexpr uint32_t getCppVersion() { return cppVersion; }
 
   Build(const Build&) = delete;                       // Define copy constructor.
   Build& operator=(const Build&) = delete;            // Define copy assignment operator.
