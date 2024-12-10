@@ -169,15 +169,20 @@ public:
   /// @return Value of the `__cplusplus` macro.
   static constexpr uint32_t getCppVersion() { return cppVersion; }
 
+  /// @brief Retrieves the firmware build time as a UNIX timestamp.
+  /// @return The build time (`BUILD_TIME`).
+  static constexpr uint32_t getbuildTime() { return buildTime; }
+
   Build(const Build&) = delete;                       // Define copy constructor.
   Build& operator=(const Build&) = delete;            // Define copy assignment operator.
   Build(Build&&) = delete;                            // Define move constructor.
   Build& operator=(Build&&) = delete;                 // Define move assignment operator.
 
 private:
-  static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);      // Firmware version.
-  static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);         // Git commit hash.
-  static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);                // Repository state.
-  static constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);          // C++ standard version.
+  static constexpr uint16_t fwVersion = static_cast<uint16_t>(GIT_COMMIT_COUNT);      // Firmware version derived from commit count.
+  static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);         // Git commit hash of the build.
+  static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);                // Repository state indicating uncommitted changes.
+  static constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);          // C++ standard version used for compilation.
+  static constexpr uint32_t buildTime = static_cast<uint32_t>(BUILD_TIME);            // Firmware build timestamp.
 };
 #endif // COMMON_HPP
