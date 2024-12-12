@@ -52,9 +52,15 @@ public:
   /// @return A bitmask representing tasks that failed initialization. Each bit corresponds to a task index.
   uint32_t initTasks() {
     uint32_t failureMask = 0U;
-    for(uint8_t i = 0U; i < taskNum; ++i) {
-      if(!taskList[i]->init()) {
-        failureMask |= (1U << i);
+    if(singleTaskOnly) {
+      if(!taskList[0]->init()) {
+        failureMask = 1U;
+      }
+    } else {
+      for(uint8_t i = 0U; i < taskNum; ++i) {
+        if(!taskList[i]->init()) {
+          failureMask |= (1U << i);
+        }
       }
     }
     return failureMask;
@@ -65,13 +71,17 @@ public:
   /// - Full round-robin (`true`): Executes tasks sequentially, one at a time.
   /// - Partial round-robin (`false`): Always runs the first task, alternating with others.
   void runTasks() {
-    if(fullRoundRobin) {
-      taskList[currentTask]->run();
-      currentTask = (currentTask + 1U) % taskNum;
-    } else {
+    if(singleTaskOnly) {
       taskList[0]->run();
-      currentTask = (currentTask % (taskNum - 1U)) + 1U;
-      taskList[currentTask]->run();
+    } else {
+      if(fullRoundRobin) {
+        taskList[currentTask]->run();
+        currentTask = (currentTask + 1U) % taskNum;
+      } else {
+        taskList[0]->run();
+        currentTask = (currentTask % (taskNum - 1U)) + 1U;
+        taskList[currentTask]->run();
+      }
     }
   }
 
@@ -81,6 +91,8 @@ public:
   TaskHandler& operator=(TaskHandler&&) = delete;                 // Define move assignment operator.
 
 private:
+  static constexpr bool singleTaskOnly = (taskNum == 1U);         // Indicates if the task handler has only 1 task.
+
   Task *(&taskList)[taskNum];                                     // Reference to an array of task pointers.
   uint8_t currentTask;                                            // Index of the currently executing task.
 };
