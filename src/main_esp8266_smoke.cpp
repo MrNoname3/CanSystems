@@ -1,7 +1,9 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
 #include "connectivity.hpp"
 #include "adcReader.hpp"
@@ -40,6 +42,15 @@ void setup() {
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
   iotConn.begin(Connectivity::Interface::WIFI, true);
   //adcReader.enableMqttSending(10000U);
+
+  const uint32_t initResult = taskHandler.initTasks();
+  const bool initSuccess = (initResult == 0U);
+  Serial.printf_P(PSTR("Init:%s\r\n"), initSuccess ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
+  if(!initSuccess) {
+    Serial.printf_P(PSTR("Code:%u\r\n"), initResult);
+    ResetHandler::restartMCU();
+  }
+
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
 }
 
