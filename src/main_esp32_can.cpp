@@ -52,7 +52,6 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
-
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
 
   if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {

@@ -51,7 +51,6 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
-
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
 }
 
