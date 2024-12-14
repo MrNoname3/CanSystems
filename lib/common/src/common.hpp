@@ -138,8 +138,13 @@ public:
   Str& operator=(Str&&) = delete;                 // Define move assignment operator.
 
 private:
+#if defined(__AVR_ATmega328P__)
   static constexpr const char* OK_STR           = "[OK]";
   static constexpr const char* ERR_STR          = "[ERR]";
+#elif defined(ESP8266) || defined(ESP32)
+  static const char PROGMEM OK_STR[];
+  static const char PROGMEM ERR_STR[];
+#endif
   static constexpr const char* SPACER_STR       = "|";
 };
 

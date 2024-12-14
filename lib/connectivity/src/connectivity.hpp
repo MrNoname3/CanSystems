@@ -132,10 +132,6 @@ private:
   void (*resetWdt)();
   std::vector<Connectivity::MqttComBase*> messageMap;
 
-public:
-  static const char PROGMEM OK_STATE[];
-  static const char PROGMEM ERR_STATE[];
-private:
   static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];

@@ -23,8 +23,6 @@ const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
-const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
 const char Connectivity::DEVICE_TYPE[] PROGMEM              = BUILD_ENV_NAME;
 const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
 const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
@@ -82,7 +80,7 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, vo
 void Connectivity::begin(Interface interface, bool errorHandling) {
   const uint32_t conTime = millis();
   const bool conResult = beginSimple(interface);
-  serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
+  serialPort.printf_P(PSTR("%sIOT connection: %s\r\n"), INIT_PREFIX, (conResult ? Str::getOkStr() : Str::getErrStr()));
   serialPort.printf_P(PSTR("%sInit time was: %lums\r\n"), INIT_PREFIX, (millis() - conTime));
   if(!conResult && errorHandling) { ResetHandler::restartMCU(); }
 }
@@ -104,7 +102,7 @@ bool Connectivity::beginSimple(Interface interface) {
   {
     delay(10);
     const bool initFS = LittleFS.begin();
-    serialPort.printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE));
+    serialPort.printf_P(PSTR("%sInitialising filesystem: %s\r\n"), FS_PREFIX, (initFS ? Str::getOkStr() : Str::getErrStr()));
     if(!initFS) { return false; }
 #ifdef ESP8266
     {
@@ -136,7 +134,7 @@ bool Connectivity::beginSimple(Interface interface) {
     WiFi.onEvent(Connectivity::WiFiEvent);
     const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
 #endif
-    serialPort.printf_P(PSTR("%sInitialising ethernet modul:%s\r\n"), ETH_PREFIX, ethInit ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sInitialising ethernet modul: %s\r\n"), ETH_PREFIX, ethInit ? Str::getOkStr() : Str::getErrStr());
     if(!ethInit) { return false; }
     serialPort.printf_P(PSTR("%sConnecting to router"), ETH_PREFIX);
 #ifdef ESP8266
@@ -149,13 +147,13 @@ bool Connectivity::beginSimple(Interface interface) {
       delay(300);
     }
 #ifdef ESP8266
-    serialPort.printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR(" %s\r\n"), ethInt.connected() ? Str::getOkStr() : Str::getErrStr());
     if(!ethInt.connected()) { return false; }
     serialPort.printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str());
     serialPort.printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str());
     serialPort.printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str());
 #elif defined ESP32
-    serialPort.printf_P(PSTR("%s\r\n"), ethConnected ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR(" %s\r\n"), ethConnected ? Str::getOkStr() : Str::getErrStr());
     if(!ethConnected) { return false; }
     serialPort.printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
     serialPort.printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
@@ -164,7 +162,7 @@ bool Connectivity::beginSimple(Interface interface) {
   }
   else if(interface == Interface::WIFI) {
     const bool wifiInit = WiFi.mode(WIFI_STA);
-    serialPort.printf_P(PSTR("%sInitialising wifi:%s\r\n"), WIFI_PREFIX, wifiInit ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sInitialising wifi: %s\r\n"), WIFI_PREFIX, wifiInit ? Str::getOkStr() : Str::getErrStr());
     if(!wifiInit) { return false; }
     WiFi.setAutoReconnect(true);
     if(!startWifi()) { return false; }
@@ -174,7 +172,7 @@ bool Connectivity::beginSimple(Interface interface) {
       serialPort.print(loadingMark);
       delay(300);
     }
-    serialPort.printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR(" %s\r\n"), (WiFi.status() == WL_CONNECTED) ? Str::getOkStr() : Str::getErrStr());
     if(WiFi.status() != WL_CONNECTED) { return false; }
     serialPort.printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
     serialPort.printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
@@ -193,7 +191,7 @@ bool Connectivity::beginSimple(Interface interface) {
   {
     const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
-    serialPort.printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sMake string from MAC: %s\r\n"), INIT_PREFIX, macValid ? Str::getOkStr() : Str::getErrStr());
     if(!macValid) { return false; }
   }
 
@@ -225,11 +223,11 @@ bool Connectivity::beginSimple(Interface interface) {
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    serialPort.printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sClient name: %s\r\n"), MQTT_PREFIX, clientNameValid ? Str::getOkStr() : Str::getErrStr());
     serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize);
-    serialPort.printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sSender topic: %s\r\n"), MQTT_PREFIX, senderTopicValid ? Str::getOkStr() : Str::getErrStr());
     serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize);
-    serialPort.printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE);
+    serialPort.printf_P(PSTR("%sReceiver topic: %s\r\n"), MQTT_PREFIX, receiverTopicValid ? Str::getOkStr() : Str::getErrStr());
     serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize);
     serialPort.flush();
     if(!clientNameValid) { return false; }
@@ -259,7 +257,7 @@ bool Connectivity::beginSimple(Interface interface) {
     const auto& currentObject = messageMap[i];
     if(currentObject != nullptr) {
       const bool beginResult = currentObject->begin();
-      serialPort.printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE);
+      serialPort.printf_P(PSTR("  %zu. %s -> %s\r\n"), i, currentObject->getClassId(), beginResult ? Str::getOkStr() : Str::getErrStr());
     }
     else {
       serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
@@ -274,11 +272,11 @@ bool Connectivity::startWifi() {
   bool retVal = false;
   const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
   serialPort.printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
-  serialPort.printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("  %s -> %s\r\n"), wifiFileLocation, wifiFileExists ? Str::getOkStr() : Str::getErrStr());
   if(!wifiFileExists) { return retVal; }
 
   File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
-  serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("%sOpening: %s %s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? Str::getOkStr() : Str::getErrStr());
   if(!wifiFile) { wifiFile.close(); return retVal; }
 
   JsonDocument wifiJson;
@@ -326,7 +324,7 @@ bool Connectivity::connect() {
   // TCP connection.
   //tcpClient.getLastSSLError() == BR_ERR_OK ?
   const bool tcpStopResult = tcpClient.stop(2000);
-  serialPort.printf_P(PSTR("%sReset connection for fresh start%s\r\n"), TCP_PREFIX, tcpStopResult ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("%sReset connection for fresh start %s\r\n"), TCP_PREFIX, tcpStopResult ? Str::getOkStr() : Str::getErrStr());
   if(!tcpStopResult) { return false; }
 #elif defined ESP32
   //tcpClient.stop();
@@ -334,16 +332,16 @@ bool Connectivity::connect() {
   tcpClient.setTimeout(10);
 #endif
   const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
-  serialPort.printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("%sConnecting to: %s:%hu %s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? Str::getOkStr() : Str::getErrStr());
   if(!tcpConResult) { return false; }
 
   // MQTT connection.
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  serialPort.printf_P(PSTR("%sConnecting to MQTT broker:%s\r\n  State: %s\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, getMqttStatusStr(mqttClient.state()));
+  serialPort.printf_P(PSTR("%sConnecting to MQTT broker: %s\r\n  State: %s\r\n"), MQTT_PREFIX, mqttConResult ? Str::getOkStr() : Str::getErrStr(), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
-  serialPort.printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE);
+  serialPort.printf_P(PSTR("%sSubscription: %s\r\n"), MQTT_PREFIX, subResult ? Str::getOkStr() : Str::getErrStr());
   if(!subResult) { return false; }
   return true;
 }
@@ -630,18 +628,18 @@ bool Connectivity::DataTransfer::checkValidity() {
   if(this->remainingFileSize_ != 0) { return false; }
   File receivedFile = LittleFS.open(FPSTR(this->fileName_), "r");
   if(this->serialPort) {
-    this->serialPort->printf_P(PSTR("%sChecking received file:%s\r\n"),
-      FILE_TRANSFER_PREFIX, receivedFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
+    this->serialPort->printf_P(PSTR("%sChecking received file: %s\r\n"),
+      FILE_TRANSFER_PREFIX, receivedFile ? Str::getOkStr() : Str::getErrStr());
   }
   if(!receivedFile) { receivedFile.close(); return false; }
   const bool fileSizeOk = (receivedFile.size() == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size -> %s\r\n"), fileSizeOk ? Str::getOkStr() : Str::getErrStr()); }
   if(!fileSizeOk) { receivedFile.close(); return false; }
   Crc32 crc32;
   while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
   const uint32_t calcFileCrc32 = crc32.get();
   const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC -> %s\r\n"), fileCrcOk ? Str::getOkStr() : Str::getErrStr()); }
   if(!fileCrcOk) { receivedFile.close(); return false; }
   if(this->fileName_ != otaFwLocation) {
     receivedFile.close();
@@ -651,14 +649,14 @@ bool Connectivity::DataTransfer::checkValidity() {
 
   receivedFile.seek(0, SeekSet);
   const bool updateBeginResult = Update.begin(this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Begin -> %s\r\n"), updateBeginResult ? Str::getOkStr() : Str::getErrStr()); }
   if(!updateBeginResult) { receivedFile.close(); return false; }
   const bool updateStreamResult = (Update.writeStream(receivedFile) == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Stream -> %s\r\n"), updateStreamResult ? Str::getOkStr() : Str::getErrStr()); }
   if(!updateStreamResult) { receivedFile.close(); return false; }
   receivedFile.close();
   const bool updateEndResult = Update.end();
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
+  if(this->serialPort) { this->serialPort->printf_P(PSTR("  End -> %s\r\n"), updateEndResult ? Str::getOkStr() : Str::getErrStr()); }
   stop(true);
   if(!updateEndResult) { return false; }
   return true;
