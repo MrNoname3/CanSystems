@@ -47,7 +47,8 @@ void setup() {
   const bool initSuccess = (initResult == 0U);
   Serial.printf_P(PSTR("Init:%s\r\n"), initSuccess ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
   if(!initSuccess) {
-    Serial.printf_P(PSTR("Code:%u\r\n"), initResult);
+    Serial.printf_P(PSTR("Code: "));
+    Serial.println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
