@@ -37,9 +37,9 @@ public:
   };
 
 #ifdef ESP8266
-  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t ethCS);
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)(), uint8_t ethCS);
 #elif defined ESP32
-  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed);
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)());
 #endif
   /// @brief Destructor of the object.
   virtual ~Connectivity() = default;
@@ -66,6 +66,12 @@ private:
   static const char* getISODateTime();
 
   bool registerCallback(Connectivity::MqttComBase* obj);
+
+  inline void resetWatchdogTimer() {
+    if(resetWdt != nullptr) {
+      resetWdt();
+    }
+  }
 
   const char* getIntStatusStr(wl_status_t status);
 
@@ -123,6 +129,7 @@ private:
   MqttCredentials mqttCredentials;
   int8_t mqttState;
   uint32_t deviceResetTimer;
+  void (*resetWdt)();
   std::vector<Connectivity::MqttComBase*> messageMap;
 
 public:

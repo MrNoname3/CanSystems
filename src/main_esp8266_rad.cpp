@@ -1,5 +1,6 @@
 //--- Headers ---//
 #include <Arduino.h>                                                /// Arduino libraries header.
+#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
@@ -25,7 +26,7 @@ const char separator[] PROGMEM = "**********************************************
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-Connectivity iotConn(Serial, debugLed, SPI_CS);
+Connectivity iotConn(Serial, debugLed, WdtHandler::resetWatchdog, SPI_CS);
 
 //--- MQTT handler objects ---//
 Radiation radiation(iotConn, "radiation", RAD);
@@ -37,6 +38,7 @@ static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {
+  WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
   delay(1U);
   Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
@@ -55,6 +57,7 @@ void setup() {
 }
 
 void loop() {
+  WdtHandler::resetWatchdog();
   taskHandler.runTasks();
   iotConn.loop();
 }

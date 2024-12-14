@@ -1,5 +1,4 @@
 #include "connectivity.hpp"
-#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
@@ -60,10 +59,10 @@ const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONN
 const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
 
 #ifdef ESP8266
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t ethCS) :
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)(), uint8_t ethCS) :
   ethInt(ethCS),
 #elif defined ESP32
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)()) :
 #endif
   serialPort(serial),
   debugLed(debugLed),
@@ -73,6 +72,7 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
   interfaceStatus(WL_CONNECTED),
   mqttState(MQTT_CONNECTED),
   deviceResetTimer(0U),
+  resetWdt(resetWdt),
   dataTransfer(&serialPort),
   common(*this, "common")
 {}
@@ -80,7 +80,6 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed) :
 
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
-  WdtHandler::enableWatchdog();
   const uint32_t conTime = millis();
   const bool conResult = beginSimple(interface);
   serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
@@ -127,7 +126,7 @@ bool Connectivity::beginSimple(Interface interface) {
 #endif
 
   // Start interface.
-  WdtHandler::resetWatchdog();
+  resetWatchdogTimer();
   if(interface == Interface::ETHERNET) {
     WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
@@ -200,7 +199,7 @@ bool Connectivity::beginSimple(Interface interface) {
 
   // Set time via NTP, as required for x.509 validation.
   yield();
-  WdtHandler::resetWatchdog();
+  resetWatchdogTimer();
   {
     serialPort.printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX);
     configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
@@ -255,7 +254,6 @@ bool Connectivity::beginSimple(Interface interface) {
     common.messageSend(versionString);
   }
 
-  WdtHandler::resetWatchdog();
   serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX);
   for(std::size_t i = 0; i < messageMap.size(); ++i) {
     const auto& currentObject = messageMap[i];
@@ -269,7 +267,6 @@ bool Connectivity::beginSimple(Interface interface) {
   }
 
   debugLed.stopTicker();
-  WdtHandler::resetWatchdog();
   return true;
 }
 
@@ -375,8 +372,6 @@ void Connectivity::loop() {
 
 bool Connectivity::loopSimple() {
   yield();
-  WdtHandler::resetWatchdog();
-
   static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   const char* intPrefix;
   if(usedInterface == Interface::ETHERNET) {
