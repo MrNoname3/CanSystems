@@ -47,7 +47,7 @@ void setup() {
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Serial.printf_P(PSTR("Init: %s\r\n"), initSuccess ? Str::getOkStr() : Str::getErrStr());
+  Serial.printf_P(PSTR("Init: %s\r\n"), Str::getStateStr(initSuccess));
   if(!initSuccess) {
     Serial.printf_P(PSTR("Code: "));
     Serial.println(initResult, BIN);

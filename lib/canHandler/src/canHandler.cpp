@@ -57,7 +57,7 @@ bool CanHandler::init(uint32_t canBaud) {
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
     const bool canBeginResult = CAN.begin(canBaud) == 1;
-    canBeginResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
+    serialPort.println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
   }
   { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
@@ -66,7 +66,7 @@ bool CanHandler::init(uint32_t canBaud) {
     const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
     serialPort.print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
-    setFilterResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
+    serialPort.println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
   {
@@ -76,7 +76,7 @@ bool CanHandler::init(uint32_t canBaud) {
   {
     serialPort.print(F("FLASH: "));
     const bool flashInitResult = flash.initialize();
-    flashInitResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
+    serialPort.println(Str::getStateStr(flashInitResult));
     if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
@@ -123,7 +123,7 @@ bool CanHandler::loopSimple() {
             static_cast<uint16_t>(canFrame.data[7]) << 8U;
           serialPort.print(F("OTA start: "));
           const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
-          otaStartResult ? serialPort.println(Str::getOkStr()) : serialPort.println(Str::getErrStr());
+          serialPort.println(Str::getStateStr(otaStartResult));
           if(!otaStartResult) { send(CanCmd::OTA_START, Response::NACK); }
         } break;
         case static_cast<uint16_t>(CanCmd::OTA_SEND): {

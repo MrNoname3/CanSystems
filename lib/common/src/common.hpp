@@ -132,6 +132,11 @@ public:
   /// @return Constant string `"|"`.
   static constexpr const char* getSpacerStr() { return SPACER_STR; }
 
+  /// @brief Retrieves a status string based on a boolean state.
+  /// @param state Boolean value where `true` represents "OK" and `false` represents "Error".
+  /// @return `"[OK]"` if `state` is `true`, otherwise `"[ERR]"`.
+  static constexpr const char* getStateStr(bool state) { return state ? getOkStr() : getErrStr(); }
+
   Str(const Str&) = delete;                       // Define copy constructor.
   Str& operator=(const Str&) = delete;            // Define copy assignment operator.
   Str(Str&&) = delete;                            // Define move constructor.
@@ -139,13 +144,13 @@ public:
 
 private:
 #if defined(__AVR_ATmega328P__)
-  static constexpr const char* OK_STR           = "[OK]";
-  static constexpr const char* ERR_STR          = "[ERR]";
+  static constexpr const char* OK_STR           = "[OK]";     // Status string for "OK" on AVR platforms.
+  static constexpr const char* ERR_STR          = "[ERR]";    // Status string for "Error" on AVR platforms.
 #elif defined(ESP8266) || defined(ESP32)
-  static const char PROGMEM OK_STR[];
-  static const char PROGMEM ERR_STR[];
+  static const char PROGMEM OK_STR[];                         // Status string for "OK" stored in program memory for ESP platforms.
+  static const char PROGMEM ERR_STR[];                        // Status string for "Error" stored in program memory for ESP platforms.
 #endif
-  static constexpr const char* SPACER_STR       = "|";
+  static constexpr const char* SPACER_STR       = "|";        // A string used as a spacer in formatting.
 };
 
 /// @brief Class to provide build-time metadata and configuration information.
