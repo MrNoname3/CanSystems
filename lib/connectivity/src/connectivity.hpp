@@ -1,27 +1,29 @@
 #ifndef CONNECTIVITY_HPP
 #define CONNECTIVITY_HPP
 
-#include <stdint.h>
-#ifndef MQTT_MAX_PACKET_SIZE
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#ifndef MQTT_MAX_PACKET_SIZE                                        /// Ensure the `MQTT_MAX_PACKET_SIZE` macro is defined.
 #error "MQTT_MAX_PACKET_SIZE is not defined!"
 #endif
-// Check MQTT packet size for proper operation.
-static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024;
+
+static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024U;         // Minimum allowed MQTT packet size for proper operation.
+
+/// @brief Static assertion to validate `MQTT_MAX_PACKET_SIZE`.
 static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
 
-#include <pgmspace.h>
+#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
 #ifdef ESP8266
-#include <ESP8266WiFi.h>                                            /// Wifi driver.
-#include <ENC28J60lwIP.h>                                           /// Ethernet driver.
+#include <ESP8266WiFi.h>                                            /// WiFi driver for ESP8266.
+#include <ENC28J60lwIP.h>                                           /// Ethernet driver for ENC28J60 on ESP8266.
 #elif defined ESP32
-#include <WiFi.h>
-#include <ETH.h>
+#include <WiFi.h>                                                   /// WiFi driver for ESP32.
+#include <ETH.h>                                                    /// Ethernet driver for ESP32.
 #endif
-#include <WiFiClientSecure.h>                                       /// TCP client with SSL.
-#include <PubSubClient.h>                                           /// MQTT client.
-#include <HardwareSerial.h>
-#include "server.hpp"
-#include <vector>
+#include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
+#include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
+#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
+#include "server.hpp"                                               /// Custom server-related declarations and definitions.
+#include <vector>                                                   /// STL vector for dynamic arrays.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
 
