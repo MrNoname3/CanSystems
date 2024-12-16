@@ -179,6 +179,14 @@ public:
   /// @return Value of the `__cplusplus` macro.
   static constexpr uint32_t getCppVersion() { return cppVersion; }
 
+  /// @brief Gets the PlatformIO environment name used during the build.
+  /// @return A constant string containing the PlatformIO environment name (`BUILD_ENV_NAME`).
+  static constexpr const char* getPioEnv() { return pioEnv; }
+
+  /// @brief Gets the length of the PlatformIO environment name string.
+  /// @return Length of the `pioEnv` string excluding the null terminator.
+  static constexpr uint32_t getPioEnvLength() { return sizeof(pioEnv) - 1U; }
+
   Build(const Build&) = delete;                       // Define copy constructor.
   Build& operator=(const Build&) = delete;            // Define copy assignment operator.
   Build(Build&&) = delete;                            // Define move constructor.
@@ -189,5 +197,6 @@ private:
   static constexpr uint32_t gitHash = static_cast<uint32_t>(GIT_COMMIT_HASH);         // Git commit hash of the build.
   static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);                // Repository state indicating uncommitted changes.
   static constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);          // C++ standard version used for compilation.
+  static constexpr const char pioEnv[] = BUILD_ENV_NAME;                              // Name of the PlatformIO environment used for the build.
 };
 #endif // COMMON_HPP

@@ -23,7 +23,6 @@ const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::DEVICE_TYPE[] PROGMEM              = BUILD_ENV_NAME;
 const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
 const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
 const char Connectivity::ETH_PREFIX[] PROGMEM               = "[ETH] ";
@@ -216,7 +215,7 @@ bool Connectivity::beginSimple(Interface interface) {
     memccpy_P(mqttCredentials.password, mqttSettings::password, '\0', sizeof(mqttCredentials.password));
     memccpy_P(mqttCredentials.serverName, mqttSettings::serverName, '\0', sizeof(mqttCredentials.serverName));
     mqttCredentials.serverPort = mqttSettings::serverPort;
-    const char* deviceID = strchr(DEVICE_TYPE, '_') + 1;
+    const char* deviceID = strchr(Build::getPioEnv(), '_') + 1;
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
@@ -717,7 +716,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       switch(command) {
         case Command::FW_DT_START: {
           const char* binId = cmdJson[F("binId")].as<const char*>();
-          if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
+          if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
             conn.serialPort.printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId);
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;

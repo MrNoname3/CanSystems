@@ -9,7 +9,7 @@
 static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024;
 static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
 
-#include <Arduino.h>                                                /// Arduino libraries header.
+#include <pgmspace.h>
 #ifdef ESP8266
 #include <ESP8266WiFi.h>                                            /// Wifi driver.
 #include <ENC28J60lwIP.h>                                           /// Ethernet driver.
@@ -20,7 +20,6 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <WiFiClientSecure.h>                                       /// TCP client with SSL.
 #include <PubSubClient.h>                                           /// MQTT client.
 #include <HardwareSerial.h>
-#include <functional>
 #include "server.hpp"
 #include <vector>
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
@@ -136,7 +135,6 @@ private:
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-  static const char PROGMEM DEVICE_TYPE[];
   static const char PROGMEM INIT_PREFIX[];
   static const char PROGMEM FS_PREFIX[];
   static const char PROGMEM ETH_PREFIX[];
