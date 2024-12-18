@@ -7,8 +7,6 @@
 #elif defined ESP32
 #include <Update.h>
 #endif
-#include "crc32.hpp"
-#include "base64.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -70,11 +68,9 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, vo
   mqttState(MQTT_CONNECTED),
   deviceResetTimer(0U),
   resetWdt(resetWdt),
-  dataTransfer(&serialPort),
+  dataTransfer(serialPort),
   common(*this, "common")
 {}
-
-
 
 void Connectivity::begin(Interface interface, bool errorHandling) {
   const uint32_t conTime = millis();
@@ -498,169 +494,6 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
 }
 #endif
 
-//////////////////// -- DataTransfer class-- ////////////////////
-
-const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
-const char Connectivity::DataTransfer::otaFwLocation[] PROGMEM            = "/config/espFirmware.bin";
-const char Connectivity::DataTransfer::wifiTempFileLocation[] PROGMEM     = "/config/wifi.json.tmp";
-
-Connectivity::DataTransfer::DataTransfer(Stream* serial) :
-  serialPort(serial),
-  fileSize_(0),
-  fileCrc_(0),
-  nextFilePieceNumber_(-1),
-  remainingFileSize_(0),
-  fileName_(nullptr),
-  fileTransferStarted_(false) {}
-
-bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
-  if(this->fileTransferStarted_) { stop(true); }
-  this->fileTransferStarted_ = true;
-  this->fileSize_ = fileSize;
-  this->fileCrc_ = fileCrc;
-  this->nextFilePieceNumber_ = 0;
-  this->remainingFileSize_ = fileSize;
-  if(fileName == nullptr) { stop(true); return false; }
-  this->fileName_ = fileName;
-  {
-#ifdef ESP8266
-    FSInfo fsInfo;
-    LittleFS.info(fsInfo);
-    const uint32_t freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
-#elif defined ESP32
-    const uint32_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-#endif
-    const bool isEnoughFreeSpace = freeSpace > this->fileSize_;
-    if(!isEnoughFreeSpace) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sNot enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), FILE_TRANSFER_PREFIX, freeSpace, this->fileSize_); }
-      return false;
-    }
-  }
-  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
-  if(fileExists) {
-    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
-    if(!rmFileResult) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-      stop(true);
-      return false;
-    }
-  }
-  if(this->serialPort) {
-    this->serialPort->printf_P(PSTR("%sFile transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"),
-      FILE_TRANSFER_PREFIX, this->fileName_, this->fileSize_, this->fileCrc_);
-  }
-  if(fileSize == 0) { stop(true); return false; }
-  return true;
-}
-
-bool Connectivity::DataTransfer::stop(bool deleteFile) {
-  this->fileTransferStarted_ = false;
-  this->fileSize_ = 0;
-  this->fileCrc_ = 0;
-  this->nextFilePieceNumber_ = -1;
-  this->remainingFileSize_ = 0;
-
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped, cleaning up done!\r\n"), FILE_TRANSFER_PREFIX); }
-  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
-  if(fileExists && deleteFile) {
-    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
-    if(!rmFileResult) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-      return false;
-    }
-  }
-  this->fileName_ = nullptr;
-  return true;
-}
-
-bool Connectivity::DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
-  if(!this->fileTransferStarted_) { return false; }
-  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
-  if(this->remainingFileSize_ == 0) { return false; }
-  constexpr uint16_t maxB64Length = receivedFilePieceSize * 4 / 3;
-  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length);
-  if(filePieceB64Size == 0) { return false; }
-
-  uint8_t decodedData[receivedFilePieceSize];
-  const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
-  if(decodedPreSize > sizeof(decodedData)) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile piece size error!\r\n"), FILE_TRANSFER_PREFIX); }
-    return false;
-  }
-  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
-  if(decodedPreSize != decodedPostSize) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), FILE_TRANSFER_PREFIX); }
-    return false;
-  }
-  const bool storingResult = store(filePieceNumber, decodedData, decodedPreSize);
-  if(!storingResult) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), FILE_TRANSFER_PREFIX); }
-  }
-  return storingResult;
-}
-
-bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
-  if(!this->fileTransferStarted_) { return false; }
-  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
-  if(fileDataSize == 0) { return false; }
-  if(this->remainingFileSize_ == 0) { return false; }
-
-  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "a");
-  if(!receivedFile) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sOpening failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-    receivedFile.close();
-    return false;
-  }
-  const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
-  receivedFile.close();
-  if(writtenBytes != fileDataSize) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sWriting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-    return false;
-  }
-  this->nextFilePieceNumber_++;
-  this->remainingFileSize_ -= fileDataSize;
-  return true;
-}
-
-bool Connectivity::DataTransfer::checkValidity() {
-  if(!this->fileTransferStarted_) { return false; }
-  if(this->remainingFileSize_ != 0) { return false; }
-  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "r");
-  if(this->serialPort) {
-    this->serialPort->printf_P(PSTR("%sChecking received file: %s\r\n"),
-      FILE_TRANSFER_PREFIX, Str::getStateStr(receivedFile));
-  }
-  if(!receivedFile) { receivedFile.close(); return false; }
-  const bool fileSizeOk = (receivedFile.size() == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fileSizeOk)); }
-  if(!fileSizeOk) { receivedFile.close(); return false; }
-  Crc32 crc32;
-  while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
-  const uint32_t calcFileCrc32 = crc32.get();
-  const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC -> %s\r\n"), Str::getStateStr(fileCrcOk)); }
-  if(!fileCrcOk) { receivedFile.close(); return false; }
-  if(this->fileName_ != otaFwLocation) {
-    receivedFile.close();
-    stop(false);
-    return true;
-  }
-
-  receivedFile.seek(0, SeekSet);
-  const bool updateBeginResult = Update.begin(this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult)); }
-  if(!updateBeginResult) { receivedFile.close(); return false; }
-  const bool updateStreamResult = (Update.writeStream(receivedFile) == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult)); }
-  if(!updateStreamResult) { receivedFile.close(); return false; }
-  receivedFile.close();
-  const bool updateEndResult = Update.end();
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult)); }
-  stop(true);
-  if(!updateEndResult) { return false; }
-  return true;
-}
-
 //////////////////// -- MqttComBase class-- ////////////////////
 
 Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
@@ -689,6 +522,8 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 //////////////////// -- Common class-- ////////////////////
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
+const char Connectivity::Common::otaFwLocation[] PROGMEM              = "/config/espFirmware.bin";
+const char Connectivity::Common::wifiTempFileLocation[] PROGMEM       = "/config/wifi.json.tmp";
 
 Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   MqttComBase(connectivity, classID),
@@ -721,9 +556,9 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
-          fileNamePtr = DataTransfer::otaFwLocation;
+          fileNamePtr = otaFwLocation;
           } break;
-        case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
+        case Command::WIFICFG_DT_START: { fileNamePtr = wifiTempFileLocation; } break;
         case Command::EXT_FILE_DT_START: {
           const char* fileName = cmdJson[F("name")].as<const char*>();
           memset(externalFileName, '\0', sizeof(externalFileName));

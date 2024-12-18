@@ -26,6 +26,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <vector>                                                   /// STL vector for dynamic arrays.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "dataTransfer.hpp"
 
 class Connectivity final {
 public:
@@ -131,6 +132,7 @@ private:
   int8_t mqttState;
   uint32_t deviceResetTimer;
   void (*resetWdt)();
+  DataTransfer dataTransfer;
   std::vector<Connectivity::MqttComBase*> messageMap;
 
   static const char PROGMEM wifiFileLocation[];
@@ -168,47 +170,6 @@ private:
   static const char PROGMEM MQTT_CONNECT_BAD_CREDENTIALS_STR[];
   static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
-
-private:
-  class DataTransfer final {
-  public:
-    explicit DataTransfer(Stream* serial = nullptr);
-
-    /// @brief Destructor of the object.
-    virtual ~DataTransfer() = default;
-
-    bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName);
-
-  private:
-    bool stop(bool deleteFile);
-
-  public:
-    bool storeBase64(uint32_t filePieceNumber, const char* fileData);
-
-    bool store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize);
-
-    bool checkValidity();
-
-    DataTransfer(const DataTransfer&) = delete;                       // Define copy constructor.
-    DataTransfer& operator=(const DataTransfer&) = delete;            // Define copy assignment operator.
-    DataTransfer(DataTransfer&&) = delete;                            // Define move constructor.
-    DataTransfer& operator=(DataTransfer&&) = delete;                 // Define move assignment operator.
-
-  private:
-    Stream* serialPort;
-    uint32_t fileSize_;
-    uint32_t fileCrc_;
-    uint32_t nextFilePieceNumber_;
-    uint32_t remainingFileSize_;
-    const char* fileName_;
-    bool fileTransferStarted_;
-    static constexpr uint16_t receivedFilePieceSize = 336; // It should always be divisible by both 3 and 4!
-    static const char PROGMEM FILE_TRANSFER_PREFIX[];
-  public:
-    static const char PROGMEM otaFwLocation[];
-    static const char PROGMEM wifiTempFileLocation[];
-  };
-  DataTransfer dataTransfer;
 
 public:
   class MqttComBase {
@@ -275,6 +236,8 @@ private:
   private:
     char externalFileName[28];
     static const char PROGMEM COMMON_PREFIX[];
+    static const char PROGMEM otaFwLocation[];
+    static const char PROGMEM wifiTempFileLocation[];
   };
   Common common;
 };
