@@ -20,23 +20,25 @@ public:
 
   bool checkValidity();
 
+  bool upgradeFirmware(const char* firmwareFileName);
+
   DataTransfer(const DataTransfer&) = delete;                       // Define copy constructor.
   DataTransfer& operator=(const DataTransfer&) = delete;            // Define copy assignment operator.
   DataTransfer(DataTransfer&&) = delete;                            // Define move constructor.
   DataTransfer& operator=(DataTransfer&&) = delete;                 // Define move assignment operator.
 
 private:
-  bool stop(bool deleteFile);
-
   static constexpr uint16_t receivedFilePieceSize = 336U;           // It should always be divisible by both 3 and 4!
+  static constexpr uint16_t maxB64Length = receivedFilePieceSize * 4U / 3U;
   static const char PROGMEM FILE_TRANSFER_PREFIX[];
+  static const char PROGMEM TEMP_FILE[];
 
   HardwareSerial& serialPort;
-  uint32_t fileSize_;
-  uint32_t fileCrc_;
-  uint32_t nextFilePieceNumber_;
-  uint32_t remainingFileSize_;
-  const char* fileName_;
-  bool fileTransferStarted_;
+  uint32_t fileSizeLocal;
+  uint32_t fileCrcLocal;
+  uint32_t nextFilePieceNumberLocal;
+  uint32_t remainingFileSizeLocal;
+  char fileNameLocal[32U];
+  bool isFileTransferStarted;
 };
 #endif // DATA_TRANSFER_HPP
