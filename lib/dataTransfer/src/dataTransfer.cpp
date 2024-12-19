@@ -1,12 +1,12 @@
 #include "dataTransfer.hpp"
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
-#include "crc32.hpp"
-#include "base64.hpp"
+#include "crc32.hpp"                                                /// Utility for calculating CRC32 checksums.
+#include "base64.hpp"                                               /// Base64 encoding and decoding utilities.
 #include "common.hpp"                                               /// Common definitions and functions.
 #ifdef ESP8266
-#include <Updater.h>
+#include <Updater.h>                                                /// ESP8266-specific firmware update functionality.
 #elif defined ESP32
-#include <Update.h>
+#include <Update.h>                                                 /// ESP32-specific firmware update functionality.
 #endif
 
 const char DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM = "[FT]";
