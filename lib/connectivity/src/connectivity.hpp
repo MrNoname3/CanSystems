@@ -132,7 +132,6 @@ private:
   int8_t mqttState;
   uint32_t deviceResetTimer;
   void (*resetWdt)();
-  DataTransfer dataTransfer;
   std::vector<Connectivity::MqttComBase*> messageMap;
 
   static const char PROGMEM wifiFileLocation[];
@@ -226,20 +225,21 @@ private:
 
     virtual bool loop() override;
 
-    inline void messageSend(const char* payload) const;
+    void messageSend(const char* payload) const;
 
-  public:
     Common(const Common&) = delete;                       // Define copy constructor.
     Common& operator=(const Common&) = delete;            // Define copy assignment operator.
     Common(Common&&) = delete;                            // Define move constructor.
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
+ 
   private:
-    char externalFileName[28];
     static const char PROGMEM COMMON_PREFIX[];
     static const char PROGMEM otaFwLocation[];
     static const char PROGMEM wifiTempFileLocation[];
+    
+    char externalFileName[28];
+    DataTransfer dataTransfer;
   };
   Common common;
 };
-
 #endif
