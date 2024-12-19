@@ -28,8 +28,11 @@ public:
   DataTransfer& operator=(DataTransfer&&) = delete;                 // Define move assignment operator.
 
 private:
-  static constexpr uint16_t receivedFilePieceSize = 336U;           // It should always be divisible by both 3 and 4!
-  static constexpr uint16_t maxB64Length = receivedFilePieceSize * 4U / 3U;
+  static bool upgradeFirmware(HardwareSerial& serial, const char* firmwareFileName);
+
+  static constexpr uint8_t fileNameSize = 32U;                      // Maximum length of the file name.
+  static constexpr uint16_t filePieceSize = 336U;                   // It should always be divisible by both 3 and 4!
+  static constexpr uint16_t maxB64Length = filePieceSize * 4U / 3U;
   static const char PROGMEM FILE_TRANSFER_PREFIX[];
   static const char PROGMEM TEMP_FILE[];
 
@@ -38,7 +41,7 @@ private:
   uint32_t fileCrcLocal;
   uint32_t nextFilePieceNumberLocal;
   uint32_t remainingFileSizeLocal;
-  char fileNameLocal[32U];
+  char fileNameLocal[fileNameSize];
   bool isFileTransferStarted;
 };
 #endif // DATA_TRANSFER_HPP

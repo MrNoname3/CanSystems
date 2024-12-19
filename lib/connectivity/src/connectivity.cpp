@@ -2,11 +2,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
-#ifdef ESP8266
-#include <Updater.h>
-#elif defined ESP32
-#include <Update.h>
-#endif
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -521,7 +516,7 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 
 //////////////////// -- Common class-- ////////////////////
 
-const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
+const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON]";
 const char Connectivity::Common::otaFwLocation[] PROGMEM              = "/config/espFirmware.bin";
 const char Connectivity::Common::wifiTempFileLocation[] PROGMEM       = "/config/wifi.json.tmp";
 
@@ -534,7 +529,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    conn.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), COMMON_PREFIX, reinterpret_cast<const char*>(deserializationError.f_str()));
+    conn.serialPort.printf_P(PSTR("%s Deserialisation failed: %s\r\n"), COMMON_PREFIX, reinterpret_cast<const char*>(deserializationError.f_str()));
     return;
   }
   const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
@@ -552,7 +547,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         case Command::FW_DT_START: {
           const char* binId = cmdJson[F("binId")].as<const char*>();
           if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-            conn.serialPort.printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId);
+            conn.serialPort.printf_P(PSTR("%s Wrong FW file ID: %s\r\n"), COMMON_PREFIX, binId);
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
@@ -565,7 +560,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
           if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
           uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
           if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-            conn.serialPort.printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX);
+            conn.serialPort.printf_P(PSTR("%s Wrong file name: missing / too long!\r\n"), COMMON_PREFIX);
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
@@ -576,7 +571,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool transferBeginResult = conn.dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
       MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!transferBeginResult) {
-        conn.serialPort.printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr);
+        conn.serialPort.printf_P(PSTR("%s Can't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr);
         return;
       }
     } break;
@@ -588,7 +583,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool storingResult = conn.dataTransfer.storeBase64(filePieceNumber, filePieceB64);
       MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
       if(!storingResult) {
-        conn.serialPort.printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX);
+        conn.serialPort.printf_P(PSTR("%s File storing failed!\r\n"), COMMON_PREFIX);
       }
     } break;
     case Command::FW_DT_END:
@@ -597,9 +592,17 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
       const bool validityCheckResult = conn.dataTransfer.checkValidity();
       MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
       if(!validityCheckResult) {
-        conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);
+        conn.serialPort.printf_P(PSTR("%s Stored file is not valid!\r\n"), COMMON_PREFIX);
+        return;
       }
-      if(validityCheckResult && (command == Command::FW_DT_END)) { ResetHandler::restartMCU(); }
+      if(command == Command::FW_DT_END) {
+        const bool fwUpdatePreparationOk = conn.dataTransfer.upgradeFirmware(otaFwLocation);
+        if(!fwUpdatePreparationOk) {
+          conn.serialPort.printf_P(PSTR("%s FW upgrade preparation failed!\r\n"), COMMON_PREFIX);
+          return;
+        }
+        ResetHandler::restartMCU();
+      }
     } break;
   };
 }

@@ -3,6 +3,11 @@
 #include "crc32.hpp"
 #include "base64.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
+#ifdef ESP8266
+#include <Updater.h>
+#elif defined ESP32
+#include <Update.h>
+#endif
 
 const char DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM = "[FT]";
 const char DataTransfer::TEMP_FILE[] PROGMEM = "/temp.tmp";
@@ -63,7 +68,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length);
   if(filePieceB64Size == 0U || filePieceB64Size == maxB64Length) { return false; }
 
-  uint8_t decodedData[receivedFilePieceSize];
+  uint8_t decodedData[filePieceSize];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > sizeof(decodedData)) {
     serialPort.printf_P(PSTR("%s File piece size error!\r\n"), FILE_TRANSFER_PREFIX);
@@ -164,20 +169,66 @@ bool DataTransfer::checkValidity() {
 }
 
 bool DataTransfer::upgradeFirmware(const char* firmwareFileName) {
+  if(isFileTransferStarted) { return false; }
+  return upgradeFirmware(serialPort, firmwareFileName);
+}
+
+bool DataTransfer::upgradeFirmware(HardwareSerial& serial, const char* firmwareFileName) {
   if(firmwareFileName == nullptr) { return false; }
+  const uint32_t firmwareFileNameLength = strnlen(firmwareFileName, fileNameSize);
+  if(firmwareFileNameLength == 0U || firmwareFileNameLength == fileNameSize) { return false; }
+  {
+    const bool fileExists = LittleFS.exists(FPSTR(firmwareFileName));
+    if(!fileExists) {
+      serial.printf_P(PSTR("%s No firmware file exists!\r\n"), FILE_TRANSFER_PREFIX);
+      return false;
+    }
+  }
 
-  // receivedFile.seek(0U, SeekSet);
-  // const bool updateBeginResult = Update.begin(fileSizeLocal);
-  // serialPort.printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
-  // if(!updateBeginResult) { receivedFile.close(); return false; }
-  // const bool updateStreamResult = (Update.writeStream(receivedFile) == fileSizeLocal);
-  // serialPort.printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult));
-  // if(!updateStreamResult) { receivedFile.close(); return false; }
-  // receivedFile.close();
-  // const bool updateEndResult = Update.end();
-  // serialPort.printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult));
-  // //stop(true);
-  // if(!updateEndResult) { return false; }
+  File receivedFile = LittleFS.open(FPSTR(firmwareFileName), "r");
+  serial.printf_P(PSTR("%s Checking firmware file: %s\r\n"), FILE_TRANSFER_PREFIX, Str::getStateStr(receivedFile));
+  if(!receivedFile) {
+    receivedFile.close();
+    return false;
+  }
+  {
+    const uint32_t fwFileSize = receivedFile.size();
+    const bool fwSizeOk = (fwFileSize > 0U);
+    serial.printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fwSizeOk));
+    if(!fwSizeOk) {
+      receivedFile.close();
+      return false;
+    }
 
+    const bool updateBeginResult = Update.begin(fwFileSize);
+    serial.printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
+    if(!updateBeginResult) {
+      receivedFile.close();
+      return false;
+    }
+    const bool updateStreamResult = (Update.writeStream(receivedFile) == fwFileSize);
+    serial.printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult));
+    if(!updateStreamResult) {
+      receivedFile.close();
+      return false;
+    }
+  }
+  {
+    const bool updateEndResult = Update.end();
+    serial.printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult));
+    if(!updateEndResult) {
+      receivedFile.close();
+      return false;
+    }
+  }
+
+  const bool rmFileResult = LittleFS.remove(FPSTR(firmwareFileName));
+  if(!rmFileResult) {
+    serial.printf_P(PSTR("  Cleanup -> %s\r\n"), Str::getStateStr(rmFileResult));
+    receivedFile.close();
+    return false;
+  }
+
+  receivedFile.close();
   return true;
 }
