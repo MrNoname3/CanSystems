@@ -2,6 +2,7 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
+#include "configHandler.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -257,48 +258,17 @@ bool Connectivity::beginSimple(Interface interface) {
 }
 
 bool Connectivity::startWifi() {
-  bool retVal = false;
-  const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
-  serialPort.printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
-  serialPort.printf_P(PSTR("  %s -> %s\r\n"), FileName::getWifiConfigLocation(), Str::getStateStr(wifiFileExists));
-  if(!wifiFileExists) { return retVal; }
-
-  File wifiFile = LittleFS.open(FPSTR(FileName::getWifiConfigLocation()), "r");
-  serialPort.printf_P(PSTR("%sOpening: %s %s\r\n"), FS_PREFIX, FileName::getWifiConfigLocation(), Str::getStateStr(wifiFile));
-  if(!wifiFile) { wifiFile.close(); return retVal; }
-
-  JsonDocument wifiJson;
-  DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(deSerResult) {
-    JsonVariant ssidJsonVar = wifiJson[F("ssid")];
-    JsonVariant passwordJsonVar = wifiJson[F("password")];
-    if(ssidJsonVar.is<const char*>() && passwordJsonVar.is<const char*>()) {
-      constexpr uint8_t maxSsidLength = 48;
-      constexpr uint8_t maxPassLength = 48;
-      const char* ssid = ssidJsonVar.as<const char*>();
-      const char* pass = passwordJsonVar.as<const char*>();
-      const uint8_t ssidLength = strnlen(ssid, maxSsidLength);
-      const uint8_t passLength = strnlen(pass, maxPassLength);
-      const bool ssidLengthValid = (ssidLength > 0) && (ssidLength < maxSsidLength);
-      const bool passLengthValid = (passLength > 0) && (passLength < maxPassLength);
-      if(ssidLengthValid && passLengthValid) {
-        WiFi.begin(ssid, pass);
-        retVal = true;
-      }
-      else {
-        serialPort.printf_P(PSTR("%sWifi credentials are empty!\r\n"), JSON_PREFIX);
-      }
-    }
-    else {
-      serialPort.printf_P(PSTR("%sKeys are not presented in the file!\r\n"), JSON_PREFIX);
-    }
+  char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
+  char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
+  const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
+  const bool wifiConfigOk = (wifiConfigResult == 0U);
+  serialPort.printf_P(PSTR("%sWifi config: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiConfigOk));
+  if(!wifiConfigOk) {
+    serialPort.printf_P(PSTR("Code: %hu\r\n"), wifiConfigResult);
+  } else {
+    WiFi.begin(ssid, password);
   }
-  else {
-    serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, reinterpret_cast<const char*>(deserializationError.f_str()));
-  }
-  wifiFile.close();
-  return retVal;
+  return wifiConfigOk;
 }
 
 bool Connectivity::connect() {
