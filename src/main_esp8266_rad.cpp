@@ -20,9 +20,6 @@ static constexpr uint8_t RF_TX                      = D3;           // RF receiv
 //--- Functions ---//
 void maxLoopTimeCallback(uint32_t maxLoopTime);
 
-//--- Variables ---//
-const char separator[] PROGMEM = "******************************************************";
-
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
@@ -41,7 +38,7 @@ void setup() {
   WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
   delay(1U);
-  Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
+  Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
 
   const uint32_t initResult = taskHandler.initTasks();
@@ -53,7 +50,7 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
-  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
+  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
 }
 
 void loop() {

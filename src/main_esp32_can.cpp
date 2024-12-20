@@ -20,7 +20,6 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 void canTask(void *pvParameters);
 
 //--- Variables ---//
-const char separator[] PROGMEM = "******************************************************";
 TaskHandle_t canTaskHandle = nullptr;
 
 //--- Driver objects ---//
@@ -42,7 +41,7 @@ void setup() {
   WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
   delay(1U);
-  Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
+  Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   iotConn.begin(Connectivity::Interface::ETHERNET, true);
 
   const uint32_t initResult = taskHandler.initTasks();
@@ -54,7 +53,7 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
-  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
+  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
 
   if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
     Serial.printf_P(PSTR("Error creating the CAN task!"));
@@ -69,9 +68,9 @@ void loop() {
 }
 
 void canTask(void *pvParameters) {
-  Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), separator);
+  Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), Str::getSectionSeparator());
   canHandler.begin(500E3);
-  Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), separator);
+  Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), Str::getSectionSeparator());
   while(true) {
     canHandler.loop();
     vTaskDelay(5);

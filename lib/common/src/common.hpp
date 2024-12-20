@@ -122,20 +122,26 @@ private:
 public:
   /// @brief Retrieves the "OK" status string.
   /// @return Constant string `"[OK]"`.
-  static constexpr const char* getOkStr() { return OK_STR; }
+  static constexpr const char* getOkStr() { return okStr; }
 
   /// @brief Retrieves the "Error" status string.
   /// @return Constant string `"[ERR]"`.
-  static constexpr const char* getErrStr() { return ERR_STR; }
+  static constexpr const char* getErrStr() { return errStr; }
 
   /// @brief Retrieves the spacer string.
   /// @return Constant string `"|"`.
-  static constexpr const char* getSpacerStr() { return SPACER_STR; }
+  static constexpr const char* getSpacerStr() { return spacerStr; }
 
   /// @brief Retrieves a status string based on a boolean state.
   /// @param state Boolean value where `true` represents "OK" and `false` represents "Error".
   /// @return `"[OK]"` if `state` is `true`, otherwise `"[ERR]"`.
   static constexpr const char* getStateStr(bool state) { return state ? getOkStr() : getErrStr(); }
+
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Retrieves the section separator string.
+  /// @return Constant string used to separate sections in logs or messages, stored in program memory.
+  static constexpr const char* getSectionSeparator() { return sectionSeparator; }
+#endif
 
   Str(const Str&) = delete;                       // Define copy constructor.
   Str& operator=(const Str&) = delete;            // Define copy assignment operator.
@@ -144,13 +150,14 @@ public:
 
 private:
 #if defined(__AVR_ATmega328P__)
-  static constexpr const char* OK_STR           = "[OK]";     // Status string for "OK" on AVR platforms.
-  static constexpr const char* ERR_STR          = "[ERR]";    // Status string for "Error" on AVR platforms.
+  static constexpr const char* okStr           = "[OK]";      // Status string for "OK" on AVR platforms.
+  static constexpr const char* errStr          = "[ERR]";     // Status string for "Error" on AVR platforms.
 #elif defined(ESP8266) || defined(ESP32)
-  static const char PROGMEM OK_STR[];                         // Status string for "OK" stored in program memory for ESP platforms.
-  static const char PROGMEM ERR_STR[];                        // Status string for "Error" stored in program memory for ESP platforms.
+  static const char PROGMEM okStr[];                          // Status string for "OK" stored in program memory for ESP platforms.
+  static const char PROGMEM errStr[];                         // Status string for "Error" stored in program memory for ESP platforms.
+  static const char PROGMEM sectionSeparator[];               // Section separator string, stored in program memory on ESP platforms.
 #endif
-  static constexpr const char* SPACER_STR       = "|";        // A string used as a spacer in formatting.
+  static constexpr const char* spacerStr       = "|";         // A string used as a spacer in formatting.
 };
 
 /// @brief Class to provide build-time metadata and configuration information.
