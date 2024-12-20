@@ -12,7 +12,6 @@ bool Connectivity::ethConnected = false;
 #endif
 bool Connectivity::isDeviceOnline = true;
 
-const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
@@ -259,13 +258,13 @@ bool Connectivity::beginSimple(Interface interface) {
 
 bool Connectivity::startWifi() {
   bool retVal = false;
-  const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
+  const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
   serialPort.printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
-  serialPort.printf_P(PSTR("  %s -> %s\r\n"), wifiFileLocation, Str::getStateStr(wifiFileExists));
+  serialPort.printf_P(PSTR("  %s -> %s\r\n"), FileName::getWifiConfigLocation(), Str::getStateStr(wifiFileExists));
   if(!wifiFileExists) { return retVal; }
 
-  File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
-  serialPort.printf_P(PSTR("%sOpening: %s %s\r\n"), FS_PREFIX, wifiFileLocation, Str::getStateStr(wifiFile));
+  File wifiFile = LittleFS.open(FPSTR(FileName::getWifiConfigLocation()), "r");
+  serialPort.printf_P(PSTR("%sOpening: %s %s\r\n"), FS_PREFIX, FileName::getWifiConfigLocation(), Str::getStateStr(wifiFile));
   if(!wifiFile) { wifiFile.close(); return retVal; }
 
   JsonDocument wifiJson;
@@ -516,8 +515,6 @@ const char* Connectivity::MqttComBase::getClassId() const { return classId; }
 //////////////////// -- Common class-- ////////////////////
 
 const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON]";
-const char Connectivity::Common::otaFwLocation[] PROGMEM              = "/config/espFirmware.bin";
-const char Connectivity::Common::wifiTempFileLocation[] PROGMEM       = "/config/wifi.json.tmp";
 
 Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
   MqttComBase(connectivity, classID),
@@ -552,9 +549,9 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
             MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
             return;
           }
-          fileNamePtr = otaFwLocation;
+          fileNamePtr = FileName::getOtaFwLocation();
           } break;
-        case Command::WIFICFG_DT_START: { fileNamePtr = wifiTempFileLocation; } break;
+        case Command::WIFICFG_DT_START: { fileNamePtr = FileName::getWifiTempConfigLocation(); } break;
         case Command::EXT_FILE_DT_START: {
           const char* fileName = cmdJson[F("name")].as<const char*>();
           memset(externalFileName, '\0', sizeof(externalFileName));
@@ -597,7 +594,7 @@ void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
         return;
       }
       if(command == Command::FW_DT_END) {
-        const bool fwUpdatePreparationOk = dataTransfer.upgradeFirmware(otaFwLocation);
+        const bool fwUpdatePreparationOk = dataTransfer.upgradeFirmware();
         if(!fwUpdatePreparationOk) {
           conn.serialPort.printf_P(PSTR("%s FW upgrade preparation failed!\r\n"), COMMON_PREFIX);
           return;

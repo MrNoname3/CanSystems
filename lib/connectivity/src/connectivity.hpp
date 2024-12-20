@@ -134,7 +134,6 @@ private:
   void (*resetWdt)();
   std::vector<Connectivity::MqttComBase*> messageMap;
 
-  static const char PROGMEM wifiFileLocation[];
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
@@ -234,8 +233,6 @@ private:
  
   private:
     static const char PROGMEM COMMON_PREFIX[];
-    static const char PROGMEM otaFwLocation[];
-    static const char PROGMEM wifiTempFileLocation[];
     
     char externalFileName[28];
     DataTransfer dataTransfer;

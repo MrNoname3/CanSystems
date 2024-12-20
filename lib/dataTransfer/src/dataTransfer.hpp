@@ -40,10 +40,9 @@ public:
   /// @return True if the file is valid, false otherwise.
   bool checkValidity();
 
-  /// @brief Initiates a firmware upgrade using the specified file.
-  /// @param firmwareFileName The name of the firmware file.
+  /// @brief Initiates a firmware upgrade.
   /// @return True if the firmware upgrade process is successfully initiated, false otherwise.
-  bool upgradeFirmware(const char* firmwareFileName);
+  bool upgradeFirmware();
 
   DataTransfer(const DataTransfer&) = delete;                       // Define copy constructor.
   DataTransfer& operator=(const DataTransfer&) = delete;            // Define copy assignment operator.
@@ -60,8 +59,7 @@ private:
   static constexpr uint8_t fileNameSize = 32U;                      // Maximum length of the file name.
   static constexpr uint16_t filePieceSize = 336U;                   // Size of a file piece. Divisible by both 3 and 4.
   static constexpr uint16_t maxB64Length = filePieceSize * 4U / 3U; // Maximum base64-encoded piece length.
-  static const char PROGMEM FILE_TRANSFER_PREFIX[];                 // Prefix for file transfer logs.
-  static const char PROGMEM TEMP_FILE[];                            // Temporary file name used during the transfer.
+  static const char PROGMEM fileTransferPrefix[];                   // Prefix for file transfer logs.
 
   HardwareSerial& serialPort;                                       // Reference to the serial port for communication.
   uint32_t fileSizeLocal;                                           // Size of the file being transferred, in bytes.

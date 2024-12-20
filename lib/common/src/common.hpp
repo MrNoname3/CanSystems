@@ -215,4 +215,51 @@ private:
   static constexpr const char pioEnv[] = BUILD_ENV_NAME;                              // Name of the PlatformIO environment used for the build.
   static constexpr const char pioEnvJson[] = "{\"Env\":\"" BUILD_ENV_NAME "\"}";      // JSON-formatted string containing the PlatformIO environment name.
 };
+
+/// @brief Utility class for managing predefined file names in the file system.
+class FileName final {
+private:
+  /// @brief Delete constructor.
+  FileName() = delete;
+
+  /// @brief Delete destructor.
+  ~FileName() = delete;
+
+public:
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Retrieves the temporary file location.
+  /// @return Constant string representing the path to the temporary file.
+  static constexpr const char* getTempFileLocation() { return tempFileLocation; }
+
+  /// @brief Retrieves the OTA firmware file location.
+  /// @return Constant string representing the path to the OTA firmware file.
+  static constexpr const char* getOtaFwLocation() { return otaFwLocation; }
+
+  /// @brief Retrieves the external device OTA firmware file location.
+  /// @return Constant string representing the path to the external device OTA firmware file.
+  static constexpr const char* getExtOtaFwLocation() { return extOtaFwLocation; }
+
+  /// @brief Retrieves the Wi-Fi configuration file location.
+  /// @return Constant string representing the path to the Wi-Fi configuration file.
+  static constexpr const char* getWifiConfigLocation() { return wifiConfigLocation; }
+
+  /// @brief Retrieves the temporary Wi-Fi configuration file location.
+  /// @return Constant string representing the path to the temporary Wi-Fi configuration file.
+  static constexpr const char* getWifiTempConfigLocation() { return wifiTempConfigLocation; }
+#endif
+
+  FileName(const FileName&) = delete;                       // Define copy constructor.
+  FileName& operator=(const FileName&) = delete;            // Define copy assignment operator.
+  FileName(FileName&&) = delete;                            // Define move constructor.
+  FileName& operator=(FileName&&) = delete;                 // Define move assignment operator.
+
+private:
+#if defined(ESP8266) || defined(ESP32)
+  static const char PROGMEM tempFileLocation[];             // Temporary file name used during file transfer.
+  static const char PROGMEM otaFwLocation[];                // File location for the OTA firmware.
+  static const char PROGMEM extOtaFwLocation[];             // File location for external device OTA firmware.
+  static const char PROGMEM wifiConfigLocation[];           // File location for the Wi-Fi configuration.
+  static const char PROGMEM wifiTempConfigLocation[];       // File location for the temporary Wi-Fi configuration.
+#endif
+};
 #endif // COMMON_HPP
