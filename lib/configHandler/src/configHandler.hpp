@@ -3,6 +3,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include <functional>                                               /// For callback functions.
 
 /// @brief A utility class to manage configurations and error states.
 class ConfigHandler final {
@@ -31,16 +32,22 @@ public:
   /// @return Error state, where `0` means success.
   static uint8_t getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
 
+  /// @brief Retrieves the server certificate using a callback for storage.
+  /// @param storeCert A callback function to handle the storage of the certificate.
+  /// The callback receives a reference to a `Stream` and the certificate size in bytes.
+  /// @return Error state as a `uint8_t`, where `0` means success.
+  static uint8_t getServerCert(std::function<bool(Stream&, size_t)> storeCert);
+
   ConfigHandler(const ConfigHandler&) = delete;                       // Define copy constructor.
   ConfigHandler& operator=(const ConfigHandler&) = delete;            // Define copy assignment operator.
   ConfigHandler(ConfigHandler&&) = delete;                            // Define move constructor.
   ConfigHandler& operator=(ConfigHandler&&) = delete;                 // Define move assignment operator
 
 private:
-  /// @brief Enumeration representing possible error states for Wifi connection.
+  /// @brief Enumeration representing possible error states for Wi-Fi configuration.
   enum class WifiConfigError : uint8_t {
     NONE                = 0U,                     // No error.
-    NO_CONFIG_FILE      = 1 << 0U,                // Configuration file is missing.
+    NO_WIFI_CONFIG_FILE = 1 << 0U,                // Wi-Fi configuration file is missing.
     CANNOT_OPEN_FILE    = 1 << 1U,                // Unable to open the configuration file.
     JSON_PARSING_ERROR  = 1 << 2U,                // JSON parsing failed.
     MISSING_SSID_KEY    = 1 << 3U,                // SSID key is missing in the JSON.
@@ -49,6 +56,17 @@ private:
     PWD_LENGTH_ERR      = 1 << 6U                 // Password length is invalid.
   };
 
-  static ErrorState<WifiConfigError, uint8_t> wifiConfErrState;
+  /// @brief Enumeration representing possible error states for server certificate retrieval.
+  enum class ServerCertError : uint8_t {
+    NONE                = 0U,                     // No error.
+    NO_SERVER_CERT_FILE = 1 << 0U,                // Server certification file is missing.
+    CANNOT_OPEN_FILE    = 1 << 1U,                // Unable to open the configuration file.
+    CERT_FILE_EMPTY     = 1 << 2U,                // Server certificate file is empty.
+    CALLBACK_NULLPTR    = 1 << 3U,                // Callback function is nullptr.
+    CERT_STORING_FAILED = 1 << 4U                 // Unable to store the certificate.
+  };
+
+  static ErrorState<WifiConfigError, uint8_t> wifiConfErrState;       // Manages error states for Wi-Fi configuration.
+  static ErrorState<ServerCertError, uint8_t> serverCertErrState;     // Manages error states for server certificate retrieval.
 };
 #endif // CONFIG_HANDLER_HPP

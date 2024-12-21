@@ -3,12 +3,13 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
 ErrorState<ConfigHandler::WifiConfigError, uint8_t> ConfigHandler::wifiConfErrState;
+ErrorState<ConfigHandler::ServerCertError, uint8_t> ConfigHandler::serverCertErrState;
 
 uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
   wifiConfErrState.clearAllErrors();
   const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
   if(!wifiFileExists) {
-    wifiConfErrState.setError(WifiConfigError::NO_CONFIG_FILE);
+    wifiConfErrState.setError(WifiConfigError::NO_WIFI_CONFIG_FILE);
     return wifiConfErrState.getRawErrorState();
   }
 
@@ -49,4 +50,36 @@ uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&passw
 
   wifiFile.close();
   return wifiConfErrState.getRawErrorState();
+}
+
+uint8_t ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) {
+  serverCertErrState.clearAllErrors();
+  const bool certFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCertLocation()));
+  if(!certFileExists) {
+    serverCertErrState.setError(ServerCertError::NO_SERVER_CERT_FILE);
+    return serverCertErrState.getRawErrorState();
+  }
+
+  File certFile = LittleFS.open(FPSTR(FileName::getMqttServerCertLocation()), "r");
+  if(!certFile) {
+    serverCertErrState.setError(ServerCertError::CANNOT_OPEN_FILE);
+    certFile.close();
+    return serverCertErrState.getRawErrorState();
+  }
+
+  if(certFile.size() > 0U) {
+    if(storeCert != nullptr) {
+      const bool certStoringOk = storeCert(certFile, certFile.size());
+      if(!certStoringOk) {
+      serverCertErrState.setError(ServerCertError::CERT_STORING_FAILED);
+      }
+    } else {
+      serverCertErrState.setError(ServerCertError::CALLBACK_NULLPTR);
+    }
+  } else {
+    serverCertErrState.setError(ServerCertError::CERT_FILE_EMPTY);
+  }
+
+  certFile.close();
+  return serverCertErrState.getRawErrorState();
 }
