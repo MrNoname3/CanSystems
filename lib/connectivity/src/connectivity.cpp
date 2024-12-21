@@ -51,6 +51,7 @@ const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKN
 #ifdef ESP8266
 Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)(), uint8_t ethCS) :
   ethInt(ethCS),
+  serverCert(nullptr),
 #elif defined ESP32
 Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)()) :
 #endif
@@ -224,6 +225,26 @@ bool Connectivity::beginSimple(Interface interface) {
     if(!receiverTopicValid) { return false; }
   }
 
+  // Open cert.
+  const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
+#ifdef ESP8266
+    delete serverCert;
+    serverCert = new X509List(certFile, certFileSize);
+    tcpClient.setTrustAnchors(serverCert);
+    tcpClient.setTimeout(Time::secToMs(5U));
+    return (serverCert != nullptr);
+#elif defined ESP32
+    tcpClient.setTimeout(10);
+    return tcpClient.loadCACert(certFile, certFileSize);
+#endif
+  });
+  const bool certResultOk = (certResult == 0U);
+  serialPort.printf_P(PSTR("%sGetting server certification: %s\r\n"), TCP_PREFIX, Str::getStateStr(certResultOk));
+  if(!certResultOk) {
+    serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
+    return false;
+  }
+
   if(!connect()) { return false; }
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
 
@@ -264,7 +285,7 @@ bool Connectivity::startWifi() {
   const bool wifiConfigOk = (wifiConfigResult == 0U);
   serialPort.printf_P(PSTR("%sWifi config: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiConfigOk));
   if(!wifiConfigOk) {
-    serialPort.printf_P(PSTR("Code: %hu\r\n"), wifiConfigResult);
+    serialPort.printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
   } else {
     WiFi.begin(ssid, password);
   }
@@ -273,22 +294,7 @@ bool Connectivity::startWifi() {
 
 bool Connectivity::connect() {
   yield();
-#ifdef ESP8266
-  // Open cert.
-  X509List cert(mqttSettings::caCert);
-  tcpClient.setTrustAnchors(&cert);
-  tcpClient.setTimeout(5000);
-
   // TCP connection.
-  //tcpClient.getLastSSLError() == BR_ERR_OK ?
-  const bool tcpStopResult = tcpClient.stop(2000);
-  serialPort.printf_P(PSTR("%sReset connection for fresh start %s\r\n"), TCP_PREFIX, Str::getStateStr(tcpStopResult));
-  if(!tcpStopResult) { return false; }
-#elif defined ESP32
-  //tcpClient.stop();
-  tcpClient.setCACert(mqttSettings::caCert);
-  tcpClient.setTimeout(10);
-#endif
   const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
   serialPort.printf_P(PSTR("%sConnecting to: %s:%hu %s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(tcpConResult));
   if(!tcpConResult) { return false; }
