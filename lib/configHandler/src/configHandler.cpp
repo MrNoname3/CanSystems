@@ -1,37 +1,22 @@
 #include "configHandler.hpp"
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
-#include "common.hpp"                                               /// Common definitions and functions.
 
-uint8_t ConfigHandler::error = 0U;
+ErrorState<ConfigHandler::WifiConfigError, uint8_t> ConfigHandler::wifiConfErrState;
 
-void ConfigHandler::setError(ERROR err) {
-  if(err != ERROR::NONE) {
-    error |= static_cast<uint8_t>(err);
-  }
-}
-
-uint8_t ConfigHandler::getError() {
-  return error;
-}
-
-void ConfigHandler::clearError() {
-  error = 0U;
-}
-
-uint16_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
-  clearError();
+uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
+  wifiConfErrState.clearAllErrors();
   const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
   if(!wifiFileExists) {
-    setError(ERROR::NO_CONFIG_FILE);
-    return getError();
+    wifiConfErrState.setError(WifiConfigError::NO_CONFIG_FILE);
+    return wifiConfErrState.getRawErrorState();
   }
 
   File wifiFile = LittleFS.open(FPSTR(FileName::getWifiConfigLocation()), "r");
   if(!wifiFile) {
-    setError(ERROR::CANNOT_OPEN_FILE);
+    wifiConfErrState.setError(WifiConfigError::CANNOT_OPEN_FILE);
     wifiFile.close();
-    return getError();
+    return wifiConfErrState.getRawErrorState();
   }
 
   JsonDocument wifiJson;
@@ -42,8 +27,8 @@ uint16_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&pass
     JsonVariant passwordJsonVar = wifiJson[F("password")];
     const bool ssidKeyOk = ssidJsonVar.is<const char*>();
     const bool passwordKeyOk = passwordJsonVar.is<const char*>();
-    if(!ssidKeyOk) { setError(ERROR::MISSING_SSID_KEY); }
-    if(!passwordKeyOk) { setError(ERROR::MISSING_PWD_KEY); }
+    if(!ssidKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_SSID_KEY); }
+    if(!passwordKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_PWD_KEY); }
     if(ssidKeyOk && passwordKeyOk) {
       const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
       const char* passJsonPtr = passwordJsonVar.as<const char*>();
@@ -51,17 +36,17 @@ uint16_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&pass
       const uint8_t passLength = strnlen(passJsonPtr, maxWifiPasswordSize);
       const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
       const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
-      if(!ssidLengthValid) { setError(ERROR::SSID_LENGTH_ERR); }
-      if(!passLengthValid) { setError(ERROR::PWD_LENGTH_ERR); }
+      if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
+      if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
       if(ssidLengthValid && passLengthValid) {
         strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
         strlcpy(password, passJsonPtr, maxWifiPasswordSize);
       }
     }
   } else {
-    setError(ERROR::JSON_PARSING_ERROR);
+    wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR);
   }
 
   wifiFile.close();
-  return getError();
+  return wifiConfErrState.getRawErrorState();
 }
