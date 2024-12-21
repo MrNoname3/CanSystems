@@ -158,7 +158,7 @@ private:
   };
 
   /// @brief Represents error states in the pump control system.
-  enum class ERROR : uint8_t {
+  enum class PumpControlError : uint8_t {
     NONE          = 0U,                     // No error.
     CH_SELECT     = 1 << 0U,                // Channel select error.
     FLOW_STUCK    = 1 << 1U,                // Flow meter stuck error.
@@ -176,17 +176,6 @@ private:
   /// @param channel The channel to select.
   /// @return True if the channel was successfully selected, false otherwise.
   bool selectChannel(uint8_t channel) const;
-
-  /// @brief Sets the error state for the pump control system.
-  /// @param err The error to set.
-  void setError(ERROR err);
-
-  /// @brief Retrieves the current error state.
-  /// @return The current error state.
-  uint8_t getError() const;
-
-  /// @brief Clears the current error state.
-  void clearError();
 
   /// @brief Schedules an irrigation task.
   /// @param irrigationElement The irrigation task details.
@@ -218,7 +207,7 @@ private:
   uint16_t analogValue;                                                     // Filtered analog value from sensor.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
   uint32_t errorCheckTimer;                                                 // Timer variable for error checking.
-  uint8_t error;                                                            // Current error state.
+  ErrorState<PumpControlError, uint8_t> pumpControlErrState;                // Error code handler object.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.

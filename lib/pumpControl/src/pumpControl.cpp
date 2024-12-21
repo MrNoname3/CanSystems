@@ -15,7 +15,7 @@ PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin
   analogValue(0U),
   eventTimer(0U),
   errorCheckTimer(0U),
-  error(0U),
+  pumpControlErrState(),
   reportError(reportError),
   limitSwitches{nullptr},
   calibrationValue(0U),
@@ -47,23 +47,23 @@ void PumpControl::run() {
           rgbLed.setColor(irrStartColors[0], irrStartColors[1], irrStartColors[2], false);
           irrigationState = IrrigationState::RUN;
         } else {
-          setError(ERROR::CH_SELECT);
+          pumpControlErrState.setError(PumpControlError::CH_SELECT);
           irrigationState = IrrigationState::ERROR;
         }
       } else {
         checkSafetyIrrigations();
         if(flowCounter > 0U) {
-          setError(ERROR::FLOW_OVERRUN);
+          pumpControlErrState.setError(PumpControlError::FLOW_OVERRUN);
           irrigationState = IrrigationState::ERROR;
         }
         if(getPositiveCurrent() > maxAllowedStandbyCurrent) {
-          setError(ERROR::PUMP_OVERRUN);
+          pumpControlErrState.setError(PumpControlError::PUMP_OVERRUN);
           irrigationState = IrrigationState::ERROR;
         }
       }
-      if((error > 0U) && (reportError != nullptr)) {
-        reportError(getError());
-        clearError();
+      if((pumpControlErrState.getRawErrorState() > 0U) && (reportError != nullptr)) {
+        reportError(pumpControlErrState.getRawErrorState());
+        pumpControlErrState.clearAllErrors();
       }
     } break;
     case IrrigationState::RUN: {
@@ -80,18 +80,18 @@ void PumpControl::run() {
             if(flowCheckSuccess) {
               prevFlowCounter = flowCounter;
             } else {
-              setError(ERROR::FLOW_STUCK);
+              pumpControlErrState.setError(PumpControlError::FLOW_STUCK);
               irrigationState = IrrigationState::ERROR;
             }
           }
           if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
             const uint16_t actualCurrent = getPositiveCurrent();
             if(actualCurrent < maxAllowedStandbyCurrent) {
-              setError(ERROR::PUMP_UC);
+              pumpControlErrState.setError(PumpControlError::PUMP_UC);
               irrigationState = IrrigationState::ERROR;
             }
             if(actualCurrent > maxAllowedCurrent) {
-              setError(ERROR::PUMP_OC);
+              pumpControlErrState.setError(PumpControlError::PUMP_OC);
               irrigationState = IrrigationState::ERROR;
             }
           }
@@ -140,7 +140,7 @@ void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uin
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(irrigationInfo, pwmValue, repeatNum));
   } else {
-    setError(ERROR::QUEUE_FULL);
+    pumpControlErrState.setError(PumpControlError::QUEUE_FULL);
   }
 }
 
@@ -148,7 +148,7 @@ void PumpControl::createIrrigation(uint8_t channel, uint8_t duration, bool check
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum));
   } else {
-    setError(ERROR::QUEUE_FULL);
+    pumpControlErrState.setError(PumpControlError::QUEUE_FULL);
   }
 }
 
@@ -156,7 +156,7 @@ void PumpControl::createIrrigation(IrrigationQueueElement irrigationElement) {
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(irrigationElement);
   } else {
-    setError(ERROR::QUEUE_FULL);
+    pumpControlErrState.setError(PumpControlError::QUEUE_FULL);
   }
 }
 
@@ -187,22 +187,6 @@ bool PumpControl::selectChannel(uint8_t channel) const {
   uint8_t newRegValue = actualRegValue & 0xF0;            // Keep high 4 bits, clear low 4 bits.
   newRegValue |= (1U << channel);                         // Apply the new channel selection.
   return pcf.write(newRegValue);
-}
-
-void PumpControl::setError(ERROR err) {
-  if(err == ERROR::NONE) {
-    this->error = 0U;
-  } else {
-    this->error |= static_cast<uint8_t>(err);
-  }
-}
-
-uint8_t PumpControl::getError() const {
-  return static_cast<const uint8_t>(error);
-}
-
-void PumpControl::clearError() {
-  error = 0U;
 }
 
 void PumpControl::addLimitSwitch(uint8_t channel, bool (*limitSwitch)()) {
