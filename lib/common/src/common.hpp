@@ -262,4 +262,65 @@ private:
   static const char PROGMEM wifiTempConfigLocation[];       // File location for the temporary Wi-Fi configuration.
 #endif
 };
+
+/// @brief Template class to manage error states using a bitmask.
+/// @tparam Enum An enumeration type representing individual error states.
+/// @tparam StorageType An integral type used to store the bitmask. Must be large enough to hold all Enum values.
+template <typename Enum, typename StorageType>
+class ErrorState final {
+  // Ensure that Enum is an enumeration type and StorageType is large enough to hold all Enum values.
+  static_assert(sizeof(StorageType) * 8U >= sizeof(Enum) * 8U, "StorageType must be large enough to hold all Enum values!");
+public:
+  /// @brief Constructs an `ErrorState` object with all error states cleared.
+  ErrorState() :
+    errorState(0U)
+  {}
+
+  /// @brief Default destructor.
+  ~ErrorState() = default;
+
+  /// @brief Sets a specific error state.
+  /// @param error The error to set.
+  void setError(Enum error) {
+    errorState |= static_cast<StorageType>(error);
+  }
+
+  /// @brief Checks if a specific error state is set.
+  /// @param error The error to check.
+  /// @return `true` if the error is set, otherwise `false`.
+  bool hasError(Enum error) const {
+    return (errorState & static_cast<StorageType>(error)) != 0U;
+  }
+
+  /// @brief Clears a specific error state.
+  /// @param error The error to clear.
+  void clearError(Enum error) {
+    errorState &= ~static_cast<StorageType>(error);
+  }
+
+  /// @brief Clears all error states.
+  void clearAllErrors() {
+    errorState = 0U;
+  }
+
+  /// @brief Retrieves the raw bitmask representing all error states.
+  /// @return The raw error state as a value of type `StorageType`.
+  StorageType getRawErrorState() const {
+    return errorState;
+  }
+
+  /// @brief Checks if any error state is set.
+  /// @return `true` if any error is set, otherwise `false`.
+  bool hasAnyError() const {
+    return errorState != 0U;
+  }
+
+  ErrorState(const ErrorState&) = delete;                       // Define copy constructor.
+  ErrorState& operator=(const ErrorState&) = delete;            // Define copy assignment operator.
+  ErrorState(ErrorState&&) = delete;                            // Define move constructor.
+  ErrorState& operator=(ErrorState&&) = delete;                 // Define move assignment operator.
+
+private:
+  StorageType errorState;                           // Stores the current error state as a bitmask.
+};
 #endif // COMMON_HPP
