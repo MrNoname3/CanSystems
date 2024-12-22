@@ -250,6 +250,10 @@ public:
   /// @brief Retrieves the MQTT server certificate file location.
   /// @return Constant string representing the path to the MQTT server certificate file.
   static constexpr const char* getMqttServerCertLocation() { return mqttServerCertLocation; }
+
+  /// @brief Retrieces the MQTT server credentials file location.
+  /// @return Constant string representing the path to the MQTT server credentials file.
+  static constexpr const char* getMqttServerCredentialsLocation() { return mqttServerCredLocation; }
 #endif
 
   FileName(const FileName&) = delete;                       // Define copy constructor.
@@ -265,6 +269,7 @@ private:
   static const char PROGMEM wifiConfigLocation[];           // File location for the Wi-Fi configuration.
   static const char PROGMEM wifiTempConfigLocation[];       // File location for the temporary Wi-Fi configuration.
   static const char PROGMEM mqttServerCertLocation[];       // File location for the MQTT server certificate.
+  static const char PROGMEM mqttServerCredLocation[];       // File location for the MQTT server credentials.
 #endif
 };
 
