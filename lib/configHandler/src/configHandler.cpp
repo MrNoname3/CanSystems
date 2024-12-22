@@ -2,11 +2,8 @@
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
-ErrorState<ConfigHandler::WifiConfigError, uint8_t> ConfigHandler::wifiConfErrState;
-ErrorState<ConfigHandler::ServerCertError, uint8_t> ConfigHandler::serverCertErrState;
-
 uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
-  wifiConfErrState.clearAllErrors();
+  ErrorState<WifiConfigError, uint8_t> wifiConfErrState;
   const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
   if(!wifiFileExists) {
     wifiConfErrState.setError(WifiConfigError::NO_WIFI_CONFIG_FILE);
@@ -53,7 +50,7 @@ uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&passw
 }
 
 uint8_t ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) {
-  serverCertErrState.clearAllErrors();
+  ErrorState<ServerCertError, uint8_t> serverCertErrState;
   const bool certFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCertLocation()));
   if(!certFileExists) {
     serverCertErrState.setError(ServerCertError::NO_SERVER_CERT_FILE);
@@ -82,4 +79,67 @@ uint8_t ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeC
 
   certFile.close();
   return serverCertErrState.getRawErrorState();
+}
+
+uint16_t ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
+  char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
+  ErrorState<ServerCredError, uint16_t> serverCredErrState;
+  const bool credFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()));
+  if(!credFileExists) {
+    serverCredErrState.setError(ServerCredError::NO_SERVER_CRED_FILE);
+    return serverCredErrState.getRawErrorState();
+  }
+
+  File credFile = LittleFS.open(FPSTR(FileName::getMqttServerCredentialsLocation()), "r");
+  if(!credFile) {
+    serverCredErrState.setError(ServerCredError::CANNOT_OPEN_FILE);
+    credFile.close();
+    return serverCredErrState.getRawErrorState();
+  }
+
+  JsonDocument serverCredJson;
+  DeserializationError deserializationError = deserializeJson(serverCredJson, credFile);
+  const bool isDeserializationSuccessful  = (deserializationError == DeserializationError::Code::Ok);
+  if(isDeserializationSuccessful ) {
+    JsonVariant mqttUserNameVar = serverCredJson[F("mqttUserName")];
+    JsonVariant mqttPasswordVar = serverCredJson[F("mqttPassword")];
+    JsonVariant mqttServerUrlVar = serverCredJson[F("mqttServerUrl")];
+    JsonVariant mqttServerPortVar = serverCredJson[F("mqttServerPort")];
+    const bool mqttUserNameKeyOk = mqttUserNameVar.is<const char*>();
+    const bool mqttPasswordKeyOk = mqttPasswordVar.is<const char*>();
+    const bool mqttServerUrlKeyOk = mqttServerUrlVar.is<const char*>();
+    const bool mqttServerPortKeyOk = mqttServerPortVar.is<uint16_t>();
+    if(!mqttUserNameKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_USER); }
+    if(!mqttPasswordKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PASS); }
+    if(!mqttServerUrlKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_URL); }
+    if(!mqttServerPortKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PORT); }
+    if(mqttUserNameKeyOk && mqttPasswordKeyOk && mqttServerUrlKeyOk && mqttServerPortKeyOk) {
+      const char* mqttUserNamePtr = mqttUserNameVar.as<const char*>();
+      const char* mqttPasswordPtr = mqttPasswordVar.as<const char*>();
+      const char* mqttServerUrlPtr = mqttServerUrlVar.as<const char*>();
+      const uint16_t mqttServerPortNum = mqttServerPortVar.as<uint16_t>();
+      const uint8_t mqttUserNameLength = strnlen(mqttUserNamePtr, maxMqttUserNameSize);
+      const uint8_t mqttPasswordLength = strnlen(mqttPasswordPtr, maxMqttPasswordSize);
+      const uint8_t mqttServerUrlLength = strnlen(mqttServerUrlPtr, maxMqttServerUrlSize);
+      const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize);
+      const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize);
+      const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize);
+      const bool mqttServerPortNumValid = (mqttServerPortNum > 0U);
+      if(!mqttUserNameLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_USER_LENGTH_ERR); }
+      if(!mqttPasswordLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_PASS_LENGTH_ERR); }
+      if(!mqttServerUrlLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_URL_LENGTH_ERR); }
+      if(!mqttServerPortNumValid) { serverCredErrState.setError(ServerCredError::MQTT_PORT_NUM_ERR); }
+      if(mqttUserNameLengthValid && mqttPasswordLengthValid && mqttServerUrlLengthValid && mqttServerPortNumValid) {
+        strlcpy(mqttUserName, mqttUserNamePtr, maxMqttUserNameSize);
+        strlcpy(mqttPassword, mqttPasswordPtr, maxMqttPasswordSize);
+        strlcpy(mqttServerUrl, mqttServerUrlPtr, maxMqttServerUrlSize);
+        mqttServerPort = mqttServerPortNum;
+      }
+    }
+  } else {
+    serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR);
+  }
+
+  credFile.close();
+  return serverCredErrState.getRawErrorState();
 }
