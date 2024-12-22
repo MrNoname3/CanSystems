@@ -232,23 +232,25 @@ bool Connectivity::beginSimple(Interface interface) {
   }
 
   // Open cert.
-  const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
+  {
+    const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
-    delete serverCert;
-    serverCert = new X509List(certFile, certFileSize);
-    tcpClient.setTrustAnchors(serverCert);
-    tcpClient.setTimeout(Time::secToMs(5U));
-    return (serverCert != nullptr);
+      delete serverCert;
+      serverCert = new X509List(certFile, certFileSize);
+      tcpClient.setTrustAnchors(serverCert);
+      tcpClient.setTimeout(Time::secToMs(5U));
+      return (serverCert != nullptr);
 #elif defined ESP32
-    tcpClient.setTimeout(10);
-    return tcpClient.loadCACert(certFile, certFileSize);
+      tcpClient.setTimeout(10);
+      return tcpClient.loadCACert(certFile, certFileSize);
 #endif
-  });
-  const bool certResultOk = (certResult == 0U);
-  serialPort.printf_P(PSTR("%sGetting server certification: %s\r\n"), TCP_PREFIX, Str::getStateStr(certResultOk));
-  if(!certResultOk) {
-    serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
-    return false;
+    });
+    const bool certResultOk = (certResult == 0U);
+    serialPort.printf_P(PSTR("%sGetting server certification: %s\r\n"), TCP_PREFIX, Str::getStateStr(certResultOk));
+    if(!certResultOk) {
+      serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
+      return false;
+    }
   }
 
   if(!connect()) { return false; }
