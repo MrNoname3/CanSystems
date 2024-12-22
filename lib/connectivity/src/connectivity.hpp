@@ -22,11 +22,11 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
-#include "server.hpp"                                               /// Custom server-related declarations and definitions.
 #include <vector>                                                   /// STL vector for dynamic arrays.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "dataTransfer.hpp"
+#include "configHandler.hpp"
 
 class Connectivity final {
 public:
@@ -90,11 +90,10 @@ public:
   Connectivity& operator=(Connectivity&&) = delete;                 // Define move assignment operator.
 
 private:
-  struct __attribute__((packed))
-  MqttCredentials {
-    char userName[sizeof(mqttSettings::userName)];
-    char password[sizeof(mqttSettings::password)];
-    char serverName[sizeof(mqttSettings::serverName)];
+  struct MqttCredentials {
+    char userName[ConfigHandler::getMaxMqttUserNameSize()];
+    char password[ConfigHandler::getMaxMqttPasswordSize()];
+    char serverName[ConfigHandler::getMaxMqttServerUrlSize()];
     uint16_t serverPort;
     char clientName[36];
     char senderTopic[32];

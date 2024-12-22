@@ -2,7 +2,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
-#include "configHandler.hpp"
 
 #ifdef ESP8266
 // Monitor the internal VCC level, it varies with WiFi load.
@@ -200,12 +199,19 @@ bool Connectivity::beginSimple(Interface interface) {
     serialPort.printf_P(PSTR("\r\n%sUTC ISO time: %s\r\n"), NTP_PREFIX, getISODateTime());
   }
 
+  // Get MQTT server credentials.
+  {
+    const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
+    const bool credResultOk = (credResult == 0U);
+    serialPort.printf_P(PSTR("%sGetting server credentials: %s\r\n"), MQTT_PREFIX, Str::getStateStr(credResultOk));
+    if(!credResultOk) {
+      serialPort.printf_P(PSTR("  Code: %hu\r\n"), credResult);
+      return false;
+    }
+  }
+
   // Setup MQTT topics.
   {
-    memccpy_P(mqttCredentials.userName, mqttSettings::userName, '\0', sizeof(mqttCredentials.userName));
-    memccpy_P(mqttCredentials.password, mqttSettings::password, '\0', sizeof(mqttCredentials.password));
-    memccpy_P(mqttCredentials.serverName, mqttSettings::serverName, '\0', sizeof(mqttCredentials.serverName));
-    mqttCredentials.serverPort = mqttSettings::serverPort;
     const char* deviceID = strchr(Build::getPioEnv(), '_') + 1;
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
