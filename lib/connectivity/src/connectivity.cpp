@@ -89,21 +89,22 @@ bool Connectivity::beginSimple(Interface interface) {
 
   // Init filesystem.
   {
-    delay(10);
+    delay(10U);
     const bool initFS = LittleFS.begin();
     serialPort.printf_P(PSTR("%sInitialising filesystem: %s\r\n"), FS_PREFIX, Str::getStateStr(initFS));
     if(!initFS) { return false; }
 #ifdef ESP8266
-    {
-      FSInfo fsInfo;
-      LittleFS.info(fsInfo);
-      serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n  Block size: %u\r\n  Page size: %u\r\n  Max open files: %u\r\n  Max path lengths: %u\r\n"),
-        fsInfo.totalBytes, fsInfo.usedBytes, (fsInfo.totalBytes - fsInfo.usedBytes), fsInfo.blockSize, fsInfo.pageSize, fsInfo.maxOpenFiles, fsInfo.maxPathLength);
-    }
+    FSInfo fsInfo;
+    LittleFS.info(fsInfo);
+    const uint32_t totalBytes = fsInfo.totalBytes;
+    const uint32_t usedBytes = fsInfo.usedBytes;
+    const uint32_t freeBytes = totalBytes - usedBytes;
 #elif defined ESP32
-    serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"),
-      LittleFS.totalBytes(), LittleFS.usedBytes(), (LittleFS.totalBytes() - LittleFS.usedBytes()));
+    const uint32_t totalBytes = LittleFS.totalBytes();
+    const uint32_t usedBytes = LittleFS.usedBytes();
+    const uint32_t freeBytes = totalBytes - usedBytes;
 #endif
+    serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
 
   // Get MAC.
