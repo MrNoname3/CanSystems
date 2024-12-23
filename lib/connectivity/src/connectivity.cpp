@@ -4,10 +4,9 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
 #ifdef ESP8266
-// Monitor the internal VCC level, it varies with WiFi load.
-// Don't connect anything to the analog input pin!
-ADC_MODE(ADC_VCC);
+#include <Esp.h>
 #elif defined ESP32
+#include <esp_task_wdt.h>
 bool Connectivity::ethConnected = false;
 #endif
 bool Connectivity::isDeviceOnline = true;
@@ -77,13 +76,16 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
   debugLed.startTicker(500U);
+#ifdef ESP8266
+  const uint8_t resetReason = static_cast<uint8_t>(ESP.getResetInfoPtr()->reason);
+#elif defined ESP32
+  const uint8_t resetReason = static_cast<uint8_t>(esp_reset_reason());
+#endif
   serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, Build::getCppVersion());
   serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, Build::getFwVersion());
   serialPort.printf_P(PSTR("%sGIT: %x\r\n"), INIT_PREFIX, Build::getGitHash());
   serialPort.printf_P(PSTR("%sDirty: %hu\r\n"), INIT_PREFIX, Build::getGitDirty());
-#ifdef ESP8266
-  serialPort.printf_P(PSTR("%sInternal VCC: %humV\r\n"), INIT_PREFIX, ESP.getVcc());
-#endif
+  serialPort.printf_P(PSTR("%sReset reason: %hu\r\n"), INIT_PREFIX, resetReason);
   serialPort.printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
   serialPort.flush();
 
@@ -258,14 +260,9 @@ bool Connectivity::beginSimple(Interface interface) {
   mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
 
   {
-    char versionString[80];
-#ifdef ESP8266
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu,\"VCC\":%hu""}"),
-      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ESP.getVcc());
-#elif defined ESP32
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu""}"),
-      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty());
-#endif
+    char versionString[80] = {'\0'};
+    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu,\"RR\":%hu""}"),
+      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), resetReason);
     const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
     if(!versionStringValid) { return false; }
     common.messageSend(versionString);
