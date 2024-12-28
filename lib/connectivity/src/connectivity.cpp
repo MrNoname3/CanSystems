@@ -1,6 +1,5 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
 #ifdef ESP8266
@@ -92,20 +91,10 @@ bool Connectivity::beginSimple(Interface interface) {
   // Init filesystem.
   {
     delay(10U);
-    const bool initFS = LittleFS.begin();
+    uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
+    const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
     serialPort.printf_P(PSTR("%sInitialising filesystem: %s\r\n"), FS_PREFIX, Str::getStateStr(initFS));
     if(!initFS) { return false; }
-#ifdef ESP8266
-    FSInfo fsInfo;
-    LittleFS.info(fsInfo);
-    const uint32_t totalBytes = fsInfo.totalBytes;
-    const uint32_t usedBytes = fsInfo.usedBytes;
-    const uint32_t freeBytes = totalBytes - usedBytes;
-#elif defined ESP32
-    const uint32_t totalBytes = LittleFS.totalBytes();
-    const uint32_t usedBytes = LittleFS.usedBytes();
-    const uint32_t freeBytes = totalBytes - usedBytes;
-#endif
     serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
 

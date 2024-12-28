@@ -2,6 +2,23 @@
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
+bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) {
+  const bool initFS = LittleFS.begin();
+  if(!initFS) { return false; }
+#ifdef ESP8266
+  FSInfo fsInfo;
+  LittleFS.info(fsInfo);
+  totalBytes = fsInfo.totalBytes;
+  usedBytes = fsInfo.usedBytes;
+  freeBytes = totalBytes - usedBytes;
+#elif defined ESP32
+  totalBytes = LittleFS.totalBytes();
+  usedBytes = LittleFS.usedBytes();
+  freeBytes = totalBytes - usedBytes;
+#endif
+  return true;
+}
+
 uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
   ErrorState<WifiConfigError, uint8_t> wifiConfErrState;
   const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));

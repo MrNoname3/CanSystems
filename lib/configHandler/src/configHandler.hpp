@@ -21,37 +21,44 @@ private:
   ~ConfigHandler() = delete;
 
 public:
+  /// @brief Initializes the file system and retrieves usage statistics.
+  /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
+  /// @param usedBytes Reference to a variable where the used space (in bytes) will be stored.
+  /// @param freeBytes Reference to a variable where the free space (in bytes) will be stored.
+  /// @return `true` if the initialization was successful; `false` otherwise.
+  [[nodiscard]] static bool initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes);
+
   /// @brief Gets the maximum allowed size for the Wi-Fi SSID.
   /// @return Maximum size of the SSID string.
-  static constexpr uint8_t getMaxWifiSsidSize() { return maxWifiSsidSize; }
+  [[nodiscard]] static constexpr uint8_t getMaxWifiSsidSize() { return maxWifiSsidSize; }
 
   /// @brief Gets the maximum allowed size for the Wi-Fi password.
   /// @return Maximum size of the password string.
-  static constexpr uint8_t getMaxWifiPasswordSize() { return maxWifiPasswordSize; }
+  [[nodiscard]] static constexpr uint8_t getMaxWifiPasswordSize() { return maxWifiPasswordSize; }
 
   /// @brief Retrieves Wi-Fi configuration (SSID and password) from a file.
   /// @param ssid Buffer to store the retrieved SSID.
   /// @param password Buffer to store the retrieved password.
   /// @return Error state, where `0` means success.
-  static uint8_t getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
+  [[nodiscard]] static uint8_t getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
 
   /// @brief Retrieves the server certificate using a callback for storage.
   /// @param storeCert A callback function to handle the storage of the certificate.
   /// The callback receives a reference to a `Stream` and the certificate size in bytes.
   /// @return Error state, where `0` means success.
-  static uint8_t getServerCert(std::function<bool(Stream&, size_t)> storeCert);
+  [[nodiscard]] static uint8_t getServerCert(std::function<bool(Stream&, size_t)> storeCert);
 
   /// @brief Gets the maximum allowed size for the MQTT user name.
   /// @return Maximum size of the MQTT user name string.
-  static constexpr uint8_t getMaxMqttUserNameSize() { return maxMqttUserNameSize; }
+  [[nodiscard]] static constexpr uint8_t getMaxMqttUserNameSize() { return maxMqttUserNameSize; }
 
   /// @brief Gets the maximum allowed size for the MQTT password.
   /// @return Maximum size of the MQTT password string.
-  static constexpr uint8_t getMaxMqttPasswordSize() { return maxMqttPasswordSize; }
+  [[nodiscard]] static constexpr uint8_t getMaxMqttPasswordSize() { return maxMqttPasswordSize; }
 
   /// @brief Gets the maximum allowed size for the MQTT server URL.
   /// @return Maximum size of the MQTT server URL string.
-  static constexpr uint8_t getMaxMqttServerUrlSize() { return maxMqttServerUrlSize; }
+  [[nodiscard]] static constexpr uint8_t getMaxMqttServerUrlSize() { return maxMqttServerUrlSize; }
 
   /// @brief Retrieves server credentials (MQTT username, password, URL, and port) from a file.
   /// @param mqttUserName Buffer to store the MQTT user name.
@@ -59,7 +66,7 @@ public:
   /// @param mqttServerUrl Buffer to store the MQTT server URL.
   /// @param mqttServerPort Variable to store the MQTT server port number.
   /// @return Error state, where `0` means success.
-  static uint16_t getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
+  [[nodiscard]] static uint16_t getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
     char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort);
 
   ConfigHandler(const ConfigHandler&) = delete;                       // Define copy constructor.
