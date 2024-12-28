@@ -1,6 +1,8 @@
 #ifndef RESET_HANDLER_HPP
 #define RESET_HANDLER_HPP
 
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+
 /// @brief Class for handling system resets.
 class ResetHandler final {
 private:
@@ -13,6 +15,12 @@ private:
 public:
   /// @brief Resets the microcontroller unit (MCU) by triggering a watchdog reset.
   static void restartMCU();
+
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Retrieves the reason for the last system reset.
+  /// @return A `uint8_t` value representing the reset reason, where each value corresponds to a specific reset cause.
+  static uint8_t getResetReason();
+#endif
 
   ResetHandler(const ResetHandler&) = delete;                       // Define copy constructor.
   ResetHandler& operator=(const ResetHandler&) = delete;            // Define copy assignment operator.

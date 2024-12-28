@@ -2,10 +2,7 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
-#ifdef ESP8266
-#include <Esp.h>
-#elif defined ESP32
-#include <esp_task_wdt.h>
+#ifdef ESP32
 bool Connectivity::ethConnected = false;
 #endif
 bool Connectivity::isDeviceOnline = true;
@@ -75,11 +72,7 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 bool Connectivity::beginSimple(Interface interface) {
   const char loadingMark = '.';
   debugLed.startTicker(500U);
-#ifdef ESP8266
-  const uint8_t resetReason = static_cast<uint8_t>(ESP.getResetInfoPtr()->reason);
-#elif defined ESP32
-  const uint8_t resetReason = static_cast<uint8_t>(esp_reset_reason());
-#endif
+  const uint8_t resetReason = ResetHandler::getResetReason();
   serialPort.printf_P(PSTR("%sInfo:\r\n"), INIT_PREFIX);
   serialPort.printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
   serialPort.printf_P(PSTR("  FW: %hu\r\n"), Build::getFwVersion());

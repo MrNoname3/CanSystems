@@ -1,9 +1,13 @@
 #include "resetHandler.hpp"
-#include <Arduino.h>                                                /// Arduino libraries header.
+#include <Arduino.h>                                                /// Arduino core library for common functionality.
 #if defined(__AVR_ATmega328P__)
-#include <avr/wdt.h>                                                /// Watchdog timer library.
-#elif defined(ESP8266) || defined(ESP32)
-#include <Esp.h>                                                    /// Watchdog timer functions for ESPs.
+#include <avr/wdt.h>                                                /// Watchdog timer library for AVR microcontrollers.
+#elif defined(ESP8266)
+#include <Esp.h>                                                    /// Restart and reset-related functions for ESP8266.
+#include <user_interface.h>                                         /// Provides the definition for struct rst_info.
+#elif ESP32
+#include <Esp.h>                                                    /// Restart and reset-related functions for ESP32.
+#include <esp_task_wdt.h>                                           /// Watchdog timer functions specific to ESP32.
 #endif
 
 void ResetHandler::restartMCU() {
@@ -18,3 +22,13 @@ void ResetHandler::restartMCU() {
 #endif
   while(true) {};
 }
+
+#if defined(ESP8266) || defined(ESP32)
+uint8_t ResetHandler::getResetReason() {
+#ifdef ESP8266
+  return static_cast<uint8_t>(ESP.getResetInfoPtr()->reason);
+#elif defined ESP32
+  return static_cast<uint8_t>(esp_reset_reason());
+#endif
+}
+#endif
