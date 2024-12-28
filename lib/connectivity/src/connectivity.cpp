@@ -70,7 +70,6 @@ void Connectivity::begin(Interface interface, bool errorHandling) {
 }
 
 bool Connectivity::beginSimple(Interface interface) {
-  const char loadingMark = '.';
   debugLed.startTicker(500U);
   const uint8_t resetReason = ResetHandler::getResetReason();
   serialPort.printf_P(PSTR("%sInfo:\r\n"), INIT_PREFIX);
@@ -92,7 +91,7 @@ bool Connectivity::beginSimple(Interface interface) {
   }
 
   // Get MAC.
-  uint8_t mac[6] = { 0 };
+  uint8_t mac[6] = { 0U };
 #ifdef ESP8266
   wifi_get_macaddr(STATION_IF, mac);
 #endif
@@ -117,8 +116,8 @@ bool Connectivity::beginSimple(Interface interface) {
     while(!ethConnected) {    // Wait until the device receives an IP address.
 #endif
       yield();
-      serialPort.print(loadingMark);
-      delay(300);
+      serialPort.print(".");
+      delay(200U);
     }
 #ifdef ESP8266
     serialPort.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethInt.connected()));
@@ -143,8 +142,8 @@ bool Connectivity::beginSimple(Interface interface) {
     serialPort.printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX);
     while(WiFi.status() != WL_CONNECTED) {
       yield();
-      serialPort.print(loadingMark);
-      delay(300);
+      serialPort.print(".");
+      delay(200U);
     }
     serialPort.printf_P(PSTR(" %s\r\n"), Str::getStateStr(WiFi.status() == WL_CONNECTED));
     if(WiFi.status() != WL_CONNECTED) { return false; }
@@ -156,7 +155,7 @@ bool Connectivity::beginSimple(Interface interface) {
     return false;
   }
 #ifdef ESP32
-  ETH.setHostname(BUILD_ENV_NAME);
+  ETH.setHostname(Build::getPioEnv());
   ETH.macAddress(mac);
 #endif
   serialPort.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -177,8 +176,8 @@ bool Connectivity::beginSimple(Interface interface) {
     configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
     time_t nowSecs = time(nullptr);
     while(nowSecs < 8 * 3600 * 2) {
-      delay(300);
-      serialPort.print(loadingMark);
+      serialPort.print(".");
+      delay(200U);
       nowSecs = time(nullptr);
     }
     serialPort.printf_P(PSTR("\r\n%sUTC ISO time: %s\r\n"), NTP_PREFIX, getISODateTime());
