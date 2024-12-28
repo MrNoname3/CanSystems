@@ -45,7 +45,6 @@ const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKN
 #ifdef ESP8266
 Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)(), uint8_t ethCS) :
   ethInt(ethCS),
-  serverCert(nullptr),
 #elif defined ESP32
 Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)()) :
 #endif
@@ -221,18 +220,18 @@ bool Connectivity::init() {
   {
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
-      delete serverCert;
-      serverCert = new X509List(certFile, certFileSize);
-      tcpClient.setTrustAnchors(serverCert);
+      serverCert.emplace(certFile, certFileSize);
+      if(!serverCert.has_value()) { return false; }
+      tcpClient.setTrustAnchors(&serverCert.value());
       tcpClient.setTimeout(Time::secToMs(5U));
-      return (serverCert != nullptr);
+      return true;
 #elif defined ESP32
       tcpClient.setTimeout(10);
       return tcpClient.loadCACert(certFile, certFileSize);
 #endif
     });
     const bool certResultOk = (certResult == 0U);
-    serialPort.printf_P(PSTR("%sGetting server certification: %s\r\n"), TCP_PREFIX, Str::getStateStr(certResultOk));
+    serialPort.printf_P(PSTR("%sGetting server certificate: %s\r\n"), TCP_PREFIX, Str::getStateStr(certResultOk));
     if(!certResultOk) {
       serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
       return false;
