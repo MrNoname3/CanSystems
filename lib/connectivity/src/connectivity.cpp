@@ -81,12 +81,12 @@ bool Connectivity::beginSimple(Interface interface) {
 #elif defined ESP32
   const uint8_t resetReason = static_cast<uint8_t>(esp_reset_reason());
 #endif
-  serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, Build::getCppVersion());
-  serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, Build::getFwVersion());
-  serialPort.printf_P(PSTR("%sGIT: %x\r\n"), INIT_PREFIX, Build::getGitHash());
-  serialPort.printf_P(PSTR("%sDirty: %hu\r\n"), INIT_PREFIX, Build::getGitDirty());
-  serialPort.printf_P(PSTR("%sReset reason: %hu\r\n"), INIT_PREFIX, resetReason);
-  serialPort.printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
+  serialPort.printf_P(PSTR("%sInfo:\r\n"), INIT_PREFIX);
+  serialPort.printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
+  serialPort.printf_P(PSTR("  FW: %hu\r\n"), Build::getFwVersion());
+  serialPort.printf_P(PSTR("  GIT: %x\r\n"), Build::getGitHash());
+  serialPort.printf_P(PSTR("  Dirty: %hu\r\n"), Build::getGitDirty());
+  serialPort.printf_P(PSTR("  Reset reason: %hu\r\n"), resetReason);
   serialPort.flush();
 
   // Init filesystem.
