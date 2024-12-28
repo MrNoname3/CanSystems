@@ -23,14 +23,14 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-Connectivity iotConn(Serial, debugLed, WdtHandler::resetWatchdog, SPI_CS);
+Connectivity iotConn(Serial, debugLed, Connectivity::Interface::WIFI, WdtHandler::resetWatchdog, SPI_CS);
 
 //--- MQTT handler objects ---//
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
 
 //--- Handling tasks ---//
-Task *task[1] = {&performance};
+Task *task[2] = {&iotConn, &performance};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -39,7 +39,6 @@ void setup() {
   Serial.begin(MONITOR_BAUD);
   delay(1U);
   Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
-  iotConn.begin(Connectivity::Interface::WIFI, true);
   //adcReader.enableMqttSending(10000U);
 
   const uint32_t initResult = taskHandler.initTasks();
@@ -57,7 +56,6 @@ void setup() {
 void loop() {
   WdtHandler::resetWatchdog();
   taskHandler.runTasks();
-  iotConn.loop();
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {

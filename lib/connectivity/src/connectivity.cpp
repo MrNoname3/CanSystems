@@ -43,17 +43,17 @@ const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONN
 const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
 
 #ifdef ESP8266
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)(), uint8_t ethCS) :
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)(), uint8_t ethCS) :
   ethInt(ethCS),
   serverCert(nullptr),
 #elif defined ESP32
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)()) :
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)()) :
 #endif
   serialPort(serial),
   debugLed(debugLed),
   tcpClient(),
   mqttClient(tcpClient),
-  usedInterface(Interface::UNKNOWN),
+  usedInterface(interface),
   interfaceStatus(WL_CONNECTED),
   mqttState(MQTT_CONNECTED),
   deviceResetTimer(0U),
@@ -61,15 +61,8 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, vo
   common(*this, "common")
 {}
 
-void Connectivity::begin(Interface interface, bool errorHandling) {
+bool Connectivity::init() {
   const uint32_t conTime = millis();
-  const bool conResult = beginSimple(interface);
-  serialPort.printf_P(PSTR("%sIOT connection: %s\r\n"), INIT_PREFIX, Str::getStateStr(conResult));
-  serialPort.printf_P(PSTR("%sInit time was: %lums\r\n"), INIT_PREFIX, (millis() - conTime));
-  if(!conResult && errorHandling) { ResetHandler::restartMCU(); }
-}
-
-bool Connectivity::beginSimple(Interface interface) {
   debugLed.startTicker(500U);
   const uint8_t resetReason = ResetHandler::getResetReason();
   serialPort.printf_P(PSTR("%sInfo:\r\n"), INIT_PREFIX);
@@ -98,7 +91,7 @@ bool Connectivity::beginSimple(Interface interface) {
 
   // Start interface.
   resetWatchdogTimer();
-  if(interface == Interface::ETHERNET) {
+  if(usedInterface == Interface::ETHERNET) {
     WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
     ethInt.setDefault();         // default route set through this interface
@@ -133,12 +126,22 @@ bool Connectivity::beginSimple(Interface interface) {
     serialPort.printf_P(PSTR("  SNM: %s\r\n"), ETH.subnetMask().toString().c_str());
 #endif
   }
-  else if(interface == Interface::WIFI) {
+  else if(usedInterface == Interface::WIFI) {
     const bool wifiInit = WiFi.mode(WIFI_STA);
     serialPort.printf_P(PSTR("%sInitialising wifi: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiInit));
     if(!wifiInit) { return false; }
     WiFi.setAutoReconnect(true);
-    if(!startWifi()) { return false; }
+    char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
+    char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
+    const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
+    const bool wifiConfigOk = (wifiConfigResult == 0U);
+    serialPort.printf_P(PSTR("%sWifi config: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiConfigOk));
+    if(!wifiConfigOk) {
+      serialPort.printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
+      return false;
+    } else {
+      WiFi.begin(ssid, password);
+    }
     serialPort.printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX);
     while(WiFi.status() != WL_CONNECTED) {
       yield();
@@ -159,7 +162,6 @@ bool Connectivity::beginSimple(Interface interface) {
   ETH.macAddress(mac);
 #endif
   serialPort.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  usedInterface = interface;
   char macAddress[macStringSize] = { '\0' };
   {
     const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -262,21 +264,8 @@ bool Connectivity::beginSimple(Interface interface) {
   }
 
   debugLed.stopTicker();
+  serialPort.printf_P(PSTR("%sInit time was: %lums\r\n"), INIT_PREFIX, (millis() - conTime));
   return true;
-}
-
-bool Connectivity::startWifi() {
-  char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
-  char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
-  const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
-  const bool wifiConfigOk = (wifiConfigResult == 0U);
-  serialPort.printf_P(PSTR("%sWifi config: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiConfigOk));
-  if(!wifiConfigOk) {
-    serialPort.printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
-  } else {
-    WiFi.begin(ssid, password);
-  }
-  return wifiConfigOk;
 }
 
 bool Connectivity::connect() {
@@ -297,7 +286,7 @@ bool Connectivity::connect() {
   return true;
 }
 
-void Connectivity::loop() {
+void Connectivity::run() {
   const bool loopingResult = loopSimple();
   const bool statusChanged = loopingResult != isDeviceOnline;
   const uint32_t actualTime = millis();

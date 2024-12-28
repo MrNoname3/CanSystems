@@ -27,28 +27,29 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "dataTransfer.hpp"
 #include "configHandler.hpp"
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
 
-class Connectivity final {
+class Connectivity final : public Task {
 public:
   class MqttComBase;
 
   enum class Interface : uint8_t {
-    WIFI = 0,
+    WIFI = 0U,
     ETHERNET,
     UNKNOWN
   };
 
 #ifdef ESP8266
-  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)(), uint8_t ethCS);
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)(), uint8_t ethCS);
 #elif defined ESP32
-  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, void (*resetWdt)());
+  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)());
 #endif
   /// @brief Destructor of the object.
-  virtual ~Connectivity() = default;
+  ~Connectivity() = default;
 
-  void begin(Interface interface, bool errorHandling);
+  virtual bool init() override;
 
-  void loop();
+  virtual void run() override;
 
   static bool getConnectionState();
 
@@ -56,8 +57,6 @@ private:
   inline bool loopSimple();
 
   inline bool beginSimple(Interface interface);
-
-  inline bool startWifi();
 
   bool connect();
 
