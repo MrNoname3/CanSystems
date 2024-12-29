@@ -72,7 +72,7 @@ private:
   static const char PROGMEM wlUnknownStatusStr[];
 
 #ifdef ESP8266
-  std::optional<ENC28J60lwIP> enthernetEnc28j60;
+  std::optional<ENC28J60lwIP> ethernetEnc28j60;
 #elif defined ESP32
   static constexpr uint8_t ETH_PHY_ADDR_ = 1;                 // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
   static constexpr int8_t ETH_PHY_POWER_ = 17;                // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)

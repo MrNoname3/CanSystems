@@ -29,8 +29,8 @@ void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetSh
   if(interface == Interface::UNKNOWN) { return; }
 #ifdef ESP8266
   if((interface == Interface::ENC28J60) && (ethernetShieldCsPin != invalidPin)) {
-    enthernetEnc28j60.emplace(ethernetShieldCsPin);
-    if(!enthernetEnc28j60.has_value()) { return; }
+    ethernetEnc28j60.emplace(ethernetShieldCsPin);
+    if(!ethernetEnc28j60.has_value()) { return; }
   }
 #endif
   networkInterface = interface;
@@ -86,33 +86,33 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
 #ifdef ESP8266
     case Interface::ENC28J60: {
       serial.printf_P(PSTR("[ENC28J60]\r\n"));
-      if(!enthernetEnc28j60.has_value()) {
+      if(!ethernetEnc28j60.has_value()) {
         networkErrState.setError(NetworkError::ENC28J60_NO_DRIVER);
         return networkErrState.getRawErrorState();
       }
       WiFi.macAddress(mac);
       WiFi.mode(WIFI_OFF);
-      enthernetEnc28j60.value().setDefault();         // default route set through this interface
-      const bool ethInit = enthernetEnc28j60.value().begin(mac);
+      ethernetEnc28j60.value().setDefault();         // default route set through this interface
+      const bool ethInit = ethernetEnc28j60.value().begin(mac);
       serial.printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
       serial.printf_P(PSTR("[NETWORK] Connecting to router"));
-      while(!enthernetEnc28j60.value().connected()) {
+      while(!ethernetEnc28j60.value().connected()) {
         yield();
         serial.print(".");
         delay(200U);
       }
-      serial.printf_P(PSTR(" %s\r\n"), Str::getStateStr(enthernetEnc28j60.value().connected()));
-      if(!enthernetEnc28j60.value().connected()) {
+      serial.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethernetEnc28j60.value().connected()));
+      if(!ethernetEnc28j60.value().connected()) {
         networkErrState.setError(NetworkError::ENC28J60_CONN_FAILED);
         return networkErrState.getRawErrorState();
       }
-      serial.printf_P(PSTR("  IP: %s\r\n"), enthernetEnc28j60.value().localIP().toString().c_str());
-      serial.printf_P(PSTR("  GW: %s\r\n"), enthernetEnc28j60.value().gatewayIP().toString().c_str());
-      serial.printf_P(PSTR("  SNM: %s\r\n"), enthernetEnc28j60.value().subnetMask().toString().c_str());
+      serial.printf_P(PSTR("  IP: %s\r\n"), ethernetEnc28j60.value().localIP().toString().c_str());
+      serial.printf_P(PSTR("  GW: %s\r\n"), ethernetEnc28j60.value().gatewayIP().toString().c_str());
+      serial.printf_P(PSTR("  SNM: %s\r\n"), ethernetEnc28j60.value().subnetMask().toString().c_str());
     } break;
 #elif defined ESP32
     case Interface::LAN8720: {
@@ -173,7 +173,7 @@ bool NetworkManager::isNetworkAvailable() {
     } break;
 #ifdef ESP8266
     case Interface::ENC28J60: {
-      actualInterfaceStatus = enthernetEnc28j60.value().status();
+      actualInterfaceStatus = ethernetEnc28j60.value().status();
     } break;
 #elif defined ESP32
     case Interface::LAN8720: {
