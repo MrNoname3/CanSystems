@@ -6,6 +6,7 @@
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
+#include "networkManager.hpp"                                       /// Manages the network connection.
 #include "connectivity.hpp"
 #include "adcReader.hpp"
 #include "mq135Handler.hpp"
@@ -23,7 +24,8 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-Connectivity iotConn(Serial, debugLed, Connectivity::Interface::WIFI, WdtHandler::resetWatchdog, SPI_CS);
+NetworkManager networkManager(Serial, NetworkManager::Interface::WIFI);
+Connectivity iotConn(Serial, debugLed, networkManager, WdtHandler::resetWatchdog);
 
 //--- MQTT handler objects ---//
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);

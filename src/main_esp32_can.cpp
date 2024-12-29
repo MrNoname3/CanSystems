@@ -6,6 +6,7 @@
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
+#include "networkManager.hpp"                                       /// Manages the network connection.
 #include "connectivity.hpp"
 #include "radiation.hpp"
 #include "rfHandler.hpp"
@@ -25,7 +26,8 @@ TaskHandle_t canTaskHandle = nullptr;
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-Connectivity iotConn(Serial, debugLed, Connectivity::Interface::ETHERNET, []() -> void {WdtHandler::resetWatchdog();});
+NetworkManager networkManager(Serial, NetworkManager::Interface::LAN8720);
+Connectivity iotConn(Serial, debugLed, networkManager, []() -> void {WdtHandler::resetWatchdog();});
 
 //--- MQTT handler objects ---//
 CanHandler canHandler(Serial);

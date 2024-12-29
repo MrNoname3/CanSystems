@@ -6,6 +6,7 @@
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
+#include "networkManager.hpp"                                       /// Manages the network connection.
 #include "connectivity.hpp"
 #include "radiation.hpp"
 #include "rfHandler.hpp"
@@ -23,7 +24,8 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-Connectivity iotConn(Serial, debugLed, Connectivity::Interface::ETHERNET, WdtHandler::resetWatchdog, SPI_CS);
+NetworkManager networkManager(Serial, NetworkManager::Interface::ENC28J60, SPI_CS);
+Connectivity iotConn(Serial, debugLed, networkManager, WdtHandler::resetWatchdog);
 
 //--- MQTT handler objects ---//
 Radiation radiation(iotConn, "radiation", RAD);

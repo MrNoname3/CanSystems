@@ -2,34 +2,15 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
-#ifdef ESP32
-bool Connectivity::ethConnected = false;
-#endif
-bool Connectivity::isDeviceOnline = true;
-
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
 const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
-const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
-const char Connectivity::ETH_PREFIX[] PROGMEM               = "[ETH] ";
-const char Connectivity::WIFI_PREFIX[] PROGMEM              = "[WIFI] ";
 const char Connectivity::NTP_PREFIX[] PROGMEM               = "[NTP] ";
-const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 const char Connectivity::RUN_PREFIX[] PROGMEM               = "[RUN] ";
 
-const char Connectivity::WL_NO_SHIELD_STR[] PROGMEM                 = "WL_NO_SHIELD";
-const char Connectivity::WL_IDLE_STATUS_STR[] PROGMEM               = "WL_IDLE_STATUS";
-const char Connectivity::WL_NO_SSID_AVAIL_STR[] PROGMEM             = "WL_NO_SSID_AVAIL";
-const char Connectivity::WL_SCAN_COMPLETED_STR[] PROGMEM            = "WL_SCAN_COMPLETED";
-const char Connectivity::WL_CONNECTED_STR[] PROGMEM                 = "WL_CONNECTED";
-const char Connectivity::WL_CONNECT_FAILED_STR[] PROGMEM            = "WL_CONNECT_FAILED";
-const char Connectivity::WL_CONNECTION_LOST_STR[] PROGMEM           = "WL_CONNECTION_LOST";
-const char Connectivity::WL_WRONG_PASSWORD_STR[] PROGMEM            = "WL_WRONG_PASSWORD";
-const char Connectivity::WL_DISCONNECTED_STR[] PROGMEM              = "WL_DISCONNECTED";
-const char Connectivity::WL_UNKNOWN_STATUS_STR[] PROGMEM            = "WL_UNKNOWN_STATUS";
 const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
 const char Connectivity::MQTT_CONNECTION_LOST_STR[] PROGMEM         = "MQTT_CONNECTION_LOST";
 const char Connectivity::MQTT_CONNECT_FAILED_STR[] PROGMEM          = "MQTT_CONNECT_FAILED";
@@ -42,19 +23,15 @@ const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONN
 const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
 const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
 
-#ifdef ESP8266
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)(), uint8_t ethCS) :
-  ethInt(ethCS),
-#elif defined ESP32
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Interface interface, void (*resetWdt)()) :
-#endif
+Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, NetworkManager& networkManager, void (*resetWdt)()) :
   serialPort(serial),
   debugLed(debugLed),
+  networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
-  usedInterface(interface),
-  interfaceStatus(WL_CONNECTED),
+  networkState(true),
   mqttState(MQTT_CONNECTED),
+  onlineState(true),
   deviceResetTimer(0U),
   resetWdt(resetWdt),
   common(*this, "common")
@@ -77,96 +54,21 @@ bool Connectivity::init() {
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
     const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
-    serialPort.printf_P(PSTR("%sInitialising filesystem: %s\r\n"), FS_PREFIX, Str::getStateStr(initFS));
+    serialPort.printf_P(PSTR("[FS] Initialising filesystem: %s\r\n"), Str::getStateStr(initFS));
     if(!initFS) { return false; }
     serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
 
-  // Get MAC.
-  uint8_t mac[6] = { 0U };
-#ifdef ESP8266
-  wifi_get_macaddr(STATION_IF, mac);
-#endif
-
   // Start interface.
   resetWatchdogTimer();
-  if(usedInterface == Interface::ETHERNET) {
-    WiFi.mode(WIFI_OFF);
-#ifdef ESP8266
-    ethInt.setDefault();         // default route set through this interface
-    const bool ethInit = ethInt.begin(mac);
-#elif defined ESP32
-    WiFi.onEvent(Connectivity::WiFiEvent);
-    const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
-#endif
-    serialPort.printf_P(PSTR("%sInitialising ethernet modul: %s\r\n"), ETH_PREFIX, Str::getStateStr(ethInit));
-    if(!ethInit) { return false; }
-    serialPort.printf_P(PSTR("%sConnecting to router"), ETH_PREFIX);
-#ifdef ESP8266
-    while(!ethInt.connected()) {
-#elif defined ESP32
-    while(!ethConnected) {    // Wait until the device receives an IP address.
-#endif
-      yield();
-      serialPort.print(".");
-      delay(200U);
-    }
-#ifdef ESP8266
-    serialPort.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethInt.connected()));
-    if(!ethInt.connected()) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str());
-#elif defined ESP32
-    serialPort.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethConnected));
-    if(!ethConnected) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), ETH.subnetMask().toString().c_str());
-#endif
-  }
-  else if(usedInterface == Interface::WIFI) {
-    const bool wifiInit = WiFi.mode(WIFI_STA);
-    serialPort.printf_P(PSTR("%sInitialising wifi: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiInit));
-    if(!wifiInit) { return false; }
-    WiFi.setAutoReconnect(true);
-    char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
-    char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
-    const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
-    const bool wifiConfigOk = (wifiConfigResult == 0U);
-    serialPort.printf_P(PSTR("%sWifi config: %s\r\n"), WIFI_PREFIX, Str::getStateStr(wifiConfigOk));
-    if(!wifiConfigOk) {
-      serialPort.printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
-      return false;
-    } else {
-      WiFi.begin(ssid, password);
-    }
-    serialPort.printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX);
-    while(WiFi.status() != WL_CONNECTED) {
-      yield();
-      serialPort.print(".");
-      delay(200U);
-    }
-    serialPort.printf_P(PSTR(" %s\r\n"), Str::getStateStr(WiFi.status() == WL_CONNECTED));
-    if(WiFi.status() != WL_CONNECTED) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str());
-  }
-  else {
-    return false;
-  }
-#ifdef ESP32
-  ETH.setHostname(Build::getPioEnv());
-  ETH.macAddress(mac);
-#endif
-  serialPort.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  char macAddress[macStringSize] = { '\0' };
   {
-    const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
-    serialPort.printf_P(PSTR("%sMake string from MAC: %s\r\n"), INIT_PREFIX, Str::getStateStr(macValid));
-    if(!macValid) { return false; }
+    const uint16_t connResult = networkManager.connect();
+    const bool connResultOk = (connResult == 0U);
+    serialPort.printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
+    if(!connResultOk) {
+      serialPort.printf_P(PSTR("  Code: %hu\r\n"), connResult);
+      return false;
+    }
   }
 
   // Set time via NTP, as required for x.509 validation.
@@ -198,9 +100,9 @@ bool Connectivity::init() {
   // Setup MQTT topics.
   {
     const char* deviceID = strchr(Build::getPioEnv(), '_') + 1;
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
-    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, networkManager.getMacAddressString());
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, networkManager.getMacAddressString());
+    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, networkManager.getMacAddressString());
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
@@ -286,48 +188,16 @@ bool Connectivity::connect() {
 }
 
 void Connectivity::run() {
-  const bool loopingResult = loopSimple();
-  const bool statusChanged = loopingResult != isDeviceOnline;
   const uint32_t actualTime = millis();
-  if(loopingResult) {
-    deviceResetTimer = actualTime;
-  }
-  if(statusChanged) {
-    isDeviceOnline = loopingResult;
-    if(isDeviceOnline) {
-      debugLed.stopTicker();
+  const bool actualNetworkState = networkManager.isNetworkAvailable();
+  if(actualNetworkState != networkState) {
+    networkState = actualNetworkState;
+    if(networkState) {
+      connect();
     } else {
-      debugLed.startTicker(250U);
+      mqttClient.disconnect();
     }
-    serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, reinterpret_cast<const char*>(isDeviceOnline ? F("ONLINE") : F("OFFLINE")));
   }
-  if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
-    serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, (actualTime - deviceResetTimer));
-    ResetHandler::restartMCU();
-  }
-}
-
-bool Connectivity::loopSimple() {
-  yield();
-  static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
-  const char* intPrefix;
-  if(usedInterface == Interface::ETHERNET) {
-#ifdef ESP8266
-    actualInterfaceStatus = ethInt.status();
-#elif defined ESP32
-    actualInterfaceStatus = ethConnected ? WL_CONNECTED : WL_DISCONNECTED;
-#endif
-    intPrefix = ETH_PREFIX;
-  }
-  else if(usedInterface == Interface::WIFI) { actualInterfaceStatus = WiFi.status();  intPrefix = WIFI_PREFIX; }
-  else { return false; }
-  if(interfaceStatus != actualInterfaceStatus) {
-    serialPort.printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), intPrefix, getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
-    interfaceStatus = actualInterfaceStatus;
-    if(interfaceStatus == WL_CONNECTED) { connect(); }
-    else { mqttClient.disconnect(); }
-  }
-
   const int8_t actualMqttState = mqttClient.state();
   if(mqttState != actualMqttState) {
     serialPort.printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), MQTT_PREFIX, getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
@@ -335,9 +205,9 @@ bool Connectivity::loopSimple() {
   }
 
   if(!mqttClient.loop()) {
-    if((mqttState < MQTT_CONNECTED) && (interfaceStatus == WL_CONNECTED)) {
+    if((mqttState < MQTT_CONNECTED) && networkState) {
       static uint32_t reconnectTimer = millis();
-      if(millis() - reconnectTimer >= 10000) {
+      if(millis() - reconnectTimer >= 10000U) {
         reconnectTimer = millis();
         connect();
       }
@@ -350,10 +220,21 @@ bool Connectivity::loopSimple() {
     }
   }
 
-  return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
-}
+  const bool actualOnlineState = networkState && (mqttState == MQTT_CONNECTED);
+  if(actualOnlineState) {
+    deviceResetTimer = actualTime;
+  }
+  if(actualOnlineState != onlineState) {
+    onlineState = actualOnlineState;
+    onlineState ? debugLed.stopTicker() : debugLed.startTicker(250U);
+    serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
+  }
 
-bool Connectivity::getConnectionState() { return isDeviceOnline; }
+  if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
+    serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, (actualTime - deviceResetTimer));
+    ResetHandler::restartMCU();
+  }
+}
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
   const char* classID = strrchr(topic, '/') + 1;
@@ -392,23 +273,6 @@ bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
   return true;
 }
 
-const char* Connectivity::getIntStatusStr(wl_status_t status) {
-  switch(status) {
-    case WL_NO_SHIELD: { return WL_NO_SHIELD_STR; } break;
-    case WL_IDLE_STATUS: { return WL_IDLE_STATUS_STR; } break;
-    case WL_NO_SSID_AVAIL: { return WL_NO_SSID_AVAIL_STR; } break;
-    case WL_SCAN_COMPLETED: { return WL_SCAN_COMPLETED_STR; } break;
-    case WL_CONNECTED: { return WL_CONNECTED_STR; } break;
-    case WL_CONNECT_FAILED: { return WL_CONNECT_FAILED_STR; } break;
-    case WL_CONNECTION_LOST: { return WL_CONNECTION_LOST_STR; } break;
-#ifdef ESP8266
-    case WL_WRONG_PASSWORD: { return WL_WRONG_PASSWORD_STR; } break;
-#endif
-    case WL_DISCONNECTED: { return WL_DISCONNECTED_STR; } break;
-    default: { return WL_UNKNOWN_STATUS_STR; } break;
-  }
-}
-
 const char* Connectivity::getMqttStatusStr(int8_t status) {
   switch(status) {
     case MQTT_CONNECTION_TIMEOUT: { return MQTT_CONNECTION_TIMEOUT_STR; } break;
@@ -424,19 +288,6 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
     default: { return MQTT_UNKNOWN_STATUS_STR; } break;
   }
 }
-
-#ifdef ESP32
-  void Connectivity::WiFiEvent(WiFiEvent_t event) {
-  switch(event) {
-    case ARDUINO_EVENT_ETH_START: {} break;
-    case ARDUINO_EVENT_ETH_CONNECTED: {} break;
-    case ARDUINO_EVENT_ETH_GOT_IP: { ethConnected = true; } break;
-    case ARDUINO_EVENT_ETH_DISCONNECTED: { ethConnected = false; } break;
-    case ARDUINO_EVENT_ETH_STOP: { ethConnected = false; } break;
-    default: {} break;
-  }
-}
-#endif
 
 //////////////////// -- MqttComBase class-- ////////////////////
 
