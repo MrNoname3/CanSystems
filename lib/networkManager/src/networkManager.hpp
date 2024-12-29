@@ -60,7 +60,6 @@ private:
 
   static constexpr uint8_t macAddressStrSize = 13U;
   static constexpr uint8_t invalidPin = 0xFF;
-  static const char PROGMEM networkPrefix[];
   static const char PROGMEM wlNoShieldStr[];
   static const char PROGMEM wlIdleStatusStr[];
   static const char PROGMEM wlNoSsidAvailableStr[];

@@ -2,7 +2,6 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"
 
-const char NetworkManager::networkPrefix[] PROGMEM            = "[NETWORK]";
 const char NetworkManager::wlNoShieldStr[] PROGMEM            = "WL_NO_SHIELD";
 const char NetworkManager::wlIdleStatusStr[] PROGMEM          = "WL_IDLE_STATUS";
 const char NetworkManager::wlNoSsidAvailableStr[] PROGMEM     = "WL_NO_SSID_AVAIL";
@@ -44,14 +43,14 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
     return networkErrState.getRawErrorState();
   }
   uint8_t mac[6] = { 0U };
-  serial.printf_P(PSTR("%s Network interface: "), networkPrefix);
+  serial.printf_P(PSTR("[NETWORK] Network interface: "));
 
   switch(networkInterface) {
     case Interface::WIFI: {
       serial.printf_P(PSTR("[Wi-Fi]\r\n"));
       WiFi.macAddress(mac);
       const bool wifiInit = WiFi.mode(WIFI_STA);
-      serial.printf_P(PSTR("%s Initialising Wi-Fi: %s\r\n"), networkPrefix, Str::getStateStr(wifiInit));
+      serial.printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
       if(!wifiInit) {
         networkErrState.setError(NetworkError::WIFI_INIT_FAILED);
         return networkErrState.getRawErrorState();
@@ -61,7 +60,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
       const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
       const bool wifiConfigOk = (wifiConfigResult == 0U);
-      serial.printf_P(PSTR("%s Wifi config: %s\r\n"), networkPrefix, Str::getStateStr(wifiConfigOk));
+      serial.printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
       if(!wifiConfigOk) {
         serial.printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
         networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
@@ -69,7 +68,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       } else {
         WiFi.begin(ssid, password);
       }
-      serial.printf_P(PSTR("%s Connecting to router"), networkPrefix);
+      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
       while(WiFi.status() != WL_CONNECTED) {
         yield();
         serial.print(".");
@@ -95,12 +94,12 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.mode(WIFI_OFF);
       enthernetEnc28j60.value().setDefault();         // default route set through this interface
       const bool ethInit = enthernetEnc28j60.value().begin(mac);
-      serial.printf_P(PSTR("%s Initialising ethernet modul: %s\r\n"), networkPrefix, Str::getStateStr(ethInit));
+      serial.printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      serial.printf_P(PSTR("%s Connecting to router"), networkPrefix);
+      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
       while(!enthernetEnc28j60.value().connected()) {
         yield();
         serial.print(".");
@@ -121,12 +120,12 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.mode(WIFI_OFF);
       WiFi.onEvent(NetworkManager::WiFiEvent);
       const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
-      serial.printf_P(PSTR("%s Initialising ethernet modul: %s\r\n"), networkPrefix, Str::getStateStr(ethInit));
+      serial.printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      serial.printf_P(PSTR("%s Connecting to router"), networkPrefix);
+      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
         serial.print(".");
@@ -155,7 +154,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
   {
     const int32_t macAddressSize = snprintf(macAddressStr, sizeof(macAddressStr), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddressStr)));
-    serial.printf_P(PSTR("%s MAC string created: %s\r\n"), networkPrefix, Str::getStateStr(macValid));
+    serial.printf_P(PSTR("[NETWORK] MAC string created: %s\r\n"), Str::getStateStr(macValid));
     if(!macValid) {
       networkErrState.setError(NetworkError::MAC_STRING_INVALID);
       return networkErrState.getRawErrorState();
@@ -186,7 +185,7 @@ bool NetworkManager::isNetworkAvailable() {
     } break;
   }
   if(interfaceStatus != actualInterfaceStatus) {
-    serial.printf_P(PSTR("%s Status changed: %s -> %s\r\n"), networkPrefix, getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
+    serial.printf_P(PSTR("[NETWORK] Status changed: %s -> %s\r\n"), getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
     interfaceStatus = actualInterfaceStatus;
   }
   return (interfaceStatus == WL_CONNECTED);
