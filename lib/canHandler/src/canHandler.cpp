@@ -229,14 +229,13 @@ bool CanHandler::sendFwVersion() const {
 QueueHandle_t CanHandler::canRxQueue = nullptr;
 const char CanHandler::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
 const char CanHandler::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
-const char CanHandler::CAN_PREFIX[] PROGMEM               = "[CAN] ";
 
 CanHandler::CanHandler(HardwareSerial& serial) : serialPort(serial) {}
 
 bool CanHandler::begin(uint32_t canBaud) {
-  serialPort.printf_P(PSTR("%sHardware init started...\r\n"), CAN_PREFIX);
+  serialPort.printf_P(PSTR("[CAN] Hardware init started...\r\n"));
   const bool canBeginResult = CAN.begin(canBaud) == 1;
-  serialPort.printf_P(PSTR("%sInit:%s\r\n"), CAN_PREFIX, (canBeginResult ? OK_STATE : ERR_STATE));
+  serialPort.printf_P(PSTR("[CAN] Init:%s\r\n"), (canBeginResult ? OK_STATE : ERR_STATE));
   if(!canBeginResult) { return false; }
   CAN.onReceive(rxInterrupt);
   { // Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
@@ -244,16 +243,16 @@ bool CanHandler::begin(uint32_t canBaud) {
     const uint32_t mask = 0x3FFU;                   // Mask for lower 10 bits (0b1111111111).
     const uint32_t id = deviceAddress & mask;       // Calculate the ID using the device's local address.
     const bool setFilterResult = CAN.filterExtended(id, mask) == 1;
-    serialPort.printf_P(PSTR("%sFilter:%s\r\n"), CAN_PREFIX, (setFilterResult ? OK_STATE : ERR_STATE));
+    serialPort.printf_P(PSTR("[CAN] Filter:%s\r\n"), (setFilterResult ? OK_STATE : ERR_STATE));
     if(!setFilterResult) { return false; }
   }
   canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));  // Create FIFO queue for RX CAN packets.
   const bool rxQueueResult = canRxQueue != nullptr;             // Check queue creation.
   canTxQueue = xQueueCreate(canTxQueueSize, sizeof(CanFrame));  // Create FIFO queue for TX CAN packets.
   const bool txQueueResult = canTxQueue != nullptr;
-  serialPort.printf_P(PSTR("%sCreating queues:%s\r\n"), CAN_PREFIX, (rxQueueResult && txQueueResult ? OK_STATE : ERR_STATE));
+  serialPort.printf_P(PSTR("[CAN] Creating queues:%s\r\n"), (rxQueueResult && txQueueResult ? OK_STATE : ERR_STATE));
   if(!rxQueueResult || !txQueueResult) { return false; }
-  serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), CAN_PREFIX);
+  serialPort.printf_P(PSTR("[CAN] Init registered objects:\r\n"));
   for(std::size_t i = 0; i < canDevices.size(); ++i) {
     const auto& currentObject = canDevices[i];
     if(currentObject != nullptr) {
@@ -336,7 +335,6 @@ void CanHandler::SoftwareTimer::reload() { start_time_ = millis(); }
 
 //////////////////// -- CanComBase class-- ////////////////////
 
-const char CanHandler::CanComBase::CAN_BASE_PREFIX[] PROGMEM            = "[CANB] ";
 const char CanHandler::CanComBase::STATUS_ONLINE[] PROGMEM              = "ONLINE";
 const char CanHandler::CanComBase::STATUS_OFFLINE[] PROGMEM             = "OFFLINE";
 const char CanHandler::CanComBase::STATUS_RESTARTED[] PROGMEM           = "RESTARTED";
@@ -394,7 +392,7 @@ bool CanHandler::CanComBase::loopPriv() {
   if(nodeAlive != nodeAlive_) {
     nodeAlive_ = nodeAlive;
     const char* statusStr = nodeAlive_ ? STATUS_ONLINE : STATUS_OFFLINE;
-    canHandler.serialPort.printf_P(PSTR("%s%s is %s!\r\n"), CAN_BASE_PREFIX, MqttComBase::getClassId(), statusStr);
+    canHandler.serialPort.printf_P(PSTR("[CANB] %s is %s!\r\n"), MqttComBase::getClassId(), statusStr);
     static constexpr const uint8_t dataOutBufSize = 64;
     char dataOut[dataOutBufSize] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, statusStr);
@@ -467,15 +465,15 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
-    canHandler.serialPort.printf_P(PSTR("%sDeserialisation failed at %s: %s\r\n"),
-      CAN_BASE_PREFIX, MqttComBase::getClassId(), reinterpret_cast<const char*>(deserializationError.f_str()));
+    canHandler.serialPort.printf_P(PSTR("[CANB] Deserialisation failed at %s: %s\r\n"),
+      MqttComBase::getClassId(), reinterpret_cast<const char*>(deserializationError.f_str()));
     return;
   }
   JsonVariant fileJsonVar = cmdJson[F("File")];
   if(fileJsonVar.is<const char*>()) {
     const char* fileName = fileJsonVar.as<const char*>();
     const bool fileTransferStartResult = startOta(fileName);
-    canHandler.serialPort.printf_P(PSTR("%sFile transfer starts to \"%s\":%s\r\n"), CAN_BASE_PREFIX,
+    canHandler.serialPort.printf_P(PSTR("[CANB] File transfer starts to \"%s\":%s\r\n"),
       MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     if(!fileTransferStartResult) { transferState = TransferState::INVALID; }
     return;
@@ -610,7 +608,7 @@ void CanHandler::CanComBase::runOta() {
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME, reinterpret_cast<const char*>(otaStatus ? F("OK") : F("ERR")));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(dataOutValid) { MqttComBase::messageSend(dataOut); }
-        canHandler.serialPort.printf_P(PSTR("%sFile transfer for \"%s\":%s\r\n"), CAN_BASE_PREFIX,
+        canHandler.serialPort.printf_P(PSTR("[CANB] File transfer for \"%s\":%s\r\n"),
           MqttComBase::getClassId(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
       }
       transferState = TransferState::IDLE;

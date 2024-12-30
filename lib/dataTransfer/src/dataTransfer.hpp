@@ -59,7 +59,6 @@ private:
   static constexpr uint8_t fileNameSize = 32U;                      // Maximum length of the file name.
   static constexpr uint16_t filePieceSize = 336U;                   // Size of a file piece. Divisible by both 3 and 4.
   static constexpr uint16_t maxB64Length = filePieceSize * 4U / 3U; // Maximum base64-encoded piece length.
-  static const char PROGMEM fileTransferPrefix[];                   // Prefix for file transfer logs.
 
   HardwareSerial& serialPort;                                       // Reference to the serial port for communication.
   uint32_t fileSizeLocal;                                           // Size of the file being transferred, in bytes.

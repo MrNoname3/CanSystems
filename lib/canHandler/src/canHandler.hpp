@@ -198,7 +198,6 @@ private:
   std::vector<CanHandler::CanComBase*> canDevices;
   static const char PROGMEM OK_STATE[];
   static const char PROGMEM ERR_STATE[];
-  static const char PROGMEM CAN_PREFIX[];
 
 public:
   class SoftwareTimer {
@@ -272,7 +271,6 @@ public:
     SoftwareTimer pingTimer;
     SoftwareTimer alertTimer;
     bool nodeAlive_;
-    static const char PROGMEM CAN_BASE_PREFIX[];
     static const char PROGMEM STATUS_ONLINE[];
     static const char PROGMEM STATUS_OFFLINE[];
     static const char PROGMEM STATUS_RESTARTED[];

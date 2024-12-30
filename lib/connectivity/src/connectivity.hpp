@@ -98,9 +98,6 @@ private:
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-  static const char PROGMEM TCP_PREFIX[];
-  static const char PROGMEM MQTT_PREFIX[];
-  static const char PROGMEM RUN_PREFIX[];
 
   static const char PROGMEM MQTT_CONNECTION_TIMEOUT_STR[];
   static const char PROGMEM MQTT_CONNECTION_LOST_STR[];
@@ -174,10 +171,8 @@ private:
     Common& operator=(const Common&) = delete;            // Define copy assignment operator.
     Common(Common&&) = delete;                            // Define move constructor.
     Common& operator=(Common&&) = delete;                 // Define move assignment operator.
- 
+
   private:
-    static const char PROGMEM COMMON_PREFIX[];
-    
     char externalFileName[28];
     DataTransfer dataTransfer;
   };
