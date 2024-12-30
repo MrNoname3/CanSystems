@@ -20,7 +20,7 @@ NetworkManager::NetworkManager(HardwareSerial& serial, Interface interface, uint
   serial(serial),
   networkInterface(Interface::UNKNOWN),
   interfaceStatus(WL_DISCONNECTED),
-  macAddressStr{'\0'}
+  mac{0U}
 {
   setNetworkInterface(interface, ethernetShieldCsPin);
 }
@@ -38,13 +38,7 @@ void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetSh
 
 NetworkManager::NetworkErrorType NetworkManager::connect() {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
-  if(networkInterface == Interface::UNKNOWN) {
-    networkErrState.setError(NetworkError::NO_INTERFACE_SET);
-    return networkErrState.getRawErrorState();
-  }
-  uint8_t mac[6] = { 0U };
   serial.printf_P(PSTR("[NETWORK] Network interface: "));
-
   switch(networkInterface) {
     case Interface::WIFI: {
       serial.printf_P(PSTR("[Wi-Fi]\r\n"));
@@ -144,22 +138,19 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
     } break;
 #endif
     default: {
-      networkInterface = Interface::UNKNOWN;
-      serial.printf_P(PSTR("Not valid!\r\n"));
+      serial.printf_P(PSTR("[INVALID]\r\n"));
       networkErrState.setError(NetworkError::INVALID_INTERFACE);
       return networkErrState.getRawErrorState();
     } break;
   }
   serial.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  {
-    const int32_t macAddressSize = snprintf(macAddressStr, sizeof(macAddressStr), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddressStr)));
-    serial.printf_P(PSTR("[NETWORK] MAC string created: %s\r\n"), Str::getStateStr(macValid));
-    if(!macValid) {
-      networkErrState.setError(NetworkError::MAC_STRING_INVALID);
-      return networkErrState.getRawErrorState();
-    }
+  const bool macValid = (memcmp(mac, "\0\0\0\0\0\0", sizeof(mac)) != 0);
+  if(!macValid) {
+    serial.printf_P(PSTR("[NETWORK] MAC address invalid!\r\n"));
+    networkErrState.setError(NetworkError::MAC_ADDRESS_INVALID);
+    return networkErrState.getRawErrorState();
   }
+
   interfaceStatus = WL_CONNECTED;
   return networkErrState.getRawErrorState();
 }
@@ -189,6 +180,12 @@ bool NetworkManager::isNetworkAvailable() {
     interfaceStatus = actualInterfaceStatus;
   }
   return (interfaceStatus == WL_CONNECTED);
+}
+
+bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
+  memcpy(macAddress, mac, sizeof(mac));
+  if((memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) == 0)) { return false; }
+  return true;
 }
 
 const char* NetworkManager::getIntStatusStr(wl_status_t status) {

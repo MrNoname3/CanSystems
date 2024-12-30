@@ -15,7 +15,9 @@
 /// @brief Manages network interfaces and connectivity for ESP-based devices.
 class NetworkManager final {
 private:
-  using NetworkErrorType = uint16_t;              // Underlying type for network error states.
+  using NetworkErrorType = uint16_t;                          // Underlying type for network error states.
+  static constexpr uint8_t macAddressSize = 6U;               // Size of the MAC address array.
+  static constexpr uint8_t invalidPin = 0xFF;                 // Invalid pin value.
 
 public:
   /// @brief Represents supported network interfaces.
@@ -48,9 +50,10 @@ public:
   /// @return True if the network is connected, false otherwise.
   [[nodiscard]] bool isNetworkAvailable();
 
-  /// @brief Gets the MAC address as a string.
-  /// @return A pointer to the MAC address string.
-  [[nodiscard]] const char* getMacAddressString() { return macAddressStr; }
+  /// @brief Retrieves the MAC address as an array of bytes.
+  /// @param[out] macAddress A reference to an array of size macAddressSize where the MAC address will be stored.
+  /// @return True if the MAC address was successfully retrieved, false if the MAC address is uninitialized (all zeros).
+  [[nodiscard]] bool getMacAddress(uint8_t (&macAddress)[macAddressSize]);
 
   NetworkManager(const NetworkManager&) = delete;                       // Define copy constructor.
   NetworkManager& operator=(const NetworkManager&) = delete;            // Define copy assignment operator.
@@ -70,22 +73,17 @@ private:
   // Network error types as bitfields.
   enum class NetworkError : NetworkErrorType {
     NONE                  = 0U,                   // No error.
-    NO_INTERFACE_SET      = 1 << 0U,              // No network interface is set.
-    INVALID_INTERFACE     = 1 << 1U,              // Invalid network interface selected.
-    WIFI_INIT_FAILED      = 1 << 2U,              // Wi-Fi initialization failed.
-    WIFI_CONFIG_ERROR     = 1 << 3U,              // Wi-Fi configuration error.
-    WIFI_CONN_FAILED      = 1 << 4U,              // Wi-Fi connection failed.
-    ENC28J60_NO_DRIVER    = 1 << 5U,              // ENC28J60 driver not initialized.
-    ENC28J60_INIT_FAILED  = 1 << 6U,              // ENC28J60 initialization failed.
-    ENC28J60_CONN_FAILED  = 1 << 7U,              // ENC28J60 connection failed.
-    LAN8720_INIT_FAILED   = 1 << 8U,              // LAN8720 initialization failed.
-    LAN8720_CONN_FAILED   = 1 << 9U,              // LAN8720 connection failed.
-    MAC_STRING_INVALID    = 1 << 10U              // Invalid MAC address string.
+    INVALID_INTERFACE     = 1 << 0U,              // Invalid network interface selected.
+    WIFI_INIT_FAILED      = 1 << 1U,              // Wi-Fi initialization failed.
+    WIFI_CONFIG_ERROR     = 1 << 2U,              // Wi-Fi configuration error.
+    WIFI_CONN_FAILED      = 1 << 3U,              // Wi-Fi connection failed.
+    ENC28J60_NO_DRIVER    = 1 << 4U,              // ENC28J60 driver not initialized.
+    ENC28J60_INIT_FAILED  = 1 << 5U,              // ENC28J60 initialization failed.
+    ENC28J60_CONN_FAILED  = 1 << 6U,              // ENC28J60 connection failed.
+    LAN8720_INIT_FAILED   = 1 << 7U,              // LAN8720 initialization failed.
+    LAN8720_CONN_FAILED   = 1 << 8U,              // LAN8720 connection failed.
+    MAC_ADDRESS_INVALID   = 1 << 9U               // Invalid MAC address.
   };
-
-  // Constants
-  static constexpr uint8_t macAddressStrSize = 13U;           // Size of the MAC address string buffer.
-  static constexpr uint8_t invalidPin = 0xFF;                 // Invalid pin value.
 
   // Wi-Fi status strings
   static const char PROGMEM wlNoShieldStr[];
@@ -117,6 +115,6 @@ private:
   HardwareSerial& serial;                                     // Serial instance for debug logs.
   Interface networkInterface;                                 // Current network interface.
   wl_status_t interfaceStatus;                                // Current network interface status.
-  char macAddressStr[macAddressStrSize];                      // Buffer for the MAC address string.
+  uint8_t mac[macAddressSize];                                // Byte array to store the MAC address.
 };
 #endif // NETWORK_MANAGER_HPP
