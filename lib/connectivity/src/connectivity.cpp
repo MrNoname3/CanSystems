@@ -44,9 +44,7 @@ bool Connectivity::init() {
   serialPort.printf_P(PSTR("  Dirty: %hu\r\n"), Build::getGitDirty());
   serialPort.printf_P(PSTR("  Reset reason: %hu\r\n"), resetReason);
   serialPort.flush();
-
-  // Init filesystem.
-  {
+  { // Init filesystem.
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
     const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
@@ -54,10 +52,8 @@ bool Connectivity::init() {
     if(!initFS) { return false; }
     serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
-
-  // Start interface.
-  resetWatchdogTimer();
-  {
+  { // Start interface.
+    resetWatchdogTimer();
     const uint16_t connResult = networkManager.connect();
     const bool connResultOk = (connResult == 0U);
     serialPort.printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
@@ -66,11 +62,8 @@ bool Connectivity::init() {
       return false;
     }
   }
-
-  // Set time via NTP, as required for x.509 validation.
-  yield();
-  resetWatchdogTimer();
-  {
+  { // Set time via NTP, as required for x.509 validation.
+    resetWatchdogTimer();
     syncNtpTime();
     char dateTimeStr[24] = {'\0'};
     const bool dateTimeValid = getIsoTimeString(dateTimeStr);
@@ -81,9 +74,7 @@ bool Connectivity::init() {
       return false;
     }
   }
-
-  // Get MQTT server credentials.
-  {
+  { // Get MQTT server credentials.
     const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
     const bool credResultOk = (credResult == 0U);
     serialPort.printf_P(PSTR("[MQTT] Getting server credentials: %s\r\n"), Str::getStateStr(credResultOk));
@@ -92,9 +83,7 @@ bool Connectivity::init() {
       return false;
     }
   }
-
-  // Setup MQTT topics.
-  {
+  { // Setup MQTT topics.
     uint8_t mac[6] = { 0U };
     if(!networkManager.getMacAddress(mac)) { return false; }
     char macAddressStr[13] = { '\0' };
@@ -120,9 +109,7 @@ bool Connectivity::init() {
     if(!senderTopicValid) { return false; }
     if(!receiverTopicValid) { return false; }
   }
-
-  // Open cert.
-  {
+  { // Open cert.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
       serverCert.emplace(certFile, certFileSize);
@@ -278,9 +265,9 @@ void Connectivity::syncNtpTime() {
 
 bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[24U]) {
   memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
-  time_t currentTime = time(nullptr);
+  const time_t currentTime = time(nullptr);
   if(currentTime == -1) { return false; }           // Check if time retrieval failed.
-  tm* utcTimeInfo = gmtime(&currentTime);           // Convert time to UTC time structure.
+  const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
   if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
   const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
   if(formattedSize == 0U || formattedSize >= sizeof(dateTimeBuffer)) { return false; }
