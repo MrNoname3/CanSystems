@@ -71,9 +71,9 @@ private:
     char password[ConfigHandler::getMaxMqttPasswordSize()];
     char serverName[ConfigHandler::getMaxMqttServerUrlSize()];
     uint16_t serverPort;
-    char clientName[36];
-    char senderTopic[32];
-    char receiverTopic[32];
+    char clientName[32];
+    char senderTopic[28];
+    char receiverTopic[28];
     MqttCredentials() : userName{'\0'}, password{'\0'}, serverName{'\0'}, serverPort(0), clientName{'\0'}, senderTopic{'\0'}, receiverTopic{'\0'} {}
   };
 
@@ -95,9 +95,9 @@ private:
   void (*resetWdt)();
   std::vector<Connectivity::MqttComBase*> messageMap;
 
-  static const char PROGMEM BASE_TOPIC[];
-  static const char PROGMEM SENDER_TOPIC[];
-  static const char PROGMEM RECEIVER_TOPIC[];
+  static const char PROGMEM mqttClientName[];
+  static const char PROGMEM mqttOutTopic[];
+  static const char PROGMEM mqttInTopic[];
 
   static const char PROGMEM MQTT_CONNECTION_TIMEOUT_STR[];
   static const char PROGMEM MQTT_CONNECTION_LOST_STR[];

@@ -3,9 +3,9 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include <time.h>
 
-const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
-const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
-const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
+const char Connectivity::mqttClientName[] PROGMEM                   = "%s_%02x%02x%02x%02x%02x%02x";
+const char Connectivity::mqttOutTopic[] PROGMEM                     = "iot/dtos/%02x%02x%02x%02x%02x%02x";
+const char Connectivity::mqttInTopic[] PROGMEM                      = "iot/stod/%02x%02x%02x%02x%02x%02x/#";
 
 const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
 const char Connectivity::MQTT_CONNECTION_LOST_STR[] PROGMEM         = "MQTT_CONNECTION_LOST";
@@ -43,7 +43,6 @@ bool Connectivity::init() {
   serialPort.printf_P(PSTR("  GIT: %x\r\n"), Build::getGitHash());
   serialPort.printf_P(PSTR("  Dirty: %hu\r\n"), Build::getGitDirty());
   serialPort.printf_P(PSTR("  Reset reason: %hu\r\n"), resetReason);
-  serialPort.flush();
   { // Init filesystem.
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
@@ -86,28 +85,24 @@ bool Connectivity::init() {
   { // Setup MQTT topics.
     uint8_t mac[6] = { 0U };
     if(!networkManager.getMacAddress(mac)) { return false; }
-    char macAddressStr[13] = { '\0' };
-    const int32_t macAddressSize = snprintf(macAddressStr, sizeof(macAddressStr), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddressStr)));
-    serialPort.printf_P(PSTR("[MQTT] MAC string created: %s\r\n"), Str::getStateStr(macValid));
-    if(!macValid) { return false; }
-    const char* deviceID = strchr(Build::getPioEnv(), '_') + 1;
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddressStr);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddressStr);
-    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddressStr);
+    const char* pioEnv = Build::getPioEnv();
+    if(pioEnv == nullptr) { return false; }
+    const char* underscore = strchr(pioEnv, '_');
+    if(underscore == nullptr || *(underscore + 1) == '\0') {
+      serialPort.printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
+      return false;
+    }
+    const char* deviceId = underscore + 1;
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    serialPort.printf_P(PSTR("[MQTT] Client name: %s\r\n"), Str::getStateStr(clientNameValid));
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize);
-    serialPort.printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), Str::getStateStr(senderTopicValid));
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize);
-    serialPort.printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), Str::getStateStr(receiverTopicValid));
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize);
-    serialPort.flush();
-    if(!clientNameValid) { return false; }
-    if(!senderTopicValid) { return false; }
-    if(!receiverTopicValid) { return false; }
+    serialPort.printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
+    serialPort.printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
+    serialPort.printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
+    if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
   }
   { // Open cert.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
@@ -241,7 +236,7 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
 
 void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   char actualTopic[sizeof(mqttCredentials.senderTopic)];
-  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), "%s/%s", mqttCredentials.senderTopic, subTopic);
+  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), PSTR("%s/%s"), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return; }
   mqttClient.publish(actualTopic, payload);
