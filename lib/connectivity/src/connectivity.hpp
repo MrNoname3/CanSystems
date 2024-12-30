@@ -46,7 +46,8 @@ private:
 
   void sendMqttMessage(const char* subTopic, const char* payload);
 
-  static const char* getISODateTime();
+  void syncNtpTime();
+  bool getIsoTimeString(char (&dateTimeBuffer)[24U]);
 
   bool registerCallback(Connectivity::MqttComBase* obj);
 
@@ -97,8 +98,6 @@ private:
   static const char PROGMEM BASE_TOPIC[];
   static const char PROGMEM SENDER_TOPIC[];
   static const char PROGMEM RECEIVER_TOPIC[];
-  static const char PROGMEM INIT_PREFIX[];
-  static const char PROGMEM NTP_PREFIX[];
   static const char PROGMEM TCP_PREFIX[];
   static const char PROGMEM MQTT_PREFIX[];
   static const char PROGMEM RUN_PREFIX[];
@@ -132,7 +131,6 @@ public:
     virtual ~MqttComBase() = default;
     void messageSend(const char* payload) const;
     virtual bool sendResponse(Response resp, uint16_t cmd);
-    const char* getIsoTime();
     virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
     virtual bool begin() = 0;
     virtual bool loop() = 0;

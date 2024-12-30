@@ -1,12 +1,11 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
+#include <time.h>
 
 const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
 const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
 const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
-const char Connectivity::NTP_PREFIX[] PROGMEM               = "[NTP] ";
 const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
 const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
 const char Connectivity::RUN_PREFIX[] PROGMEM               = "[RUN] ";
@@ -41,7 +40,7 @@ bool Connectivity::init() {
   const uint32_t conTime = millis();
   debugLed.startTicker(500U);
   const uint8_t resetReason = ResetHandler::getResetReason();
-  serialPort.printf_P(PSTR("%sInfo:\r\n"), INIT_PREFIX);
+  serialPort.printf_P(PSTR("[INIT] Info:\r\n"));
   serialPort.printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
   serialPort.printf_P(PSTR("  FW: %hu\r\n"), Build::getFwVersion());
   serialPort.printf_P(PSTR("  GIT: %x\r\n"), Build::getGitHash());
@@ -75,15 +74,15 @@ bool Connectivity::init() {
   yield();
   resetWatchdogTimer();
   {
-    serialPort.printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX);
-    configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
-    time_t nowSecs = time(nullptr);
-    while(nowSecs < 8 * 3600 * 2) {
-      serialPort.print(".");
-      delay(200U);
-      nowSecs = time(nullptr);
+    syncNtpTime();
+    char dateTimeStr[24] = {'\0'};
+    const bool dateTimeValid = getIsoTimeString(dateTimeStr);
+    if(dateTimeValid) {
+      serialPort.printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
+    } else {
+      serialPort.printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
+      return false;
     }
-    serialPort.printf_P(PSTR("\r\n%sUTC ISO time: %s\r\n"), NTP_PREFIX, getISODateTime());
   }
 
   // Get MQTT server credentials.
@@ -159,7 +158,7 @@ bool Connectivity::init() {
     common.messageSend(versionString);
   }
 
-  serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX);
+  serialPort.printf_P(PSTR("[INIT] Init registered objects:\r\n"));
   for(std::size_t i = 0; i < messageMap.size(); ++i) {
     const auto& currentObject = messageMap[i];
     if(currentObject != nullptr) {
@@ -172,7 +171,7 @@ bool Connectivity::init() {
   }
 
   debugLed.stopTicker();
-  serialPort.printf_P(PSTR("%sInit time was: %lums\r\n"), INIT_PREFIX, (millis() - conTime));
+  serialPort.printf_P(PSTR("[INIT] Init time was: %lums\r\n"), (millis() - conTime));
   return true;
 }
 
@@ -264,14 +263,31 @@ void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   mqttClient.publish(actualTopic, payload);
 }
 
-const char* Connectivity::getISODateTime() {
-  const time_t time_ = time(nullptr);
-  static char buffer[24];
-  memset(buffer, '\0', sizeof(buffer));
-  struct tm * timeinfo;
-  timeinfo = gmtime(&time_); // Convert time to UTC time structure
-  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
-  return static_cast<const char*>(buffer);
+void Connectivity::syncNtpTime() {
+  const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
+  constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
+  constexpr uint8_t pollingDelayMs = 200U;
+
+  serialPort.printf_P(PSTR("[NTP] Waiting for NTP time sync"));
+  configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
+  time_t currentTime = time(nullptr);
+  while(currentTime < minValidTime) {
+    serialPort.print(".");
+    delay(pollingDelayMs);
+    currentTime = time(nullptr);
+  }
+  serialPort.printf_P(PSTR("\r\n"));
+}
+
+bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[24U]) {
+  memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
+  time_t currentTime = time(nullptr);
+  if(currentTime == -1) { return false; }           // Check if time retrieval failed.
+  tm* utcTimeInfo = gmtime(&currentTime);           // Convert time to UTC time structure.
+  if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
+  const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
+  if(formattedSize == 0U || formattedSize >= sizeof(dateTimeBuffer)) { return false; }
+  return true;
 }
 
 bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
@@ -306,8 +322,6 @@ Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* c
 void Connectivity::MqttComBase::messageSend(const char* payload) const {
   conn.sendMqttMessage(getClassId(), payload);
 }
-
-const char* Connectivity::MqttComBase::getIsoTime() { return conn.getISODateTime(); }
 
 bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
   static constexpr const uint8_t respBufSize = 28;
