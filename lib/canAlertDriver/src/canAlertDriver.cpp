@@ -2,7 +2,6 @@
 
 const char CanAlertDriver::HUM_TEMP_LDR_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"Temperature\":%.2f,"
     "\"Humidity\":%hu,"
     "\"Light\":%hu"
@@ -27,7 +26,7 @@ void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
       const uint16_t lightRaw = (static_cast<uint16_t>(canFrame.data[4]) << 0U) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
       const uint8_t light = static_cast<uint8_t>(lightRaw >> 2U); // TODO: send the full 2byte to the server.
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), HUM_TEMP_LDR_FRAME, MqttComBase::getIsoTime(), temperature, humidity, light);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), HUM_TEMP_LDR_FRAME, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       MqttComBase::messageSend(dataOut);

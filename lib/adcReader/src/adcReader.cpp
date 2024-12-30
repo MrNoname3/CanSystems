@@ -3,7 +3,6 @@
 volatile bool AdcReader::adcReady = false;
 const char AdcReader::MQTT_MSG_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"Analog\":[%hd,%hd,%hd,%hd],"
     "\"Voltage\":[%.2f,%.2f,%.2f,%.2f]"
   "}"
@@ -81,7 +80,7 @@ bool AdcReader::loop() {
         if(valuesReady && enableSending && (millis() - mqttSendTimer >= mqttSendTime)) {
           mqttSendTimer = millis();
           char dataOut[dataOutBufSize] = { '\0' };
-          const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
+          const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME,
             adcValues[0], adcValues[1], adcValues[2], adcValues[3],
             ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
           const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));

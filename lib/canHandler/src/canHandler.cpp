@@ -342,26 +342,22 @@ const char CanHandler::CanComBase::STATUS_OFFLINE[] PROGMEM             = "OFFLI
 const char CanHandler::CanComBase::STATUS_RESTARTED[] PROGMEM           = "RESTARTED";
 const char CanHandler::CanComBase::STATUS_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"Status\":\"%s\""
   "}"
 };
 const char CanHandler::CanComBase::BUTTON_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"Button\":%hu"
   "}"
 };
 const char CanHandler::CanComBase::FW_VERSION_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"Firmware\":%hu,"
     "\"GitHash\":\"%x\""
   "}"
 };
 const char CanHandler::CanComBase::OTA_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"OTA\":\"%s\""
   "}"
 };
@@ -401,7 +397,7 @@ bool CanHandler::CanComBase::loopPriv() {
     canHandler.serialPort.printf_P(PSTR("%s%s is %s!\r\n"), CAN_BASE_PREFIX, MqttComBase::getClassId(), statusStr);
     static constexpr const uint8_t dataOutBufSize = 64;
     char dataOut[dataOutBufSize] = { '\0' };
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, MqttComBase::getIsoTime(), statusStr);
+    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, statusStr);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
     MqttComBase::messageSend(dataOut);
@@ -419,7 +415,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
     case static_cast<uint16_t>(CanCmd::RESTART): {
       static constexpr const uint8_t dataOutBufSize = 64;
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, MqttComBase::getIsoTime(), STATUS_RESTARTED);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, STATUS_RESTARTED);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       MqttComBase::messageSend(dataOut);
@@ -435,8 +431,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
         (static_cast<uint16_t>(canFrame.data[5]) << 24);
       static constexpr const uint8_t dataOutBufSize = 96;
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), FW_VERSION_FRAME,
-        MqttComBase::getIsoTime(), fwVersion, gitHash);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), FW_VERSION_FRAME, fwVersion, gitHash);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       MqttComBase::messageSend(dataOut);
@@ -445,8 +440,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       const uint8_t buttonState = canFrame.data[0];
       static constexpr const uint8_t dataOutBufSize = 64;
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), BUTTON_FRAME,
-        MqttComBase::getIsoTime(), buttonState);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), BUTTON_FRAME, buttonState);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       MqttComBase::messageSend(dataOut);
@@ -613,8 +607,7 @@ void CanHandler::CanComBase::runOta() {
         const bool otaStatus = (transferState == TransferState::VALID);
         static constexpr const uint8_t dataOutBufSize = 64;
         char dataOut[dataOutBufSize] = { '\0' };
-        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME,
-          MqttComBase::getIsoTime(), reinterpret_cast<const char*>(otaStatus ? F("OK") : F("ERR")));
+        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME, reinterpret_cast<const char*>(otaStatus ? F("OK") : F("ERR")));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(dataOutValid) { MqttComBase::messageSend(dataOut); }
         canHandler.serialPort.printf_P(PSTR("%sFile transfer for \"%s\":%s\r\n"), CAN_BASE_PREFIX,

@@ -5,7 +5,6 @@ volatile bool Radiation::measureDone = false;
 volatile uint16_t Radiation::cpmToSend = 0;
 const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"cpm\":%hu"
   "}"
 };
@@ -36,7 +35,7 @@ bool Radiation::loop() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, MqttComBase::getIsoTime(), cpmToSend);
+    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
     MqttComBase::messageSend(dataOut);

@@ -3,7 +3,6 @@
 
 const char RfHandler::RF_MSG_FRAME[] PROGMEM = {
   "{"
-    "\"Time\":\"%s\","
     "\"RfReceived\":"
     "{"
       "\"Data\":%llu,"
@@ -46,7 +45,7 @@ bool RfHandler::loop() {
     // Filter repeated data.
     if((rfDataOld.data != rfData.data) || (rfDataOld.bitLength != rfData.bitLength) || (rfDataOld.protocol != rfData.protocol)) {
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, MqttComBase::getIsoTime(), rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       MqttComBase::messageSend(dataOut);
