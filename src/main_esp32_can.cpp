@@ -49,7 +49,7 @@ void setup() {
   const bool initSuccess = (initResult == 0U);
   Serial.printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));
   if(!initSuccess) {
-    Serial.printf_P(PSTR("Code: "));
+    Serial.printf_P(PSTR("  Code: "));
     Serial.println(initResult, BIN);
     ResetHandler::restartMCU();
   }
