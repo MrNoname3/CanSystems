@@ -4,7 +4,7 @@
 #include <time.h>
 
 const char Connectivity::mqttClientName[] PROGMEM                   = "%s_%02x%02x%02x%02x%02x%02x";
-const char Connectivity::mqttOutTopic[] PROGMEM                     = "iot/dtos/%02x%02x%02x%02x%02x%02x";
+const char Connectivity::mqttOutTopic[] PROGMEM                     = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";
 const char Connectivity::mqttInTopic[] PROGMEM                      = "iot/stod/%02x%02x%02x%02x%02x%02x/#";
 
 const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
@@ -85,7 +85,7 @@ bool Connectivity::init() {
     }
     const char* deviceId = underscore + 1;
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], PSTR("%s"));
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
@@ -211,21 +211,22 @@ void Connectivity::run() {
 }
 
 void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
-  const char* classID = strrchr(topic, '/') + 1;
-  if(!classID) { return; }
+  if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
+  const char* classId = strrchr(topic, '/') + 1;
+  if(!classId) { return; }
   for(const auto &currentObject : messageMap) {
     if(currentObject == nullptr) { return; }
-    if(strcmp(currentObject->getClassId(), classID) == 0) {
+    if(strcmp(currentObject->getClassId(), classId) == 0) {
       currentObject->messageReceived(payload, length);
       return;
     }
   }
-  serialPort.printf_P(PSTR("[MQTT] No handler -> %s\r\n"), classID);
+  serialPort.printf_P(PSTR("[MQTT] No handler -> %s\r\n"), classId);
 }
 
 void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   char actualTopic[sizeof(mqttCredentials.senderTopic) + 16U];
-  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), PSTR("%s/%s"), mqttCredentials.senderTopic, subTopic);
+  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return; }
   mqttClient.publish(actualTopic, payload);
