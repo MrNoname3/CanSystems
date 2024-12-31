@@ -64,6 +64,7 @@ void setup() {
   Analog::config();
   delay(1U);
   Serial.println(F("\r\n********\r\nStarting..."));
+  Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
 

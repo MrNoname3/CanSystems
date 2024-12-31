@@ -35,13 +35,6 @@ Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManage
 
 bool Connectivity::init() {
   const uint32_t conTime = millis();
-  const uint8_t resetReason = ResetHandler::getResetReason();
-  serialPort.printf_P(PSTR("[INIT] Info:\r\n"));
-  serialPort.printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
-  serialPort.printf_P(PSTR("  FW: %hu\r\n"), Build::getFwVersion());
-  serialPort.printf_P(PSTR("  GIT: %x\r\n"), Build::getGitHash());
-  serialPort.printf_P(PSTR("  Dirty: %hu\r\n"), Build::getGitDirty());
-  serialPort.printf_P(PSTR("  Reset reason: %hu\r\n"), resetReason);
   { // Init filesystem.
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
@@ -130,7 +123,7 @@ bool Connectivity::init() {
   {
     char versionString[80] = {'\0'};
     const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu,\"RR\":%hu""}"),
-      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), resetReason);
+      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
     const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
     if(!versionStringValid) { return false; }
     common.messageSend(versionString);

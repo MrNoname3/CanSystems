@@ -49,6 +49,8 @@ void setup() {
   debugLed.startTicker(500U);
   delay(1U);
   Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
+  Build::printBuildInfo();
+
   //adcReader.enableMqttSending(10000U);
 
   const uint32_t initResult = taskHandler.initTasks();

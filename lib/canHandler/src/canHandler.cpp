@@ -3,7 +3,6 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <CAN.h>                                                    /// CAN controller library.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include <avr/boot.h>                                               /// Reading fuses.
 
 volatile uint8_t CanHandler::intCount = 0U;
 
@@ -24,24 +23,6 @@ CanHandler::CanHandler(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_
 }
 
 bool CanHandler::init(uint32_t canBaud) {
-  {
-    serialPort.print(F("CPP: "));
-    serialPort.println(Build::getCppVersion());
-    serialPort.print(F("FW: "));
-    serialPort.println(Build::getFwVersion());
-    serialPort.print(F("GIT: "));
-    serialPort.println(Build::getGitHash(), HEX);
-    serialPort.print(F("Dirty: "));
-    serialPort.println(Build::getGitDirty());
-    serialPort.print(F("Fuses: "));
-    serialPort.print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
-    serialPort.print(Str::getSpacerStr());
-    serialPort.print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
-    serialPort.print(Str::getSpacerStr());
-    serialPort.print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
-    serialPort.print(Str::getSpacerStr());
-    serialPort.println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
-  }
   {
 #ifdef NEW_CAN_ADDRESS
     localCanId = newCanAddress;

@@ -49,6 +49,7 @@ void setup() {
   debugLed.startTicker(500U);
   delay(1U);
   Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
+  Build::printBuildInfo();
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
