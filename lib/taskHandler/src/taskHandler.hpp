@@ -30,13 +30,20 @@ public:
 
 /// @brief Task handler for managing a collection of tasks.
 /// @details Handles initialization and round-robin execution of tasks.
-/// @tparam taskNum Number of tasks to manage (must be greater than 0 and less than or equal to 32).
+/// @tparam taskNumber Number of tasks to manage (must be greater than 0 and less than or equal to 32).
 /// @tparam fullRoundRobin If true, uses full round-robin scheduling. If false, prioritizes the first task and alternates with the others.
-template<uint8_t taskNum, bool fullRoundRobin>
+template<uint8_t taskNumber, bool fullRoundRobin>
 class TaskHandler final {
-public:
+private:
+  static constexpr uint8_t taskNum = taskNumber;                  // The number of tasks managed by the handler.
+  static constexpr bool singleTaskOnly = (taskNum == 1U);         // Indicates if the task handler has only 1 task.
+  static constexpr bool fullRoundRobinL = fullRoundRobin;         // Configures the type of round-robin scheduling.
+
+  // Ensures the number of tasks is within the valid range.
   static_assert(taskNum > 0U, "TaskHandler requires at least one task!");
   static_assert(taskNum <= 32U, "TaskHandler maximum task handling limit exceeded!");
+
+public:
 
   /// @brief Constructor for TaskHandler.
   /// @param taskListRef Reference to an array of pointers to `Task` objects.
@@ -52,14 +59,18 @@ public:
   /// @return A bitmask representing tasks that failed initialization. Each bit corresponds to a task index.
   uint32_t initTasks() {
     uint32_t failureMask = 0U;
-    if(singleTaskOnly) {
-      if(!taskList[0]->init()) {
-        failureMask = 1U;
+    if constexpr(singleTaskOnly) {
+      if(taskList[0] != nullptr) {
+        if(!taskList[0]->init()) {
+          failureMask = 1U;
+        }
       }
     } else {
       for(uint8_t i = 0U; i < taskNum; ++i) {
-        if(!taskList[i]->init()) {
-          failureMask |= (1U << i);
+        if(taskList[i] != nullptr) {
+          if(!taskList[i]->init()) {
+            failureMask |= (1U << i);
+          }
         }
       }
     }
@@ -72,15 +83,23 @@ public:
   /// - Partial round-robin (`false`): Always runs the first task, alternating with others.
   void runTasks() {
     if(singleTaskOnly) {
-      taskList[0]->run();
+      if(taskList[0] == nullptr) {
+        taskList[0]->run();
+      }
     } else {
-      if(fullRoundRobin) {
-        taskList[currentTask]->run();
+      if constexpr(fullRoundRobinL) {
+        if(taskList[currentTask] != nullptr) {
+          taskList[currentTask]->run();
+        }
         currentTask = (currentTask + 1U) % taskNum;
       } else {
-        taskList[0]->run();
+        if(taskList[0] != nullptr) {
+          taskList[0]->run();
+        }
         currentTask = (currentTask % (taskNum - 1U)) + 1U;
-        taskList[currentTask]->run();
+        if(taskList[currentTask] != nullptr) {
+          taskList[currentTask]->run();
+        }
       }
     }
   }
@@ -91,8 +110,6 @@ public:
   TaskHandler& operator=(TaskHandler&&) = delete;                 // Define move assignment operator.
 
 private:
-  static constexpr bool singleTaskOnly = (taskNum == 1U);         // Indicates if the task handler has only 1 task.
-
   Task *(&taskList)[taskNum];                                     // Reference to an array of task pointers.
   uint8_t currentTask;                                            // Index of the currently executing task.
 };
