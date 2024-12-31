@@ -233,7 +233,7 @@ void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint3
 }
 
 void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
-  char actualTopic[sizeof(mqttCredentials.senderTopic)];
+  char actualTopic[sizeof(mqttCredentials.senderTopic) + 16U];
   const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), PSTR("%s/%s"), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return; }
