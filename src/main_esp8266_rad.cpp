@@ -25,7 +25,14 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
 NetworkManager networkManager(Serial, NetworkManager::Interface::ENC28J60, SPI_CS);
-Connectivity iotConn(Serial, debugLed, networkManager, WdtHandler::resetWatchdog);
+Connectivity iotConn(
+  Serial,
+  networkManager,
+  [](bool state) -> void {
+    state ? debugLed.stopTicker() : debugLed.startTicker(250U);
+  },
+  WdtHandler::resetWatchdog
+);
 
 //--- MQTT handler objects ---//
 Radiation radiation(iotConn, "radiation", RAD);
@@ -39,6 +46,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 void setup() {
   WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
+  debugLed.startTicker(500U);
   delay(1U);
   Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
 
@@ -52,6 +60,7 @@ void setup() {
   }
 
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+  debugLed.stopTicker();
 }
 
 void loop() {

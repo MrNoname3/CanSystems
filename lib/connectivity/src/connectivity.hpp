@@ -20,7 +20,6 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 #include <vector>                                                   /// STL vector for dynamic arrays.
-#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "dataTransfer.hpp"
 #include "configHandler.hpp"
@@ -30,7 +29,7 @@ class Connectivity final : public Task {
 public:
   class MqttComBase;
 
-  Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, NetworkManager& networkManager, void (*resetWdt)());
+  Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
 
   /// @brief Destructor of the object.
   ~Connectivity() = default;
@@ -83,7 +82,6 @@ private:
   std::optional<X509List> serverCert;
 #endif
   HardwareSerial& serialPort;
-  DebugLedHandler& debugLed;
   NetworkManager& networkManager;
   WiFiClientSecure tcpClient;
   PubSubClient mqttClient;
@@ -92,6 +90,7 @@ private:
   int8_t mqttState;
   bool onlineState;
   uint32_t deviceResetTimer;
+  void (*debugLed)(bool state);
   void (*resetWdt)();
   std::vector<Connectivity::MqttComBase*> messageMap;
 

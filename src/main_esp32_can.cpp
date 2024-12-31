@@ -27,7 +27,16 @@ TaskHandle_t canTaskHandle = nullptr;
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
 NetworkManager networkManager(Serial, NetworkManager::Interface::LAN8720);
-Connectivity iotConn(Serial, debugLed, networkManager, []() -> void {WdtHandler::resetWatchdog();});
+Connectivity iotConn(
+  Serial,
+  networkManager,
+  [](bool state) -> void {
+    state ? debugLed.stopTicker() : debugLed.startTicker(250U);
+  },
+  []() -> void {
+    WdtHandler::resetWatchdog();
+  }
+);
 
 //--- MQTT handler objects ---//
 CanHandler canHandler(Serial);
@@ -42,6 +51,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 void setup() {
   WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
+  debugLed.startTicker(500U);
   delay(1U);
   Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
 
@@ -55,6 +65,7 @@ void setup() {
   }
 
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+  debugLed.stopTicker();
 
   if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
     Serial.printf_P(PSTR("Error creating the CAN task!"));

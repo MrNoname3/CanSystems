@@ -19,9 +19,8 @@ const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONN
 const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
 const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
 
-Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, NetworkManager& networkManager, void (*resetWdt)()) :
+Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   serialPort(serial),
-  debugLed(debugLed),
   networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
@@ -29,13 +28,13 @@ Connectivity::Connectivity(HardwareSerial& serial, DebugLedHandler& debugLed, Ne
   mqttState(MQTT_CONNECTED),
   onlineState(true),
   deviceResetTimer(0U),
-  resetWdt(resetWdt),
+  debugLed(debugLedFunc),
+  resetWdt(resetWdtFunc),
   common(*this, "common")
 {}
 
 bool Connectivity::init() {
   const uint32_t conTime = millis();
-  debugLed.startTicker(500U);
   const uint8_t resetReason = ResetHandler::getResetReason();
   serialPort.printf_P(PSTR("[INIT] Info:\r\n"));
   serialPort.printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
@@ -149,7 +148,6 @@ bool Connectivity::init() {
     }
   }
 
-  debugLed.stopTicker();
   serialPort.printf_P(PSTR("[INIT] Init time was: %lums\r\n"), (millis() - conTime));
   return true;
 }
@@ -211,7 +209,7 @@ void Connectivity::run() {
   }
   if(actualOnlineState != onlineState) {
     onlineState = actualOnlineState;
-    onlineState ? debugLed.stopTicker() : debugLed.startTicker(250U);
+    if(debugLed != nullptr) { debugLed(onlineState); }
     serialPort.printf_P(PSTR("[RUN] Device is: %s\r\n"), reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
   }
 
