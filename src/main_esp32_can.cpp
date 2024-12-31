@@ -73,6 +73,7 @@ void setup() {
   if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
     Serial.printf_P(PSTR("Error creating the CAN task!"));
   }
+  performance.resetTimer();
 }
 
 void loop() {

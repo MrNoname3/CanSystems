@@ -23,11 +23,10 @@ public:
   /// @brief Default destructor.
   ~Performance() = default;
 
-  /// @brief Initializes the performance measurement.
-  /// This function records the initial time (using `millis()`) to calculate loop times.
-  /// @return Always returns `true` to indicate successful initialization.
+  /// @brief Initializes the performance tracker.
+  /// @return Always returns `true`, indicating successful initialization.
   virtual bool init() override {
-    lastLoopTime = millis();
+    resetTimer();
     return true;
   }
 
@@ -46,6 +45,10 @@ public:
       }
     }
   }
+
+  /// @brief Resets the timer for measuring loop execution time.
+  /// @details Sets the `lastLoopTime` to the current timestamp (`millis()`).
+  inline void resetTimer() { lastLoopTime = millis(); }
 
   Performance(const Performance&) = delete;                       // Define copy constructor.
   Performance& operator=(const Performance&) = delete;            // Define copy assignment operator.

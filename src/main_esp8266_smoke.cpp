@@ -66,6 +66,7 @@ void setup() {
   Serial.printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
   debugLed.stopTicker();
+  performance.resetTimer();
 }
 
 void loop() {
