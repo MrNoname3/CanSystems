@@ -44,6 +44,7 @@ static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {
+  const uint32_t initTime = millis();
   WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
   debugLed.startTicker(500U);
@@ -62,6 +63,7 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
+  Serial.printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
   debugLed.stopTicker();
 }

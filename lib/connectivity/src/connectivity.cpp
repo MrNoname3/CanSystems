@@ -34,7 +34,6 @@ Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManage
 {}
 
 bool Connectivity::init() {
-  const uint32_t conTime = millis();
   { // Init filesystem.
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
@@ -141,7 +140,6 @@ bool Connectivity::init() {
     }
   }
 
-  serialPort.printf_P(PSTR("[INIT] Init time was: %lums\r\n"), (millis() - conTime));
   return true;
 }
 
