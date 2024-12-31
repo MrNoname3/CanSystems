@@ -1,5 +1,4 @@
 #include "resetHandler.hpp"
-#include <Arduino.h>                                                /// Arduino core library for common functionality.
 #if defined(__AVR_ATmega328P__)
 #include <avr/wdt.h>                                                /// Watchdog timer library for AVR microcontrollers.
 #elif defined(ESP8266)
@@ -10,14 +9,14 @@
 #include <esp_task_wdt.h>                                           /// Watchdog timer functions specific to ESP32.
 #endif
 
-void ResetHandler::restartMCU() {
+void ResetHandler::restartMCU(HardwareSerial& serial) {
 #if defined(__AVR_ATmega328P__)
-  Serial.println(F("Restarting..."));
-  Serial.flush();                                     // Sends out data from the serial buffer before reset.
+  serial.println(F("Restarting..."));
+  serial.flush();                                     // Sends out data from the serial buffer before reset.
   wdt_enable(WDTO_15MS);                              // Configures the watchdog timer for a 15-ms timeout.
 #elif defined(ESP32) || defined(ESP8266)
-  Serial.printf_P(PSTR("Restarting...\r\n"));
-  Serial.flush();
+  serial.printf_P(PSTR("Restarting...\r\n"));
+  serial.flush();
   ESP.restart();
 #endif
   while(true) {};
