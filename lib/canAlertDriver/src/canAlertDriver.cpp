@@ -15,7 +15,7 @@ CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectiv
 
 bool CanAlertDriver::init() { return true; }
 
-bool CanAlertDriver::run() { return true; }
+void CanAlertDriver::run() {}
 
 void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
   const uint16_t command = canFrame.cmd;
@@ -29,7 +29,7 @@ void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), HUM_TEMP_LDR_FRAME, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      MqttComBase::messageSend(dataOut);
+      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
     } break;
     default: {} break;
   }

@@ -5,7 +5,7 @@
 #include <Wire.h>
 #include <ADS1X15.h>
 
-class AdcReader final : public Connectivity::MqttComBase {
+class AdcReader final : public MqttBase {
 public:
   enum class Channel : uint8_t {
     AN0 = 0,
@@ -19,13 +19,13 @@ public:
   /// @brief Destructor of the object.
   virtual ~AdcReader() = default;
 
-  virtual bool begin() override;
+  virtual bool init() override;
 
   void end();
 
-  virtual bool loop() override;
+  virtual void run() override;
 
-  virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 
   int16_t analogRead(Channel channel);
 

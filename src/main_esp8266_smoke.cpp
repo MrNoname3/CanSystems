@@ -7,7 +7,8 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
 #include "networkManager.hpp"                                       /// Manages the network connection.
-#include "connectivity.hpp"
+#include "connectivity.hpp"                                         /// Handles the MQTT connection.
+#include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
 #include "adcReader.hpp"
 #include "mq135Handler.hpp"
 
@@ -35,6 +36,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
+MqttCommon mqttCommon (iotConn, "common", Serial);
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
 

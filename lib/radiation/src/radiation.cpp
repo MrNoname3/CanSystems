@@ -10,13 +10,13 @@ const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
 };
 
 Radiation::Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin) :
-  MqttComBase(connectivity, classID),
+  MqttBase(connectivity, classID),
   sensorPin(sensorPin)
 {
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::begin() {
+bool Radiation::init() {
   constexpr const uint16_t measureTime = 60000;  //millisec
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTimer.attach_ms(measureTime, measure);
@@ -31,19 +31,19 @@ void Radiation::end() {
   measureDone = false;
 }
 
-bool Radiation::loop() {
+void Radiation::run() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-    if(!dataOutValid) { return false; }
-    MqttComBase::messageSend(dataOut);
+    if(!dataOutValid) { return /*false*/; }
+    if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
   }
-  return true;
+  return /*true*/;
 }
 
-void Radiation::messageReceived(uint8_t* payload, uint32_t length) {
+void Radiation::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
   (void)payload;
   (void)length;
 }

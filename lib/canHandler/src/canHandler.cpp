@@ -342,7 +342,7 @@ const char CanHandler::CanComBase::OTA_FRAME[] PROGMEM = {
 };
 
 CanHandler::CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
-  MqttComBase(connectivity, classID),
+  MqttBase(connectivity, classID),
   canHandler(canHandler),
   nodeCanId(canId),
   pingTimer(pingTime),
@@ -373,16 +373,17 @@ bool CanHandler::CanComBase::loopPriv() {
   if(nodeAlive != nodeAlive_) {
     nodeAlive_ = nodeAlive;
     const char* statusStr = nodeAlive_ ? STATUS_ONLINE : STATUS_OFFLINE;
-    canHandler.serialPort.printf_P(PSTR("[CANB] %s is %s!\r\n"), MqttComBase::getClassId(), statusStr);
+    canHandler.serialPort.printf_P(PSTR("[CANB] %s is %s!\r\n"), MqttBase::getSubtopic(), statusStr);
     static constexpr const uint8_t dataOutBufSize = 64;
     char dataOut[dataOutBufSize] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, statusStr);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
-    MqttComBase::messageSend(dataOut);
+    if(!MqttBase::sendMessage(dataOut)) { return false; /*Handler needed*/ }
   }
   runOta();
-  return run();
+  run();
+  return true;
 }
 
 void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame) {
@@ -397,7 +398,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, STATUS_RESTARTED);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      MqttComBase::messageSend(dataOut);
+      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
       const uint16_t fwVersion =
@@ -413,7 +414,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), FW_VERSION_FRAME, fwVersion, gitHash);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      MqttComBase::messageSend(dataOut);
+      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
     } break;
     case static_cast<uint16_t>(CanCmd::BUTTON_EVENT): {
       const uint8_t buttonState = canFrame.data[0];
@@ -422,7 +423,7 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), BUTTON_FRAME, buttonState);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      MqttComBase::messageSend(dataOut);
+      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
@@ -437,17 +438,13 @@ void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame
   }
 }
 
-bool CanHandler::CanComBase::begin() { return true; }
-
-bool CanHandler::CanComBase::loop() { return true; }
-
-void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) {
+void CanHandler::CanComBase::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
   JsonDocument cmdJson;
   DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
   if(!deSerResult) {
     canHandler.serialPort.printf_P(PSTR("[CANB] Deserialisation failed at %s: %s\r\n"),
-      MqttComBase::getClassId(), reinterpret_cast<const char*>(deserializationError.f_str()));
+      MqttBase::getSubtopic(), reinterpret_cast<const char*>(deserializationError.f_str()));
     return;
   }
   JsonVariant fileJsonVar = cmdJson[F("File")];
@@ -455,7 +452,7 @@ void CanHandler::CanComBase::messageReceived(uint8_t* payload, uint32_t length) 
     const char* fileName = fileJsonVar.as<const char*>();
     const bool fileTransferStartResult = startOta(fileName);
     canHandler.serialPort.printf_P(PSTR("[CANB] File transfer starts to \"%s\":%s\r\n"),
-      MqttComBase::getClassId(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+      MqttBase::getSubtopic(), fileTransferStartResult ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
     if(!fileTransferStartResult) { transferState = TransferState::INVALID; }
     return;
   }
@@ -588,9 +585,11 @@ void CanHandler::CanComBase::runOta() {
         char dataOut[dataOutBufSize] = { '\0' };
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), OTA_FRAME, reinterpret_cast<const char*>(otaStatus ? F("OK") : F("ERR")));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-        if(dataOutValid) { MqttComBase::messageSend(dataOut); }
+        if(dataOutValid) {
+          if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+        }
         canHandler.serialPort.printf_P(PSTR("[CANB] File transfer for \"%s\":%s\r\n"),
-          MqttComBase::getClassId(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
+          MqttBase::getSubtopic(), otaStatus ? CanHandler::OK_STATE : CanHandler::ERR_STATE);
       }
       transferState = TransferState::IDLE;
     } break;

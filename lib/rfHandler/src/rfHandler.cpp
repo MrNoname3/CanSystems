@@ -14,7 +14,7 @@ const char RfHandler::RF_MSG_FRAME[] PROGMEM = {
 };
 
 RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rxPin, uint8_t txPin) :
-  MqttComBase(connectivity, classID),
+  MqttBase(connectivity, classID),
   rxPin_(rxPin),
   txPin_(txPin)
 {
@@ -23,9 +23,9 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rx
   rfTransciever.enableTransmit(txPin_);
 }
 
-bool RfHandler::begin() { return true; }
+bool RfHandler::init() { return true; }
 
-bool RfHandler::loop() {
+void RfHandler::run() {
   if(rfTransciever.available()) {                                         // Check if RF data received.
     static RFData rfDataOld;                                              // Save old data.
     static uint32_t dataCheckTimer = 0;                                   // Serial data send cooldown timer.
@@ -47,16 +47,16 @@ bool RfHandler::loop() {
       char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return false; }
-      MqttComBase::messageSend(dataOut);
+      if(!dataOutValid) { return /*false*/; }
+      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
       rfDataOld = rfData;                                                 // Save sent data to use it for filtering.
     }
     dataCheckTimer = millis();                                            // Reload timer.
   }
-  return true;
+  return /*true*/;
 }
 
-void RfHandler::messageReceived(uint8_t* payload, uint32_t length) {
+void RfHandler::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
   JsonDocument rfJson;
   DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
   const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);

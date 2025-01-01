@@ -5,18 +5,18 @@
 #include "adcReader.hpp"
 #include <MQUnifiedsensor.h>
 
-class Mq135Handler final : public Connectivity::MqttComBase {
+class Mq135Handler final : public MqttBase {
 public:
   Mq135Handler(Connectivity& connectivity, const char* classID, AdcReader& adcReader, AdcReader::Channel channel, uint32_t measureTime);
 
   /// @brief Destructor of the object.
   virtual ~Mq135Handler() = default;
 
-  virtual bool begin() override;
+  virtual bool init() override;
 
-  virtual bool loop() override;
+  virtual void run() override;
 
-  virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 
   bool startCalibration();
 

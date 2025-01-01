@@ -2,6 +2,7 @@
 #define CONNECTIVITY_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <string.h>
 #ifndef MQTT_MAX_PACKET_SIZE                                        /// Ensure the `MQTT_MAX_PACKET_SIZE` macro is defined.
 #error "MQTT_MAX_PACKET_SIZE is not defined!"
 #endif
@@ -21,14 +22,13 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 #include <vector>                                                   /// STL vector for dynamic arrays.
 #include "common.hpp"                                               /// Common definitions and functions.
-#include "dataTransfer.hpp"
 #include "configHandler.hpp"
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
+class MqttBase;
+
 class Connectivity final : public Task {
 public:
-  class MqttComBase;
-
   Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
 
   /// @brief Destructor of the object.
@@ -38,17 +38,16 @@ public:
 
   virtual void run() override;
 
+  bool sendMqttMessage(const char* subTopic, const char* payload);
+
+  bool registerCallback(MqttBase* obj);
+
 private:
   bool connect();
 
-  void receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length);
-
-  void sendMqttMessage(const char* subTopic, const char* payload);
-
   void syncNtpTime();
-  bool getIsoTimeString(char (&dateTimeBuffer)[24U]);
 
-  bool registerCallback(Connectivity::MqttComBase* obj);
+  bool getIsoTimeString(char (&dateTimeBuffer)[24U]);
 
   inline void resetWatchdogTimer() {
     if(resetWdt != nullptr) {
@@ -92,7 +91,8 @@ private:
   uint32_t deviceResetTimer;
   void (*debugLed)(bool state);
   void (*resetWdt)();
-  std::vector<Connectivity::MqttComBase*> messageMap;
+  uint8_t subtopicOffset;
+  std::vector<MqttBase*> messageHandlerList;
 
   static const char PROGMEM mqttClientName[];
   static const char PROGMEM mqttOutTopic[];
@@ -109,72 +109,70 @@ private:
   static const char PROGMEM MQTT_CONNECT_BAD_CREDENTIALS_STR[];
   static const char PROGMEM MQTT_CONNECT_UNAUTHORIZED_STR[];
   static const char PROGMEM MQTT_UNKNOWN_STATUS_STR[];
+};
 
+class Connectivity;
+
+class MqttBase {
+private:
+  static constexpr uint8_t subtopicSize = 16U;
+  static constexpr uint8_t responseBufferSize = 28U;
 public:
-  class MqttComBase {
-  public:
-    friend class Connectivity;
-    enum class Response : uint8_t {
-      NACK = 0,
-      ACK
-    };
-    MqttComBase(const MqttComBase&) = delete;                       // Define copy constructor.
-    MqttComBase& operator=(const MqttComBase&) = delete;            // Define copy assignment operator.
-    MqttComBase(MqttComBase&&) = delete;                            // Define move constructor.
-    MqttComBase& operator=(MqttComBase&&) = delete;                 // Define move assignment operator.
-  protected:
-    MqttComBase(Connectivity& connectivity, const char* classID);
-    virtual ~MqttComBase() = default;
-    void messageSend(const char* payload) const;
-    virtual bool sendResponse(Response resp, uint16_t cmd);
-    virtual void messageReceived(uint8_t* payload, uint32_t length) = 0;
-    virtual bool begin() = 0;
-    virtual bool loop() = 0;
-    const char* getClassId() const;
-    Connectivity& conn;
-  private:
-    char classId[16];
+  enum class Response : uint8_t {
+    NACK = 0U,
+    ACK
   };
+
+  MqttBase(Connectivity& connectivity, const char* subTopic) :
+    connectivity(connectivity),
+    subtopic{'\0'}
+  {
+    if(isSubtopicValid(subTopic)) {
+      strlcpy(subtopic, subTopic, subtopicSize);
+      connectivity.registerCallback(this);
+    }
+  }
+
+  virtual ~MqttBase() = default;
+
+  [[nodiscard]] virtual bool init() = 0;
+
+  virtual void run() = 0;
+
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) = 0;
+
+  [[nodiscard]] static inline bool isSubtopicValid(const char* subTopic) {
+    if(subTopic == nullptr) { return false; }
+    const uint32_t subtopicLength = strnlen(subTopic, subtopicSize);
+    return ((subtopicLength > 0U) && (subtopicLength < subtopicSize));
+  }
+
+  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
+
+  [[nodiscard]] inline const char* getSubtopic() const { return subtopic; }
+
+  [[nodiscard]] inline bool sendMessage(const char* payload) {
+    if(payload == nullptr) { return false; }
+    return connectivity.sendMqttMessage(getSubtopic(), payload);
+  }
+
+  [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command) {
+    char responseBuffer[responseBufferSize] = { '\0' };
+    const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
+      PSTR("{""\"type\":%hu,""\"cmd\":%hu""}"), static_cast<uint8_t>(response), command);
+    const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
+      (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
+    if(!responseBufferValid) { return false; }
+    return sendMessage(responseBuffer);
+  }
+
+  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
+  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
+  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
+  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
 
 private:
-  class Common final : public Connectivity::MqttComBase {
-  public:
-    enum class Command : uint8_t {
-      BLANK = 0,
-      RESTART,
-      FW_DT_START,
-      FW_DT_DATA,
-      FW_DT_END,
-      WIFICFG_DT_START,
-      WIFICFG_DT_DATA,
-      WIFICFG_DT_END,
-      EXT_FILE_DT_START,
-      EXT_FILE_DT_DATA,
-      EXT_FILE_DT_END
-    };
-
-    Common(Connectivity& connectivity, const char* classID);
-
-    /// @brief Destructor of the object.
-    virtual ~Common() = default;
-
-    virtual void messageReceived(uint8_t* payload, uint32_t length) override;
-
-    virtual bool begin() override;
-
-    virtual bool loop() override;
-
-    void messageSend(const char* payload) const;
-
-    Common(const Common&) = delete;                       // Define copy constructor.
-    Common& operator=(const Common&) = delete;            // Define copy assignment operator.
-    Common(Common&&) = delete;                            // Define move constructor.
-    Common& operator=(Common&&) = delete;                 // Define move assignment operator.
-
-  private:
-    char externalFileName[28];
-    DataTransfer dataTransfer;
-  };
-  Common common;
+  Connectivity& connectivity;
+  char subtopic[subtopicSize];
 };
 #endif

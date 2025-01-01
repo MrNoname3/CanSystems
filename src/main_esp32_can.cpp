@@ -7,9 +7,8 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
 #include "networkManager.hpp"                                       /// Manages the network connection.
-#include "connectivity.hpp"
-#include "radiation.hpp"
-#include "rfHandler.hpp"
+#include "connectivity.hpp"                                         /// Handles the MQTT connection.
+#include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
 #include "canHandler.hpp"
 #include "canAlertDriver.hpp"
 
@@ -39,6 +38,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
+MqttCommon mqttCommon (iotConn, "common", Serial);
 CanHandler canHandler(Serial);
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);

@@ -218,7 +218,7 @@ public:
   };
 
 public:
-  class CanComBase : protected Connectivity::MqttComBase {
+  class CanComBase : protected MqttBase {
   public:
     friend class CanHandler;
     CanComBase(const CanComBase&) = delete;                       // Define copy constructor.
@@ -235,7 +235,7 @@ public:
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
     virtual bool init() = 0;
-    virtual bool run() = 0;
+    virtual void run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
     bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
     bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
@@ -257,9 +257,7 @@ public:
     bool loopPriv();
     void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
     uint32_t getCanId() const;
-    virtual bool begin() override;
-    virtual bool loop() override;
-    virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+    virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 
     bool startOta(const char* fileName);
     void runOta();

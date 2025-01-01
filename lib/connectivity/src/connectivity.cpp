@@ -1,6 +1,5 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include <ArduinoJson.h>                                            /// Handle JSON files.
 #include <time.h>
 
 const char Connectivity::mqttClientName[] PROGMEM                   = "%s_%02x%02x%02x%02x%02x%02x";
@@ -30,7 +29,7 @@ Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManage
   deviceResetTimer(0U),
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
-  common(*this, "common")
+  subtopicOffset(0U)
 {}
 
 bool Connectivity::init() {
@@ -94,6 +93,7 @@ bool Connectivity::init() {
     serialPort.printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
     serialPort.printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
+    subtopicOffset = senderTopicSize - 2U;
   }
   { // Open cert.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
@@ -117,23 +117,27 @@ bool Connectivity::init() {
   }
 
   if(!connect()) { return false; }
-  mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
 
-  {
-    char versionString[80] = {'\0'};
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"Dirty\":%hu,\"RR\":%hu""}"),
-      Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
-    const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
-    if(!versionStringValid) { return false; }
-    common.messageSend(versionString);
-  }
+  mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
+    if((topic == nullptr) || (payload == nullptr) || (length ==  0U)) { return; }
+    const char* subtopic = topic + subtopicOffset;
+    if(!MqttBase::isSubtopicValid(subtopic)) { return; }
+    for(const auto &currentMessageHandler : messageHandlerList) {
+      if(currentMessageHandler == nullptr) { return; }
+      if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
+        currentMessageHandler->messageArrivedCallback(payload, length);
+        return;
+      }
+    }
+    serialPort.printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+  });
 
   serialPort.printf_P(PSTR("[INIT] Init registered objects:\r\n"));
-  for(std::size_t i = 0; i < messageMap.size(); ++i) {
-    const auto& currentObject = messageMap[i];
+  for(std::size_t i = 0; i < messageHandlerList.size(); ++i) {
+    const auto& currentObject = messageHandlerList[i];
     if(currentObject != nullptr) {
-      const bool beginResult = currentObject->begin();
-      serialPort.printf_P(PSTR("  %zu. %s -> %s\r\n"), i, currentObject->getClassId(), Str::getStateStr(beginResult));
+      const bool beginResult = currentObject->init();
+      serialPort.printf_P(PSTR("  %zu. %s -> %s\r\n"), i, currentObject->getSubtopic(), Str::getStateStr(beginResult));
     }
     else {
       serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
@@ -188,9 +192,9 @@ void Connectivity::run() {
     }
   }
 
-  for(const auto &currentObject : messageMap) {
+  for(const auto &currentObject : messageHandlerList) {
     if(currentObject != nullptr) {
-      currentObject->loop();
+      currentObject->run();
     }
   }
 
@@ -210,26 +214,12 @@ void Connectivity::run() {
   }
 }
 
-void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
-  if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
-  const char* classId = strrchr(topic, '/') + 1;
-  if(!classId) { return; }
-  for(const auto &currentObject : messageMap) {
-    if(currentObject == nullptr) { return; }
-    if(strcmp(currentObject->getClassId(), classId) == 0) {
-      currentObject->messageReceived(payload, length);
-      return;
-    }
-  }
-  serialPort.printf_P(PSTR("[MQTT] No handler -> %s\r\n"), classId);
-}
-
-void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
+bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   char actualTopic[sizeof(mqttCredentials.senderTopic) + 16U];
   const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
-  if(!actualTopicValid) { return; }
-  mqttClient.publish(actualTopic, payload);
+  if(!actualTopicValid) { return false; }
+  return mqttClient.publish(actualTopic, payload);
 }
 
 void Connectivity::syncNtpTime() {
@@ -259,9 +249,9 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[24U]) {
   return true;
 }
 
-bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
+bool Connectivity::registerCallback(MqttBase* obj) {
   if(!obj) { return false; }
-  messageMap.push_back(obj);
+  messageHandlerList.push_back(obj);
   return true;
 }
 
@@ -279,126 +269,4 @@ const char* Connectivity::getMqttStatusStr(int8_t status) {
     case MQTT_CONNECT_UNAUTHORIZED: { return MQTT_CONNECT_UNAUTHORIZED_STR; } break;
     default: { return MQTT_UNKNOWN_STATUS_STR; } break;
   }
-}
-
-//////////////////// -- MqttComBase class-- ////////////////////
-
-Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
-  strlcpy(this->classId, classID, sizeof(this->classId));
-  conn.registerCallback(this);
-}
-
-void Connectivity::MqttComBase::messageSend(const char* payload) const {
-  conn.sendMqttMessage(getClassId(), payload);
-}
-
-bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
-  static constexpr const uint8_t respBufSize = 28;
-  char respBuf[respBufSize] = { '\0' };
-  const int32_t respBufRealSize = snprintf_P(respBuf, sizeof(respBuf), PSTR("{""\"type\":%hu,""\"cmd\":%hu""}"), static_cast<uint8_t>(resp), cmd);
-  const bool respBufValid = (respBufRealSize >= 0 && respBufRealSize < static_cast<int32_t>(sizeof(respBuf)));
-  if(!respBufValid) { return false; }
-  messageSend(respBuf);
-  return true;
-}
-
-const char* Connectivity::MqttComBase::getClassId() const { return classId; }
-
-//////////////////// -- Common class-- ////////////////////
-
-Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
-  MqttComBase(connectivity, classID),
-  externalFileName{'\0'},
-  dataTransfer(conn.serialPort)
-{}
-
-void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
-  JsonDocument cmdJson;
-  DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(!deSerResult) {
-    conn.serialPort.printf_P(PSTR("[COMMON] Deserialisation failed: %s\r\n"), reinterpret_cast<const char*>(deserializationError.f_str()));
-    return;
-  }
-  const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
-  Command command = static_cast<Command>(cmd);
-  switch(command) {
-    case Command::BLANK: {} break;
-    case Command::RESTART: { ResetHandler::restartMCU(); } break;
-    case Command::FW_DT_START:
-    case Command::WIFICFG_DT_START:
-    case Command::EXT_FILE_DT_START: {
-      const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
-      const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
-      const char* fileNamePtr = nullptr;
-      switch(command) {
-        case Command::FW_DT_START: {
-          const char* binId = cmdJson[F("binId")].as<const char*>();
-          if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-            conn.serialPort.printf_P(PSTR("[COMMON] Wrong FW file ID: %s\r\n"), binId);
-            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-            return;
-          }
-          fileNamePtr = FileName::getOtaFwLocation();
-          } break;
-        case Command::WIFICFG_DT_START: { fileNamePtr = FileName::getWifiTempConfigLocation(); } break;
-        case Command::EXT_FILE_DT_START: {
-          const char* fileName = cmdJson[F("name")].as<const char*>();
-          memset(externalFileName, '\0', sizeof(externalFileName));
-          if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
-          uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
-          if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-            conn.serialPort.printf_P(PSTR("[COMMON] Wrong file name: missing / too long!\r\n"));
-            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-            return;
-          }
-          fileNamePtr = static_cast<const char*>(externalFileName);
-        } break;
-        default: {} break;
-      }
-      const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
-      MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-      if(!transferBeginResult) {
-        conn.serialPort.printf_P(PSTR("[COMMON] Can't begin file transfer:\r\n  Name: %s\r\n"), fileNamePtr);
-        return;
-      }
-    } break;
-    case Command::FW_DT_DATA:
-    case Command::WIFICFG_DT_DATA:
-    case Command::EXT_FILE_DT_DATA: {
-      const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
-      const char* filePieceB64 = cmdJson["data"].as<const char*>();
-      const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
-      MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
-      if(!storingResult) {
-        conn.serialPort.printf_P(PSTR("[COMMON] File storing failed!\r\n"));
-      }
-    } break;
-    case Command::FW_DT_END:
-    case Command::WIFICFG_DT_END:
-    case Command::EXT_FILE_DT_END: {
-      const bool validityCheckResult = dataTransfer.checkValidity();
-      MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-      if(!validityCheckResult) {
-        conn.serialPort.printf_P(PSTR("[COMMON] Stored file is not valid!\r\n"));
-        return;
-      }
-      if(command == Command::FW_DT_END) {
-        const bool fwUpdatePreparationOk = dataTransfer.upgradeFirmware();
-        if(!fwUpdatePreparationOk) {
-          conn.serialPort.printf_P(PSTR("[COMMON] FW upgrade preparation failed!\r\n"));
-          return;
-        }
-        ResetHandler::restartMCU();
-      }
-    } break;
-  };
-}
-
-bool Connectivity::Common::begin() { return true; }
-
-bool Connectivity::Common::loop() { return true; }
-
-void Connectivity::Common::messageSend(const char* payload) const {
-  MqttComBase::messageSend(payload);
 }

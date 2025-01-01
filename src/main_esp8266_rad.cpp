@@ -7,7 +7,8 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "performance.hpp"                                          /// Performance measurement class.
 #include "networkManager.hpp"                                       /// Manages the network connection.
-#include "connectivity.hpp"
+#include "connectivity.hpp"                                         /// Handles the MQTT connection.
+#include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
 #include "radiation.hpp"
 #include "rfHandler.hpp"
 
@@ -35,6 +36,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
+MqttCommon mqttCommon (iotConn, "common", Serial);
 Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 

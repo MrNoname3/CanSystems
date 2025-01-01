@@ -5,20 +5,20 @@
 #include <Arduino.h>                          /// Arduino libraries header.
 #include <Ticker.h>                           /// Timer interrupt hadnler.
 
-class Radiation final : public Connectivity::MqttComBase {
+class Radiation final : public MqttBase {
 public:
   Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin);
 
   /// @brief Destructor of the object.
   virtual ~Radiation() = default;
 
-  virtual bool begin() override;
+  virtual bool init() override;
 
   void end();
 
-  virtual bool loop() override;
+  virtual void run() override;
 
-  virtual void messageReceived(uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 
   Radiation(const Radiation&) = delete;                       // Define copy constructor.
   Radiation& operator=(const Radiation&) = delete;            // Define copy assignment operator.

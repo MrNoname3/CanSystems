@@ -9,7 +9,7 @@ const char AdcReader::MQTT_MSG_FRAME[] PROGMEM = {
 };
 
 AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t sdaPin, uint8_t sclPin, uint8_t address) :
-  MqttComBase(connectivity, classID),
+  MqttBase(connectivity, classID),
   ADS(address),
   measureTime(measureTime),
   rdyPin(rdyPin),
@@ -28,7 +28,7 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t m
   Wire.begin(sdaPin, sclPin);
 }
 
-bool AdcReader::begin() {
+bool AdcReader::init() {
   const bool initAdc =  ADS.begin();
   if(initAdc) {
     // Set ALERT/RDY pin.
@@ -52,7 +52,7 @@ void AdcReader::end() {
   measureState = MeasureStates::IDLE;
 }
 
-bool AdcReader::loop() {
+void AdcReader::run() {
   switch(measureState) {
     case MeasureStates::IDLE: {
       if(adcReady) {
@@ -84,8 +84,8 @@ bool AdcReader::loop() {
             adcValues[0], adcValues[1], adcValues[2], adcValues[3],
             ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
           const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-          if(!dataOutValid) { return false; }
-          MqttComBase::messageSend(dataOut);
+          if(!dataOutValid) { return /*false*/; }
+          if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
         }
         channel = (channel + 1) & maxChannelNumber;
         measureState = MeasureStates::REQUEST_ADC;
@@ -95,12 +95,12 @@ bool AdcReader::loop() {
   if(millis() - adsReadWdTimer >= adsReadWdTime) {
     adsReadWdTimer = millis();
     measureState = MeasureStates::REQUEST_ADC;
-    return false;
+    return /*false*/;
   }
-  return ADS.getError() == ADS1X15_OK ? true : false;
+  return /*ADS.getError() == ADS1X15_OK ? true : false*/;
 }
 
-void AdcReader::messageReceived(uint8_t* payload, uint32_t length) {
+void AdcReader::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
   (void)payload;
   (void)length;
 }
