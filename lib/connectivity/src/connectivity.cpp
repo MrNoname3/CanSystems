@@ -132,18 +132,6 @@ bool Connectivity::init() {
     serialPort.printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
   });
 
-  serialPort.printf_P(PSTR("[INIT] Init registered objects:\r\n"));
-  for(std::size_t i = 0; i < messageHandlerList.size(); ++i) {
-    const auto& currentObject = messageHandlerList[i];
-    if(currentObject != nullptr) {
-      const bool beginResult = currentObject->init();
-      serialPort.printf_P(PSTR("  %zu. %s -> %s\r\n"), i, currentObject->getSubtopic(), Str::getStateStr(beginResult));
-    }
-    else {
-      serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
-    }
-  }
-
   return true;
 }
 
@@ -192,12 +180,6 @@ void Connectivity::run() {
     }
   }
 
-  for(const auto &currentObject : messageHandlerList) {
-    if(currentObject != nullptr) {
-      currentObject->run();
-    }
-  }
-
   const bool actualOnlineState = networkState && (mqttState == MQTT_CONNECTED);
   if(actualOnlineState) {
     deviceResetTimer = actualTime;
@@ -215,7 +197,7 @@ void Connectivity::run() {
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
-  char actualTopic[sizeof(mqttCredentials.senderTopic) + 16U];
+  char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
   const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return false; }

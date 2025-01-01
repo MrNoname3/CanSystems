@@ -16,7 +16,7 @@ public:
   /// @brief Initializes the task.
   /// @details Called once during setup to prepare the task for execution. Must be implemented by derived classes.
   /// @return `true` if the execution was successfully, `false` otherwise.
-  virtual bool init() = 0;
+  [[nodiscard]] virtual bool init() = 0;
 
   /// @brief Executes the task logic.
   /// @details Called repeatedly during the program loop to perform the task's operations. Must be implemented by derived classes.

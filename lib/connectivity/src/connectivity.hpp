@@ -113,16 +113,39 @@ private:
 
 class Connectivity;
 
-class MqttBase {
+class MqttBase : public Task {
 private:
   static constexpr uint8_t subtopicSize = 16U;
   static constexpr uint8_t responseBufferSize = 28U;
+
 public:
   enum class Response : uint8_t {
     NACK = 0U,
     ACK
   };
 
+  [[nodiscard]] virtual bool init() = 0;
+
+  virtual void run() = 0;
+
+  [[nodiscard]] static inline bool isSubtopicValid(const char* subTopic) {
+    if(subTopic == nullptr) { return false; }
+    const uint32_t subtopicLength = strnlen(subTopic, subtopicSize);
+    return ((subtopicLength > 0U) && (subtopicLength < subtopicSize));
+  }
+
+  [[nodiscard]] inline const char* getSubtopic() const { return subtopic; }
+
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) = 0;
+
+  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
+
+  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
+  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
+  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
+  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
+
+protected:
   MqttBase(Connectivity& connectivity, const char* subTopic) :
     connectivity(connectivity),
     subtopic{'\0'}
@@ -134,22 +157,6 @@ public:
   }
 
   virtual ~MqttBase() = default;
-
-  [[nodiscard]] virtual bool init() = 0;
-
-  virtual void run() = 0;
-
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) = 0;
-
-  [[nodiscard]] static inline bool isSubtopicValid(const char* subTopic) {
-    if(subTopic == nullptr) { return false; }
-    const uint32_t subtopicLength = strnlen(subTopic, subtopicSize);
-    return ((subtopicLength > 0U) && (subtopicLength < subtopicSize));
-  }
-
-  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
-
-  [[nodiscard]] inline const char* getSubtopic() const { return subtopic; }
 
   [[nodiscard]] inline bool sendMessage(const char* payload) {
     if(payload == nullptr) { return false; }
@@ -165,11 +172,6 @@ public:
     if(!responseBufferValid) { return false; }
     return sendMessage(responseBuffer);
   }
-
-  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
-  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
-  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
-  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
 
 private:
   Connectivity& connectivity;
