@@ -67,8 +67,9 @@ public:
     return init(500000U);
   }
 
-  /// @brief Executes the main loop for CAN communication.
-  virtual void run() override;
+  /// @brief Handles ongoing CAN communication in a non-blocking loop.
+  /// @return `true` if successful, `false` otherwise.
+  virtual bool run() override;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 16-bit command value.
@@ -114,10 +115,6 @@ private:
   /// @param canBaud Baud rate for CAN communication.
   /// @return `true` if successful, `false` otherwise.
   bool init(uint32_t canBaud);
-
-  /// @brief Handles ongoing CAN communication in a non-blocking loop.
-  /// @return `true` if successful, `false` otherwise.
-  bool loopSimple();
 
   /// @brief Interrupt handler for tracking received CAN frames.
   static inline void rxInterrupt() { intCount++; }
@@ -235,7 +232,7 @@ public:
     /// @brief Destructor of the object.
     virtual ~CanComBase() = default;
     virtual bool init() = 0;
-    virtual void run() = 0;
+    virtual bool run() = 0;
     virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
     bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
     bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;

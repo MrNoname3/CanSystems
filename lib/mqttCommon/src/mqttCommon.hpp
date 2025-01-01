@@ -31,7 +31,7 @@ public:
 
   virtual bool init() override;
 
-  virtual void run() override;
+  virtual bool run() override;
 
   MqttCommon(const MqttCommon&) = delete;                       // Define copy constructor.
   MqttCommon& operator=(const MqttCommon&) = delete;            // Define copy assignment operator.

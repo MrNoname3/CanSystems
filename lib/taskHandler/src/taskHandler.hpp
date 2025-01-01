@@ -20,7 +20,8 @@ public:
 
   /// @brief Executes the task logic.
   /// @details Called repeatedly during the program loop to perform the task's operations. Must be implemented by derived classes.
-  virtual void run() = 0;
+  /// @return `true` if the task executed successfully, `false` otherwise.
+  [[nodiscard]] virtual bool run() = 0;
 
   Task(const Task&) = delete;                       // Define copy constructor.
   Task& operator=(const Task&) = delete;            // Define copy assignment operator.
@@ -57,7 +58,7 @@ public:
 
   /// @brief Initializes all tasks managed by the handler.
   /// @return A bitmask representing tasks that failed initialization. Each bit corresponds to a task index.
-  uint32_t initTasks() {
+  [[nodiscard]] uint32_t initTasks() {
     uint32_t failureMask = 0U;
     if constexpr(singleTaskOnly) {
       if(taskList[0] != nullptr) {
@@ -81,27 +82,38 @@ public:
   /// @details Alternates execution based on the `fullRoundRobin` parameter:
   /// - Full round-robin (`true`): Executes tasks sequentially, one at a time.
   /// - Partial round-robin (`false`): Always runs the first task, alternating with others.
-  void runTasks() {
+  /// @return A bitmask representing tasks that failed execution. Each bit corresponds to a task index.
+  [[nodiscard]] uint32_t runTasks() {
+    uint32_t failureMask = 0U;
     if(singleTaskOnly) {
-      if(taskList[0] == nullptr) {
-        taskList[0]->run();
+      if(taskList[0] != nullptr) {
+        if(!taskList[0]->run()) {
+          failureMask = 1U;
+        }
       }
     } else {
       if constexpr(fullRoundRobinL) {
         if(taskList[currentTask] != nullptr) {
-          taskList[currentTask]->run();
+          if(!taskList[currentTask]->run()) {
+            failureMask |= (1U << currentTask);
+          }
         }
         currentTask = (currentTask + 1U) % taskNum;
       } else {
         if(taskList[0] != nullptr) {
-          taskList[0]->run();
+          if(!taskList[0]->run()) {
+            failureMask |= 1U;
+          }
         }
         currentTask = (currentTask % (taskNum - 1U)) + 1U;
         if(taskList[currentTask] != nullptr) {
-          taskList[currentTask]->run();
+          if(!taskList[currentTask]->run()) {
+            failureMask |= (1U << currentTask);
+          }
         }
       }
     }
+    return failureMask;
   }
 
   TaskHandler(const TaskHandler&) = delete;                       // Define copy constructor.

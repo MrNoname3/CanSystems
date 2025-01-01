@@ -31,7 +31,8 @@ public:
   virtual bool init() override;
 
   /// @brief Executes the state machine to read moisture data.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   /// @brief Triggers an immediate measurement by resetting the timer.
   void triggerImmediateMeasurement();
@@ -90,7 +91,7 @@ bool MoistureReader<N>::init() {
 }
 
 template<uint8_t N>
-void MoistureReader<N>::run() {
+bool MoistureReader<N>::run() {
   const uint32_t actualTime = millis();
   switch(readState) {
     case ReadState::IDLE: {
@@ -133,6 +134,7 @@ void MoistureReader<N>::run() {
       }
     } break;
   };
+  return true;
 }
 
 template<uint8_t N>

@@ -153,7 +153,7 @@ bool Connectivity::connect() {
   return true;
 }
 
-void Connectivity::run() {
+bool Connectivity::run() {
   const uint32_t actualTime = millis();
   const bool actualNetworkState = networkManager.isNetworkAvailable();
   if(actualNetworkState != networkState) {
@@ -194,6 +194,7 @@ void Connectivity::run() {
     serialPort.printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
     ResetHandler::restartMCU();
   }
+  return true;
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {

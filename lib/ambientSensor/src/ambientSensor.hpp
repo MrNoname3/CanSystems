@@ -26,7 +26,8 @@ public:
   virtual bool init() override;
 
   /// @brief Periodically reads sensors and sends data via CAN and serial.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   AmbientSensor(const AmbientSensor&) = delete;                       // Define copy constructor.
   AmbientSensor& operator=(const AmbientSensor&) = delete;            // Define copy assignment operator.

@@ -73,7 +73,7 @@ void setup() {
 
 void loop() {
   WdtHandler::resetWatchdog();
-  taskHandler.runTasks();
+  (void)taskHandler.runTasks();
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {

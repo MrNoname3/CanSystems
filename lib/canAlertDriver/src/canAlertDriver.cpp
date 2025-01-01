@@ -15,7 +15,7 @@ CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectiv
 
 bool CanAlertDriver::init() { return true; }
 
-void CanAlertDriver::run() {}
+bool CanAlertDriver::run() { return true; }
 
 void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
   const uint16_t command = canFrame.cmd;

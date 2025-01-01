@@ -31,16 +31,16 @@ void Radiation::end() {
   measureDone = false;
 }
 
-void Radiation::run() {
+bool Radiation::run() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-    if(!dataOutValid) { return /*false*/; }
-    if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+    if(!dataOutValid) { return false; }
+    if(!MqttBase::sendMessage(dataOut)) { return false; }
   }
-  return /*true*/;
+  return true;
 }
 
 void Radiation::messageArrivedCallback(const uint8_t* payload, uint32_t length) {

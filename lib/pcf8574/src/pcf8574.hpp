@@ -24,7 +24,8 @@ public:
   virtual bool init() override;
 
   /// @brief Provides an empty implementation of the method.
-  virtual void run() override {}
+  /// @return `true`.
+  virtual bool run() override { return true; }
 
   /// @brief Writes a byte to the PCF8574 register.
   /// @param reg The byte to write to the PCF8574.

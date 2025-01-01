@@ -9,7 +9,7 @@ public:
   ~CanAlertDriver() = default;
 protected:
   virtual bool init() override;
-  virtual void run() override;
+  virtual bool run() override;
   virtual void canFrameReceived(CanHandler::CanFrame& canFrame) override;
 private:
   static constexpr uint8_t dataOutBufSize = 96U;

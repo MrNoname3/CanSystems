@@ -14,7 +14,7 @@ public:
 
   virtual bool init() override;
 
-  virtual void run() override;
+  virtual bool run() override;
 
   virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 

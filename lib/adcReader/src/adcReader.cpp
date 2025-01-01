@@ -52,7 +52,7 @@ void AdcReader::end() {
   measureState = MeasureStates::IDLE;
 }
 
-void AdcReader::run() {
+bool AdcReader::run() {
   switch(measureState) {
     case MeasureStates::IDLE: {
       if(adcReady) {
@@ -84,8 +84,8 @@ void AdcReader::run() {
             adcValues[0], adcValues[1], adcValues[2], adcValues[3],
             ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
           const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-          if(!dataOutValid) { return /*false*/; }
-          if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+          if(!dataOutValid) { return false; }
+          if(!MqttBase::sendMessage(dataOut)) { return false; }
         }
         channel = (channel + 1) & maxChannelNumber;
         measureState = MeasureStates::REQUEST_ADC;
@@ -95,9 +95,9 @@ void AdcReader::run() {
   if(millis() - adsReadWdTimer >= adsReadWdTime) {
     adsReadWdTimer = millis();
     measureState = MeasureStates::REQUEST_ADC;
-    return /*false*/;
+    return false;
   }
-  return /*ADS.getError() == ADS1X15_OK ? true : false*/;
+  return ADS.getError() == ADS1X15_OK ? true : false;
 }
 
 void AdcReader::messageArrivedCallback(const uint8_t* payload, uint32_t length) {

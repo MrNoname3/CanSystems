@@ -78,7 +78,7 @@ void setup() {
 
 void loop() {
   WdtHandler::resetWatchdog();
-  taskHandler.runTasks();
+  (void)taskHandler.runTasks();
   vTaskDelay(5);
 }
 

@@ -61,7 +61,8 @@ public:
 
   /// @brief Manages the state machine for track playback.
   /// Should be called periodically in the main loop.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   /// @brief Prints errors from the DFPlayer module.
   using DFPlayerMiniFast::printError;

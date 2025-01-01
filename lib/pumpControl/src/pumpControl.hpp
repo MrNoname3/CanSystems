@@ -29,7 +29,8 @@ public:
   virtual bool init() override;
 
   /// @brief Runs the main irrigation control loop.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   /// @brief Creates a new irrigation schedule.
   /// @param irrigationInfo Information on the irrigation task.

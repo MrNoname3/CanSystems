@@ -37,8 +37,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     return ret;
   }
 
-  void Mq135Handler::run() {
-    /*bool ret = true;*/
+  bool Mq135Handler::run() {
     switch(gasReadState) {
       case GasReadState::IDLE: {
         if((millis()- measureTimer >= measureTime) && adcReader.readyToRead()) {
@@ -68,12 +67,12 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME,
           gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-        if(!dataOutValid) { return /*false*/; }
-        if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+        if(!dataOutValid) { return false; }
+        if(!MqttBase::sendMessage(dataOut)) { return false; }
         gasReadState = GasReadState::IDLE;
       } break;
     }
-    return /*ret*/;
+    return true;
   }
 
   void Mq135Handler::messageArrivedCallback(const uint8_t* payload, uint32_t length) {

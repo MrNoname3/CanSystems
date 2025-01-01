@@ -34,7 +34,8 @@ public:
   /// This function calculates the time taken since the last loop iteration and checks if 
   /// it exceeds the current maximum loop time. If a new maximum is recorded, it calls the 
   /// provided callback function (if not null).
-  virtual void run() override {
+  /// @return `true`.
+  virtual bool run() override {
     const uint32_t actualTime = millis();
     uint32_t actualLoopTime = actualTime - lastLoopTime;
     lastLoopTime = actualTime;
@@ -44,6 +45,7 @@ public:
         maxLoopTimeCallback(maxLoopTime);
       }
     }
+    return true;
   }
 
   /// @brief Resets the timer for measuring loop execution time.

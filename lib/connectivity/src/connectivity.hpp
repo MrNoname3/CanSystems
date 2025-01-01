@@ -36,7 +36,7 @@ public:
 
   virtual bool init() override;
 
-  virtual void run() override;
+  virtual bool run() override;
 
   bool sendMqttMessage(const char* subTopic, const char* payload);
 
@@ -126,7 +126,7 @@ public:
 
   [[nodiscard]] virtual bool init() = 0;
 
-  virtual void run() = 0;
+  [[nodiscard]] virtual bool run() = 0;
 
   [[nodiscard]] static inline bool isSubtopicValid(const char* subTopic) {
     if(subTopic == nullptr) { return false; }

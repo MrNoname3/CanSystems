@@ -25,7 +25,7 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rx
 
 bool RfHandler::init() { return true; }
 
-void RfHandler::run() {
+bool RfHandler::run() {
   if(rfTransciever.available()) {                                         // Check if RF data received.
     static RFData rfDataOld;                                              // Save old data.
     static uint32_t dataCheckTimer = 0;                                   // Serial data send cooldown timer.
@@ -47,13 +47,13 @@ void RfHandler::run() {
       char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return /*false*/; }
-      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+      if(!dataOutValid) { return false; }
+      if(!MqttBase::sendMessage(dataOut)) { return false; }
       rfDataOld = rfData;                                                 // Save sent data to use it for filtering.
     }
     dataCheckTimer = millis();                                            // Reload timer.
   }
-  return /*true*/;
+  return true;
 }
 
 void RfHandler::messageArrivedCallback(const uint8_t* payload, uint32_t length) {

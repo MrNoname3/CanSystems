@@ -31,7 +31,7 @@ bool PumpControl::init() {
   return true;
 }
 
-void PumpControl::run() {
+bool PumpControl::run() {
   const uint32_t actualTime = millis();
   analogValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue), analogValue);
   switch(irrigationState) {
@@ -134,6 +134,7 @@ void PumpControl::run() {
       }
     } break;
   };
+  return true;
 }
 
 void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) {

@@ -64,15 +64,7 @@ bool CanHandler::init(uint32_t canBaud) {
   return true;
 }
 
-void CanHandler::run() {
-  const bool loopResult = loopSimple();
-  if(!loopResult) {
-    serialPort.println(F("Loop ERROR!"));
-    ResetHandler::restartMCU();
-  }
-}
-
-bool CanHandler::loopSimple() {
+bool CanHandler::run() {
   const uint32_t actualTime = millis();
   if(intCount > 0U) {
     intCount--;
@@ -382,8 +374,7 @@ bool CanHandler::CanComBase::loopPriv() {
     if(!MqttBase::sendMessage(dataOut)) { return false; /*Handler needed*/ }
   }
   runOta();
-  run();
-  return true;
+  return run();
 }
 
 void CanHandler::CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame) {

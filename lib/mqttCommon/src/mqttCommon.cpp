@@ -103,4 +103,4 @@ bool MqttCommon::init() {
   return true;
 }
 
-void MqttCommon::run() {}
+bool MqttCommon::run() { return true; }

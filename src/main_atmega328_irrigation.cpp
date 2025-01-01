@@ -108,7 +108,7 @@ void setup() {
 
 void loop() {
   wdt.resetWatchdog();
-  taskHandler.runTasks();
+  (void)taskHandler.runTasks();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
