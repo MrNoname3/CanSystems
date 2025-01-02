@@ -11,6 +11,9 @@
 /// @class PumpControl
 /// @brief Controls irrigation pumps, monitors flow rate, and manages irrigation schedules and safety limits.
 class PumpControl final : public Task {
+private:
+  using PumpControlErrorType = uint8_t;                             // Underlying type for pump control error states.
+
 public:
   /// @brief Constructor for the PumpControl class.
   /// @param pcf8574 Reference to the I2C GPIO expander.
@@ -159,7 +162,7 @@ private:
   };
 
   /// @brief Represents error states in the pump control system.
-  enum class PumpControlError : uint8_t {
+  enum class PumpControlError : PumpControlErrorType {
     NONE          = 0U,                     // No error.
     CH_SELECT     = 1 << 0U,                // Channel select error.
     FLOW_STUCK    = 1 << 1U,                // Flow meter stuck error.
@@ -208,7 +211,7 @@ private:
   uint16_t analogValue;                                                     // Filtered analog value from sensor.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
   uint32_t errorCheckTimer;                                                 // Timer variable for error checking.
-  ErrorState<PumpControlError, uint8_t> pumpControlErrState;                // Error code handler object.
+  ErrorState<PumpControlError, PumpControlErrorType> pumpControlErrState;   // Error code handler object.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
