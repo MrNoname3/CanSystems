@@ -19,8 +19,8 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
   return true;
 }
 
-uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
-  ErrorState<WifiConfigError, uint8_t> wifiConfErrState;
+ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
+  ErrorState<WifiConfigError, WifiConfigErrorType> wifiConfErrState;
   const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
   if(!wifiFileExists) {
     wifiConfErrState.setError(WifiConfigError::NO_WIFI_CONFIG_FILE);
@@ -66,8 +66,8 @@ uint8_t ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&passw
   return wifiConfErrState.getRawErrorState();
 }
 
-uint8_t ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) {
-  ErrorState<ServerCertError, uint8_t> serverCertErrState;
+ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) {
+  ErrorState<ServerCertError, ServerCertErrorType> serverCertErrState;
   const bool certFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCertLocation()));
   if(!certFileExists) {
     serverCertErrState.setError(ServerCertError::NO_SERVER_CERT_FILE);
@@ -98,9 +98,9 @@ uint8_t ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeC
   return serverCertErrState.getRawErrorState();
 }
 
-uint16_t ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
-  char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
-  ErrorState<ServerCredError, uint16_t> serverCredErrState;
+ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],
+  char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
+  ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
   const bool credFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()));
   if(!credFileExists) {
     serverCredErrState.setError(ServerCredError::NO_SERVER_CRED_FILE);

@@ -8,6 +8,9 @@
 /// @brief A utility class to manage configurations and error states.
 class ConfigHandler final {
 private:
+  using WifiConfigErrorType = uint8_t;                                // Underlying type for Wi-Fi config error states.
+  using ServerCertErrorType = uint8_t;                                // Underlying type for server certificate error states.
+  using ServerCredErrorType = uint16_t;                               // Underlying type for server credentials error states.
   static constexpr uint8_t maxWifiSsidSize = 24U;                     // Maximum size of the Wi-Fi SSID string.
   static constexpr uint8_t maxWifiPasswordSize = 24U;                 // Maximum size of the Wi-Fi password string.
   static constexpr uint8_t maxMqttUserNameSize = 24U;                 // Maximum size of the MQTT user name string.
@@ -40,13 +43,13 @@ public:
   /// @param ssid Buffer to store the retrieved SSID.
   /// @param password Buffer to store the retrieved password.
   /// @return Error state, where `0` means success.
-  [[nodiscard]] static uint8_t getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
+  [[nodiscard]] static WifiConfigErrorType getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
 
   /// @brief Retrieves the server certificate using a callback for storage.
   /// @param storeCert A callback function to handle the storage of the certificate.
   /// The callback receives a reference to a `Stream` and the certificate size in bytes.
   /// @return Error state, where `0` means success.
-  [[nodiscard]] static uint8_t getServerCert(std::function<bool(Stream&, size_t)> storeCert);
+  [[nodiscard]] static ServerCertErrorType getServerCert(std::function<bool(Stream&, size_t)> storeCert);
 
   /// @brief Gets the maximum allowed size for the MQTT user name.
   /// @return Maximum size of the MQTT user name string.
@@ -66,7 +69,7 @@ public:
   /// @param mqttServerUrl Buffer to store the MQTT server URL.
   /// @param mqttServerPort Variable to store the MQTT server port number.
   /// @return Error state, where `0` means success.
-  [[nodiscard]] static uint16_t getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
+  [[nodiscard]] static ServerCredErrorType getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
     char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort);
 
   ConfigHandler(const ConfigHandler&) = delete;                       // Define copy constructor.
@@ -76,7 +79,7 @@ public:
 
 private:
   /// @brief Enumeration representing possible error states for Wi-Fi configuration.
-  enum class WifiConfigError : uint8_t {
+  enum class WifiConfigError : WifiConfigErrorType {
     NONE                  = 0U,                   // No error.
     NO_WIFI_CONFIG_FILE   = 1 << 0U,              // Wi-Fi configuration file is missing.
     CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the configuration file.
@@ -88,7 +91,7 @@ private:
   };
 
   /// @brief Enumeration representing possible error states for server certificate retrieval.
-  enum class ServerCertError : uint8_t {
+  enum class ServerCertError : ServerCertErrorType {
     NONE                  = 0U,                   // No error.
     NO_SERVER_CERT_FILE   = 1 << 0U,              // Server certification file is missing.
     CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the configuration file.
@@ -98,7 +101,7 @@ private:
   };
 
   /// @brief Enumeration representing possible error states for server credentials retrieval.
-  enum class ServerCredError : uint16_t {
+  enum class ServerCredError : ServerCredErrorType {
     NONE                  = 0U,                   // No error.
     NO_SERVER_CRED_FILE   = 1 << 0U,              // Server credentials file is missing.
     CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the credentials file.
