@@ -43,12 +43,9 @@ bool Radiation::run() {
   return true;
 }
 
-void Radiation::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
-  (void)payload;
-  (void)length;
+void Radiation::counter() {
+  cpm++;
 }
-
-void Radiation::counter() { cpm++; }
 
 void Radiation::measure() {
   cli();

@@ -39,7 +39,10 @@ public:
   /// This implementation does not handle incoming messages.
   /// @param payload Pointer to the received message payload.
   /// @param length Length of the payload in bytes.
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override {
+    (void)payload;
+    (void)length;
+  }
 
   Radiation(const Radiation&) = delete;                       // Define copy constructor.
   Radiation& operator=(const Radiation&) = delete;            // Define copy assignment operator.
