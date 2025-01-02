@@ -2,34 +2,39 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>
 
-const char Connectivity::mqttClientName[] PROGMEM                   = "%s_%02x%02x%02x%02x%02x%02x";
-const char Connectivity::mqttOutTopic[] PROGMEM                     = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";
-const char Connectivity::mqttInTopic[] PROGMEM                      = "iot/stod/%02x%02x%02x%02x%02x%02x/#";
-
-const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
-const char Connectivity::MQTT_CONNECTION_LOST_STR[] PROGMEM         = "MQTT_CONNECTION_LOST";
-const char Connectivity::MQTT_CONNECT_FAILED_STR[] PROGMEM          = "MQTT_CONNECT_FAILED";
-const char Connectivity::MQTT_DISCONNECTED_STR[] PROGMEM            = "MQTT_DISCONNECTED";
-const char Connectivity::MQTT_CONNECTED_STR[] PROGMEM               = "MQTT_CONNECTED";
-const char Connectivity::MQTT_CONNECT_BAD_PROTOCOL_STR[] PROGMEM    = "MQTT_CONNECT_BAD_PROTOCOL";
-const char Connectivity::MQTT_CONNECT_BAD_CLIENT_ID_STR[] PROGMEM   = "MQTT_CONNECT_BAD_CLIENT_ID";
-const char Connectivity::MQTT_CONNECT_UNAVAILABLE_STR[] PROGMEM     = "MQTT_CONNECT_UNAVAILABLE";
-const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONNECT_BAD_CREDENTIALS";
-const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
-const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
+const char Connectivity::mqttClientName[] PROGMEM                 = "%s_%02x%02x%02x%02x%02x%02x";
+const char Connectivity::mqttOutTopic[] PROGMEM                   = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";
+const char Connectivity::mqttInTopic[] PROGMEM                    = "iot/stod/%02x%02x%02x%02x%02x%02x/#";
+const char Connectivity::mqttConnectionTimeoutStr[] PROGMEM       = "MQTT_CONNECTION_TIMEOUT";
+const char Connectivity::mqttConnectionLostStr[] PROGMEM          = "MQTT_CONNECTION_LOST";
+const char Connectivity::mqttConnectFailedStr[] PROGMEM           = "MQTT_CONNECT_FAILED";
+const char Connectivity::mqttDisconnectedStr[] PROGMEM            = "MQTT_DISCONNECTED";
+const char Connectivity::mqttConnectedStr[] PROGMEM               = "MQTT_CONNECTED";
+const char Connectivity::mqttConnectBadProtocolStr[] PROGMEM      = "MQTT_CONNECT_BAD_PROTOCOL";
+const char Connectivity::mqttConnectBadClientIdStr[] PROGMEM      = "MQTT_CONNECT_BAD_CLIENT_ID";
+const char Connectivity::mqttConnectUnavailableStr[] PROGMEM      = "MQTT_CONNECT_UNAVAILABLE";
+const char Connectivity::mqttConnectBadCredentialsStr[] PROGMEM   = "MQTT_CONNECT_BAD_CREDENTIALS";
+const char Connectivity::mqttConnectUnauthorizedStr[] PROGMEM     = "MQTT_CONNECT_UNAUTHORIZED";
+const char Connectivity::mqttUnknownStatusStr[] PROGMEM           = "MQTT_UNKNOWN_STATUS";
 
 Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   serialPort(serial),
   networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
+  mqttCredentials(),
   networkState(true),
   mqttState(MQTT_CONNECTED),
   onlineState(true),
   deviceResetTimer(0U),
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
-  subtopicOffset(0U)
+  subtopicOffset(0U),
+  reconnectTimer(0U),
+#ifdef ESP8266
+  serverCert{},
+#endif
+  messageHandlerList{}
 {}
 
 bool Connectivity::init() {
@@ -54,7 +59,7 @@ bool Connectivity::init() {
   { // Set time via NTP, as required for x.509 validation.
     resetWatchdogTimer();
     syncNtpTime();
-    char dateTimeStr[24] = {'\0'};
+    char dateTimeStr[dateTimeStrBufSize] = {'\0'};
     const bool dateTimeValid = getIsoTimeString(dateTimeStr);
     if(dateTimeValid) {
       serialPort.printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
@@ -161,10 +166,11 @@ bool Connectivity::run() {
     mqttState = actualMqttState;
   }
 
-  if(!mqttClient.loop()) {
+  if(mqttClient.loop()) {
+    reconnectTimer = millis();
+  } else {
     if((mqttState < MQTT_CONNECTED) && networkState) {
-      static uint32_t reconnectTimer = millis();
-      if(millis() - reconnectTimer >= 10000U) {
+      if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
         reconnectTimer = millis();
         connectToMqttServer();
       }
@@ -189,6 +195,7 @@ bool Connectivity::run() {
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
+  if(subTopic == nullptr || payload == nullptr ) { return false; }
   char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
   const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
@@ -196,7 +203,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   return mqttClient.publish(actualTopic, payload);
 }
 
-void Connectivity::syncNtpTime() {
+void Connectivity::syncNtpTime() const {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
   constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
   constexpr uint8_t pollingDelayMs = 200U;
@@ -212,7 +219,7 @@ void Connectivity::syncNtpTime() {
   serialPort.printf_P(PSTR("\r\n"));
 }
 
-bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[24U]) {
+bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) const {
   memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
   const time_t currentTime = time(nullptr);
   if(currentTime == -1) { return false; }           // Check if time retrieval failed.
@@ -223,24 +230,24 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[24U]) {
   return true;
 }
 
-bool Connectivity::registerCallback(MqttBase* obj) {
-  if(!obj) { return false; }
-  messageHandlerList.push_back(obj);
+bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
+  if(mqttBasePtr == nullptr) { return false; }
+  messageHandlerList.push_back(mqttBasePtr);
   return true;
 }
 
 const char* Connectivity::getMqttStatusStr(int8_t status) {
   switch(status) {
-    case MQTT_CONNECTION_TIMEOUT: { return MQTT_CONNECTION_TIMEOUT_STR; } break;
-    case MQTT_CONNECTION_LOST: { return MQTT_CONNECTION_LOST_STR; } break;
-    case MQTT_CONNECT_FAILED: { return MQTT_CONNECT_FAILED_STR; } break;
-    case MQTT_DISCONNECTED: { return MQTT_DISCONNECTED_STR; } break;
-    case MQTT_CONNECTED: { return MQTT_CONNECTED_STR; } break;
-    case MQTT_CONNECT_BAD_PROTOCOL: { return MQTT_CONNECT_BAD_PROTOCOL_STR; } break;
-    case MQTT_CONNECT_BAD_CLIENT_ID: { return MQTT_CONNECT_BAD_CLIENT_ID_STR; } break;
-    case MQTT_CONNECT_UNAVAILABLE: { return MQTT_CONNECT_UNAVAILABLE_STR; } break;
-    case MQTT_CONNECT_BAD_CREDENTIALS: { return MQTT_CONNECT_BAD_CREDENTIALS_STR; } break;
-    case MQTT_CONNECT_UNAUTHORIZED: { return MQTT_CONNECT_UNAUTHORIZED_STR; } break;
-    default: { return MQTT_UNKNOWN_STATUS_STR; } break;
+    case MQTT_CONNECTION_TIMEOUT: { return mqttConnectionTimeoutStr; } break;
+    case MQTT_CONNECTION_LOST: { return mqttConnectionLostStr; } break;
+    case MQTT_CONNECT_FAILED: { return mqttConnectFailedStr; } break;
+    case MQTT_DISCONNECTED: { return mqttDisconnectedStr; } break;
+    case MQTT_CONNECTED: { return mqttConnectedStr; } break;
+    case MQTT_CONNECT_BAD_PROTOCOL: { return mqttConnectBadProtocolStr; } break;
+    case MQTT_CONNECT_BAD_CLIENT_ID: { return mqttConnectBadClientIdStr; } break;
+    case MQTT_CONNECT_UNAVAILABLE: { return mqttConnectUnavailableStr; } break;
+    case MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; } break;
+    case MQTT_CONNECT_UNAUTHORIZED: { return mqttConnectUnauthorizedStr; } break;
+    default: { return mqttUnknownStatusStr; } break;
   }
 }
