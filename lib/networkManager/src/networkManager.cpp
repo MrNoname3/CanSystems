@@ -17,6 +17,9 @@ volatile bool NetworkManager::ethConnected = false;
 #endif
 
 NetworkManager::NetworkManager(HardwareSerial& serial, Interface interface, uint8_t ethernetShieldCsPin) :
+#ifdef ESP8266
+  ethernetEnc28j60{},
+#endif
   serial(serial),
   networkInterface(Interface::UNKNOWN),
   interfaceStatus(WL_DISCONNECTED),
@@ -113,7 +116,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       serial.printf_P(PSTR("[LAN8720]\r\n"));
       WiFi.mode(WIFI_OFF);
       WiFi.onEvent(NetworkManager::WiFiEvent);
-      const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
+      const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
       serial.printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);

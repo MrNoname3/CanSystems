@@ -15,9 +15,21 @@
 /// @brief Manages network interfaces and connectivity for ESP-based devices.
 class NetworkManager final {
 private:
-  using NetworkErrorType = uint16_t;                          // Underlying type for network error states.
-  static constexpr uint8_t macAddressSize = 6U;               // Size of the MAC address array.
-  static constexpr uint8_t invalidPin = 0xFF;                 // Invalid pin value.
+  using NetworkErrorType = uint16_t;                                // Underlying type for network error states.
+  static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
+  static constexpr uint8_t invalidPin = 0xFF;                       // Invalid pin value.
+#ifdef ESP32
+  static constexpr uint8_t ethPhyAddress = 1;                       // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
+  static constexpr int32_t ethPhyPower = 17;                        // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
+  static constexpr int32_t ethPhyMdcPin = 23;                       // Pin# of the I²C clock signal for the Ethernet PHY
+  static constexpr int32_t ethPhyMdioPin = 18;                      // Pin# of the I²C IO signal for the Ethernet PHY
+  static constexpr eth_phy_type_t ethPhyType = ETH_PHY_LAN8720;     // Type of the Ethernet PHY (LAN8720 or TLK110)
+  static constexpr eth_clock_mode_t ethClockMode = ETH_CLOCK_GPIO0_IN;
+  // ETH_CLOCK_GPIO0_IN   - default: external clock from crystal oscillator
+  // ETH_CLOCK_GPIO0_OUT  - 50MHz clock from internal APLL output on GPIO0 - possibly an inverter is needed for LAN8720
+  // ETH_CLOCK_GPIO16_OUT - 50MHz clock from internal APLL output on GPIO16 - possibly an inverter is needed for LAN8720
+  // ETH_CLOCK_GPIO17_OUT - 50MHz clock from internal APLL inverted output on GPIO17 - tested with LAN8720
+#endif
 
 public:
   /// @brief Represents supported network interfaces.
@@ -97,24 +109,14 @@ private:
   static const char PROGMEM wlDisconnectedStr[];
   static const char PROGMEM wlUnknownStatusStr[];
 
-#ifdef ESP8266
-  std::optional<ENC28J60lwIP> ethernetEnc28j60;               // Optional instance for ENC28J60 on ESP8266.
-#elif defined ESP32
-  static constexpr uint8_t ETH_PHY_ADDR_ = 1;                 // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
-  static constexpr int8_t ETH_PHY_POWER_ = 17;                // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
-  static constexpr int8_t ETH_PHY_MDC_ = 23;                  // Pin# of the I²C clock signal for the Ethernet PHY
-  static constexpr int8_t ETH_PHY_MDIO_ = 18;                 // Pin# of the I²C IO signal for the Ethernet PHY
-  static constexpr auto ETH_PHY_TYPE_ = ETH_PHY_LAN8720;      // Type of the Ethernet PHY (LAN8720 or TLK110)
-  static constexpr auto ETH_CLK_MODE_ = ETH_CLOCK_GPIO0_IN;
-  // ETH_CLOCK_GPIO0_IN   - default: external clock from crystal oscillator
-  // ETH_CLOCK_GPIO0_OUT  - 50MHz clock from internal APLL output on GPIO0 - possibly an inverter is needed for LAN8720
-  // ETH_CLOCK_GPIO16_OUT - 50MHz clock from internal APLL output on GPIO16 - possibly an inverter is needed for LAN8720
-  // ETH_CLOCK_GPIO17_OUT - 50MHz clock from internal APLL inverted output on GPIO17 - tested with LAN8720
-  static volatile bool ethConnected;                          // Ethernet connection status.
+#ifdef ESP32
+  static volatile bool ethConnected;                                // Ethernet connection status.
+#elif defined ESP8266
+  std::optional<ENC28J60lwIP> ethernetEnc28j60;                     // Optional instance for ENC28J60 on ESP8266.
 #endif
-  HardwareSerial& serial;                                     // Serial instance for debug logs.
-  Interface networkInterface;                                 // Current network interface.
-  wl_status_t interfaceStatus;                                // Current network interface status.
-  uint8_t mac[macAddressSize];                                // Byte array to store the MAC address.
+  HardwareSerial& serial;                                           // Serial instance for debug logs.
+  Interface networkInterface;                                       // Current network interface.
+  wl_status_t interfaceStatus;                                      // Current network interface status.
+  uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.
 };
 #endif // NETWORK_MANAGER_HPP
