@@ -1,33 +1,33 @@
 #include "radiation.hpp"
 
-volatile uint16_t Radiation::cpm = 0;
-volatile bool Radiation::measureDone = false;
-volatile uint16_t Radiation::cpmToSend = 0;
-const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
+const char Radiation::cpmMessageFrame[] PROGMEM = {
   "{"
     "\"cpm\":%hu"
   "}"
 };
+volatile uint16_t Radiation::cpm = 0U;
+volatile bool Radiation::measureDone = false;
+volatile uint16_t Radiation::cpmToSend = 0U;
 
-Radiation::Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin) :
-  MqttBase(connectivity, classID),
+Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin) :
+  MqttBase(connectivity, subtopic),
+  measureTicker(),
   sensorPin(sensorPin)
 {
   pinMode(sensorPin, INPUT);
 }
 
 bool Radiation::init() {
-  constexpr const uint16_t measureTime = 60000;  //millisec
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
-  measureTimer.attach_ms(measureTime, measure);
-  cpm = 0;
+  measureTicker.attach_ms(measureTime, measure);
+  cpm = 0U;
   return true;
 }
 
 void Radiation::end() {
   detachInterrupt(digitalPinToInterrupt(sensorPin));
-  measureTimer.detach();
-  cpm = 0;
+  measureTicker.detach();
+  cpm = 0U;
   measureDone = false;
 }
 
@@ -35,7 +35,7 @@ bool Radiation::run() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, cpmToSend);
+    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), cpmMessageFrame, cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
     if(!MqttBase::sendMessage(dataOut)) { return false; }
@@ -53,7 +53,7 @@ void Radiation::counter() { cpm++; }
 void Radiation::measure() {
   cli();
   cpmToSend = cpm;
-  cpm = 0;
+  cpm = 0U;
   measureDone = true;
   sei();
 }

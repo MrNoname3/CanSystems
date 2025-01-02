@@ -4,7 +4,7 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #if defined(ESP8266) || defined(ESP32)
-#include <Ticker.h>                                                 /// Timer interrupt hadnler.
+#include <Ticker.h>                                                 /// Timer interrupt handler.
 #endif
 
 /// @brief A utility class for controlling a debug LED.

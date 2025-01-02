@@ -22,7 +22,7 @@ public:
     EXT_FILE_DT_END
   };
 
-  MqttCommon(Connectivity& connectivity, const char* classID, HardwareSerial& serial);
+  MqttCommon(Connectivity& connectivity, const char* subtopic, HardwareSerial& serial);
 
   /// @brief Destructor of the object.
   virtual ~MqttCommon() = default;

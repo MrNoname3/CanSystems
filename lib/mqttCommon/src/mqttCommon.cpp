@@ -2,8 +2,8 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 
-MqttCommon::MqttCommon(Connectivity& connectivity, const char* classID, HardwareSerial& serial) :
-  MqttBase(connectivity, classID),
+MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic, HardwareSerial& serial) :
+  MqttBase(connectivity, subtopic),
   serial(serial),
   externalFileName{'\0'},
   dataTransfer(this->serial)

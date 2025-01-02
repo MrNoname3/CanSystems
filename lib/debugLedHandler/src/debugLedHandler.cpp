@@ -3,7 +3,9 @@
 uint8_t DebugLedHandler::dbgLedOnState = 1U;
 uint8_t DebugLedHandler::dbgLedPin = DebugLedHandler::invalidPin;
 
-DebugLedHandler::DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState) {
+DebugLedHandler::DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState) :
+  ledTicker()
+{
   setupLedPin(debugLedPin, ledOnState);
 }
 
