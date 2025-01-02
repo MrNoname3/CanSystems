@@ -1,7 +1,8 @@
 #include "rfHandler.hpp"
-#include <ArduinoJson.h>                      /// Handle JSON files.
+#include <ArduinoJson.h>                                            /// Handle JSON files.
+#include "common.hpp"                                               /// Common definitions and functions.
 
-const char RfHandler::RF_MSG_FRAME[] PROGMEM = {
+const char RfHandler::rfMessageFrame[] PROGMEM = {
   "{"
     "\"RfReceived\":"
     "{"
@@ -13,45 +14,43 @@ const char RfHandler::RF_MSG_FRAME[] PROGMEM = {
   "}"
 };
 
-RfHandler::RfHandler(Connectivity& connectivity, const char* classID, uint8_t rxPin, uint8_t txPin) :
-  MqttBase(connectivity, classID),
-  rxPin_(rxPin),
-  txPin_(txPin)
+RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
+  MqttBase(connectivity, subtopic),
+  rfTransciever(),
+  rfRxPin(rfRxPin),
+  rfTxPin(rfTxPin),
+  lastRfData(),
+  dataCheckTimer(0U)
 {
-  pinMode(rxPin_, INPUT_PULLUP);
-  rfTransciever.enableReceive(digitalPinToInterrupt(rxPin_));
-  rfTransciever.enableTransmit(txPin_);
+  pinMode(this->rfRxPin, INPUT_PULLUP);
+  rfTransciever.enableReceive(digitalPinToInterrupt(this->rfRxPin));
+  rfTransciever.enableTransmit(this->rfTxPin);
 }
 
-bool RfHandler::init() { return true; }
-
 bool RfHandler::run() {
-  if(rfTransciever.available()) {                                         // Check if RF data received.
-    static RFData rfDataOld;                                              // Save old data.
-    static uint32_t dataCheckTimer = 0;                                   // Serial data send cooldown timer.
-    RFData rfData;
-    rfData.data = rfTransciever.getReceivedValue();                       // Get received data.
-    rfData.bitLength = rfTransciever.getReceivedBitlength();              // Get received data bit length.
-    rfData.protocol = rfTransciever.getReceivedProtocol();                // Get receved data protocol.
-    rfData.pulseLength = rfTransciever.getReceivedDelay();                // Get received data pulse length.
-    rfTransciever.resetAvailable();                                       // Clear receive flag.
+  const uint32_t actualTime = millis();
+  if(rfTransciever.available()) {
+    RfData actualRfData(rfTransciever.getReceivedValue(), rfTransciever.getReceivedBitlength(),
+      rfTransciever.getReceivedProtocol(), rfTransciever.getReceivedDelay());
+    rfTransciever.resetAvailable();
 
-    if(millis() - dataCheckTimer >= 100) {                                // If timer is expired, clear old data to pass the next filter.
-      rfDataOld.data = 0;
-      rfDataOld.bitLength = 0;
-      rfDataOld.protocol = 0;
+    // If timer is expired, clear old data to pass the next filter.
+    if(Time::hasElapsed(actualTime, dataCheckTimer, dataCheckTime)) {
+      lastRfData.data = 0U;
+      lastRfData.bitLength = 0U;
+      lastRfData.protocol = 0U;
     }
 
     // Filter repeated data.
-    if((rfDataOld.data != rfData.data) || (rfDataOld.bitLength != rfData.bitLength) || (rfDataOld.protocol != rfData.protocol)) {
+    if((lastRfData.data != actualRfData.data) || (lastRfData.bitLength != actualRfData.bitLength) || (lastRfData.protocol != actualRfData.protocol)) {
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), RF_MSG_FRAME, rfData.data, rfData.bitLength, rfData.protocol, rfData.pulseLength);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), rfMessageFrame, actualRfData.data, actualRfData.bitLength, actualRfData.protocol, actualRfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       if(!MqttBase::sendMessage(dataOut)) { return false; }
-      rfDataOld = rfData;                                                 // Save sent data to use it for filtering.
+      lastRfData = actualRfData;
     }
-    dataCheckTimer = millis();                                            // Reload timer.
+    dataCheckTimer = actualTime;
   }
   return true;
 }
@@ -71,8 +70,14 @@ void RfHandler::messageArrivedCallback(const uint8_t* payload, uint32_t length) 
     const uint32_t rfOutBitLength = bitsJsonVar.as<uint32_t>();
     const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();
     const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
-    if(rfOutProtocol != 0) { rfTransciever.setProtocol(rfOutProtocol); }
-    if(rfOutPulseLength != 0) { rfTransciever.setPulseLength(rfOutPulseLength); }
-    if(rfOutData != 0 && rfOutBitLength != 0) { rfTransciever.send(rfOutData, rfOutBitLength); }
+    if(rfOutProtocol > 0U) {
+      rfTransciever.setProtocol(rfOutProtocol);
+    }
+    if(rfOutPulseLength > 0U) {
+      rfTransciever.setPulseLength(rfOutPulseLength);
+    }
+    if(rfOutData > 0U && rfOutBitLength > 0U) {
+      rfTransciever.send(rfOutData, rfOutBitLength);
+    }
   }
 }

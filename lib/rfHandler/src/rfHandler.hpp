@@ -1,21 +1,40 @@
 #ifndef RFHANDLER_HPP
 #define RFHANDLER_HPP
 
-#include "connectivity.hpp"
-#include <Arduino.h>                          /// Arduino libraries header.
-#include "RCSwitch.h"                         /// RF driver library.
+#include "connectivity.hpp"                                         /// Handles the MQTT connection.
+#include <Arduino.h>                                                /// Arduino libraries header.
+#include "RCSwitch.h"                                               /// RF driver library.
 
+/// @brief Class for handling RF communication and integrating with MQTT.
+/// This class supports receiving and transmitting RF signals, filtering duplicate data, and sending the processed data via MQTT.
 class RfHandler final : public MqttBase {
+private:
+  static constexpr uint8_t dataOutBufSize = 116U;   // Size of the buffer used for outgoing MQTT data messages.
+  static constexpr uint8_t dataCheckTime = 100U;    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
+
 public:
-  RfHandler(Connectivity& connectivity, const char* classID, uint8_t rxPin, uint8_t txPin);
+  /// @brief Constructs the RF handler object.
+  /// @param connectivity Reference to the MQTT connectivity object.
+  /// @param subtopic Subtopic for MQTT messages related to RF data.
+  /// @param rfRxPin GPIO pin connected to the RF receiver.
+  /// @param rfTxPin GPIO pin connected to the RF transmitter.
+  RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin);
 
   /// @brief Destructor of the object.
-  virtual ~RfHandler() = default;
+  ~RfHandler() = default;
 
-  virtual bool init() override;
+  /// @brief Initializes the RF handler. No additional setup is required in this implementation.
+  /// @return Always returns `true`.
+  virtual bool init() override { return true; }
 
+  /// @brief Executes the RF handling logic, including receiving and sending RF data.
+  /// @return `true` if the operation was successful; otherwise, `false`.
   virtual bool run() override;
 
+  /// @brief Callback function invoked when an MQTT message is received.
+  /// Processes incoming messages to send RF signals based on the payload.
+  /// @param payload Pointer to the received message payload.
+  /// @param length Length of the payload in bytes.
   virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
 
   RfHandler(const RfHandler&) = delete;                       // Define copy constructor.
@@ -24,20 +43,41 @@ public:
   RfHandler& operator=(RfHandler&&) = delete;                 // Define move assignment operator.
 
 private:
-  /// @brief RF data transciev struct.
+  /// @brief Struct for storing RF data and its associated metadata.
   struct __attribute__((packed))
-  RFData {
-    uint64_t data;                              // RF data.
-    uint32_t bitLength;                         // RF data bit length.
-    uint32_t protocol;                          // RF protocol.
-    uint32_t pulseLength;                       // RF pulse length.
-    RFData() : data(0), bitLength(0), protocol(0), pulseLength(0) {}
+  RfData {
+    uint64_t data;                                  // RF signal data.
+    uint32_t bitLength;                             // Number of bits in the RF signal.
+    uint32_t protocol;                              // Protocol used for the RF signal.
+    uint32_t pulseLength;                           // Pulse length for the RF signal.
+
+    /// @brief Default constructor initializing the RF data to zero.
+    RfData() :
+      data(0U),
+      bitLength(0U),
+      protocol(0U),
+      pulseLength(0U)
+    {}
+
+    /// @brief Constructor initializing RF data with specified values.
+    /// @param data RF signal data.
+    /// @param bitLength Number of bits in the RF signal.
+    /// @param protocol Protocol used for the RF signal.
+    /// @param pulseLength Pulse length for the RF signal.
+    RfData(uint64_t data, uint32_t bitLength, uint32_t protocol, uint32_t pulseLength) :
+      data(data),
+      bitLength(bitLength),
+      protocol(protocol),
+      pulseLength(pulseLength)
+    {}
   };
 
-  RCSwitch rfTransciever;                                      // RF modules driver object.
-  const uint8_t rxPin_;
-  const uint8_t txPin_;
-  static constexpr uint8_t dataOutBufSize = 140;
-  static const char PROGMEM RF_MSG_FRAME[];
+  static const char PROGMEM rfMessageFrame[];                 // Format string for the MQTT message containing RF data.
+
+  RCSwitch rfTransciever;                                     // RF driver object for sending and receiving RF signals.
+  const uint8_t rfRxPin;                                      // GPIO pin connected to the RF receiver.
+  const uint8_t rfTxPin;                                      // GPIO pin connected to the RF transmitter.
+  RfData lastRfData;                                          // Last received RF data for duplicate filtering.
+  uint32_t dataCheckTimer;                                    // Timer for filtering out repeated RF data.
 };
 #endif // RFHANDLER_HPP
