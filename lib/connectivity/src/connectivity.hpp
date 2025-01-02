@@ -43,7 +43,7 @@ public:
   bool registerCallback(MqttBase* obj);
 
 private:
-  bool connect();
+  bool connectToMqttServer();
 
   void syncNtpTime();
 

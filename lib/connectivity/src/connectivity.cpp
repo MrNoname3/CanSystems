@@ -115,9 +115,8 @@ bool Connectivity::init() {
       return false;
     }
   }
-
-  if(!connect()) { return false; }
-
+  // Setup MQTT client.
+  mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length ==  0U)) { return; }
     const char* subtopic = topic + subtopicOffset;
@@ -132,25 +131,23 @@ bool Connectivity::init() {
     serialPort.printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
   });
 
-  return true;
+  return connectToMqttServer();
 }
 
-bool Connectivity::connect() {
-  yield();
+bool Connectivity::connectToMqttServer() {
   // TCP connection.
-  const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
-  serialPort.printf_P(PSTR("[TCP] Connecting to: %s:%hu %s\r\n"), mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(tcpConResult));
-  if(!tcpConResult) { return false; }
+  // const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
+  // serialPort.printf_P(PSTR("[TCP] Connecting to: %s:%hu %s\r\n"), mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(tcpConResult));
+  // if(!tcpConResult) { return false; }
 
   // MQTT connection.
-  mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  serialPort.printf_P(PSTR("[MQTT] Connecting to MQTT broker: %s\r\n  State: %s\r\n"), Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+  serialPort.printf_P(PSTR("[MQTT] Connecting to MQTT server: %s:%hu %s\r\n  State: %s\r\n"),
+    mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
-  const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
+  const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   serialPort.printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
-  if(!subResult) { return false; }
-  return true;
+  return subResult;
 }
 
 bool Connectivity::run() {
@@ -159,7 +156,7 @@ bool Connectivity::run() {
   if(actualNetworkState != networkState) {
     networkState = actualNetworkState;
     if(networkState) {
-      connect();
+      connectToMqttServer();
     } else {
       mqttClient.disconnect();
     }
@@ -175,7 +172,7 @@ bool Connectivity::run() {
       static uint32_t reconnectTimer = millis();
       if(millis() - reconnectTimer >= 10000U) {
         reconnectTimer = millis();
-        connect();
+        connectToMqttServer();
       }
     }
   }
