@@ -141,7 +141,7 @@ bool Connectivity::init() {
 
 bool Connectivity::connectToMqttServer() {
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  serialPort.printf_P(PSTR("[MQTT] Connecting to MQTT server: %s:%hu %s\r\n  State: %s\r\n"),
+  serialPort.printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
