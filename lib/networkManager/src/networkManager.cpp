@@ -65,11 +65,9 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       } else {
         WiFi.begin(ssid, password);
       }
-      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
+      serial.printf_P(PSTR("[NETWORK] Connecting to router..."));
       while(WiFi.status() != WL_CONNECTED) {
         yield();
-        serial.print(".");
-        delay(200U);
       }
       serial.printf_P(PSTR(" %s\r\n"), Str::getStateStr(WiFi.status() == WL_CONNECTED));
       if(WiFi.status() != WL_CONNECTED) {
@@ -96,11 +94,9 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
+      serial.printf_P(PSTR("[NETWORK] Connecting to router..."));
       while(!ethernetEnc28j60.value().connected()) {
         yield();
-        serial.print(".");
-        delay(200U);
       }
       serial.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethernetEnc28j60.value().connected()));
       if(!ethernetEnc28j60.value().connected()) {
@@ -122,11 +118,9 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      serial.printf_P(PSTR("[NETWORK] Connecting to router"));
+      serial.printf_P(PSTR("[NETWORK] Connecting to router..."));
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
-        serial.print(".");
-        delay(200U);
       }
       serial.printf_P(PSTR(" %s\r\n"), Str::getStateStr(ethConnected));
       if(!ethConnected) {
