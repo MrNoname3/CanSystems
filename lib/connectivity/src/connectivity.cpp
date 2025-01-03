@@ -38,15 +38,15 @@ Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManage
 {}
 
 bool Connectivity::init() {
-  { // Init filesystem.
+  { // Initialise the file system.
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
     const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
-    serialPort.printf_P(PSTR("[FS] Initialising filesystem: %s\r\n"), Str::getStateStr(initFS));
+    serialPort.printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
     if(!initFS) { return false; }
     serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
-  { // Start interface.
+  { // Start network interface.
     resetWatchdogTimer();
     const uint16_t connResult = networkManager.connect();
     const bool connResultOk = (connResult == 0U);
@@ -71,7 +71,7 @@ bool Connectivity::init() {
   { // Get MQTT server credentials.
     const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
     const bool credResultOk = (credResult == 0U);
-    serialPort.printf_P(PSTR("[MQTT] Getting server credentials: %s\r\n"), Str::getStateStr(credResultOk));
+    serialPort.printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
     if(!credResultOk) {
       serialPort.printf_P(PSTR("  Code: %hu\r\n"), credResult);
       return false;
@@ -100,7 +100,7 @@ bool Connectivity::init() {
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
     subtopicOffset = senderTopicSize - 2U;
   }
-  { // Open cert.
+  { // Open certificate.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
       serverCert.emplace(certFile, certFileSize);
@@ -109,12 +109,12 @@ bool Connectivity::init() {
       tcpClient.setTimeout(Time::secToMs(5U));
       return true;
 #elif defined ESP32
-      tcpClient.setTimeout(10);
+      tcpClient.setTimeout(10U);
       return tcpClient.loadCACert(certFile, certFileSize);
 #endif
     });
     const bool certResultOk = (certResult == 0U);
-    serialPort.printf_P(PSTR("[TCP] Getting server certificate: %s\r\n"), Str::getStateStr(certResultOk));
+    serialPort.printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
     if(!certResultOk) {
       serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
       return false;
@@ -206,17 +206,14 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 void Connectivity::syncNtpTime() const {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
   constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
-  constexpr uint8_t pollingDelayMs = 200U;
 
-  serialPort.printf_P(PSTR("[NTP] Waiting for NTP time sync"));
+  serialPort.printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
   time_t currentTime = time(nullptr);
   while(currentTime < minValidTime) {
-    serialPort.print(".");
-    delay(pollingDelayMs);
+    yield();
     currentTime = time(nullptr);
   }
-  serialPort.printf_P(PSTR("\r\n"));
 }
 
 bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) const {
