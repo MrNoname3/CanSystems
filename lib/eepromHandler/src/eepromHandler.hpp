@@ -24,7 +24,7 @@ public:
   /// @brief Saves the data pointed to by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
   bool save() {
-    if (data == nullptr) { return false; } // Null pointer check.
+    if(data == nullptr) { return false; }
     return save(data);
   }
 
@@ -32,6 +32,7 @@ public:
   /// @param data Pointer to the data to be stored.
   /// @return True if the operation was successful; false otherwise.
   static bool save(T* data) {
+    if(data == nullptr) { return false; }
     EEPROMData eepromData;
     eepromData.data = *data;
     eepromData.crc = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
@@ -40,8 +41,8 @@ public:
     EEPROM.put(eepromAddress, eepromData);
 
     // Verify the written data.
-    for (uint16_t i = 0; i < sizeof(EEPROMData); ++i) {
-      if (EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
+    for(uint16_t i = 0U; i < sizeof(EEPROMData); ++i) {
+      if(EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
         return false;  // Write operation failed.
       }
     }
@@ -51,7 +52,7 @@ public:
   /// @brief Loads data into the memory address stored by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
   bool load() {
-    if (data == nullptr) { return false; } ///< Null pointer check.
+    if(data == nullptr) { return false; }
     return load(data);
   }
 
@@ -59,16 +60,17 @@ public:
   /// @param data Pointer to the memory where the data will be loaded.
   /// @return True if the operation was successful; false otherwise.
   static bool load(T* data) {
+    if(data == nullptr) { return false; }
     // Read the data from EEPROM.
     EEPROMData eepromData;
     EEPROM.get(eepromAddress, eepromData);
 
     // Validate CRC.
     uint16_t crcReceived = eepromData.crc;
-    eepromData.crc = 0;
+    eepromData.crc = 0U;
     uint16_t crcCalculated = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
 
-    if (crcReceived == crcCalculated) {
+    if(crcReceived == crcCalculated) {
       *data = eepromData.data;
       return true;  // CRC validation succeeded.
     } else {
@@ -91,7 +93,7 @@ private:
   EEPROMData {
     uint16_t crc;                               // CRC16 value of the data.
     T data;                                     // User-defined data type.
-    EEPROMData() : crc(0), data() {}            // Default constructor initializes members to zero.
+    EEPROMData() : crc(0U), data() {}           // Default constructor initializes members to zero.
   };
 
   T* data;                                      // Pointer to the user-defined data type.

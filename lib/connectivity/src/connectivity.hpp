@@ -161,7 +161,7 @@ public:
     ACK = 1U          // Positive acknowledgmen.
   };
 
- /// @brief Initializes the MQTT base instance.
+  /// @brief Initializes the MQTT base instance.
   /// @return `true` if the initialization was successful; otherwise, `false`.
   [[nodiscard]] virtual bool init() = 0;
 
