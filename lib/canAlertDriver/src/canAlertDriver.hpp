@@ -3,7 +3,7 @@
 
 #include "canHandler.hpp"
 
-class CanAlertDriver final : protected CanHandler::CanComBase {
+class CanAlertDriver final : protected CanComBase {
 public:
   CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID, float tempOffset = 0.0F);
   ~CanAlertDriver() = default;

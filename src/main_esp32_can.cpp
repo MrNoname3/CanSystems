@@ -9,8 +9,8 @@
 #include "networkManager.hpp"                                       /// Manages the network connection.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
-#include "canHandler.hpp"
-#include "canAlertDriver.hpp"
+#include "canHandler.hpp"                                           /// CAN handler library.
+// #include "canAlertDriver.hpp"
 
 //--- Constants ---//
 static constexpr uint8_t LED_PIN                    = 2U;           // Pin of the LED.
@@ -40,8 +40,8 @@ Connectivity iotConn(
 //--- MQTT handler objects ---//
 MqttCommon mqttCommon (iotConn, "common", Serial);
 CanHandler canHandler(Serial);
-CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
-CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
+//CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
+//CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
 //--- Handling tasks ---//
 Task *task[3] = {&iotConn, &performance, &mqttCommon};
@@ -84,10 +84,10 @@ void loop() {
 
 void canTask(void *pvParameters) {
   Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), Str::getSectionSeparator());
-  canHandler.begin(500E3);
+  canHandler.init();
   Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), Str::getSectionSeparator());
   while(true) {
-    canHandler.loop();
+    canHandler.run();
     vTaskDelay(5);
   }
   vTaskDelete(nullptr);
