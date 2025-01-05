@@ -22,6 +22,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include <ArduinoJson.h>                                            /// Handle JSON files.
 
 class MqttBase;                                                     // Forward declaration.
 
@@ -187,11 +188,10 @@ public:
   /// @return The maximum subtopic size.
   [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
 
-  /// @brief Callback invoked when an MQTT message arrives.
+  /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.
-  /// @param payload Pointer to the message payload.
-  /// @param length Length of the payload in bytes.
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) = 0;
+  /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
 
   MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
   MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.

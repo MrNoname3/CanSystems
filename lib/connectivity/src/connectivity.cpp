@@ -129,7 +129,14 @@ bool Connectivity::init() {
     for(const auto &currentMessageHandler : messageHandlerList) {
       if(currentMessageHandler == nullptr) { continue; }
       if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
-        currentMessageHandler->messageArrivedCallback(payload, length);
+        JsonDocument payloadJson;
+        DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
+        if(parsingError != DeserializationError::Code::Ok) {
+        serialPort.printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
+          currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+          return;
+        }
+        currentMessageHandler->messageArrivedCallback(payloadJson);
         return;
       }
     }

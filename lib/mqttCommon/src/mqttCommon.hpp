@@ -27,7 +27,7 @@ public:
   /// @brief Destructor of the object.
   virtual ~MqttCommon() = default;
 
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   virtual bool init() override;
 

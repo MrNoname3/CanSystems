@@ -35,13 +35,11 @@ public:
   /// @brief Stops the radiation monitoring and detaches interrupts.
   void end();
 
-  /// @brief Callback function invoked when an MQTT message is received.
-  /// This implementation does not handle incoming messages.
-  /// @param payload Pointer to the received message payload.
-  /// @param length Length of the payload in bytes.
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override {
-    (void)payload;
-    (void)length;
+  /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
+  /// Derived classes must implement this to handle incoming messages.
+  /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) override {
+    (void)payloadJson;
   }
 
   Radiation(const Radiation&) = delete;                       // Define copy constructor.

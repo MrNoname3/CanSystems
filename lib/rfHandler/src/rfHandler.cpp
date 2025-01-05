@@ -55,15 +55,11 @@ bool RfHandler::run() {
   return true;
 }
 
-void RfHandler::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
-  JsonDocument rfJson;
-  DeserializationError deserializationError = deserializeJson(rfJson, payload, length);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(!deSerResult) { return; }
-  JsonVariant dataJsonVar = rfJson[F("Data")];
-  JsonVariant bitsJsonVar = rfJson[F("Bits")];
-  JsonVariant protocolJsonVar = rfJson[F("Protocol")];
-  JsonVariant pulseJsonVar = rfJson[F("Pulse")];
+void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) {
+  JsonVariant dataJsonVar = payloadJson[F("Data")];
+  JsonVariant bitsJsonVar = payloadJson[F("Bits")];
+  JsonVariant protocolJsonVar = payloadJson[F("Protocol")];
+  JsonVariant pulseJsonVar = payloadJson[F("Pulse")];
   if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() &&
     protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
     const uint64_t rfOutData = dataJsonVar.as<uint64_t>();

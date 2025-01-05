@@ -9,15 +9,8 @@ MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic, Hardwar
   dataTransfer(this->serial)
 {}
 
-void MqttCommon::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
-  JsonDocument cmdJson;
-  DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(!deSerResult) {
-    serial.printf_P(PSTR("[COMMON] Deserialisation failed: %s\r\n"), reinterpret_cast<const char*>(deserializationError.f_str()));
-    return;
-  }
-  const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
+void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
+  const uint8_t cmd = payloadJson[F("cmd")].as<uint8_t>();
   Command command = static_cast<Command>(cmd);
   switch(command) {
     case Command::BLANK: {} break;
@@ -25,12 +18,12 @@ void MqttCommon::messageArrivedCallback(const uint8_t* payload, uint32_t length)
     case Command::FW_DT_START:
     case Command::WIFICFG_DT_START:
     case Command::EXT_FILE_DT_START: {
-      const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
-      const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
+      const uint32_t fileSize = payloadJson[F("fileSize")].as<uint32_t>();
+      const uint32_t fileCrc = payloadJson[F("crc32")].as<uint32_t>();
       const char* fileNamePtr = nullptr;
       switch(command) {
         case Command::FW_DT_START: {
-          const char* binId = cmdJson[F("binId")].as<const char*>();
+          const char* binId = payloadJson[F("binId")].as<const char*>();
           if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
             serial.printf_P(PSTR("[COMMON] Wrong FW file ID: %s\r\n"), binId);
             if(!MqttBase::sendResponse(MqttBase::Response::NACK, cmd)) { return; /*Handler needed*/ }
@@ -40,7 +33,7 @@ void MqttCommon::messageArrivedCallback(const uint8_t* payload, uint32_t length)
           } break;
         case Command::WIFICFG_DT_START: { fileNamePtr = FileName::getWifiTempConfigLocation(); } break;
         case Command::EXT_FILE_DT_START: {
-          const char* fileName = cmdJson[F("name")].as<const char*>();
+          const char* fileName = payloadJson[F("name")].as<const char*>();
           memset(externalFileName, '\0', sizeof(externalFileName));
           if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
           uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
@@ -63,8 +56,8 @@ void MqttCommon::messageArrivedCallback(const uint8_t* payload, uint32_t length)
     case Command::FW_DT_DATA:
     case Command::WIFICFG_DT_DATA:
     case Command::EXT_FILE_DT_DATA: {
-      const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
-      const char* filePieceB64 = cmdJson["data"].as<const char*>();
+      const uint32_t filePieceNumber = payloadJson[F("piece")].as<uint32_t>();
+      const char* filePieceB64 = payloadJson["data"].as<const char*>();
       const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
       if(!MqttBase::sendResponse(storingResult ? MqttBase::Response::ACK : MqttBase::Response::NACK, cmd)) { return; /*Handler needed*/ }
       if(!storingResult) {

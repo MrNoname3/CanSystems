@@ -75,11 +75,6 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     return true;
   }
 
-  void Mq135Handler::messageArrivedCallback(const uint8_t* payload, uint32_t length) {
-    (void)payload;
-    (void)length;
-  }
-
   bool Mq135Handler::startCalibration() {
     const uint16_t adcValue = getAnalogValue();
     mq135.setADC(adcValue);

@@ -31,11 +31,10 @@ public:
   /// @return `true` if the operation was successful; otherwise, `false`.
   virtual bool run() override;
 
-  /// @brief Callback function invoked when an MQTT message is received.
-  /// Processes incoming messages to send RF signals based on the payload.
-  /// @param payload Pointer to the received message payload.
-  /// @param length Length of the payload in bytes.
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
+  /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
+  /// Derived classes must implement this to handle incoming messages.
+  /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   RfHandler(const RfHandler&) = delete;                       // Define copy constructor.
   RfHandler& operator=(const RfHandler&) = delete;            // Define copy assignment operator.

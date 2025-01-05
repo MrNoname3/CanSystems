@@ -16,7 +16,9 @@ public:
 
   virtual bool run() override;
 
-  virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) override {
+    (void)payloadJson;
+  }
 
   bool startCalibration();
 
