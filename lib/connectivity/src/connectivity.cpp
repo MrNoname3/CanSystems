@@ -127,7 +127,7 @@ bool Connectivity::init() {
     const char* subtopic = topic + subtopicOffset;
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
     for(const auto &currentMessageHandler : messageHandlerList) {
-      if(currentMessageHandler == nullptr) { return; }
+      if(currentMessageHandler == nullptr) { continue; }
       if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
         currentMessageHandler->messageArrivedCallback(payload, length);
         return;
