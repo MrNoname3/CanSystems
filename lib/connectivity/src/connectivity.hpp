@@ -183,15 +183,15 @@ public:
   /// @return Pointer to the subtopic string.
   [[nodiscard]] inline const char* getSubtopic() const { return subtopic; }
 
+  /// @brief Gets the maximum allowed size for MQTT subtopics.
+  /// @return The maximum subtopic size.
+  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
+
   /// @brief Callback invoked when an MQTT message arrives.
   /// Derived classes must implement this to handle incoming messages.
   /// @param payload Pointer to the message payload.
   /// @param length Length of the payload in bytes.
   virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) = 0;
-
-  /// @brief Gets the maximum allowed size for MQTT subtopics.
-  /// @return The maximum subtopic size.
-  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
 
   MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
   MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
@@ -208,7 +208,7 @@ protected:
   {
     if(isSubtopicValid(subTopic)) {
       strlcpy(subtopic, subTopic, subtopicSize);
-      connectivity.registerCallback(this);
+      this->connectivity.registerCallback(this);
     }
   }
 
