@@ -10,7 +10,7 @@
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
 #include "canHandler.hpp"                                           /// CAN handler library.
-// #include "canAlertDriver.hpp"
+#include "canAlertDriver.hpp"                                       /// Driver for the alert client.
 
 //--- Constants ---//
 static constexpr uint8_t LED_PIN                    = 2U;           // Pin of the LED.
@@ -40,11 +40,11 @@ Connectivity iotConn(
 //--- MQTT handler objects ---//
 MqttCommon mqttCommon (iotConn, "common", Serial);
 CanHandler canHandler(Serial);
-//CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
-//CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
+CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
+CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
 //--- Handling tasks ---//
-Task *task[3] = {&iotConn, &performance, &mqttCommon};
+Task *task[5] = {&iotConn, &performance, &mqttCommon, &canAlert1, &canAlert2};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
