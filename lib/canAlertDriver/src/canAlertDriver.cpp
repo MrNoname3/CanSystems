@@ -1,6 +1,6 @@
 #include "canAlertDriver.hpp"
 
-const char CanAlertDriver::HUM_TEMP_LDR_FRAME[] PROGMEM = {
+const char CanAlertDriver::humTempLdrFrame[] PROGMEM = {
   "{"
     "\"Temperature\":%.2f,"
     "\"Humidity\":%hu,"
@@ -8,16 +8,48 @@ const char CanAlertDriver::HUM_TEMP_LDR_FRAME[] PROGMEM = {
   "}"
 };
 
-CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID, float tempOffset) :
-  CanComBase::CanComBase(canHandler, canId, connectivity, classID),
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
+  Connectivity& connectivity, const char* classID, float tempOffset) :
+  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, classID),
   tempOffset(tempOffset)
 {}
 
-bool CanAlertDriver::init() { return true; }
+void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) {
+  JsonVariant soundJsonVar = payloadJson[F("Sound")];
+  JsonVariant volumeJsonVar = payloadJson[F("Volume")];
+  JsonVariant colorsJsonVar = payloadJson[F("Colors")];
+  uint8_t colorsOffset = 0U;
+  uint8_t canData[8] = {'\0'};
 
-bool CanAlertDriver::run() { return true; }
+  if(soundJsonVar.is<uint16_t>() && volumeJsonVar.is<uint8_t>()) {
+    const uint16_t sound = soundJsonVar.as<uint16_t>();
+    const uint8_t volume = volumeJsonVar.as<uint8_t>();
+    canData[0] = static_cast<uint8_t>((sound >> 0U) & 0xFF);
+    canData[1] = static_cast<uint8_t>((sound >> 8U) & 0xFF);
+    canData[2] = volume;
+    colorsOffset = 3U;
+  }
 
-void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
+  if(colorsJsonVar.is<JsonArray>()) {
+    JsonArray colorsArray = colorsJsonVar.as<JsonArray>();
+    if(colorsArray.size() == 3U) {
+      bool validArray = true;
+      for(uint8_t i = 0U; i < 3U; ++i) {
+        if(colorsArray[i].is<uint8_t>()) {
+          canData[i + colorsOffset] = colorsArray[i].as<uint8_t>();
+        } else {
+          validArray = false;
+          break;
+        }
+      }
+      if(validArray) {
+        (void)CanBase::sendCanFrame((colorsOffset == 0U) ? CanCmd::RGB_LED : CanCmd::PLAY_MP3, canData);
+      }
+    }
+  }
+}
+
+void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame) {
   const uint16_t command = canFrame.cmd;
   switch(command) {
     case static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR): {
@@ -26,10 +58,10 @@ void CanAlertDriver::canFrameReceived(CanHandler::CanFrame& canFrame) {
       const uint16_t lightRaw = (static_cast<uint16_t>(canFrame.data[4]) << 0U) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
       const uint8_t light = static_cast<uint8_t>(lightRaw >> 2U); // TODO: send the full 2byte to the server.
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), HUM_TEMP_LDR_FRAME, temperature, humidity, light);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), humTempLdrFrame, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      if(!MqttBase::sendMessage(dataOut)) { return; /*Handler needed*/ }
+      (void)MqttBase::sendMessage(dataOut);
     } break;
     default: {} break;
   }

@@ -1,20 +1,30 @@
-#ifndef CAN_ALERT_DRIVER_HPP
-#define CAN_ALERT_DRIVER_HPP
+#pragma once
 
-#include "canHandler.hpp"
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "canMqttGateway.hpp"
 
-class CanAlertDriver final : protected CanComBase {
+class CanAlertDriver final : public CanMqttGateway {
+private:
+  static constexpr uint8_t dataOutBufSize = 56U;
+
 public:
   CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID, float tempOffset = 0.0F);
   ~CanAlertDriver() = default;
-protected:
-  virtual bool init() override;
-  virtual bool run() override;
-  virtual void canFrameReceived(CanHandler::CanFrame& canFrame) override;
+
+  virtual bool init() override { return true; }
+  virtual bool run() override { return true; }
+
+  CanAlertDriver(const CanAlertDriver&) = delete;                       // Define copy constructor.
+  CanAlertDriver& operator=(const CanAlertDriver&) = delete;            // Define copy assignment operator.
+  CanAlertDriver(CanAlertDriver&&) = delete;                            // Define move constructor.
+  CanAlertDriver& operator=(CanAlertDriver&&) = delete;                 // Define move assignment operator.
+
 private:
-  static constexpr uint8_t dataOutBufSize = 96U;
-  static const char PROGMEM HUM_TEMP_LDR_FRAME[];
+  virtual void processMessageArrived(JsonDocument& payloadJson) override;
+
+  virtual void processCanFrameArrived(const CanHandler::CanFrame& canFrame) override;
+
+  static const char PROGMEM humTempLdrFrame[];
+
   const float tempOffset;
 };
-
-#endif // CAN_ALERT_DRIVER_HPP
