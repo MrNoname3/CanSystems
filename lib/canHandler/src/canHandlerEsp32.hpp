@@ -80,7 +80,7 @@ private:
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
 
 /// @brief Base class for CAN devices that interact with the CAN handler.
-class CanBase : public Task {
+class CanBase : public virtual Task {
 public:
   /// @brief Pure virtual function to initialize the CAN device.
   /// @return `true` if operations are successful, `false` otherwise.
