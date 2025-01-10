@@ -5,11 +5,12 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
 class CanMqttGateway : public CanBase, public MqttBase {
+private:
+  static constexpr uint32_t clientPingTime = Time::secToMs(1U);
+  static constexpr uint32_t clientOfflineTime = Time::secToMs(2U);
+  static constexpr uint8_t statusBufSize = 64U;
+
 public:
-
-  [[nodiscard]] virtual bool init() = 0;
-
-  [[nodiscard]] virtual bool run() = 0;
 
   virtual void processMessageArrived(JsonDocument& payloadJson) = 0;
 
@@ -28,13 +29,31 @@ protected:
   virtual ~CanMqttGateway() = default;
 
 private:
-  virtual inline void messageArrivedCallback(JsonDocument& payloadJson) override {
-    // Do something with the data.
-    processMessageArrived(payloadJson);
-  }
+  virtual bool init() override;
 
-  virtual inline void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override {
-    // Do something with the data.
-    processCanFrameArrived(canFrame);
-  }
+  virtual bool run() override;
+
+  void handlePing();
+
+  [[nodiscard]] virtual bool initLocal() = 0;
+
+  [[nodiscard]] virtual bool runLocal() = 0;
+
+  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
+
+  virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override;
+
+  static const char PROGMEM statusOnline[];
+  static const char PROGMEM statusOffline[];
+  static const char PROGMEM statusRestarted[];
+  static const char PROGMEM statusPrintTemplate[];
+  static const char PROGMEM statusFrame[];
+
+  static const char PROGMEM buttonFrame[];
+  static const char PROGMEM buildInfoFrame[];
+  static const char PROGMEM otaFrame[];
+
+  uint32_t clientPingTimer;
+  uint32_t clientOfflineTimer;
+  bool clientOnline;
 };

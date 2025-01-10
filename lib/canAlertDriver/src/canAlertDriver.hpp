@@ -11,8 +11,8 @@ public:
   CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID, float tempOffset = 0.0F);
   ~CanAlertDriver() = default;
 
-  virtual bool init() override { return true; }
-  virtual bool run() override { return true; }
+  virtual bool initLocal() override { return true; }
+  virtual bool runLocal() override { return true; }
 
   CanAlertDriver(const CanAlertDriver&) = delete;                       // Define copy constructor.
   CanAlertDriver& operator=(const CanAlertDriver&) = delete;            // Define copy assignment operator.

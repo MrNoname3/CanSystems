@@ -130,86 +130,17 @@ bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) {
   return false;
 }
 
-// SoftwareTimer::SoftwareTimer(uint32_t time) : time_(time), start_time_(0) {}
-
-// bool SoftwareTimer::isExpired() { return (millis() - start_time_ >= time_); }
-
-// void SoftwareTimer::reload() { start_time_ = millis(); }
-
-// //////////////////// -- CanComBase class-- ////////////////////
-
-// const char CanComBase::STATUS_ONLINE[] PROGMEM              = "ONLINE";
-// const char CanComBase::STATUS_OFFLINE[] PROGMEM             = "OFFLINE";
-// const char CanComBase::STATUS_RESTARTED[] PROGMEM           = "RESTARTED";
-// const char CanComBase::STATUS_FRAME[] PROGMEM = {
-//   "{"
-//     "\"Status\":\"%s\""
-//   "}"
-// };
-// const char CanComBase::BUTTON_FRAME[] PROGMEM = {
-//   "{"
-//     "\"Button\":%hu"
-//   "}"
-// };
-// const char CanComBase::FW_VERSION_FRAME[] PROGMEM = {
-//   "{"
-//     "\"Firmware\":%hu,"
-//     "\"GitHash\":\"%x\""
-//   "}"
-// };
-// const char CanComBase::OTA_FRAME[] PROGMEM = {
-//   "{"
-//     "\"OTA\":\"%s\""
-//   "}"
-// };
-
-// CanComBase::CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID) :
-//   MqttBase(connectivity, classID),
-//   canHandler(canHandler),
-//   nodeCanId(canId),
-//   pingTimer(pingTime),
-//   alertTimer(alertTime),
-//   nodeAlive_(true),
 //   receivedFile(),
 //   frameNumber(0),
 //   storageNumber(0),
 //   transferState(TransferState::IDLE),
 //   otaTimeoutTimer(otaTimeoutTime)
-// {
-//   canHandler.registerCallback(this);
-// }
-
-// bool CanComBase::beginPriv() {
-//   sendCanCmd(CanCmd::PING);
-//   pingTimer.reload();
-//   alertTimer.reload();
-//   return init();
-// }
 
 // bool CanComBase::loopPriv() {
-//   if(pingTimer.isExpired()) {
-//     pingTimer.reload();
-//     sendCanCmd(CanCmd::PING);
-//   }
-//   const bool nodeAlive = !alertTimer.isExpired();
-//   if(nodeAlive != nodeAlive_) {
-//     nodeAlive_ = nodeAlive;
-//     const char* statusStr = nodeAlive_ ? STATUS_ONLINE : STATUS_OFFLINE;
-//     // serialPort.printf_P(PSTR("[CANB] %s is %s!\r\n"), MqttBase::getSubtopic(), statusStr);
-//     static constexpr const uint8_t dataOutBufSize = 64;
-//     char dataOut[dataOutBufSize] = { '\0' };
-//     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), STATUS_FRAME, statusStr);
-//     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-//     if(!dataOutValid) { return false; }
-//     if(!MqttBase::sendMessage(dataOut)) { return false; /*Handler needed*/ }
-//   }
 //   runOta();
-//   return run();
 // }
 
 // void CanComBase::canFrameReceivedPriv(CanHandler::CanFrame& canFrame) {
-//   pingTimer.reload();
-//   alertTimer.reload();
 //   const uint16_t command = static_cast<uint16_t>(canFrame.cmd);
 //   switch(command) {
 //     case static_cast<uint16_t>(CanCmd::PING): {} break;
@@ -291,30 +222,6 @@ bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) {
 //     sendCanFrame(command, canData);
 //     return;
 //   }
-// }
-
-// uint32_t CanComBase::getCanId() const { return nodeCanId; }
-
-// bool CanComBase::sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
-//   return sendCanFrame(static_cast<uint16_t>(command), data);
-// }
-
-// bool CanComBase::sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
-//   CanHandler::CanFrame canFrame;
-//   // canFrame.from = canHandler.localCanId;
-//   canFrame.to = nodeCanId;
-//   canFrame.cmd = command;
-//   memcpy(canFrame.data, data, sizeof(data));
-//   return canHandler.send(canFrame);
-// }
-
-// bool CanComBase::sendCanCmd(CanCmd command) const {
-//   return sendCanCmd(static_cast<uint16_t>(command));
-// }
-
-// bool CanComBase::sendCanCmd(uint16_t command) const {
-//   uint8_t data[8] = { 0 };
-//   return sendCanFrame(command, data);
 // }
 
 // bool CanComBase::startOta(const char* fileName) {

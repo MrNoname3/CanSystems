@@ -184,49 +184,9 @@ private:
 
 // #include "crc16.hpp"                                                /// CRC16 calculator class.
 // #include <LittleFS.h>                                               /// Use FLASH file system.
-
-// class SoftwareTimer {
-// public:
-//   SoftwareTimer(uint32_t time);
-//   /// @brief Destructor of the object.
-//   virtual ~SoftwareTimer() = default;
-//   bool isExpired();
-//   void reload();
-
-//   SoftwareTimer(const SoftwareTimer&) = delete;                       // Define copy constructor.
-//   SoftwareTimer& operator=(const SoftwareTimer&) = delete;            // Define copy assignment operator.
-//   SoftwareTimer(SoftwareTimer&&) = delete;                            // Define move constructor.
-//   SoftwareTimer& operator=(SoftwareTimer&&) = delete;                 // Define move assignment operator.
-// private:
-//   const uint32_t time_;
-//   uint32_t start_time_;
-// };
-
 // #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 
 // class CanComBase : protected MqttBase {
-// public:
-//   friend class CanHandler;
-//   CanComBase(const CanComBase&) = delete;                       // Define copy constructor.
-//   CanComBase& operator=(const CanComBase&) = delete;            // Define copy assignment operator.
-//   CanComBase(CanComBase&&) = delete;                            // Define move constructor.
-//   CanComBase& operator=(CanComBase&&) = delete;                 // Define move assignment operator.
-// protected:
-//   enum class Response : uint8_t {
-//     NACK = 0,
-//     ACK
-//   };
-
-//   CanComBase(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* classID);
-//   /// @brief Destructor of the object.
-//   virtual ~CanComBase() = default;
-//   virtual bool init() = 0;
-//   virtual bool run() = 0;
-//   virtual void canFrameReceived(CanHandler::CanFrame& canFrame) = 0;
-//   bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const;
-//   bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const;
-//   bool sendCanCmd(CanCmd command) const;
-//   bool sendCanCmd(uint16_t command) const;
 // private:
 //   enum class TransferState : uint8_t {
 //     IDLE = 0,
@@ -239,29 +199,8 @@ private:
 //     INVALID
 //   };
 
-//   bool beginPriv();
-//   bool loopPriv();
-//   void canFrameReceivedPriv(CanHandler::CanFrame& canFrame);
-//   uint32_t getCanId() const;
-//   virtual void messageArrivedCallback(const uint8_t* payload, uint32_t length) override;
-
 //   bool startOta(const char* fileName);
 //   void runOta();
-
-//   static constexpr uint32_t pingTime = 500U;
-//   static constexpr uint32_t alertTime = 1000U;
-//   CanHandler& canHandler;
-//   const uint32_t nodeCanId;
-//   SoftwareTimer pingTimer;
-//   SoftwareTimer alertTimer;
-//   bool nodeAlive_;
-//   static const char PROGMEM STATUS_ONLINE[];
-//   static const char PROGMEM STATUS_OFFLINE[];
-//   static const char PROGMEM STATUS_RESTARTED[];
-//   static const char PROGMEM STATUS_FRAME[];
-//   static const char PROGMEM BUTTON_FRAME[];
-//   static const char PROGMEM FW_VERSION_FRAME[];
-//   static const char PROGMEM OTA_FRAME[];
 
 //   void* operator new(size_t size);              // Disable new operator.
 //   File receivedFile;
