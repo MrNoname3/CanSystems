@@ -95,7 +95,6 @@ bool DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint
   File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
   if(!receivedFile) {
     serialPort.printf_P(PSTR("[FT] Opening failed: %s\r\n"), FileName::getTempFileLocation());
-    receivedFile.close();
     return false;
   }
   const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
@@ -116,7 +115,6 @@ bool DataTransfer::checkValidity() {
   File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
   serialPort.printf_P(PSTR("[FT] Checking received file: %s\r\n"), Str::getStateStr(receivedFile));
   if(!receivedFile) {
-    receivedFile.close();
     return false;
   }
   const bool fileSizeOk = (receivedFile.size() == fileSizeLocal);
@@ -187,7 +185,6 @@ bool DataTransfer::upgradeFirmware(HardwareSerial& serial, const char* firmwareF
   File receivedFile = LittleFS.open(FPSTR(firmwareFileName), "r");
   serial.printf_P(PSTR("[FT] Checking firmware file: %s\r\n"), Str::getStateStr(receivedFile));
   if(!receivedFile) {
-    receivedFile.close();
     return false;
   }
   {
