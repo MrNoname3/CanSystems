@@ -193,28 +193,6 @@ public:
   /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
   virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
 
-  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
-  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
-  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
-  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
-
-protected:
-  /// @brief Constructs the MQTT base instance.
-  /// @param connectivity Reference to the connectivity object managing MQTT operations.
-  /// @param subTopic Pointer to the subtopic string to be associated with the instance.
-  MqttBase(Connectivity& connectivity, const char* subTopic) :
-    connectivity(connectivity),
-    subtopic{'\0'}
-  {
-    if(isSubtopicValid(subTopic)) {
-      strlcpy(subtopic, subTopic, subtopicSize);
-      this->connectivity.registerCallback(this);
-    }
-  }
-
-  /// @brief Virtual destructor of the object.
-  virtual ~MqttBase() = default;
-
   /// @brief Sends an MQTT message with the specified payload.
   /// @param payload Pointer to the message payload.
   /// @return `true` if the message was sent successfully; otherwise, `false`.
@@ -236,6 +214,28 @@ protected:
     if(!responseBufferValid) { return false; }
     return sendMessage(responseBuffer);
   }
+
+  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
+  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
+  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
+  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
+
+protected:
+  /// @brief Constructs the MQTT base instance.
+  /// @param connectivity Reference to the connectivity object managing MQTT operations.
+  /// @param subTopic Pointer to the subtopic string to be associated with the instance.
+  MqttBase(Connectivity& connectivity, const char* subTopic) :
+    connectivity(connectivity),
+    subtopic{'\0'}
+  {
+    if(isSubtopicValid(subTopic)) {
+      strlcpy(subtopic, subTopic, subtopicSize);
+      this->connectivity.registerCallback(this);
+    }
+  }
+
+  /// @brief Virtual destructor of the object.
+  virtual ~MqttBase() = default;
 
 private:
   Connectivity& connectivity;       // Reference to the connectivity object used for MQTT communication.

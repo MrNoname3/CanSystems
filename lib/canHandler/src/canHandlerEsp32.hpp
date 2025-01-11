@@ -107,27 +107,6 @@ public:
   /// @param canFrame The received CAN frame.
   virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) = 0;
 
-  CanBase(const CanBase&) = delete;                       // Define copy constructor.
-  CanBase& operator=(const CanBase&) = delete;            // Define copy assignment operator.
-  CanBase(CanBase&&) = delete;                            // Define move constructor.
-  CanBase& operator=(CanBase&&) = delete;                 // Define move assignment operator
-
-protected:
-  /// @brief Constructor for the CanBase class.
-  /// @param canHandler Reference to the CAN handler.
-  /// @param clientCanId Client CAN ID for the device.
-  CanBase(CanHandler& canHandler, uint16_t clientCanId) :
-    canHandler(canHandler),
-    clientCanId(clientCanId)
-  {
-    if(isClientCanIdValid(this->clientCanId)) {
-      this->canHandler.registerCallback(this);
-    }
-  }
-
-  /// @brief Virtual destructor of the object.
-  virtual ~CanBase() = default;
-
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 10-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
@@ -177,41 +156,29 @@ protected:
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 
+  CanBase(const CanBase&) = delete;                       // Define copy constructor.
+  CanBase& operator=(const CanBase&) = delete;            // Define copy assignment operator.
+  CanBase(CanBase&&) = delete;                            // Define move constructor.
+  CanBase& operator=(CanBase&&) = delete;                 // Define move assignment operator
+
+protected:
+  /// @brief Constructor for the CanBase class.
+  /// @param canHandler Reference to the CAN handler.
+  /// @param clientCanId Client CAN ID for the device.
+  CanBase(CanHandler& canHandler, uint16_t clientCanId) :
+    canHandler(canHandler),
+    clientCanId(clientCanId)
+  {
+    if(isClientCanIdValid(this->clientCanId)) {
+      this->canHandler.registerCallback(this);
+    }
+  }
+
+  /// @brief Virtual destructor of the object.
+  virtual ~CanBase() = default;
+
 private:
   CanHandler& canHandler;                                 // Reference to the CAN handler instance.
   const uint16_t clientCanId;                             // Client CAN ID for this device.
 };
-
-// #include "crc16.hpp"                                                /// CRC16 calculator class.
-// #include <LittleFS.h>                                               /// Use FLASH file system.
-// #include "connectivity.hpp"                                         /// Handles the MQTT connection.
-
-// class CanComBase : protected MqttBase {
-// private:
-//   enum class TransferState : uint8_t {
-//     IDLE = 0,
-//     START,
-//     START_ACK,
-//     STORE,
-//     STORE_ACK,
-//     END_ACK,
-//     VALID,
-//     INVALID
-//   };
-
-//   bool startOta(const char* fileName);
-//   void runOta();
-
-//   void* operator new(size_t size);              // Disable new operator.
-//   File receivedFile;
-//   uint32_t frameNumber;
-//   uint16_t storageNumber;
-//   char fileName[28];
-//   uint32_t fileSize;
-//   uint16_t fileCrc;
-//   TransferState transferState;
-//   Crc16 crc16;
-//   static constexpr uint32_t otaTimeoutTime = 2U * 60U * 1000U;
-//   SoftwareTimer otaTimeoutTimer;
-// };
 #endif // ESP32
