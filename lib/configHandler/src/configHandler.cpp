@@ -30,7 +30,6 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   File wifiFile = LittleFS.open(FPSTR(FileName::getWifiConfigLocation()), "r");
   if(!wifiFile) {
     wifiConfErrState.setError(WifiConfigError::CANNOT_OPEN_FILE);
-    wifiFile.close();
     return wifiConfErrState.getRawErrorState();
   }
 
@@ -77,7 +76,6 @@ ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bo
   File certFile = LittleFS.open(FPSTR(FileName::getMqttServerCertLocation()), "r");
   if(!certFile) {
     serverCertErrState.setError(ServerCertError::CANNOT_OPEN_FILE);
-    certFile.close();
     return serverCertErrState.getRawErrorState();
   }
 
@@ -110,7 +108,6 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
   File credFile = LittleFS.open(FPSTR(FileName::getMqttServerCredentialsLocation()), "r");
   if(!credFile) {
     serverCredErrState.setError(ServerCredError::CANNOT_OPEN_FILE);
-    credFile.close();
     return serverCredErrState.getRawErrorState();
   }
 
