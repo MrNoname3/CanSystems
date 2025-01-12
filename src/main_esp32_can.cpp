@@ -17,10 +17,6 @@ static constexpr uint8_t LED_PIN                    = 2U;           // Pin of th
 
 //--- Functions ---//
 void maxLoopTimeCallback(uint32_t maxLoopTime);
-void canTask(void *pvParameters);
-
-//--- Variables ---//
-TaskHandle_t canTaskHandle = nullptr;
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
@@ -44,7 +40,7 @@ CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
 //--- Handling tasks ---//
-Task *task[5] = {&iotConn, &performance, &mqttCommon, &canAlert1, &canAlert2};
+Task *task[6] = {&iotConn, &performance, &mqttCommon, &canHandler, &canAlert1, &canAlert2};
 static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -69,28 +65,13 @@ void setup() {
   Serial.printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
   Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
   debugLed.stopTicker();
-
-  if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
-    Serial.printf_P(PSTR("Error creating the CAN task!"));
-  }
   performance.resetTimer();
 }
 
 void loop() {
   WdtHandler::resetWatchdog();
   (void)taskHandler.runTasks();
-  vTaskDelay(5);
-}
-
-void canTask(void *pvParameters) {
-  Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), Str::getSectionSeparator());
-  canHandler.init();
-  Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), Str::getSectionSeparator());
-  while(true) {
-    canHandler.run();
-    vTaskDelay(5);
-  }
-  vTaskDelete(nullptr);
+  taskYIELD();
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
