@@ -11,10 +11,16 @@ CanHandlerEsp32::CanHandlerEsp32(HardwareSerial& serial) :
   serialPort(serial),
   canTxQueue(nullptr),
   canDevicesList{},
-  canDevicesListMutex(nullptr)
+  canDevicesListMutex(xSemaphoreCreateMutex())
 {}
 
 bool CanHandlerEsp32::init(uint32_t canBaud) {
+  { // Setup mutex.
+    if(canDevicesListMutex == nullptr) {
+      serialPort.printf_P(PSTR("[CAN] Mutex is not initialized properly!\r\n"));
+      return false;
+    }
+  }
 #if defined(NEW_CAN_ADDRESS) && defined(MASTER_CAN_ADDRESS)
   // Save new CAN IDs.
   static constexpr uint16_t newMasterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
@@ -50,13 +56,6 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     serialPort.printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
       Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
     if(!rxQueueResult || !txQueueResult) { return false; }
-  }
-  { // Setup mutex.
-    canDevicesListMutex = xSemaphoreCreateMutex();
-    if(canDevicesListMutex == nullptr) {
-      serialPort.printf_P(PSTR("[CAN] Mutex setup failed!\r\n"));
-      return false;
-    }
   }
   return true;
 }
