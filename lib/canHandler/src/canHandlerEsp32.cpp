@@ -19,12 +19,12 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   // Save new CAN IDs.
   static constexpr uint16_t newMasterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
   static constexpr uint16_t newLocalCanId = static_cast<uint16_t>(NEW_CAN_ADDRESS);
-  serialPort.printf_P(PSTR("[CAN] Saving new IDs:%s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
-    Str::getStateStr(canBeginResult), newMasterCanId, newLocalCanId);
+  serialPort.printf_P(PSTR("[CAN] Saving new IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
+    Str::getStateStr(saveCanIds(newMasterCanId, newLocalCanId)), newMasterCanId, newLocalCanId);
 #endif
   { // Load CAN ID's.
   const bool canIdLoadingResult = loadCanIds();
-  serialPort.printf_P(PSTR("[CAN] Loading IDs:%s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
+  serialPort.printf_P(PSTR("[CAN] Loading IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
     Str::getStateStr(canIdLoadingResult), getMasterCanId(), getLocalCanId());
   if(!canIdLoadingResult) { return false; }
   }
