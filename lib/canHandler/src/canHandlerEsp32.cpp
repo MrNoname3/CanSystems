@@ -5,21 +5,28 @@
 #include <cstdlib>                                                  /// Standard library for memory and utilities.
 #include "common.hpp"                                               /// Common definitions and functions.
 
-QueueHandle_t CanHandlerEsp32::canRxQueue = nullptr;
+QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
 
 CanHandlerEsp32::CanHandlerEsp32(HardwareSerial& serial) :
   serialPort(serial),
-  canTxQueue(nullptr),
+  canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
   canDevicesList{},
   canDevicesListMutex(xSemaphoreCreateMutex())
 {}
 
 bool CanHandlerEsp32::init(uint32_t canBaud) {
-  { // Setup mutex.
+  { // Setup mutex and message queues.
     if(canDevicesListMutex == nullptr) {
       serialPort.printf_P(PSTR("[CAN] Mutex is not initialized properly!\r\n"));
       return false;
     }
+    //configASSERT(canRxQueue != nullptr);                          // Assert if the queue creation fails.
+    //configASSERT(canTxQueue != nullptr);
+    const bool rxQueueResult = (canRxQueue != nullptr);           // Check queue creation.
+    const bool txQueueResult = (canTxQueue != nullptr);
+    serialPort.printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
+      Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
+    if(!rxQueueResult || !txQueueResult) { return false; }
   }
 #if defined(NEW_CAN_ADDRESS) && defined(MASTER_CAN_ADDRESS)
   // Save new CAN IDs.
@@ -47,17 +54,6 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
       CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1;
     serialPort.printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
-  }
-  { // Setup message queues.
-    canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));  // Create FIFO queue for RX CAN packets.
-    canTxQueue = xQueueCreate(canTxQueueSize, sizeof(CanFrame));
-    //configASSERT(canRxQueue != nullptr);                          // Assert if the queue creation fails.
-    //configASSERT(canTxQueue != nullptr);
-    const bool rxQueueResult = (canRxQueue != nullptr);           // Check queue creation.
-    const bool txQueueResult = (canTxQueue != nullptr);
-    serialPort.printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
-      Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
-    if(!rxQueueResult || !txQueueResult) { return false; }
   }
   return true;
 }
