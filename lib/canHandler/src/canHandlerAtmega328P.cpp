@@ -30,7 +30,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   serialPort.print(F("[CAN] New local ID: "));
   serialPort.println(newLocalCanId);
   serialPort.print(F("[CAN] Saving: "));
-  serialPort.println(Str::getStateStr(saveCanIds(newMasterCanId, newLocalCanId)));
+  const bool canIdsSavingResult = saveCanIds(newMasterCanId, newLocalCanId);
+  serialPort.println(Str::getStateStr(canIdsSavingResult));
+  if(!canIdsSavingResult) { return false; }
 #endif
   // Load CAN ID's.
   serialPort.print(F("CAN IDs: "));
