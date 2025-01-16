@@ -17,8 +17,7 @@ const char Connectivity::mqttConnectBadCredentialsStr[] PROGMEM   = "MQTT_CONNEC
 const char Connectivity::mqttConnectUnauthorizedStr[] PROGMEM     = "MQTT_CONNECT_UNAUTHORIZED";
 const char Connectivity::mqttUnknownStatusStr[] PROGMEM           = "MQTT_UNKNOWN_STATUS";
 
-Connectivity::Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
-  serialPort(serial),
+Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
@@ -42,17 +41,17 @@ bool Connectivity::init() {
     delay(10U);
     uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
     const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
-    serialPort.printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
+    Logger::get().printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
     if(!initFS) { return false; }
-    serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
+    Logger::get().printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
   { // Start network interface.
     resetWatchdogTimer();
     const uint16_t connResult = networkManager.connect();
     const bool connResultOk = (connResult == 0U);
-    serialPort.printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
+    Logger::get().printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
     if(!connResultOk) {
-      serialPort.printf_P(PSTR("  Code: %hu\r\n"), connResult);
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), connResult);
       return false;
     }
   }
@@ -62,18 +61,18 @@ bool Connectivity::init() {
     char dateTimeStr[dateTimeStrBufSize] = {'\0'};
     const bool dateTimeValid = getIsoTimeString(dateTimeStr);
     if(dateTimeValid) {
-      serialPort.printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
+      Logger::get().printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
     } else {
-      serialPort.printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
+      Logger::get().printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
       return false;
     }
   }
   { // Get MQTT server credentials.
     const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
     const bool credResultOk = (credResult == 0U);
-    serialPort.printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
+    Logger::get().printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
     if(!credResultOk) {
-      serialPort.printf_P(PSTR("  Code: %hu\r\n"), credResult);
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), credResult);
       return false;
     }
   }
@@ -84,7 +83,7 @@ bool Connectivity::init() {
     if(pioEnv == nullptr) { return false; }
     const char* underscore = strchr(pioEnv, '_');
     if(underscore == nullptr || *(underscore + 1) == '\0') {
-      serialPort.printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
+      Logger::get().printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
       return false;
     }
     const char* deviceId = underscore + 1;
@@ -94,9 +93,9 @@ bool Connectivity::init() {
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    serialPort.printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
-    serialPort.printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
-    serialPort.printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
     subtopicOffset = senderTopicSize - 2U;
   }
@@ -114,9 +113,9 @@ bool Connectivity::init() {
 #endif
     });
     const bool certResultOk = (certResult == 0U);
-    serialPort.printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
+    Logger::get().printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
     if(!certResultOk) {
-      serialPort.printf_P(PSTR("  Code: %hu\r\n"), certResult);
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), certResult);
       return false;
     }
   }
@@ -132,7 +131,7 @@ bool Connectivity::init() {
         JsonDocument payloadJson;
         DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
         if(parsingError != DeserializationError::Code::Ok) {
-        serialPort.printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
+        Logger::get().printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
           currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
           return;
         }
@@ -140,7 +139,7 @@ bool Connectivity::init() {
         return;
       }
     }
-    serialPort.printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+    Logger::get().printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
   });
 
   return connectToMqttServer();
@@ -148,11 +147,11 @@ bool Connectivity::init() {
 
 bool Connectivity::connectToMqttServer() {
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  serialPort.printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
+  Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
-  serialPort.printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
+  Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   return subResult;
 }
 
@@ -169,7 +168,7 @@ bool Connectivity::run() {
   }
   const int8_t actualMqttState = mqttClient.state();
   if(mqttState != actualMqttState) {
-    serialPort.printf_P(PSTR("[MQTT] Status changed: %s -> %s\r\n"), getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
+    Logger::get().printf_P(PSTR("[MQTT] Status changed: %s -> %s\r\n"), getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
     mqttState = actualMqttState;
   }
 
@@ -191,11 +190,11 @@ bool Connectivity::run() {
   if(actualOnlineState != onlineState) {
     onlineState = actualOnlineState;
     if(debugLed != nullptr) { debugLed(onlineState); }
-    serialPort.printf_P(PSTR("[RUN] Device is: %s\r\n"), reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
+    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
   }
 
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
-    serialPort.printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
+    Logger::get().printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
     ResetHandler::restartMCU();
   }
   return true;
@@ -214,7 +213,7 @@ void Connectivity::syncNtpTime() const {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
   constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
 
-  serialPort.printf_P(PSTR("[NTP] Synchronising...\r\n"));
+  Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
   time_t currentTime = time(nullptr);
   while(currentTime < minValidTime) {

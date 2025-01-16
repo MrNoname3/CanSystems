@@ -43,7 +43,7 @@ static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow senso
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_120MS);
 DebugLedHandler debugLed(LED_PIN, HIGH);
-CanHandler canHandler(Serial, debugLed, CAN_CS, CAN_INT, FLASH_CS);
+CanHandler canHandler(debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return static_cast<bool>(digitalRead(BUTTON_PIN));});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 PCF8574 pcf(Time::msToUs(5U), 0x27);
@@ -82,7 +82,7 @@ void setup() {
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
-  Serial.println(F("\r\n********\r\nStarting..."));
+  Logger::get().println(F("\r\n********\r\nStarting..."));
   Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
@@ -91,18 +91,18 @@ void setup() {
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Serial.print(F("Init: "));
-  Serial.println(Str::getStateStr(initSuccess));
+  Logger::get().print(F("Init: "));
+  Logger::get().println(Str::getStateStr(initSuccess));
   if(!initSuccess) {
-    Serial.print(F("Code: "));
-    Serial.println(initResult, BIN);
+    Logger::get().print(F("Code: "));
+    Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
 
-  Serial.println(F("********\r\nLooping..."));
+  Logger::get().println(F("********\r\nLooping..."));
   debugLed.ledOff();
 }
 
@@ -133,8 +133,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
-  Serial.print(F("Btn: "));
-  Serial.println(static_cast<uint8_t>(btnEvent));
+  Logger::get().print(F("Btn: "));
+  Logger::get().println(static_cast<uint8_t>(btnEvent));
   switch(btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       pc.skipAllIrrigations();
@@ -150,8 +150,8 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Serial.print(F("Max loop time: "));
-  Serial.println(maxLoopTime);
+  Logger::get().print(F("Max loop time: "));
+  Logger::get().println(maxLoopTime);
   canHandler.send(CanCmd::LOOP_TIME_MAX, {
     static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
     static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),

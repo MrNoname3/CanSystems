@@ -2,7 +2,6 @@
 #ifdef ARDUINO_ARCH_AVR
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <HardwareSerial.h>                                         /// Serial driver object.
 #include <SPIFlash.h>                                               /// SPI FLASH module driver.
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
@@ -18,12 +17,11 @@ public:
   using CanHandlerBase::send;                                       // Bring the send methods of the base class to scoop.
 
   /// @brief Constructor for the CAN handler.
-  /// @param serial Reference to a `HardwareSerial` object for serial communication.
   /// @param debugLed Reference to a `DebugLedHandler` object for debug feedback.
   /// @param canCsPin Chip select pin for the CAN module's SPI interface.
   /// @param canIntPin Interrupt pin for CAN frame notifications.
   /// @param flashCsPin Chip select pin for the SPI flash module.
-  CanHandlerAtmega328P(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
+  CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
 
   /// @brief Default destructor.
   ~CanHandlerAtmega328P() = default;
@@ -71,7 +69,6 @@ private:
 
   static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
 
-  HardwareSerial& serialPort;                                               // Reference to the serial driver object.
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler objec
   SPIFlash flash;                                                           // SPI flash module driver object.
   OTA ota;                                                                  // OTA update handler.

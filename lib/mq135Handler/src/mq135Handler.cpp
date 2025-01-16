@@ -1,4 +1,5 @@
 #include "mq135Handler.hpp"
+#include "common.hpp"                                               /// Common definitions and functions.
 
 const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
   "{"
@@ -81,7 +82,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     const float calcR0 = mq135.calibrate(ratioMQ135CleanAir);
     mq135.setR0(calcR0);
     const bool calSuccess = (!isinf(calcR0)) && (calcR0 > 0);
-    Serial.println(calcR0);
+    Logger::get().println(calcR0);
     return calSuccess;
   }
 

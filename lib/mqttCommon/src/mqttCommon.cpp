@@ -1,12 +1,12 @@
 #include "mqttCommon.hpp"
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "common.hpp"                                               /// Common definitions and functions.
 
-MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic, HardwareSerial& serial) :
+MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
   MqttBase(connectivity, subtopic),
-  serial(serial),
   externalFileName{'\0'},
-  dataTransfer(this->serial)
+  dataTransfer()
 {}
 
 void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
@@ -25,7 +25,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
         case Command::FW_DT_START: {
           const char* binId = payloadJson[F("binId")].as<const char*>();
           if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-            serial.printf_P(PSTR("[COMMON] Wrong FW file ID: %s\r\n"), binId);
+            Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: %s\r\n"), binId);
             if(!MqttBase::sendResponse(MqttBase::Response::NACK, cmd)) { return; /*Handler needed*/ }
             return;
           }
@@ -38,7 +38,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
           if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
           uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
           if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-            serial.printf_P(PSTR("[COMMON] Wrong file name: missing / too long!\r\n"));
+            Logger::get().printf_P(PSTR("[COMMON] Wrong file name: missing / too long!\r\n"));
             if(!MqttBase::sendResponse(MqttBase::Response::NACK, cmd)) { return; /*Handler needed*/ }
             return;
           }
@@ -49,7 +49,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
       const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
       if(!MqttBase::sendResponse((transferBeginResult ? MqttBase::Response::ACK : MqttBase::Response::NACK), cmd)) { return; /*Handler needed*/ }
       if(!transferBeginResult) {
-        serial.printf_P(PSTR("[COMMON] Can't begin file transfer:\r\n  Name: %s\r\n"), fileNamePtr);
+        Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer:\r\n  Name: %s\r\n"), fileNamePtr);
         return;
       }
     } break;
@@ -61,7 +61,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
       const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
       if(!MqttBase::sendResponse(storingResult ? MqttBase::Response::ACK : MqttBase::Response::NACK, cmd)) { return; /*Handler needed*/ }
       if(!storingResult) {
-        serial.printf_P(PSTR("[COMMON] File storing failed!\r\n"));
+        Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n"));
       }
     } break;
     case Command::FW_DT_END:
@@ -70,13 +70,13 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
       const bool validityCheckResult = dataTransfer.checkValidity();
       if(!MqttBase::sendResponse((validityCheckResult ? MqttBase::Response::ACK : MqttBase::Response::NACK), cmd)) { return; /*Handler needed*/ }
       if(!validityCheckResult) {
-        serial.printf_P(PSTR("[COMMON] Stored file is not valid!\r\n"));
+        Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n"));
         return;
       }
       if(command == Command::FW_DT_END) {
         const bool fwUpdatePreparationOk = dataTransfer.upgradeFirmware();
         if(!fwUpdatePreparationOk) {
-          serial.printf_P(PSTR("[COMMON] FW upgrade preparation failed!\r\n"));
+          Logger::get().printf_P(PSTR("[COMMON] FW upgrade preparation failed!\r\n"));
           return;
         }
         ResetHandler::restartMCU();

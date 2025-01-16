@@ -3,7 +3,6 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
-#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 #include "dataTransfer.hpp"
 
 class MqttCommon final : public MqttBase {
@@ -22,7 +21,7 @@ public:
     EXT_FILE_DT_END
   };
 
-  MqttCommon(Connectivity& connectivity, const char* subtopic, HardwareSerial& serial);
+  MqttCommon(Connectivity& connectivity, const char* subtopic);
 
   /// @brief Destructor of the object.
   virtual ~MqttCommon() = default;
@@ -39,7 +38,6 @@ public:
   MqttCommon& operator=(MqttCommon&&) = delete;                 // Define move assignment operator.
 
 private:
-  HardwareSerial& serial;
   char externalFileName[28];
   DataTransfer dataTransfer;
 };

@@ -7,8 +7,7 @@
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
 
-CanHandlerEsp32::CanHandlerEsp32(HardwareSerial& serial) :
-  serialPort(serial),
+CanHandlerEsp32::CanHandlerEsp32() :
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
   canDevicesList{},
   canDevicesListMutex(xSemaphoreCreateMutex())
@@ -17,14 +16,14 @@ CanHandlerEsp32::CanHandlerEsp32(HardwareSerial& serial) :
 bool CanHandlerEsp32::init(uint32_t canBaud) {
   { // Setup mutex and message queues.
     if(canDevicesListMutex == nullptr) {
-      serialPort.printf_P(PSTR("[CAN] Mutex is not initialized properly!\r\n"));
+      Logger::get().printf_P(PSTR("[CAN] Mutex is not initialized properly!\r\n"));
       return false;
     }
     //configASSERT(canRxQueue != nullptr);                          // Assert if the queue creation fails.
     //configASSERT(canTxQueue != nullptr);
     const bool rxQueueResult = (canRxQueue != nullptr);           // Check queue creation.
     const bool txQueueResult = (canTxQueue != nullptr);
-    serialPort.printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
+    Logger::get().printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
       Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
     if(!rxQueueResult || !txQueueResult) { return false; }
   }
@@ -33,26 +32,26 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   static constexpr uint16_t newMasterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
   static constexpr uint16_t newLocalCanId = static_cast<uint16_t>(NEW_CAN_ADDRESS);
   const bool canIdsSavingResult = saveCanIds(newMasterCanId, newLocalCanId);
-  serialPort.printf_P(PSTR("[CAN] Saving new IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
+  Logger::get().printf_P(PSTR("[CAN] Saving new IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
     Str::getStateStr(canIdsSavingResult), newMasterCanId, newLocalCanId);
   if(!canIdsSavingResult) { return false; }
 #endif
   { // Load CAN ID's.
   const bool canIdLoadingResult = loadCanIds();
-  serialPort.printf_P(PSTR("[CAN] Loading IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
+  Logger::get().printf_P(PSTR("[CAN] Loading IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
     Str::getStateStr(canIdLoadingResult), getMasterCanId(), getLocalCanId());
   if(!canIdLoadingResult) { return false; }
   }
   { // Initialise CAN peripheral.
     const bool canBeginResult = CAN.begin(canBaud) == 1;
-    serialPort.printf_P(PSTR("[CAN] Init:%s\r\n"), Str::getStateStr(canBeginResult));
+    Logger::get().printf_P(PSTR("[CAN] Init:%s\r\n"), Str::getStateStr(canBeginResult));
     CAN.onReceive(rxInterrupt);
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
     const bool setFilterResult = CAN.filterExtended(
       CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1;
-    serialPort.printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
+    Logger::get().printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
   return true;

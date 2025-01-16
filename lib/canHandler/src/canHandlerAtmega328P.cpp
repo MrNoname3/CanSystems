@@ -6,8 +6,7 @@
 
 volatile uint8_t CanHandlerAtmega328P::intCount = 0U;
 
-CanHandlerAtmega328P::CanHandlerAtmega328P(HardwareSerial& serial, DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
-  serialPort(serial),
+CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
   debugLed(debugLed),
   flash(flashCsPin, flashJedecId),
   ota(flash),
@@ -25,38 +24,38 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   // Save new CAN IDs.
   static constexpr uint16_t newMasterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
   static constexpr uint16_t newLocalCanId = static_cast<uint16_t>(NEW_CAN_ADDRESS);
-  serialPort.print(F("[CAN] New master ID: "));
-  serialPort.println(newMasterCanId);
-  serialPort.print(F("[CAN] New local ID: "));
-  serialPort.println(newLocalCanId);
-  serialPort.print(F("[CAN] Saving: "));
+  Logger::get().print(F("[CAN] New master ID: "));
+  Logger::get().println(newMasterCanId);
+  Logger::get().print(F("[CAN] New local ID: "));
+  Logger::get().println(newLocalCanId);
+  Logger::get().print(F("[CAN] Saving: "));
   const bool canIdsSavingResult = saveCanIds(newMasterCanId, newLocalCanId);
-  serialPort.println(Str::getStateStr(canIdsSavingResult));
+  Logger::get().println(Str::getStateStr(canIdsSavingResult));
   if(!canIdsSavingResult) { return false; }
 #endif
   // Load CAN ID's.
-  serialPort.print(F("CAN IDs: "));
+  Logger::get().print(F("CAN IDs: "));
   if(loadCanIds()) {
-    serialPort.print(getMasterCanId());
-    serialPort.print(Str::getSpacerStr());
-    serialPort.println(getLocalCanId());
+    Logger::get().print(getMasterCanId());
+    Logger::get().print(Str::getSpacerStr());
+    Logger::get().println(getLocalCanId());
   } else {
-    serialPort.println(Str::getErrStr());
+    Logger::get().println(Str::getErrStr());
     return false;
   }
   { // Initialise SPI CAN shield.
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
     const bool canBeginResult = CAN.begin(canBaud) == 1;
-    serialPort.print(F("CAN: "));
-    serialPort.println(Str::getStateStr(canBeginResult));
+    Logger::get().print(F("CAN: "));
+    Logger::get().println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
-    serialPort.print(F("Filter: "));
+    Logger::get().print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(
       CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1;
-    serialPort.println(Str::getStateStr(setFilterResult));
+    Logger::get().println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
   { // Send startup info.
@@ -64,9 +63,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     if(!sendResult) { return false; }
   }
   { // Check SPI FLASH modul.
-    serialPort.print(F("FLASH: "));
+    Logger::get().print(F("FLASH: "));
     const bool flashInitResult = flash.initialize();
-    serialPort.println(Str::getStateStr(flashInitResult));
+    Logger::get().println(Str::getStateStr(flashInitResult));
     if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
@@ -102,9 +101,9 @@ bool CanHandlerAtmega328P::run() {
         const uint16_t fwCrc =
           static_cast<uint16_t>(canFrame.data[6]) << 0U |
           static_cast<uint16_t>(canFrame.data[7]) << 8U;
-        serialPort.print(F("OTA start: "));
+        Logger::get().print(F("OTA start: "));
         const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
-        serialPort.println(Str::getStateStr(otaStartResult));
+        Logger::get().println(Str::getStateStr(otaStartResult));
         if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
       } break;
       case static_cast<uint16_t>(CanCmd::OTA_SEND): {
@@ -120,7 +119,7 @@ bool CanHandlerAtmega328P::run() {
           static_cast<uint32_t>(canFrame.data[6]) << 16U |
           static_cast<uint32_t>(canFrame.data[7]) << 24U;
         const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
-        if(!otaStoreResult) { serialPort.println(F("OTA storing failed!")); }
+        if(!otaStoreResult) { Logger::get().println(F("OTA storing failed!")); }
         CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
       } break;
       case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
@@ -137,14 +136,14 @@ bool CanHandlerAtmega328P::run() {
   }
   if(otaState == OTA::OtaState::VALID) {
     CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
-    serialPort.print(F("Storing: "));
-    serialPort.println(Str::getOkStr());
+    Logger::get().print(F("Storing: "));
+    Logger::get().println(Str::getOkStr());
     if(ota.isOwnFw()) { ResetHandler::restartMCU(); }
   }
   if(otaState == OTA::OtaState::INVALID) {
     CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
-    serialPort.print(F("Storing: "));
-    serialPort.println(Str::getErrStr());
+    Logger::get().print(F("Storing: "));
+    Logger::get().println(Str::getErrStr());
   }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {

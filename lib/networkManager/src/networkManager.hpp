@@ -2,7 +2,6 @@
 #define NETWORK_MANAGER_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 #ifdef ESP8266
 #include <ESP8266WiFi.h>                                            /// WiFi driver for ESP8266.
 #include <ENC28J60lwIP.h>                                           /// Ethernet driver for ENC28J60 on ESP8266.
@@ -41,10 +40,9 @@ public:
   };
 
   /// @brief Constructs a NetworkManager instance.
-  /// @param serial HardwareSerial instance for logs.
   /// @param interface Initial network interface to configure.
   /// @param ethernetShieldCsPin Chip Select pin for ENC28J60 (optional).
-  NetworkManager(HardwareSerial& serial, Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
+  NetworkManager(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
 
   /// @brief Default destructor.
   ~NetworkManager() = default;
@@ -114,7 +112,6 @@ private:
 #elif defined ESP8266
   std::optional<ENC28J60lwIP> ethernetEnc28j60;                     // Optional instance for ENC28J60 on ESP8266.
 #endif
-  HardwareSerial& serial;                                           // Serial instance for debug logs.
   Interface networkInterface;                                       // Current network interface.
   wl_status_t interfaceStatus;                                      // Current network interface status.
   uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.

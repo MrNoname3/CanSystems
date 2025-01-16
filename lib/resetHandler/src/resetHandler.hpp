@@ -2,7 +2,6 @@
 #define RESET_HANDLER_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 
 /// @brief Class for handling system resets.
 class ResetHandler final {
@@ -15,7 +14,7 @@ private:
 
 public:
   /// @brief Resets the microcontroller unit (MCU) by triggering a watchdog reset.
-  static void restartMCU(HardwareSerial& serial = Serial);
+  static void restartMCU();
 
 #if defined(ESP8266) || defined(ESP32)
   /// @brief Retrieves the reason for the last system reset.

@@ -9,8 +9,7 @@
 #include <Update.h>                                                 /// ESP32-specific firmware update functionality.
 #endif
 
-DataTransfer::DataTransfer(HardwareSerial& serial) :
-  serialPort(serial),
+DataTransfer::DataTransfer() :
   fileSizeLocal(0U),
   fileCrcLocal(0U),
   nextFilePieceNumberLocal(-1),
@@ -41,7 +40,7 @@ bool DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileNa
 #endif
     const bool isEnoughFreeSpace = freeSpace > fileSizeLocal;
     if(!isEnoughFreeSpace) {
-      serialPort.printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), freeSpace, fileSizeLocal);
+      Logger::get().printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), freeSpace, fileSizeLocal);
       return false;
     }
   }
@@ -49,11 +48,11 @@ bool DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileNa
   if(fileExists) {
     const bool rmFileResult = LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
     if(!rmFileResult) {
-      serialPort.printf_P(PSTR("[FT] Deleting failed: %s\r\n"), FileName::getTempFileLocation());
+      Logger::get().printf_P(PSTR("[FT] Deleting failed: %s\r\n"), FileName::getTempFileLocation());
       return false;
     }
   }
-  serialPort.printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"), fileNameLocal, fileSizeLocal, fileCrcLocal);
+  Logger::get().printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"), fileNameLocal, fileSizeLocal, fileCrcLocal);
   isFileTransferStarted = true;
   return true;
 }
@@ -70,17 +69,17 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   uint8_t decodedData[filePieceSize];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > sizeof(decodedData)) {
-    serialPort.printf_P(PSTR("[FT] File piece size error!\r\n"));
+    Logger::get().printf_P(PSTR("[FT] File piece size error!\r\n"));
     return false;
   }
   const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
   if(decodedPreSize != decodedPostSize) {
-    serialPort.printf_P(PSTR("[FT] Decoded size check error!\r\n"));
+    Logger::get().printf_P(PSTR("[FT] Decoded size check error!\r\n"));
     return false;
   }
   const bool storingResult = store(filePieceNumber, decodedData, decodedPreSize);
   if(!storingResult) {
-    serialPort.printf_P(PSTR("[FT] File storing failed!\r\n"));
+    Logger::get().printf_P(PSTR("[FT] File storing failed!\r\n"));
   }
   return storingResult;
 }
@@ -94,13 +93,13 @@ bool DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint
 
   File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
   if(!receivedFile) {
-    serialPort.printf_P(PSTR("[FT] Opening failed: %s\r\n"), FileName::getTempFileLocation());
+    Logger::get().printf_P(PSTR("[FT] Opening failed: %s\r\n"), FileName::getTempFileLocation());
     return false;
   }
   const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
   receivedFile.close();
   if(writtenBytes != fileDataSize) {
-    serialPort.printf_P(PSTR("[FT] Writing failed: %s\r\n"), FileName::getTempFileLocation());
+    Logger::get().printf_P(PSTR("[FT] Writing failed: %s\r\n"), FileName::getTempFileLocation());
     return false;
   }
   nextFilePieceNumberLocal++;
@@ -113,12 +112,12 @@ bool DataTransfer::checkValidity() {
   if(remainingFileSizeLocal != 0U) { return false; }
 
   File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
-  serialPort.printf_P(PSTR("[FT] Checking received file: %s\r\n"), Str::getStateStr(receivedFile));
+  Logger::get().printf_P(PSTR("[FT] Checking received file: %s\r\n"), Str::getStateStr(receivedFile));
   if(!receivedFile) {
     return false;
   }
   const bool fileSizeOk = (receivedFile.size() == fileSizeLocal);
-  serialPort.printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fileSizeOk));
+  Logger::get().printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fileSizeOk));
   if(!fileSizeOk) {
     receivedFile.close();
     return false;
@@ -131,7 +130,7 @@ bool DataTransfer::checkValidity() {
     }
     const uint32_t calcFileCrc32 = crc32.get();
     const bool fileCrcOk = (calcFileCrc32 == fileCrcLocal);
-    serialPort.printf_P(PSTR("  CRC -> %s\r\n"), Str::getStateStr(fileCrcOk));
+    Logger::get().printf_P(PSTR("  CRC -> %s\r\n"), Str::getStateStr(fileCrcOk));
     if(!fileCrcOk) {
       receivedFile.close();
       return false;
@@ -143,14 +142,14 @@ bool DataTransfer::checkValidity() {
     if(fileExists) {
       const bool rmFileResult = LittleFS.remove(FPSTR(fileNameLocal));
       if(!rmFileResult) {
-        serialPort.printf_P(PSTR("[FT] Deleting failed: %s\r\n"), fileNameLocal);
+        Logger::get().printf_P(PSTR("[FT] Deleting failed: %s\r\n"), fileNameLocal);
         receivedFile.close();
         return false;
       }
     }
     const bool renameResult = LittleFS.rename(FPSTR(FileName::getTempFileLocation()), fileNameLocal);
     if(!renameResult) {
-      serialPort.printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
+      Logger::get().printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
       receivedFile.close();
       return false;
     }
@@ -167,43 +166,43 @@ bool DataTransfer::checkValidity() {
 
 bool DataTransfer::upgradeFirmware() {
   if(isFileTransferStarted) { return false; }
-  return upgradeFirmware(serialPort, FileName::getOtaFwLocation());
+  return upgradeFirmware(FileName::getOtaFwLocation());
 }
 
-bool DataTransfer::upgradeFirmware(HardwareSerial& serial, const char* firmwareFileName) {
+bool DataTransfer::upgradeFirmware(const char* firmwareFileName) {
   if(firmwareFileName == nullptr) { return false; }
   const uint32_t firmwareFileNameLength = strnlen_P(firmwareFileName, fileNameSize);
   if(firmwareFileNameLength == 0U || firmwareFileNameLength == fileNameSize) { return false; }
   {
     const bool fileExists = LittleFS.exists(FPSTR(firmwareFileName));
     if(!fileExists) {
-      serial.printf_P(PSTR("[FT] No firmware file exists!\r\n"));
+      Logger::get().printf_P(PSTR("[FT] No firmware file exists!\r\n"));
       return false;
     }
   }
 
   File receivedFile = LittleFS.open(FPSTR(firmwareFileName), "r");
-  serial.printf_P(PSTR("[FT] Checking firmware file: %s\r\n"), Str::getStateStr(receivedFile));
+  Logger::get().printf_P(PSTR("[FT] Checking firmware file: %s\r\n"), Str::getStateStr(receivedFile));
   if(!receivedFile) {
     return false;
   }
   {
     const uint32_t fwFileSize = receivedFile.size();
     const bool fwSizeOk = (fwFileSize > 0U);
-    serial.printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fwSizeOk));
+    Logger::get().printf_P(PSTR("  Size -> %s\r\n"), Str::getStateStr(fwSizeOk));
     if(!fwSizeOk) {
       receivedFile.close();
       return false;
     }
 
     const bool updateBeginResult = Update.begin(fwFileSize);
-    serial.printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
+    Logger::get().printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
     if(!updateBeginResult) {
       receivedFile.close();
       return false;
     }
     const bool updateStreamResult = (Update.writeStream(receivedFile) == fwFileSize);
-    serial.printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult));
+    Logger::get().printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult));
     if(!updateStreamResult) {
       receivedFile.close();
       return false;
@@ -211,7 +210,7 @@ bool DataTransfer::upgradeFirmware(HardwareSerial& serial, const char* firmwareF
   }
   {
     const bool updateEndResult = Update.end();
-    serial.printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult));
+    Logger::get().printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult));
     if(!updateEndResult) {
       receivedFile.close();
       return false;
@@ -220,7 +219,7 @@ bool DataTransfer::upgradeFirmware(HardwareSerial& serial, const char* firmwareF
 
   const bool rmFileResult = LittleFS.remove(FPSTR(firmwareFileName));
   if(!rmFileResult) {
-    serial.printf_P(PSTR("  Cleanup -> %s\r\n"), Str::getStateStr(rmFileResult));
+    Logger::get().printf_P(PSTR("  Cleanup -> %s\r\n"), Str::getStateStr(rmFileResult));
     receivedFile.close();
     return false;
   }

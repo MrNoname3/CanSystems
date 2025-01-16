@@ -214,7 +214,7 @@ void CanMqttGateway::handlePing() {
   const bool clientOnlineActual = Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
-    Serial.printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(), clientOnline ? statusOnline : statusOffline);
+    Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(), clientOnline ? statusOnline : statusOffline);
     char dataOut[statusFrameBufSize] = {'\0'};
     const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), statusFrame, clientOnline ? statusOnline : statusOffline);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
@@ -230,10 +230,10 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) {
     const char* fileName = fileJsonVar.as<const char*>();
     const uint16_t otaStartResultCode = canOta.startOta(fileName);
     const bool fileTransferStartResult = (otaStartResultCode == 0U);
-    Serial.printf_P(PSTR("[CAN] File transfer starts to \"%s\":%s\r\n"),
+    Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\":%s\r\n"),
       MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
     if(!fileTransferStartResult) {
-      Serial.printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
     }
     return;
   }

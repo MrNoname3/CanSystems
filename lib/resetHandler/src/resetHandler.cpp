@@ -8,15 +8,16 @@
 #include <Esp.h>                                                    /// Restart and reset-related functions for ESP32.
 #include <esp_task_wdt.h>                                           /// Watchdog timer functions specific to ESP32.
 #endif
+#include "common.hpp"                                               /// Common definitions and functions.
 
-void ResetHandler::restartMCU(HardwareSerial& serial) {
+void ResetHandler::restartMCU() {
 #if defined(__AVR_ATmega328P__)
-  serial.println(F("Restarting..."));
-  serial.flush();                                     // Sends out data from the serial buffer before reset.
+  Logger::get().println(F("Restarting..."));
+  Logger::get().flush();                              // Sends out data from the serial buffer before reset.
   wdt_enable(WDTO_15MS);                              // Configures the watchdog timer for a 15-ms timeout.
 #elif defined(ESP32) || defined(ESP8266)
-  serial.printf_P(PSTR("Restarting...\r\n"));
-  serial.flush();
+  Logger::get().printf_P(PSTR("Restarting...\r\n"));
+  Logger::get().flush();
   ESP.restart();
 #endif
   while(true) {};

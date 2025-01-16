@@ -25,9 +25,8 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
-NetworkManager networkManager(Serial, NetworkManager::Interface::WIFI);
+NetworkManager networkManager(NetworkManager::Interface::WIFI);
 Connectivity iotConn(
-  Serial,
   networkManager,
   [](bool state) -> void {
     state ? debugLed.stopTicker() : debugLed.startTicker(250U);
@@ -36,7 +35,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
-MqttCommon mqttCommon (iotConn, "common", Serial);
+MqttCommon mqttCommon (iotConn, "common");
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
 

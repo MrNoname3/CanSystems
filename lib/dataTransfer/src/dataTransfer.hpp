@@ -3,14 +3,12 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
-#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 
 /// @brief Class to handle file transfer and firmware upgrade operations.
 class DataTransfer final {
 public:
   /// @brief Constructor.
-  /// @param serial Reference to a HardwareSerial instance for communication.
-  explicit DataTransfer(HardwareSerial& serial);
+  explicit DataTransfer();
 
   /// @brief Destructor of the object.
   virtual ~DataTransfer() = default;
@@ -51,16 +49,14 @@ public:
 
 private:
   /// @brief Performs the firmware upgrade process.
-  /// @param serial Reference to a HardwareSerial instance for logging.
   /// @param firmwareFileName The name of the firmware file.
   /// @return True if the firmware upgrade is successful, false otherwise.
-  static bool upgradeFirmware(HardwareSerial& serial, const char* firmwareFileName);
+  static bool upgradeFirmware(const char* firmwareFileName);
 
   static constexpr uint8_t fileNameSize = 32U;                      // Maximum length of the file name.
   static constexpr uint16_t filePieceSize = 336U;                   // Size of a file piece. Divisible by both 3 and 4.
   static constexpr uint16_t maxB64Length = filePieceSize * 4U / 3U; // Maximum base64-encoded piece length.
 
-  HardwareSerial& serialPort;                                       // Reference to the serial port for communication.
   uint32_t fileSizeLocal;                                           // Size of the file being transferred, in bytes.
   uint32_t fileCrcLocal;                                            // CRC32 checksum of the file.
   uint32_t nextFilePieceNumberLocal;                                // The next expected file piece number.

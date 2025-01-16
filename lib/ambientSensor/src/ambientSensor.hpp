@@ -4,12 +4,11 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include <SI7021.hpp>                                               /// Temperature and humidity sensor driver.
-#include <HardwareSerial.h>                                         /// Arduino hardware serial lib.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Manages ambient measurements including temperature, humidity, and light intensity.
 /// @details Uses an SI7021 sensor for temperature and humidity readings, an analog pin for light intensity,
-/// and communicates data via CAN and serial output.
+/// and communicates data via CAN.
 class AmbientSensor final : public Task {
 public:
   /// @brief Constructor for the AmbientSensor class.
@@ -25,7 +24,7 @@ public:
   /// @return `true` if the execution was successfully, `false` otherwise.
   virtual bool init() override;
 
-  /// @brief Periodically reads sensors and sends data via CAN and serial.
+  /// @brief Periodically reads sensors and sends data via CAN.
   /// @return `true`.
   virtual bool run() override;
 

@@ -2,9 +2,9 @@
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <HardwareSerial.h>                                         /// Serial driver object.
 #include <vector>                                                   /// STL vector for dynamic arrays.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "common.hpp"                                               /// Common definitions and functions.
 #include "freertos/queue.h"                                         /// FreeRTOS API for queue management.
 #include "freertos/portmacro.h"                                     /// FreeRTOS API for port-specific macros.
 #include <freertos/semphr.h>                                        /// FreeRTOS API for semaphore handling.
@@ -23,8 +23,7 @@ private:
 
 public:
   /// @brief Constructor for CanHandlerEsp32.
-  /// @param serial Reference to the hardware serial driver object.
-  CanHandlerEsp32(HardwareSerial& serial);
+  CanHandlerEsp32();
 
   /// @brief Default destructor.
   ~CanHandlerEsp32() = default;
@@ -72,7 +71,6 @@ private:
 
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
 
-  HardwareSerial& serialPort;                                             // Reference to the serial driver object.
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
   std::vector<CanBase*> canDevicesList;                                   // List of registered CAN devices.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.

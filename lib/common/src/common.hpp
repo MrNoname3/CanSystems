@@ -204,8 +204,7 @@ public:
   static constexpr uint32_t getPioEnvJsonLength() { return sizeof(pioEnvJson) - 1U; }
 
   /// @brief Prints build metadata and configuration to a serial interface.
-  /// @param serial HardwareSerial object for output, defaults to `Serial`.
-  static void printBuildInfo(HardwareSerial& serial = Serial);
+  static void printBuildInfo();
 
   Build(const Build&) = delete;                       // Define copy constructor.
   Build& operator=(const Build&) = delete;            // Define copy assignment operator.

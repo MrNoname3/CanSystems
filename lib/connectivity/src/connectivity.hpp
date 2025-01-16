@@ -17,7 +17,6 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #endif
 #include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
-#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 #include <vector>                                                   /// STL vector for dynamic arrays.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
@@ -35,11 +34,10 @@ private:
 
 public:
   /// @brief Constructs a Connectivity instance.
-  /// @param serial Reference to the hardware serial port for debugging/logging.
   /// @param networkManager Reference to the network manager handling WiFi/Ethernet connections.
   /// @param debugLedFunc Function pointer for controlling the debug LED state.
   /// @param resetWdtFunc Function pointer for resetting the watchdog timer.
-  Connectivity(HardwareSerial& serial, NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
+  Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
 
   /// @brief Destructor of the object.
   ~Connectivity() = default;
@@ -130,7 +128,6 @@ private:
   static const char PROGMEM mqttConnectUnauthorizedStr[];           // MQTT unauthorized string.
   static const char PROGMEM mqttUnknownStatusStr[];                 // MQTT unknown status string.
 
-  HardwareSerial& serialPort;                                       // Reference to the hardware serial port.
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
