@@ -3,6 +3,7 @@
 
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
 class Time final {
@@ -336,5 +337,36 @@ public:
 
 private:
   StorageType errorState;                           // Stores the current error state as a bitmask.
+};
+
+/// @brief A static logger for logging via a hardware serial interface.
+class Logger final {
+private:
+  /// @brief Default constructor. Prevents instantiation of the class.
+  Logger() = default;
+
+  /// @brief Default destructor.
+  ~Logger() = default;
+
+public:
+  /// @brief Initialize the logger with a hardware serial instance.
+  /// @param serialPort The hardware serial instance (e.g., `Serial`, `Serial1`).
+  static inline void begin(HardwareSerial &serialPort) noexcept {
+    serial = &serialPort;
+  }
+
+  /// @brief Get the current hardware serial instance.
+  /// @return Reference to the hardware serial instance.
+  static inline HardwareSerial &get() noexcept {
+    return *serial;
+  }
+
+  Logger(const Logger&) = delete;                       // Define copy constructor.
+  Logger& operator=(const Logger&) = delete;            // Define copy assignment operator.
+  Logger(Logger&&) = delete;                            // Define move constructor.
+  Logger& operator=(Logger&&) = delete;                 // Define move assignment operator.
+
+private:
+  static inline HardwareSerial *serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
 };
 #endif // COMMON_HPP

@@ -51,22 +51,22 @@ void setup() {
   Serial.begin(MONITOR_BAUD);
   debugLed.startTicker(500U);
   delay(1U);
-  Serial.printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
+  Logger::get().printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   Build::printBuildInfo();
 
   //adcReader.enableMqttSending(10000U);
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Serial.printf_P(PSTR("Init: %s\r\n"), Str::getStateStr(initSuccess));
+  Logger::get().printf_P(PSTR("Init: %s\r\n"), Str::getStateStr(initSuccess));
   if(!initSuccess) {
-    Serial.printf_P(PSTR("  Code: "));
-    Serial.println(initResult, BIN);
+    Logger::get().printf_P(PSTR("  Code: "));
+    Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
-  Serial.printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
-  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+  Logger::get().printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
+  Logger::get().printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
   debugLed.stopTicker();
   performance.resetTimer();
 }
@@ -77,5 +77,5 @@ void loop() {
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Serial.printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
+  Logger::get().printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
 }
