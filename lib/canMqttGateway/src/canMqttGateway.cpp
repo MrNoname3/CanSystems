@@ -211,7 +211,7 @@ void CanMqttGateway::handlePing() {
     (void)sendCanFrame(CanCmd::PING);
     clientPingTimer = millis();
   }
-  const bool clientOnlineActual = Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
+  const bool clientOnlineActual = !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
     Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(), clientOnline ? statusOnline : statusOffline);
