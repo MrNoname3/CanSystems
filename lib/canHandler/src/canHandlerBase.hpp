@@ -90,9 +90,7 @@ public:
     /// @param from The sender address (10 bits).
     /// @param canData The 8-byte array containing the payload.
     CanFrame(uint16_t to, uint16_t cmd, uint16_t from, const uint8_t (&canData)[8]) :
-      to(static_cast<uint32_t>(to)),
-      cmd(static_cast<uint32_t>(cmd)),
-      from(static_cast<uint32_t>(from))
+      extId(((static_cast<uint32_t>(to) & 0x3FF) << 0U) | ((static_cast<uint32_t>(cmd) & 0x1FF) << 10U) | ((static_cast<uint32_t>(from) & 0x3FF) << 19U))
     {
       memcpy(data, canData, sizeof(data));
     }
