@@ -32,6 +32,9 @@ public:
   /// @param data Pointer to the data to be stored.
   /// @return True if the operation was successful; false otherwise.
   static bool save(T* data) {
+#if defined(ESP8266) || defined(ESP32)
+    if(!init()) { return false; }
+#endif
     if(data == nullptr) { return false; }
     EEPROMData eepromData;
     eepromData.data = *data;
@@ -39,6 +42,9 @@ public:
 
     // Write the data to EEPROM.
     EEPROM.put(eepromAddress, eepromData);
+#if defined(ESP8266) || defined(ESP32)
+    if(!EEPROM.commit()) { return false; }
+#endif
 
     // Verify the written data.
     for(uint16_t i = 0U; i < sizeof(EEPROMData); ++i) {
@@ -60,6 +66,9 @@ public:
   /// @param data Pointer to the memory where the data will be loaded.
   /// @return True if the operation was successful; false otherwise.
   static bool load(T* data) {
+#if defined(ESP8266) || defined(ESP32)
+    if(!init()) { return false; }
+#endif
     if(data == nullptr) { return false; }
     // Read the data from EEPROM.
     EEPROMData eepromData;
@@ -88,14 +97,28 @@ public:
   EEPROMHandler& operator=(EEPROMHandler&&) = delete;         // Define move assignment operator.
 
 private:
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Initialize the EEPROM for storing data.
+  /// @return `true` if the EEPROM is successfully initialized or was already initialized; 
+  ///         `false` if the initialization fails.
+  static inline bool init() {
+    if(eepromInitialised) { return true; }
+    eepromInitialised = EEPROM.begin(sizeof(EEPROMData));
+    return eepromInitialised;
+  }
+#endif
+
   /// @brief Data structure representing the stored frame in EEPROM.
   struct __attribute__((packed))
   EEPROMData {
-    uint16_t crc;                               // CRC16 value of the data.
-    T data;                                     // User-defined data type.
-    EEPROMData() : crc(0U), data() {}           // Default constructor initializes members to zero.
+    uint16_t crc;                                   // CRC16 value of the data.
+    T data;                                         // User-defined data type.
+    EEPROMData() : crc(0U), data() {}               // Default constructor initializes members to zero.
   };
+#if defined(ESP8266) || defined(ESP32)
+  static inline bool eepromInitialised = false;     //Tracks whether the EEPROM has been initialized.
+#endif
 
-  T* data;                                      // Pointer to the user-defined data type.
+  T* data;                                          // Pointer to the user-defined data type.
 };
 #endif // EEPROM_HANDLER_HPP
