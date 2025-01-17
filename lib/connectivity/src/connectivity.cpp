@@ -141,6 +141,15 @@ bool Connectivity::init() {
     }
     Logger::get().printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
   });
+  // List message handlers.
+  Logger::get().printf_P(PSTR("[MQTT] Message handlers:\r\n"));
+  for(std::size_t i = 0U; i < messageHandlerList.size(); ++i) {
+    if(messageHandlerList[i] != nullptr) {
+      Logger::get().printf_P(PSTR("  %zu. %s\r\n"), i, messageHandlerList[i]->getSubtopic());
+    } else {
+      Logger::get().printf_P(PSTR("  %zu. No object here!\r\n"), i);
+    }
+  }
 
   return connectToMqttServer();
 }

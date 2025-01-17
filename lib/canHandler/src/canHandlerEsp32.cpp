@@ -54,6 +54,18 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     Logger::get().printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
+  // List CAN devices.
+  Logger::get().printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
+  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
+    for(std::size_t i = 0U; i < canDevicesList.size(); ++i) {
+      if(canDevicesList[i] != nullptr) {
+        Logger::get().printf_P(PSTR("  %zu. %hu\r\n"), i, canDevicesList[i]->getClientCanId());
+      } else {
+        Logger::get().printf_P(PSTR("  %zu. No object here!\r\n"), i);
+      }
+    }
+    xSemaphoreGive(canDevicesListMutex);
+  }
   return true;
 }
 
