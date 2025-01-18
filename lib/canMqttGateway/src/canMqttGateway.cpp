@@ -24,6 +24,10 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
     otaStartErrState.setError(OtaStartError::FILE_NAME_NULLPTR);
     return otaStartErrState.getRawErrorState();
   }
+  if(fileName[0] != '/') {
+    otaStartErrState.setError(OtaStartError::FILE_LOCATION_INVALID);
+    return otaStartErrState.getRawErrorState();
+  }
   const char* subtopic = canMqttGateway.getSubtopic();
   if(subtopic == nullptr) {
     otaStartErrState.setError(OtaStartError::SUBTOPIC_NULLPTR);
@@ -202,9 +206,9 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) {
   JsonVariant fileJsonVar = payloadJson[F("File")];
   if(fileJsonVar.is<const char*>()) {
     const char* fileName = fileJsonVar.as<const char*>();
-    const uint16_t otaStartResultCode = canOta.startOta(fileName);
+    const uint8_t otaStartResultCode = (strlen(fileName) == 0U) ? canOta.startOta() : canOta.startOta(fileName);
     const bool fileTransferStartResult = (otaStartResultCode == 0U);
-    Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\":%s\r\n"),
+    Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
       MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
     if(!fileTransferStartResult) {
       Logger::get().printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
@@ -248,11 +252,12 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
         (static_cast<uint16_t>(canFrame.data[1]) << 8U);
       const uint32_t gitHash = 
         (static_cast<uint32_t>(canFrame.data[2]) << 0U) |
-        (static_cast<uint16_t>(canFrame.data[3]) << 8U) |
-        (static_cast<uint16_t>(canFrame.data[4]) << 16U) |
-        (static_cast<uint16_t>(canFrame.data[5]) << 24U);
+        (static_cast<uint32_t>(canFrame.data[3]) << 8U) |
+        (static_cast<uint32_t>(canFrame.data[4]) << 16U) |
+        (static_cast<uint32_t>(canFrame.data[5]) << 24U);
+      const uint8_t gitDirty = canFrame.data[6];
       char dataOut[buildInfoFrameBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buildInfoFrame, fwVersion, gitHash);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buildInfoFrame, fwVersion, gitHash, gitDirty);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       (void)MqttBase::sendMessage(dataOut);
