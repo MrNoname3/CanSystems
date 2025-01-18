@@ -1,16 +1,8 @@
 #include "canAlertDriver.hpp"
 
-const char CanAlertDriver::humTempLdrFrame[] PROGMEM = {
-  "{"
-    "\"Temperature\":%.2f,"
-    "\"Humidity\":%hu,"
-    "\"Light\":%hu"
-  "}"
-};
-
 CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
-  Connectivity& connectivity, const char* classID, float tempOffset) :
-  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, classID),
+  Connectivity& connectivity, const char* subTopic, float tempOffset) :
+  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic),
   tempOffset(tempOffset)
 {}
 
@@ -55,9 +47,8 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
     case static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR): {
       const float temperature = static_cast<float>((static_cast<uint16_t>(canFrame.data[0]) << 0U) | (static_cast<uint16_t>(canFrame.data[1]) << 8U)) / 100.0F + tempOffset;
       const uint16_t humidity = (static_cast<uint16_t>(canFrame.data[2]) << 0U) | (static_cast<uint16_t>(canFrame.data[3]) << 8U);
-      const uint16_t lightRaw = (static_cast<uint16_t>(canFrame.data[4]) << 0U) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
-      const uint8_t light = static_cast<uint8_t>(lightRaw >> 2U); // TODO: send the full 2byte to the server.
-      char dataOut[dataOutBufSize] = { '\0' };
+      const uint16_t light = (static_cast<uint16_t>(canFrame.data[4]) << 0U) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
+      char dataOut[dataOutBufSize] = {'\0'};
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), humTempLdrFrame, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
