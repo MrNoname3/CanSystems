@@ -8,7 +8,7 @@ class AdcReader final : public MqttBase {
 private:
   static constexpr uint8_t analogChannels = 4U;                     // Number of analog channels available on the ADC.
   static constexpr uint8_t maxChannelNumber = analogChannels - 1U;  // Maximum channel index (0-3).
-  static constexpr uint8_t dataOutBufSize = 128U;                   // Maximum size of the MQTT message buffer.
+  static constexpr uint8_t dataOutBufSize = 80U;                    // Maximum size of the MQTT message buffer.
 
   static inline const char PROGMEM mqttMsgFrame[] = {               // MQTT message JSON format.
     "{"
