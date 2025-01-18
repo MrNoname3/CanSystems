@@ -1,5 +1,4 @@
 #pragma once
-
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "canMqttGateway.hpp"                                       /// Base class for CAN-MQTT communication.
 

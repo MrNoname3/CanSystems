@@ -1,5 +1,4 @@
 #pragma once
-
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.

@@ -1,5 +1,4 @@
 #pragma once
-
 /// @file canHandler.hpp
 /// @brief Conditional inclusion of CAN handler implementations based on the target architecture.
 #ifdef ARDUINO_ARCH_AVR
