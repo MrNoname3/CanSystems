@@ -20,7 +20,7 @@ void maxLoopTimeCallback(uint32_t maxLoopTime);
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
-Performance performance(1U, maxLoopTimeCallback);
+Performance performance(2U, maxLoopTimeCallback);
 NetworkManager networkManager(NetworkManager::Interface::LAN8720);
 Connectivity iotConn(
   networkManager,
