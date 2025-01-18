@@ -14,6 +14,12 @@
 /// It uses '+' (for 62) and '/' (for 63) as special characters for Base64 encoding and '=' for padding.
 class Base64 final {
 private:
+  static inline const char PROGMEM base64AlphabetTable[] = {        // Static array containing the Base64 alphabet table in PROGMEM.
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/"
+  };
+
   /// @brief Private constructor to prevent instantiation of the class.
   Base64() = delete;
 
@@ -67,7 +73,5 @@ private:
   /// @return The Base64 index (0-63) corresponding to the input character.
   /// @note Returns -1 for invalid characters.
   static uint8_t lookupTable(char c);
-
-  static const char PROGMEM base64AlphabetTable_[];     // Static array containing the Base64 alphabet table in PROGMEM.
 };
 #endif // BASE64_HPP

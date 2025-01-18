@@ -14,6 +14,12 @@ private:
   static constexpr uint8_t dataOutBufSize = 16U;              // Size of the buffer used for outgoing MQTT data messages.
   static constexpr uint32_t measureTime = Time::minToMs(1U);  // Measurement interval in milliseconds for calculating CPM.
 
+  static inline const char PROGMEM cpmMessageFrame[] = {      // Format string for the MQTT message containing CPM data.
+    "{"
+      "\"cpm\":%hu"
+    "}"
+  };
+
 public:
   /// @brief Constructs the Radiation monitoring object.
   /// @param connectivity Reference to the MQTT connectivity object.
@@ -54,7 +60,6 @@ private:
   /// @brief ISR for measuring CPM and preparing data for transmission.
   static IRAM_ATTR void measure();
 
-  static const char PROGMEM cpmMessageFrame[];  // Format string for the MQTT message containing CPM data.
   static volatile uint16_t cpm;                 // Counter for radiation pulses detected during the current measurement period.
   static volatile bool measureDone;             // Flag indicating whether a measurement period has completed.
   static volatile uint16_t cpmToSend;           // CPM value to be sent over MQTT.

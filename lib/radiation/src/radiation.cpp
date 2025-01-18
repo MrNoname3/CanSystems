@@ -1,10 +1,5 @@
 #include "radiation.hpp"
 
-const char Radiation::cpmMessageFrame[] PROGMEM = {
-  "{"
-    "\"cpm\":%hu"
-  "}"
-};
 volatile uint16_t Radiation::cpm = 0U;
 volatile bool Radiation::measureDone = false;
 volatile uint16_t Radiation::cpmToSend = 0U;

@@ -1,11 +1,5 @@
 #include "canMqttGateway.hpp"
 
-const char CanOta::otaFrame[] PROGMEM = {
-  "{"
-    "\"OTA\":\"%s\""
-  "}"
-};
-
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   canMqttGateway(canMqttGateway),
   receivedFile(),
@@ -163,26 +157,6 @@ void CanOta::runOta() {
     } break;
   }
 }
-
-const char CanMqttGateway::statusOnline[] PROGMEM = "ONLINE";
-const char CanMqttGateway::statusOffline[] PROGMEM = "OFFLINE";
-const char CanMqttGateway::statusRestarted[] PROGMEM = "RESTARTED";
-const char CanMqttGateway::statusFrame[] PROGMEM = {
-  "{"
-    "\"Status\":\"%s\""
-  "}"
-};
-const char CanMqttGateway::buttonFrame[] PROGMEM = {
-  "{"
-    "\"Button\":%hu"
-  "}"
-};
-const char CanMqttGateway::buildInfoFrame[] PROGMEM = {
-  "{"
-    "\"Firmware\":%hu,"
-    "\"GitHash\":\"%x\""
-  "}"
-};
 
 CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic) :
   CanBase(canHandler, clientCanId),

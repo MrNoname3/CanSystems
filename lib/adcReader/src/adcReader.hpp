@@ -6,9 +6,21 @@
 #include <ADS1X15.h>
 
 class AdcReader final : public MqttBase {
+private:
+  static constexpr uint8_t analogChannels = 4U;
+  static constexpr uint8_t maxChannelNumber = analogChannels - 1U;   // Channels: 0-3.
+  static constexpr uint8_t dataOutBufSize = 128U;
+
+  static inline const char PROGMEM mqttMsgFrame[] = {
+    "{"
+      "\"Analog\":[%hd,%hd,%hd,%hd],"
+      "\"Voltage\":[%.2f,%.2f,%.2f,%.2f]"
+    "}"
+  };
+
 public:
   enum class Channel : uint8_t {
-    AN0 = 0,
+    AN0 = 0U,
     AN1,
     AN2,
     AN3
@@ -46,21 +58,21 @@ public:
 
 private:
   enum class MeasureStates : uint8_t {
-    IDLE = 0,
+    IDLE = 0U,
     REQUEST_ADC,
     STORE_DATA,
     MEASURE_DELAY
   };
 
-  inline static IRAM_ATTR void intHandler();
+  static IRAM_ATTR void intHandler();
 
-  static constexpr uint8_t analogChannels = 4;
+  static volatile bool adcReady;
+
   ADS1115 ADS;
   const uint16_t measureTime;
   const uint8_t rdyPin;
   uint8_t channel;
   int16_t adcValues[analogChannels];
-  static volatile bool adcReady;
   MeasureStates measureState;
   uint32_t measureTimer;
   bool enableSending;
@@ -69,8 +81,5 @@ private:
   const uint32_t adsReadWdTime;
   uint32_t adsReadWdTimer;
   bool valuesReady;
-  static constexpr uint8_t maxChannelNumber = analogChannels - 1;   // Channels: 0-3.
-  static constexpr uint8_t dataOutBufSize = 128;
-  static const char PROGMEM MQTT_MSG_FRAME[];
 };
 #endif // ADC_READER_HPP

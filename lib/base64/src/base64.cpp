@@ -23,7 +23,7 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
     if(i == 3) {
       fromA3ToA4(A4, A3);
       for(i = 0; i < 4; i++) {
-        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[i]]);
+        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable[A4[i]]);
       }
       i = 0;
     }
@@ -35,7 +35,7 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
     }
     fromA3ToA4(A4, A3);
     for(j = 0; j < i + 1; j++) {
-      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[j]]);
+      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable[A4[j]]);
     }
     while((i++ < 3)) {
       output[encodedLength_++] = '=';
@@ -103,8 +103,3 @@ uint8_t Base64::lookupTable(char c) {
   if(c == '/') { return 63; }
   return -1;
 }
-
-const char Base64::base64AlphabetTable_[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  "abcdefghijklmnopqrstuvwxyz"
-  "0123456789+/";

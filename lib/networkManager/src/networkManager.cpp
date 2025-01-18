@@ -2,16 +2,6 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"
 
-const char NetworkManager::wlNoShieldStr[] PROGMEM            = "WL_NO_SHIELD";
-const char NetworkManager::wlIdleStatusStr[] PROGMEM          = "WL_IDLE_STATUS";
-const char NetworkManager::wlNoSsidAvailableStr[] PROGMEM     = "WL_NO_SSID_AVAIL";
-const char NetworkManager::wlScanCompletedStr[] PROGMEM       = "WL_SCAN_COMPLETED";
-const char NetworkManager::wlConnectedStr[] PROGMEM           = "WL_CONNECTED";
-const char NetworkManager::wlConnectFailedStr[] PROGMEM       = "WL_CONNECT_FAILED";
-const char NetworkManager::wlConnectionLostStr[] PROGMEM      = "WL_CONNECTION_LOST";
-const char NetworkManager::wlWrongPasswordStr[] PROGMEM       = "WL_WRONG_PASSWORD";
-const char NetworkManager::wlDisconnectedStr[] PROGMEM        = "WL_DISCONNECTED";
-const char NetworkManager::wlUnknownStatusStr[] PROGMEM       = "WL_UNKNOWN_STATUS";
 #ifdef ESP32
 volatile bool NetworkManager::ethConnected = false;
 #endif

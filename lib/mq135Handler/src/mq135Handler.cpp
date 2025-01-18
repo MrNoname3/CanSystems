@@ -1,20 +1,6 @@
 #include "mq135Handler.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
 
-const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
-  "{"
-    "\"Gas\":"
-    "{"
-      "\"CO\":%.2f,"
-      "\"Alcohol\":%.2f,"
-      "\"CO2\":%.2f,"
-      "\"Toluene\":%.2f,"
-      "\"NH4\":%.2f,"
-      "\"Acetone\":%.2f"
-    "}"
-  "}"
-};
-
  Mq135Handler::Mq135Handler(Connectivity& connectivity, const char* classID, AdcReader& adcReader, AdcReader::Channel channel, uint32_t measureTime) :
   MqttBase(connectivity, classID),
   adcReader(adcReader),
@@ -65,7 +51,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
       } break;
       case GasReadState::SEND: {
         char dataOut[dataOutBufSize] = { '\0' };
-        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME,
+        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
           gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(!dataOutValid) { return false; }

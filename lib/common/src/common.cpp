@@ -3,13 +3,6 @@
 #include <avr/boot.h>                                               /// Reading fuses.
 #elif defined(ESP8266) || defined(ESP32)
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
-#endif
-
-#if defined(ESP8266) || defined(ESP32)
-const char Str::okStr[] PROGMEM                = "[OK]";
-const char Str::errStr[] PROGMEM               = "[ERR]";
-const char Str::sectionSeparator[] PROGMEM     = "*************************************************";
 #endif
 
 void Build::printBuildInfo() {
@@ -39,13 +32,3 @@ void Build::printBuildInfo() {
   Logger::get().printf_P(PSTR("Reset reason: %hu\r\n"), ResetHandler::getResetReason());
 #endif
 }
-
-#if defined(ESP8266) || defined(ESP32)
-const char FileName::tempFileLocation[] PROGMEM           = "/temp.tmp";
-const char FileName::otaFwLocation[] PROGMEM              = "/espFirmware.bin";
-const char FileName::extOtaFwLocation[] PROGMEM           = "/%sFirmware.bin";
-const char FileName::wifiConfigLocation[] PROGMEM         = "/config/wifi.json";
-const char FileName::wifiTempConfigLocation[] PROGMEM     = "/wifi.tmp";
-const char FileName::mqttServerCertLocation[] PROGMEM     = "/config/mosq-ca.crt";
-const char FileName::mqttServerCredLocation[] PROGMEM     = "/config/server.json";
-#endif

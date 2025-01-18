@@ -18,6 +18,12 @@ private:
   static constexpr const uint8_t otaFrameBufSize = 64U;
   using OtaStartErrorType = uint16_t;
 
+  static inline const char PROGMEM otaFrame[] = {
+    "{"
+      "\"OTA\":\"%s\""
+    "}"
+  };
+
   enum class OtaStartError : OtaStartErrorType {
     NONE                  = 0U,                   // No error.
     FILE_NAME_NULLPTR     = 1 << 0U,
@@ -59,8 +65,6 @@ private:
     INVALID
   };
 
-  static const char PROGMEM otaFrame[];
-
   CanMqttGateway& canMqttGateway;
   File receivedFile;
   uint32_t frameNumber;
@@ -79,6 +83,26 @@ private:
   static constexpr uint8_t statusFrameBufSize = 24U;
   static constexpr uint8_t buttonFrameBufSize = 24U;
   static constexpr uint8_t buildInfoFrameBufSize = 96U;
+
+  static inline const char PROGMEM statusOnline[]     = "ONLINE";
+  static inline const char PROGMEM statusOffline[]    = "OFFLINE";
+  static inline const char PROGMEM statusRestarted[]  = "RESTARTED";
+  static inline const char PROGMEM statusFrame[] = {
+    "{"
+      "\"Status\":\"%s\""
+    "}"
+  };
+  static inline const char PROGMEM buttonFrame[] = {
+    "{"
+      "\"Button\":%hu"
+    "}"
+  };
+  static inline const char PROGMEM buildInfoFrame[] = {
+    "{"
+      "\"Firmware\":%hu,"
+      "\"GitHash\":\"%x\""
+    "}"
+  };
 
 public:
 
@@ -112,14 +136,6 @@ private:
   virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override;
-
-  static const char PROGMEM statusOnline[];
-  static const char PROGMEM statusOffline[];
-  static const char PROGMEM statusRestarted[];
-  static const char PROGMEM statusFrame[];
-
-  static const char PROGMEM buttonFrame[];
-  static const char PROGMEM buildInfoFrame[];
 
   CanOta canOta;
   uint32_t clientPingTimer;

@@ -2,18 +2,6 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "common.hpp"                                               /// Common definitions and functions.
 
-const char RfHandler::rfMessageFrame[] PROGMEM = {
-  "{"
-    "\"RfReceived\":"
-    "{"
-      "\"Data\":%llu,"
-      "\"Bits\":%u,"
-      "\"Protocol\":%u,"
-      "\"Pulse\":%u"
-    "}"
-  "}"
-};
-
 RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
   MqttBase(connectivity, subtopic),
   rfTransciever(),

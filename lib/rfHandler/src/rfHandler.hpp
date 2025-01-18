@@ -9,8 +9,20 @@
 /// This class supports receiving and transmitting RF signals, filtering duplicate data, and sending the processed data via MQTT.
 class RfHandler final : public MqttBase {
 private:
-  static constexpr uint8_t dataOutBufSize = 116U;   // Size of the buffer used for outgoing MQTT data messages.
-  static constexpr uint8_t dataCheckTime = 100U;    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
+  static constexpr uint8_t dataOutBufSize = 116U;                   // Size of the buffer used for outgoing MQTT data messages.
+  static constexpr uint8_t dataCheckTime = 100U;                    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
+
+  static inline const char PROGMEM rfMessageFrame[] = {             // Format string for the MQTT message containing RF data.
+    "{"
+      "\"RfReceived\":"
+      "{"
+        "\"Data\":%llu,"
+        "\"Bits\":%u,"
+        "\"Protocol\":%u,"
+        "\"Pulse\":%u"
+      "}"
+    "}"
+  };
 
 public:
   /// @brief Constructs the RF handler object.
@@ -70,8 +82,6 @@ private:
       pulseLength(pulseLength)
     {}
   };
-
-  static const char PROGMEM rfMessageFrame[];                 // Format string for the MQTT message containing RF data.
 
   RCSwitch rfTransciever;                                     // RF driver object for sending and receiving RF signals.
   const uint8_t rfRxPin;                                      // GPIO pin connected to the RF receiver.

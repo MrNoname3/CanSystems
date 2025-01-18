@@ -2,21 +2,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>
 
-const char Connectivity::mqttClientName[] PROGMEM                 = "%s_%02x%02x%02x%02x%02x%02x";
-const char Connectivity::mqttOutTopic[] PROGMEM                   = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";
-const char Connectivity::mqttInTopic[] PROGMEM                    = "iot/stod/%02x%02x%02x%02x%02x%02x/#";
-const char Connectivity::mqttConnectionTimeoutStr[] PROGMEM       = "MQTT_CONNECTION_TIMEOUT";
-const char Connectivity::mqttConnectionLostStr[] PROGMEM          = "MQTT_CONNECTION_LOST";
-const char Connectivity::mqttConnectFailedStr[] PROGMEM           = "MQTT_CONNECT_FAILED";
-const char Connectivity::mqttDisconnectedStr[] PROGMEM            = "MQTT_DISCONNECTED";
-const char Connectivity::mqttConnectedStr[] PROGMEM               = "MQTT_CONNECTED";
-const char Connectivity::mqttConnectBadProtocolStr[] PROGMEM      = "MQTT_CONNECT_BAD_PROTOCOL";
-const char Connectivity::mqttConnectBadClientIdStr[] PROGMEM      = "MQTT_CONNECT_BAD_CLIENT_ID";
-const char Connectivity::mqttConnectUnavailableStr[] PROGMEM      = "MQTT_CONNECT_UNAVAILABLE";
-const char Connectivity::mqttConnectBadCredentialsStr[] PROGMEM   = "MQTT_CONNECT_BAD_CREDENTIALS";
-const char Connectivity::mqttConnectUnauthorizedStr[] PROGMEM     = "MQTT_CONNECT_UNAUTHORIZED";
-const char Connectivity::mqttUnknownStatusStr[] PROGMEM           = "MQTT_UNKNOWN_STATUS";
-
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
   tcpClient(),

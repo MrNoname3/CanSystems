@@ -1,9 +1,11 @@
-#ifndef COMMON_HPP
-#define COMMON_HPP
+#pragma once
 
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
+#if defined(ESP8266) || defined(ESP32)
+#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
+#endif
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
 class Time final {
@@ -129,9 +131,11 @@ public:
   /// @return Constant string `"[ERR]"`.
   static constexpr const char* getErrStr() { return errStr; }
 
+#if defined(__AVR_ATmega328P__)
   /// @brief Retrieves the spacer string.
   /// @return Constant string `"|"`.
   static constexpr const char* getSpacerStr() { return spacerStr; }
+#endif
 
   /// @brief Retrieves a status string based on a boolean state.
   /// @param state Boolean value where `true` represents "OK" and `false` represents "Error".
@@ -151,14 +155,16 @@ public:
 
 private:
 #if defined(__AVR_ATmega328P__)
-  static constexpr const char* okStr           = "[OK]";      // Status string for "OK" on AVR platforms.
-  static constexpr const char* errStr          = "[ERR]";     // Status string for "Error" on AVR platforms.
+  static constexpr const char* okStr            = "[OK]";     // Status string for "OK" on AVR platforms.
+  static constexpr const char* errStr           = "[ERR]";    // Status string for "Error" on AVR platforms.
+  static constexpr const char* spacerStr        = "|";        // A string used as a spacer in formatting.
 #elif defined(ESP8266) || defined(ESP32)
-  static const char PROGMEM okStr[];                          // Status string for "OK" stored in program memory for ESP platforms.
-  static const char PROGMEM errStr[];                         // Status string for "Error" stored in program memory for ESP platforms.
-  static const char PROGMEM sectionSeparator[];               // Section separator string, stored in program memory on ESP platforms.
+  static inline const char PROGMEM okStr[]      = "[OK]";     // Status string for "OK" stored in program memory for ESP platforms.
+  static inline const char PROGMEM errStr[]     = "[ERR]";    // Status string for "Error" stored in program memory for ESP platforms.
+  static inline const char PROGMEM sectionSeparator[] = {     // Section separator string, stored in program memory on ESP platforms.
+    "*************************************************"
+  };
 #endif
-  static constexpr const char* spacerStr       = "|";         // A string used as a spacer in formatting.
 };
 
 /// @brief Class to provide build-time metadata and configuration information.
@@ -267,13 +273,13 @@ public:
 
 private:
 #if defined(ESP8266) || defined(ESP32)
-  static const char PROGMEM tempFileLocation[];             // Temporary file name used during file transfer.
-  static const char PROGMEM otaFwLocation[];                // File location for the OTA firmware.
-  static const char PROGMEM extOtaFwLocation[];             // File location for external device OTA firmware.
-  static const char PROGMEM wifiConfigLocation[];           // File location for the Wi-Fi configuration.
-  static const char PROGMEM wifiTempConfigLocation[];       // File location for the temporary Wi-Fi configuration.
-  static const char PROGMEM mqttServerCertLocation[];       // File location for the MQTT server certificate.
-  static const char PROGMEM mqttServerCredLocation[];       // File location for the MQTT server credentials.
+  static inline const char PROGMEM tempFileLocation[]       = "/temp.tmp";              // Temporary file name used during file transfer.
+  static inline const char PROGMEM otaFwLocation[]          = "/espFirmware.bin";       // File location for the OTA firmware.
+  static inline const char PROGMEM extOtaFwLocation[]       = "/%sFirmware.bin";        // File location for external device OTA firmware.
+  static inline const char PROGMEM wifiConfigLocation[]     = "/config/wifi.json";      // File location for the Wi-Fi configuration.
+  static inline const char PROGMEM wifiTempConfigLocation[] = "/wifi.tmp";              // File location for the temporary Wi-Fi configuration.
+  static inline const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";    // File location for the MQTT server certificate.
+  static inline const char PROGMEM mqttServerCredLocation[] = "/config/server.json";    // File location for the MQTT server credentials.
 #endif
 };
 
@@ -368,4 +374,3 @@ public:
 private:
   static inline HardwareSerial *serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
 };
-#endif // COMMON_HPP

@@ -1,27 +1,21 @@
 #include "adcReader.hpp"
 
 volatile bool AdcReader::adcReady = false;
-const char AdcReader::MQTT_MSG_FRAME[] PROGMEM = {
-  "{"
-    "\"Analog\":[%hd,%hd,%hd,%hd],"
-    "\"Voltage\":[%.2f,%.2f,%.2f,%.2f]"
-  "}"
-};
 
 AdcReader::AdcReader(Connectivity& connectivity, const char* classID, uint16_t measureTime, uint8_t rdyPin, uint8_t sdaPin, uint8_t sclPin, uint8_t address) :
   MqttBase(connectivity, classID),
   ADS(address),
   measureTime(measureTime),
   rdyPin(rdyPin),
-  channel(0),
+  channel(0U),
   adcValues{0},
   measureState(MeasureStates::IDLE),
-  measureTimer(0),
+  measureTimer(0U),
   enableSending(false),
-  mqttSendTime(0),
-  mqttSendTimer(0),
+  mqttSendTime(0U),
+  mqttSendTimer(0U),
   adsReadWdTime(measureTime * analogChannels),
-  adsReadWdTimer(0),
+  adsReadWdTimer(0U),
   valuesReady(false)
 {
   pinMode(rdyPin, INPUT_PULLUP);
@@ -79,8 +73,8 @@ bool AdcReader::run() {
       if((millis() - measureTimer) >= measureTime) {
         if(valuesReady && enableSending && (millis() - mqttSendTimer >= mqttSendTime)) {
           mqttSendTimer = millis();
-          char dataOut[dataOutBufSize] = { '\0' };
-          const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME,
+          char dataOut[dataOutBufSize] = {'\0'};
+          const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
             adcValues[0], adcValues[1], adcValues[2], adcValues[3],
             ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
           const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));

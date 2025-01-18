@@ -30,6 +30,18 @@ private:
   // ETH_CLOCK_GPIO17_OUT - 50MHz clock from internal APLL inverted output on GPIO17 - tested with LAN8720
 #endif
 
+  // Wi-Fi status strings
+  static inline const char PROGMEM wlNoShieldStr[]        = "WL_NO_SHIELD";
+  static inline const char PROGMEM wlIdleStatusStr[]      = "WL_IDLE_STATUS";
+  static inline const char PROGMEM wlNoSsidAvailableStr[] = "WL_NO_SSID_AVAIL";
+  static inline const char PROGMEM wlScanCompletedStr[]   = "WL_SCAN_COMPLETED";
+  static inline const char PROGMEM wlConnectedStr[]       = "WL_CONNECTED";
+  static inline const char PROGMEM wlConnectFailedStr[]   = "WL_CONNECT_FAILED";
+  static inline const char PROGMEM wlConnectionLostStr[]  = "WL_CONNECTION_LOST";
+  static inline const char PROGMEM wlWrongPasswordStr[]   = "WL_WRONG_PASSWORD";
+  static inline const char PROGMEM wlDisconnectedStr[]    = "WL_DISCONNECTED";
+  static inline const char PROGMEM wlUnknownStatusStr[]   = "WL_UNKNOWN_STATUS";
+
 public:
   /// @brief Represents supported network interfaces.
   enum class Interface : uint8_t {
@@ -94,18 +106,6 @@ private:
     LAN8720_CONN_FAILED   = 1 << 8U,              // LAN8720 connection failed.
     MAC_ADDRESS_INVALID   = 1 << 9U               // Invalid MAC address.
   };
-
-  // Wi-Fi status strings
-  static const char PROGMEM wlNoShieldStr[];
-  static const char PROGMEM wlIdleStatusStr[];
-  static const char PROGMEM wlNoSsidAvailableStr[];
-  static const char PROGMEM wlScanCompletedStr[];
-  static const char PROGMEM wlConnectedStr[];
-  static const char PROGMEM wlConnectFailedStr[];
-  static const char PROGMEM wlConnectionLostStr[];
-  static const char PROGMEM wlWrongPasswordStr[];
-  static const char PROGMEM wlDisconnectedStr[];
-  static const char PROGMEM wlUnknownStatusStr[];
 
 #ifdef ESP32
   static volatile bool ethConnected;                                // Ethernet connection status.
