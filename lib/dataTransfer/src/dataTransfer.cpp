@@ -62,18 +62,17 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   if(filePieceNumber != nextFilePieceNumberLocal) { return false; }
   if(remainingFileSizeLocal == 0U) { return false; }
   if(fileData == nullptr) { return false; }
+  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length + 1U);
+  if(filePieceB64Size == 0U) { return false; }
 
-  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length);
-  if(filePieceB64Size == 0U || filePieceB64Size == maxB64Length) { return false; }
-
-  uint8_t decodedData[filePieceSize];
+  uint8_t decodedData[filePieceSize + 1U];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
-  if(decodedPreSize > sizeof(decodedData)) {
+  if(decodedPreSize > sizeof(decodedData) || decodedPreSize == 0U) {
     Logger::get().printf_P(PSTR("[FT] File piece size error!\r\n"));
     return false;
   }
-  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
-  if(decodedPreSize != decodedPostSize) {
+  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size, sizeof(decodedData));
+  if(decodedPreSize != decodedPostSize || decodedPostSize == 0U) {
     Logger::get().printf_P(PSTR("[FT] Decoded size check error!\r\n"));
     return false;
   }
@@ -91,7 +90,7 @@ bool DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint
   if(remainingFileSizeLocal == 0U) { return false; }
   if(fileData == nullptr) { return false; }
 
-  File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
+  File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a", true);
   if(!receivedFile) {
     Logger::get().printf_P(PSTR("[FT] Opening failed: %s\r\n"), FileName::getTempFileLocation());
     return false;

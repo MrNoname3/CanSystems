@@ -33,16 +33,16 @@ with open(server_json_path, 'r') as file:
 # MQTT configuration
 mqtt_username = mqtt_credentials['mqttUserName']
 mqtt_password = mqtt_credentials['mqttPassword']
-mqtt_server_name = mqtt_credentials['mqttServerName']
+mqtt_server_name = mqtt_credentials['mqttServerUrl']
 mqtt_server_port = mqtt_credentials['mqttServerPort']
 mqtt_ca_cert = os.path.join(data_dir, 'mosq-ca.crt')
 mqtt_client_id = 'Python_OTA'
-mqtt_ota_send_topic = 'iot/stod/40f520286e69/common'
-mqtt_ota_receive_topic = 'iot/dtos/40f520286e69/common'
+mqtt_ota_send_topic = 'iot/stod/fcf5c401bd83/common'
+mqtt_ota_receive_topic = 'iot/dtos/fcf5c401bd83/common'
 
 # Set the path to firmware.bin
-firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp8266_rad/firmware.bin')
-firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp8266_rad/firmware.bin.gz')
+firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin')
+firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin.gz')
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):

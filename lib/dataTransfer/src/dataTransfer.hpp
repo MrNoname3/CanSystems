@@ -2,7 +2,6 @@
 #define DATA_TRANSFER_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
 
 /// @brief Class to handle file transfer and firmware upgrade operations.
 class DataTransfer final {
