@@ -52,56 +52,56 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
 }
 
 uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength, uint32_t outputLength) {
+  uint32_t decodedLength_ = 0U;
+  uint32_t i = 0U;
+  uint8_t A3[3] = {0U};
+  uint8_t A4[4] = {0U};
+
   if(outputLength < decodedLength(input, inputLength)) {
-    return 0; // Output buffer too small
+    return 0U; // Output buffer too small
   }
 
-  uint32_t i = 0;
-  uint32_t decodedLength_ = 0;
-  uint8_t A3[3];
-  uint8_t A4[4];
   while(inputLength--) {
     if(*input == '=') {
       break;
     }
     A4[i++] = *(input++);
-    if(i == 4) {
-      for(i = 0; i < 4; i++) {
+    if(i == 4U) {
+      for(i = 0U; i < 4U; i++) {
         A4[i] = lookupTable(A4[i]);
-        if(A4[i] == 255) { // Invalid character
-          return 0;
+        if(A4[i] == 255U) { // Invalid character
+          return 0U;
         }
       }
       fromA4ToA3(A3, A4);
-      for(i = 0; i < 3; i++) {
+      for(i = 0U; i < 3U; i++) {
         output[decodedLength_++] = A3[i];
       }
-      i = 0;
+      i = 0U;
     }
   }
-  if(i > 0) {
-    for(uint32_t j = i; j < 4; j++) {
-      A4[j] = '\0';
+  if(i > 0U) {
+    for(uint32_t j = i; j < 4U; j++) {
+      A4[j] = 0U;
     }
-    for(uint32_t j = 0; j < 4; j++) {
-      // if(A4[j] == '=') {
-      //   A4[j] = 0;
-      //   continue;
-      // }
-      A4[j] = lookupTable(A4[j]);
-      if(A4[j] == 255) { // Invalid character
-        return 0;
+    for(uint32_t j = 0U; j < 4U; j++) {
+      if(A4[j] != 0U) {
+        A4[j] = lookupTable(A4[j]);
+      }
+      if(A4[j] == 255U) { // Invalid character
+        return 0U;
       }
     }
     fromA4ToA3(A3, A4);
-    for(uint32_t j = 0; j < i - 1; j++) {
+    for(uint32_t j = 0U; j < i - 1U; j++) {
       output[decodedLength_++] = A3[j];
     }
   }
   if(decodedLength_ >= outputLength) {
-    return 0; // Prevent overflow
+    return 0U; // Prevent overflow
+  } else {
+    output[decodedLength_] = '\0';
   }
-  output[decodedLength_] = '\0';
   return decodedLength_;
 }
 
