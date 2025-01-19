@@ -90,7 +90,7 @@ bool DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint
   if(remainingFileSizeLocal == 0U) { return false; }
   if(fileData == nullptr) { return false; }
 
-  File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a", true);
+  File receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
   if(!receivedFile) {
     Logger::get().printf_P(PSTR("[FT] Opening failed: %s\r\n"), FileName::getTempFileLocation());
     return false;
