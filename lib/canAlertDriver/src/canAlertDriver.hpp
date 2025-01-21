@@ -7,13 +7,8 @@ class CanAlertDriver final : public CanMqttGateway {
 private:
   static constexpr uint8_t dataOutBufSize = 56U;                    // Buffer size for outgoing data strings.
 
-  static inline const char PROGMEM humTempLdrFrame[] = {            // Format string for encoding temperature, humidity, and light data.
-    "{"
-      "\"Temperature\":%.2f,"
-      "\"Humidity\":%hu,"
-      "\"Light\":%hu"
-    "}"
-  };
+  // Format string for encoding temperature, humidity, and light data.
+  static inline const char PROGMEM humTempLdrFrame[] = R"({"Temperature":%.2f,"Humidity":%hu,"Light":%hu})";
 
 public:
   /// @brief Constructor to initialize the driver.

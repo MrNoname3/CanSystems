@@ -10,12 +10,8 @@ private:
   static constexpr uint8_t maxChannelNumber = analogChannels - 1U;  // Maximum channel index (0-3).
   static constexpr uint8_t dataOutBufSize = 80U;                    // Maximum size of the MQTT message buffer.
 
-  static inline const char PROGMEM mqttMsgFrame[] = {               // MQTT message JSON format.
-    "{"
-      "\"Analog\":[%hd,%hd,%hd,%hd],"
-      "\"Voltage\":[%.2f,%.2f,%.2f,%.2f]"
-    "}"
-  };
+  // MQTT message JSON format.
+  static inline const char PROGMEM mqttMsgFrame[] = R"({"Analog":[%hd,%hd,%hd,%hd],"Voltage":[%.2f,%.2f,%.2f,%.2f]})";
 
 public:
   /// @brief Enumeration representing ADC channels.

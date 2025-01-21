@@ -19,11 +19,8 @@ private:
   static constexpr const uint8_t otaFrameBufSize = 16U;                 // Buffer size for OTA status messages.
   using OtaStartErrorType = uint8_t;                                    // Type for representing OTA start errors.
 
-  static inline const char PROGMEM otaFrame[] = {                       // JSON template for OTA status messages.
-    "{"
-      "\"OTA\":\"%s\""
-    "}"
-  };
+  // JSON template for OTA status messages.
+  static inline const char PROGMEM otaFrame[] = R"({"OTA":"%s"})";
 
   /// @brief Error codes for the start of OTA operations.
   enum class OtaStartError : OtaStartErrorType {
@@ -102,23 +99,15 @@ private:
   static inline const char PROGMEM statusOnline[]     = "ONLINE";       // Status message for online state.
   static inline const char PROGMEM statusOffline[]    = "OFFLINE";      // Status message for offline state.
   static inline const char PROGMEM statusRestarted[]  = "RESTARTED";    // Status message for restarted state.
-  static inline const char PROGMEM statusFrame[] = {                    // JSON template for status messages.
-    "{"
-      "\"Status\":\"%s\""
-    "}"
-  };
-  static inline const char PROGMEM buttonFrame[] = {                    // JSON template for button messages.
-    "{"
-      "\"Button\":%hu"
-    "}"
-  };
-  static inline const char PROGMEM buildInfoFrame[] = {                 //  JSON template for build info messages.
-    "{"
-      "\"Firmware\":%hu,"
-      "\"GitHash\":\"%x\","
-      "\"GitDirty\":%hu"
-    "}"
-  };
+
+  // JSON template for status messages.
+  static inline const char PROGMEM statusFrame[] = R"({"Status":"%s"})";
+
+  // JSON template for button messages.
+  static inline const char PROGMEM buttonFrame[] = R"({"Button":%hu})";
+
+  // JSON template for build info messages.
+  static inline const char PROGMEM buildInfoFrame[] = R"({"Firmware":%hu,"GitHash":"%x","GitDirty":%hu})";
 
 public:
   /// @brief Processes an MQTT message received for this client.
