@@ -9,7 +9,7 @@ class Mq135Handler final : public MqttBase {
 private:
   static constexpr uint8_t dataOutBufSize = 192U;
 
-  static inline const char PROGMEM mqttMsgFrame[] = R"({"Gas":{"CO":%.2f,"Alcohol":%.2f,"CO2":%.2f,"Toluene":%.2f,"NH4":%.2f,"Acetone":%.2f}})";
+  static constexpr const char PROGMEM mqttMsgFrame[] = R"({"Gas":{"CO":%.2f,"Alcohol":%.2f,"CO2":%.2f,"Toluene":%.2f,"NH4":%.2f,"Acetone":%.2f}})";
 
 public:
   Mq135Handler(Connectivity& connectivity, const char* classID, AdcReader& adcReader, AdcReader::Channel channel, uint32_t measureTime);

@@ -8,7 +8,7 @@ private:
   static constexpr uint8_t dataOutBufSize = 56U;                    // Buffer size for outgoing data strings.
 
   // Format string for encoding temperature, humidity, and light data.
-  static inline const char PROGMEM humTempLdrFrame[] = R"({"Temperature":%.2f,"Humidity":%hu,"Light":%hu})";
+  static constexpr const char PROGMEM humTempLdrFrame[] = R"({"Temperature":%.2f,"Humidity":%hu,"Light":%hu})";
 
 public:
   /// @brief Constructor to initialize the driver.

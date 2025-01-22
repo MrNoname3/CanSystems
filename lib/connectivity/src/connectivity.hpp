@@ -32,20 +32,20 @@ private:
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
 
-  static inline const char PROGMEM mqttClientName[]               = "%s_%02x%02x%02x%02x%02x%02x";            // MQTT client name format.
-  static inline const char PROGMEM mqttOutTopic[]                 = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";   // MQTT topic format for outgoing messages.
-  static inline const char PROGMEM mqttInTopic[]                  = "iot/stod/%02x%02x%02x%02x%02x%02x/#";    // MQTT topic format for incoming messages.
-  static inline const char PROGMEM mqttConnectionTimeoutStr[]     = "MQTT_CONNECTION_TIMEOUT";                // MQTT connection timeout string.
-  static inline const char PROGMEM mqttConnectionLostStr[]        = "MQTT_CONNECTION_LOST";                   // MQTT connection lost string.
-  static inline const char PROGMEM mqttConnectFailedStr[]         = "MQTT_CONNECT_FAILED";                    // MQTT connection failed string.
-  static inline const char PROGMEM mqttDisconnectedStr[]          = "MQTT_DISCONNECTED";                      // MQTT disconnected string.
-  static inline const char PROGMEM mqttConnectedStr[]             = "MQTT_CONNECTED";                         // MQTT connected string.
-  static inline const char PROGMEM mqttConnectBadProtocolStr[]    = "MQTT_CONNECT_BAD_PROTOCOL";              // MQTT bad protocol string.
-  static inline const char PROGMEM mqttConnectBadClientIdStr[]    = "MQTT_CONNECT_BAD_CLIENT_ID";             // MQTT bad client ID string.
-  static inline const char PROGMEM mqttConnectUnavailableStr[]    = "MQTT_CONNECT_UNAVAILABLE";               // MQTT server unavailable string.
-  static inline const char PROGMEM mqttConnectBadCredentialsStr[] = "MQTT_CONNECT_BAD_CREDENTIALS";           // MQTT bad credentials string.
-  static inline const char PROGMEM mqttConnectUnauthorizedStr[]   = "MQTT_CONNECT_UNAUTHORIZED";              // MQTT unauthorized string.
-  static inline const char PROGMEM mqttUnknownStatusStr[]         = "MQTT_UNKNOWN_STATUS";                    // MQTT unknown status string.
+  static constexpr const char PROGMEM mqttClientName[]                = "%s_%02x%02x%02x%02x%02x%02x";            // MQTT client name format.
+  static constexpr const char PROGMEM mqttOutTopic[]                  = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";   // MQTT topic format for outgoing messages.
+  static constexpr const char PROGMEM mqttInTopic[]                   = "iot/stod/%02x%02x%02x%02x%02x%02x/#";    // MQTT topic format for incoming messages.
+  static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";                // MQTT connection timeout string.
+  static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";                   // MQTT connection lost string.
+  static constexpr const char PROGMEM mqttConnectFailedStr[]          = "MQTT_CONNECT_FAILED";                    // MQTT connection failed string.
+  static constexpr const char PROGMEM mqttDisconnectedStr[]           = "MQTT_DISCONNECTED";                      // MQTT disconnected string.
+  static constexpr const char PROGMEM mqttConnectedStr[]              = "MQTT_CONNECTED";                         // MQTT connected string.
+  static constexpr const char PROGMEM mqttConnectBadProtocolStr[]     = "MQTT_CONNECT_BAD_PROTOCOL";              // MQTT bad protocol string.
+  static constexpr const char PROGMEM mqttConnectBadClientIdStr[]     = "MQTT_CONNECT_BAD_CLIENT_ID";             // MQTT bad client ID string.
+  static constexpr const char PROGMEM mqttConnectUnavailableStr[]     = "MQTT_CONNECT_UNAVAILABLE";               // MQTT server unavailable string.
+  static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";           // MQTT bad credentials string.
+  static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";              // MQTT unauthorized string.
+  static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";                    // MQTT unknown status string.
 
 public:
   /// @brief Constructs a Connectivity instance.

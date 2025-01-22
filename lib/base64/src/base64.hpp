@@ -13,7 +13,8 @@
 /// It uses '+' (for 62) and '/' (for 63) as special characters for Base64 encoding and '=' for padding.
 class Base64 final {
 private:
-  static inline const char PROGMEM base64AlphabetTable[] = {        // Static array containing the Base64 alphabet table in PROGMEM.
+  // Static array containing the Base64 alphabet table in PROGMEM.
+  static constexpr const char PROGMEM base64AlphabetTable[] = {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789+/"

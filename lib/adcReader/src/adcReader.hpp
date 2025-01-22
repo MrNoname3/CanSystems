@@ -11,7 +11,7 @@ private:
   static constexpr uint8_t dataOutBufSize = 80U;                    // Maximum size of the MQTT message buffer.
 
   // MQTT message JSON format.
-  static inline const char PROGMEM mqttMsgFrame[] = R"({"Analog":[%hd,%hd,%hd,%hd],"Voltage":[%.2f,%.2f,%.2f,%.2f]})";
+  static constexpr const char PROGMEM mqttMsgFrame[] = R"({"Analog":[%hd,%hd,%hd,%hd],"Voltage":[%.2f,%.2f,%.2f,%.2f]})";
 
 public:
   /// @brief Enumeration representing ADC channels.

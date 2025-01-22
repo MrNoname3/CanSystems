@@ -20,7 +20,7 @@ private:
   using OtaStartErrorType = uint8_t;                                    // Type for representing OTA start errors.
 
   // JSON template for OTA status messages.
-  static inline const char PROGMEM otaFrame[] = R"({"OTA":"%s"})";
+  static constexpr const char PROGMEM otaFrame[] = R"({"OTA":"%s"})";
 
   /// @brief Error codes for the start of OTA operations.
   enum class OtaStartError : OtaStartErrorType {
@@ -96,18 +96,18 @@ private:
   static constexpr uint8_t buttonFrameBufSize = 16U;                    // Buffer size for button messages.
   static constexpr uint8_t buildInfoFrameBufSize = 60U;                 // Buffer size for build info messages.
 
-  static inline const char PROGMEM statusOnline[]     = "ONLINE";       // Status message for online state.
-  static inline const char PROGMEM statusOffline[]    = "OFFLINE";      // Status message for offline state.
-  static inline const char PROGMEM statusRestarted[]  = "RESTARTED";    // Status message for restarted state.
+  static constexpr const char PROGMEM statusOnline[]     = "ONLINE";    // Status message for online state.
+  static constexpr const char PROGMEM statusOffline[]    = "OFFLINE";   // Status message for offline state.
+  static constexpr const char PROGMEM statusRestarted[]  = "RESTARTED"; // Status message for restarted state.
 
   // JSON template for status messages.
-  static inline const char PROGMEM statusFrame[] = R"({"Status":"%s"})";
+  static constexpr const char PROGMEM statusFrame[] = R"({"Status":"%s"})";
 
   // JSON template for button messages.
-  static inline const char PROGMEM buttonFrame[] = R"({"Button":%hu})";
+  static constexpr const char PROGMEM buttonFrame[] = R"({"Button":%hu})";
 
   // JSON template for build info messages.
-  static inline const char PROGMEM buildInfoFrame[] = R"({"Firmware":%hu,"GitHash":"%x","GitDirty":%hu})";
+  static constexpr const char PROGMEM buildInfoFrame[] = R"({"Firmware":%hu,"GitHash":"%x","GitDirty":%hu})";
 
 public:
   /// @brief Processes an MQTT message received for this client.

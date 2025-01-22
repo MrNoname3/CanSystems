@@ -31,16 +31,16 @@ private:
 #endif
 
   // Wi-Fi status strings
-  static inline const char PROGMEM wlNoShieldStr[]        = "WL_NO_SHIELD";
-  static inline const char PROGMEM wlIdleStatusStr[]      = "WL_IDLE_STATUS";
-  static inline const char PROGMEM wlNoSsidAvailableStr[] = "WL_NO_SSID_AVAIL";
-  static inline const char PROGMEM wlScanCompletedStr[]   = "WL_SCAN_COMPLETED";
-  static inline const char PROGMEM wlConnectedStr[]       = "WL_CONNECTED";
-  static inline const char PROGMEM wlConnectFailedStr[]   = "WL_CONNECT_FAILED";
-  static inline const char PROGMEM wlConnectionLostStr[]  = "WL_CONNECTION_LOST";
-  static inline const char PROGMEM wlWrongPasswordStr[]   = "WL_WRONG_PASSWORD";
-  static inline const char PROGMEM wlDisconnectedStr[]    = "WL_DISCONNECTED";
-  static inline const char PROGMEM wlUnknownStatusStr[]   = "WL_UNKNOWN_STATUS";
+  static constexpr const char PROGMEM wlNoShieldStr[]        = "WL_NO_SHIELD";
+  static constexpr const char PROGMEM wlIdleStatusStr[]      = "WL_IDLE_STATUS";
+  static constexpr const char PROGMEM wlNoSsidAvailableStr[] = "WL_NO_SSID_AVAIL";
+  static constexpr const char PROGMEM wlScanCompletedStr[]   = "WL_SCAN_COMPLETED";
+  static constexpr const char PROGMEM wlConnectedStr[]       = "WL_CONNECTED";
+  static constexpr const char PROGMEM wlConnectFailedStr[]   = "WL_CONNECT_FAILED";
+  static constexpr const char PROGMEM wlConnectionLostStr[]  = "WL_CONNECTION_LOST";
+  static constexpr const char PROGMEM wlWrongPasswordStr[]   = "WL_WRONG_PASSWORD";
+  static constexpr const char PROGMEM wlDisconnectedStr[]    = "WL_DISCONNECTED";
+  static constexpr const char PROGMEM wlUnknownStatusStr[]   = "WL_UNKNOWN_STATUS";
 
 public:
   /// @brief Represents supported network interfaces.
