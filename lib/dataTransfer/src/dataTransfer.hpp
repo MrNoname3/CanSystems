@@ -1,6 +1,4 @@
-#ifndef DATA_TRANSFER_HPP
-#define DATA_TRANSFER_HPP
-
+#pragma once
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
@@ -12,6 +10,8 @@ private:
   static constexpr uint8_t fileNameSize = 32U;                          // Maximum length of the file name.
   static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
+  static constexpr uint32_t invalidFilePieceNumber = 0xFFFFFFFFU;
+  static constexpr uint16_t maxFilePieceLength = 336U + 1U;
   using DataTransferErrorType = uint32_t;
 
   enum class DataTransferError : DataTransferErrorType {
@@ -25,17 +25,18 @@ private:
     FILE_ALREADY_STORED       = 1 << 6U,
     FILE_DATA_NULLPTR         = 1 << 7U,
     B64_FILE_DATA_SIZE_ERROR  = 1 << 8U,
-    FILE_PIECE_SIZE_ERROR     = 1 << 9U,
-    B64_DECODED_SIZE_ERROR    = 1 << 10U,
-    TEMP_FILE_OPENING_ERROR   = 1 << 11U,
-    TEMP_FILE_WRITING_ERROR   = 1 << 12U,
-    RECEIVED_FILE_SIZE_ERROR  = 1 << 13U,
-    FILE_CRC_ERROR            = 1 << 14U,
-    TEMP_FILE_RENAMING_ERROR  = 1 << 15U,
-    FW_FILE_OPENING_ERROR     = 1 << 16U,
-    FW_UPGRADE_BEGIN_FAILED   = 1 << 17U,
-    FW_UPGRADE_STREAM_FAILED  = 1 << 18U,
-    FW_UPGRADE_END_FAILED     = 1 << 19U
+    FILE_PIECE_SIZE_OVEFLOW   = 1 << 9U,
+    FILE_PIECE_SIZE_ERROR     = 1 << 10U,
+    B64_DECODED_SIZE_ERROR    = 1 << 11U,
+    TEMP_FILE_OPENING_ERROR   = 1 << 12U,
+    TEMP_FILE_WRITING_ERROR   = 1 << 13U,
+    RECEIVED_FILE_SIZE_ERROR  = 1 << 14U,
+    FILE_CRC_ERROR            = 1 << 15U,
+    TEMP_FILE_RENAMING_ERROR  = 1 << 16U,
+    FW_FILE_OPENING_ERROR     = 1 << 17U,
+    FW_UPGRADE_BEGIN_FAILED   = 1 << 18U,
+    FW_UPGRADE_STREAM_FAILED  = 1 << 19U,
+    FW_UPGRADE_END_FAILED     = 1 << 20U
   };
 
 public:
@@ -91,4 +92,3 @@ private:
   File receivedFile;                                                // File object for the firmware being transferred.
   Crc32 crc32;
 };
-#endif // DATA_TRANSFER_HPP

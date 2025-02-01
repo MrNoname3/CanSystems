@@ -10,7 +10,7 @@ DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   checkOkCallback(checkOkCallback),
   fileSizeLocal(0U),
   fileCrcLocal(0U),
-  nextFilePieceNumberLocal(-1),
+  nextFilePieceNumberLocal(invalidFilePieceNumber),
   remainingFileSizeLocal(0U),
   fileNameLocal{'\0'},
   transferState(TransferState::IDLE),
@@ -101,6 +101,10 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   }
 
   const uint16_t filePieceSize = filePieceB64Size * 3U / 4U + 1U;
+  if(filePieceSize > maxFilePieceLength) {
+    dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_OVEFLOW);
+    return false;
+  }
   uint8_t decodedData[filePieceSize];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > filePieceSize || decodedPreSize == 0U) {
@@ -224,7 +228,7 @@ void DataTransfer::runValidityCheck() {
     case TransferState::CLEANUP: {
       fileSizeLocal = 0U;
       fileCrcLocal = 0U;
-      nextFilePieceNumberLocal = -1;
+      nextFilePieceNumberLocal = invalidFilePieceNumber;
       remainingFileSizeLocal = 0U;
       crc32.reset();
       if(receivedFile) {
