@@ -42,15 +42,15 @@ mqtt_ota_receive_topic = 'iot/dtos/fcf5c401bd83/common'
 
 # Set the path to firmware.bin
 firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin')
-firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin.gz')
+#firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin.gz')
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
     print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
 
-    comp_result = compress_with_7z(firmware_path_bin, firmware_path_gz)
-    if comp_result != 0:
-        exit_program()
+    #comp_result = compress_with_7z(firmware_path_bin, firmware_path_gz)
+    #if comp_result != 0:
+    #    exit_program()
 
     # Subscribe to the OTA acknowledgment topic here
     client.subscribe(mqtt_ota_receive_topic)
@@ -118,8 +118,8 @@ def get_fw_id(file_path):
 def send_fw():
     piece_size = 336
     piece_number = 0  # Start from 0
-    fw_size = os.path.getsize(firmware_path_gz)
-    crc32_total = calculate_crc32(firmware_path_gz)
+    fw_size = os.path.getsize(firmware_path_bin)
+    crc32_total = calculate_crc32(firmware_path_bin)
 
     success, identifier = get_fw_id(firmware_path_bin)
     if not success:
@@ -141,7 +141,7 @@ def send_fw():
 
     # Send firmware in pieces
     remaining_bytes = fw_size
-    with open(firmware_path_gz, 'rb') as fw_file:
+    with open(firmware_path_bin, 'rb') as fw_file:
         # Initialize tqdm progress bar
         progress_bar = tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
         while remaining_bytes != 0:
