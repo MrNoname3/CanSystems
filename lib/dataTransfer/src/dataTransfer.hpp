@@ -10,8 +10,6 @@
 class DataTransfer final {
 private:
   static constexpr uint8_t fileNameSize = 32U;                          // Maximum length of the file name.
-  static constexpr uint16_t filePieceSize = 336U;                       // Size of a file piece. Divisible by both 3 and 4.
-  static constexpr uint16_t maxB64Length = filePieceSize * 4U / 3U;     // Maximum base64-encoded piece length.
   static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
   using DataTransferErrorType = uint32_t;
@@ -21,26 +19,23 @@ private:
     FILE_SIZE_ZERO            = 1 << 0U,
     FILE_NAME_NULLPTR         = 1 << 1U,
     FILE_NAME_INVALID         = 1 << 2U,
-    TEMP_FILE_REMOVAL_ERROR   = 1 << 3U,
-    NOT_ENOUGH_STORAGE        = 1 << 4U,
-    BEGIN_NOT_CALLED          = 1 << 5U,
-    WRONG_FILE_PIECE_NUMBER   = 1 << 6U,
-    FILE_ALREADY_STORED       = 1 << 7U,
-    FILE_DATA_NULLPTR         = 1 << 8U,
-    B64_FILE_DATA_EMPTY       = 1 << 9U,
-    FILE_PIECE_SIZE_ERROR     = 1 << 10U,
-    B64_DECODED_SIZE_ERROR    = 1 << 11U,
-    TEMP_FILE_OPENING_ERROR   = 1 << 12U,
-    TEMP_FILE_WRITING_ERROR   = 1 << 13U,
-    RECEIVED_FILE_SIZE_ERROR  = 1 << 14U,
-    FILE_CRC_ERROR            = 1 << 15U,
-    FINAL_FILE_REMOVAL_ERROR  = 1 << 16U,
-    TEMP_FILE_RENAMING_ERROR  = 1 << 17U,
-    FW_FILE_OPENING_ERROR     = 1 << 18U,
-    FW_UPGRADE_BEGIN_FAILED   = 1 << 19U,
-    FW_UPGRADE_STREAM_FAILED  = 1 << 20U,
-    FW_UPGRADE_END_FAILED     = 1 << 21U,
-    FW_FILE_REMOVAL_ERROR     = 1 << 22U
+    NOT_ENOUGH_STORAGE        = 1 << 3U,
+    BEGIN_NOT_CALLED          = 1 << 4U,
+    WRONG_FILE_PIECE_NUMBER   = 1 << 5U,
+    FILE_ALREADY_STORED       = 1 << 6U,
+    FILE_DATA_NULLPTR         = 1 << 7U,
+    B64_FILE_DATA_SIZE_ERROR  = 1 << 8U,
+    FILE_PIECE_SIZE_ERROR     = 1 << 9U,
+    B64_DECODED_SIZE_ERROR    = 1 << 10U,
+    TEMP_FILE_OPENING_ERROR   = 1 << 11U,
+    TEMP_FILE_WRITING_ERROR   = 1 << 12U,
+    RECEIVED_FILE_SIZE_ERROR  = 1 << 13U,
+    FILE_CRC_ERROR            = 1 << 14U,
+    TEMP_FILE_RENAMING_ERROR  = 1 << 15U,
+    FW_FILE_OPENING_ERROR     = 1 << 16U,
+    FW_UPGRADE_BEGIN_FAILED   = 1 << 17U,
+    FW_UPGRADE_STREAM_FAILED  = 1 << 18U,
+    FW_UPGRADE_END_FAILED     = 1 << 19U
   };
 
 public:
@@ -71,13 +66,7 @@ public:
   /// @return True if the file piece is successfully stored, false otherwise.
   bool storeBase64(uint32_t filePieceNumber, const char* fileData);
 
-  inline bool isTransferInProgress() { return (transferState != TransferState::IDLE); }
-
-  inline DataTransferErrorType getErrorCode() {
-    const DataTransferErrorType errCode = dataTransferErrState.getRawErrorState();
-    dataTransferErrState.clearAllErrors();
-    return errCode;
-  }
+  DataTransferErrorType getErrorCode();
 
   /// @brief Validates the received file.
   /// Checks the file size and CRC32 checksum to ensure the file was transferred correctly.

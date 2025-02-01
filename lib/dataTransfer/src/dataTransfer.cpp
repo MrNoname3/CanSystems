@@ -49,20 +49,8 @@ bool DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileNa
   if(receivedFile) {
     receivedFile.close();
   }
-  if(LittleFS.exists(FPSTR(FileName::getTempFileLocation()))) {
-    if(!LittleFS.remove(FPSTR(FileName::getTempFileLocation()))) {
-      Logger::get().printf_P(PSTR("[FT] Deleting failed: %s\r\n"), FileName::getTempFileLocation());
-      dataTransferErrState.setError(DataTransferError::TEMP_FILE_REMOVAL_ERROR);
-      return false;
-    }
-  }
-  if(LittleFS.exists(FPSTR(FileName::getOtaFwLocation()))) {
-    if(!LittleFS.remove(FPSTR(FileName::getOtaFwLocation()))) {
-      Logger::get().printf_P(PSTR("[FT] Deleting failed: %s\r\n"), FileName::getOtaFwLocation());
-      dataTransferErrState.setError(DataTransferError::FW_FILE_REMOVAL_ERROR);
-      return false;
-    }
-  }
+  LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
+  LittleFS.remove(FPSTR(FileName::getOtaFwLocation()));
   {
 #ifdef ESP8266
     FSInfo fsInfo;
@@ -106,20 +94,21 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::FILE_DATA_NULLPTR);
     return false;
   }
-  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length + 1U);
-  if(filePieceB64Size == 0U) {
-    dataTransferErrState.setError(DataTransferError::B64_FILE_DATA_EMPTY);
+  const uint32_t filePieceB64Size = strlen(fileData);
+  if((filePieceB64Size == 0U) || (filePieceB64Size % 4U != 0U)) {
+    dataTransferErrState.setError(DataTransferError::B64_FILE_DATA_SIZE_ERROR);
     return false;
   }
 
-  uint8_t decodedData[filePieceSize + 1U];
+  const uint16_t filePieceSize = filePieceB64Size * 3U / 4U + 1U;
+  uint8_t decodedData[filePieceSize];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
-  if(decodedPreSize > sizeof(decodedData) || decodedPreSize == 0U) {
+  if(decodedPreSize > filePieceSize || decodedPreSize == 0U) {
     Logger::get().printf_P(PSTR("[FT] File piece size error!\r\n"));
     dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_ERROR);
     return false;
   }
-  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size, sizeof(decodedData));
+  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size, filePieceSize);
   if(decodedPreSize != decodedPostSize || decodedPostSize == 0U) {
     Logger::get().printf_P(PSTR("[FT] Decoded size check error!\r\n"));
     dataTransferErrState.setError(DataTransferError::B64_DECODED_SIZE_ERROR);
@@ -178,16 +167,10 @@ void DataTransfer::runValidityCheck() {
           dataTransferErrState.setError(DataTransferError::FILE_CRC_ERROR);
           break;
         } else {
-          if(LittleFS.exists(FPSTR(fileNameLocal))) {
-            if(!LittleFS.remove(FPSTR(fileNameLocal))) {
-              Logger::get().printf_P(PSTR("[FT] Deleting failed: %s\r\n"), fileNameLocal);
-              dataTransferErrState.setError(DataTransferError::FINAL_FILE_REMOVAL_ERROR);
-              break;
-            }
-          }
           if(receivedFile) {
             receivedFile.close();
           }
+          LittleFS.remove(FPSTR(fileNameLocal));
           if(!LittleFS.rename(FPSTR(FileName::getTempFileLocation()), fileNameLocal)) {
             Logger::get().printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
             dataTransferErrState.setError(DataTransferError::TEMP_FILE_RENAMING_ERROR);
@@ -196,7 +179,6 @@ void DataTransfer::runValidityCheck() {
         }
         Logger::get().printf_P(PSTR("[FT] File received: %s\r\n"), fileNameLocal);
         if(strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0) {
-          //receivedFile.seek(0U, SeekSet);
           transferState = TransferState::UPGRADE_FW;
         } else {
           if(checkOkCallback != nullptr) {
@@ -234,12 +216,7 @@ void DataTransfer::runValidityCheck() {
         break;
       }
       receivedFile.close();
-      const bool rmFileResult = LittleFS.remove(FPSTR(FileName::getOtaFwLocation()));
-      Logger::get().printf_P(PSTR("  Cleanup -> %s\r\n"), Str::getStateStr(rmFileResult));
-      if(!rmFileResult) {
-        dataTransferErrState.setError(DataTransferError::FW_FILE_REMOVAL_ERROR);
-        break;
-      }
+      LittleFS.remove(FPSTR(FileName::getOtaFwLocation()));
       if(checkOkCallback != nullptr) {
         checkOkCallback(true);
       }
@@ -259,5 +236,10 @@ void DataTransfer::runValidityCheck() {
       }
     } break;
   }
+}
 
+DataTransfer::DataTransferErrorType DataTransfer::getErrorCode() {
+  const DataTransferErrorType errCode = dataTransferErrState.getRawErrorState();
+  dataTransferErrState.clearAllErrors();
+  return errCode;
 }
