@@ -203,7 +203,7 @@ def on_message(client, userdata, msg):
 
 # Function to wait for ACK/NACK for a particular command with a timeout
 def wait_for_ack(cmd):
-    timeout = 10  # timeout in seconds
+    timeout = 25  # timeout in seconds
     start_time = time.time()
 
     while not command_status[cmd]:
