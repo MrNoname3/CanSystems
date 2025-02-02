@@ -62,8 +62,9 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
       ResetHandler::restartMCU();
     } break;
     case Command::FW_DT_START:
-    case Command::WIFICFG_DT_START:
-    case Command::EXT_FILE_DT_START: {
+    case Command::WIFI_CFG_DT_START:
+    case Command::EXT_FILE_DT_START:
+    case Command::EXT_FW_DT_START: {
       const char* fileNamePtr = nullptr;
       isRestartRequired = false;
       if(command == Command::FW_DT_START) {
@@ -81,18 +82,33 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
         }
         fileNamePtr = FileName::getOtaFwLocation();
         isRestartRequired = true;
-      } else if(command == Command::WIFICFG_DT_START) {
+      } else if(command == Command::WIFI_CFG_DT_START) {
         fileNamePtr = FileName::getWifiConfigLocation();
       } else if(command == Command::EXT_FILE_DT_START) {
         JsonVariant fileNameJsonVar = payloadJson[F("name")];
-        if(command == Command::EXT_FILE_DT_START) {
-          if(!fileNameJsonVar.is<const char*>()) {
-            Logger::get().printf_P(PSTR("[COMMON] No 'name' key detected in JSON file!\r\n"));
-            sendResponse(false, command);
-            break;
-          }
-          fileNamePtr = fileNameJsonVar.as<const char*>();
+        if(!fileNameJsonVar.is<const char*>()) {
+          Logger::get().printf_P(PSTR("[COMMON] No 'name' key detected in JSON file!\r\n"));
+          sendResponse(false, command);
+          break;
         }
+        fileNamePtr = fileNameJsonVar.as<const char*>();
+      } else if(command == Command::EXT_FW_DT_START) {
+        JsonVariant subclassJsonVar = payloadJson[F("subclass")];
+        if(!subclassJsonVar.is<const char*>()) {
+          Logger::get().printf_P(PSTR("[COMMON] No 'subclass' key detected in JSON file!\r\n"));
+          sendResponse(false, command);
+          break;
+        }
+        const char* subclass = subclassJsonVar.as<const char*>();
+        char extFwName[32U] = {'\0'};
+        const int32_t extFwNameSize = snprintf_P(extFwName, sizeof(extFwName), FileName::getExtOtaFwLocation(), subclass);
+        const bool extFwNameValid = (extFwNameSize >= 0 && extFwNameSize < static_cast<int32_t>(sizeof(extFwName)));
+        if(!extFwNameValid) {
+          Logger::get().printf_P(PSTR("[COMMON] External firmware name length invalid!\r\n"));
+          sendResponse(false, command);
+          break;
+        }
+        fileNamePtr = extFwName;
       }
 
       JsonVariant fileSizeJsonVar = payloadJson[F("fileSize")];

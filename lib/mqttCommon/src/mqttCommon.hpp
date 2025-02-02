@@ -13,12 +13,13 @@ private:
 public:
   /// @brief Commands supported by MqttCommon.
   enum class Command : uint8_t {
-    RESTART = 1U,               // Restart the device.
-    FW_DT_START,                // Start a firmware file transfer.
-    FILE_PIECE,                 // Transfer a piece of a file.
-    FILE_CHECK,                 // Check file validity.
-    WIFICFG_DT_START,           // Start a WiFi configuration file transfer.
-    EXT_FILE_DT_START           // Start an external file transfer.
+    RESTART                = 1U,     // Restart the device.
+    FILE_PIECE             = 3U,     // Transfer a piece of a file.
+    FILE_CHECK             = 4U,     // Check file validity.
+    FW_DT_START            = 2U,     // Start a firmware file transfer.
+    WIFI_CFG_DT_START      = 5U,     // Start a WiFi configuration file transfer.
+    EXT_FILE_DT_START      = 6U,     // Start an external file transfer.
+    EXT_FW_DT_START        = 7U,     // Start an external firmware file transfer.
   };
 
   /// @brief Constructs a new MqttCommon object.
