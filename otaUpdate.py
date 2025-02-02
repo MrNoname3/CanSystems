@@ -12,9 +12,6 @@ import signal
 try:
     import paho.mqtt.client as mqtt
 except ModuleNotFoundError:
-    import subprocess
-    import sys
-
     print("Paho MQTT library not found. Installing...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "paho-mqtt"])
     import paho.mqtt.client as mqtt
@@ -42,138 +39,75 @@ mqtt_ota_receive_topic = 'iot/dtos/fcf5c401bd83/common'
 
 # Set the path to firmware.bin
 firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin')
-#firmware_path_gz = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin.gz')
 
 # Callback function on connecting to MQTT broker
 def on_connect(client, userdata, flags, rc):
     print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
-
-    #comp_result = compress_with_7z(firmware_path_bin, firmware_path_gz)
-    #if comp_result != 0:
-    #    exit_program()
-
-    # Subscribe to the OTA acknowledgment topic here
     client.subscribe(mqtt_ota_receive_topic)
-    # Start a thread to send firmware pieces
     send_fw_thread = threading.Thread(target=send_fw, daemon=False)
     send_fw_thread.start()
 
 # Calculate CRC32 of the firmware file
 def calculate_crc32(file_path):
-    crc = 0  # Initial CRC value
-
+    crc = 0
     with open(file_path, 'rb') as f:
-        while True:
-            data = f.read(1)
-            if not data:
-                break
-            crc = zlib.crc32(data, crc)
-
+        while chunk := f.read(4096):
+            crc = zlib.crc32(chunk, crc)
     return crc & 0xFFFFFFFF
 
-def compress_with_7z(bin_path, gz_path):
-    # Run 7z command to compress firmware.bin to firmware.bin.gz
-    command = [ '7z', 'a', '-tgzip', '-mx=9', gz_path, bin_path ]
-
-    try:
-        # Run the command
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output, error = process.communicate()
-        returncode = process.returncode
-        
-        # Check the return code and output
-        if returncode == 0:
-            print("Compression successful!")
-            print("Output:", output.decode())
-        else:
-            print("Compression failed!")
-            print("Error:", error.decode())
-        
-        return returncode
-    except Exception as e:
-        print("Error:", str(e))
-        return 1  # Return a non-zero code to indicate failure
-    
 def get_fw_id(file_path):
     begin_of_id = b"project_"
     with open(file_path, 'rb') as file:
         data = file.read()
-
-    # Find the start index of the identifier
     start_index = data.find(begin_of_id)
-
-    if start_index != -1:  # If the identifier is found
-        # Find the end of the string by searching for the null terminator
+    if start_index != -1:
         end_index = data.find(b'\0', start_index + len(begin_of_id))
-
-        # Extract the string after the identifier and before the null terminator
         identifier = data[start_index:end_index].decode('utf-8')
         print(f"ID of bin file: \"{identifier}\"")
         return True, identifier
-    else:
-        print("ID not found for the file!")
-        return False, ""
+    print("ID not found for the file!")
+    return False, ""
 
 # Function to send firmware pieces
 def send_fw():
     piece_size = 336
-    piece_number = 0  # Start from 0
+    piece_number = 0
     fw_size = os.path.getsize(firmware_path_bin)
     crc32_total = calculate_crc32(firmware_path_bin)
-
     success, identifier = get_fw_id(firmware_path_bin)
     if not success:
         exit_program()
 
-    # Start message
-    start_message = {
-        "cmd": 2,
-        "fileSize": fw_size,
-        "crc32": crc32_total,
-        "binId": identifier
-    }
+    start_message = {"cmd": 2, "fileSize": fw_size, "crc32": crc32_total, "binId": identifier}
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
     print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total} ", end="")
-    starting_result = wait_for_ack(2)
-    print(f"-> {'OK' if starting_result else 'ERR'}")
-    if starting_result == False:
+    if not wait_for_ack(2):
+        print("-> ERR")
         exit_program()
+    print("-> OK")
 
-    # Send firmware in pieces
     remaining_bytes = fw_size
-    with open(firmware_path_bin, 'rb') as fw_file:
-        # Initialize tqdm progress bar
-        progress_bar = tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
-        while remaining_bytes != 0:
+    with open(firmware_path_bin, 'rb') as fw_file, tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True) as progress_bar:
+        while remaining_bytes:
             read_size = min(remaining_bytes, piece_size)
             data = fw_file.read(read_size)
-            piece_message = {
-                "cmd": 3,
-                "piece": piece_number,
-                "data": base64.b64encode(data).decode('utf-8')
-            }
+            piece_message = {"cmd": 3, "piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
             client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
-            sending_piece_result = wait_for_ack(3)
-            if sending_piece_result == False:
-                progress_bar.close()
-                print("NACK or timeout occured during FW piece transmission!")
+            if not wait_for_ack(3):
+                print("NACK or timeout occurred during FW piece transmission!")
                 exit_program()
             piece_number += 1
             remaining_bytes -= read_size
-            progress_bar.update(read_size)      # Update tqdm progress bar
-        progress_bar.close()                    # Close tqdm progress bar
-
-    check_message = {
-        "cmd": 4
-    }
+            progress_bar.update(read_size)
+    
+    check_message = {"cmd": 4}
     client.publish(mqtt_ota_send_topic, json.dumps(check_message))
     print("Checking FW ", end="")
-    fw_check_result = wait_for_ack(4)
-    print(f"-> {'OK' if fw_check_result else 'ERR'}")
-    if fw_check_result == False:
+    if not wait_for_ack(4):
+        print("-> ERR")
         exit_program()
-    else:
-        print("Upload done, exiting...")
+    print("-> OK")
+    print("Upload done, exiting...")
     exit_program()
 
 def exit_program():
@@ -184,43 +118,22 @@ def exit_program():
 def signal_handler(sig, frame):
     exit_program()
 
-# Define a global variable or use a queue to manage commands and their corresponding ACK/NACK status
-command_status = {
-    2: False,  # Start command
-    3: False,  # Piece command
-    4: False   # End command
-}
+command_status = {2: False, 3: False, 4: False}
 
-# Callback function when a message is received
 def on_message(client, userdata, msg):
     message = json.loads(msg.payload)
-    cmd = message["cmd"]
-    # Update the status based on the received ACK/NACK
-    if message["type"] == 0:
-        command_status[cmd] = False
-    else:
-        command_status[cmd] = True
+    command_status[message["cmd"]] = message["type"] != 0
 
-# Function to wait for ACK/NACK for a particular command with a timeout
 def wait_for_ack(cmd):
-    timeout = 25  # timeout in seconds
-    start_time = time.time()
-
+    timeout, start_time = 25, time.time()
     while not command_status[cmd]:
-        elapsed_time = time.time() - start_time
-        if elapsed_time > timeout:
+        if time.time() - start_time > timeout:
             return False
-        time.sleep(0.05)  # Small delay to avoid excessive CPU usage on the MCU
+        time.sleep(0.05)
+    command_status[cmd] = False
+    return True
 
-    if command_status[cmd]:
-        command_status[cmd] = False
-        return True
-    else:
-        return False
-    
-# Set up the signal handler for SIGINT (Ctrl+C)
 signal.signal(signal.SIGINT, signal_handler)
-# Run MQTT loop
 client = mqtt.Client(client_id=mqtt_client_id)
 client.username_pw_set(username=mqtt_username, password=mqtt_password)
 client.tls_set(ca_certs=mqtt_ca_cert)
@@ -228,4 +141,3 @@ client.on_connect = on_connect
 client.on_message = on_message
 client.connect(mqtt_server_name, mqtt_server_port, 60)
 client.loop_forever()
-
