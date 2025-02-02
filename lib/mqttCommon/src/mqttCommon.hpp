@@ -11,17 +11,6 @@ private:
   static constexpr const char PROGMEM versionMessageFrame[] = R"({"CPP":%u,"FW":%hu,"GH":"%x","Dirty":%hu,"RR":%hu})";
 
 public:
-  /// @brief Commands supported by MqttCommon.
-  enum class Command : uint8_t {
-    RESTART                = 1U,     // Restart the device.
-    FILE_PIECE             = 3U,     // Transfer a piece of a file.
-    FILE_CHECK             = 4U,     // Check file validity.
-    FW_DT_START            = 2U,     // Start a firmware file transfer.
-    WIFI_CFG_DT_START      = 5U,     // Start a WiFi configuration file transfer.
-    EXT_FILE_DT_START      = 6U,     // Start an external file transfer.
-    EXT_FW_DT_START        = 7U,     // Start an external firmware file transfer.
-  };
-
   /// @brief Constructs a new MqttCommon object.
   /// @param connectivity Reference to a Connectivity object to manage MQTT connections.
   /// @param subtopic Subtopic for MQTT message routing.
@@ -54,9 +43,8 @@ private:
 
   /// @brief Sends a response message over MQTT.
   /// @param result Outcome of the previous operation (`true` for success, `false` for failure).
-  /// @param command The command that triggered this response.
   /// @return `true` if the response is sent successfully, `false` otherwise.
-  bool sendResponse(bool result, Command command);
+  bool sendResponse(bool result);
 
   static inline bool isFileCheckDone = false;       // Flag indicating that a file validity check is completed.
   static inline bool isFileValid = false;           // Flag indicating the result of the file validity check.

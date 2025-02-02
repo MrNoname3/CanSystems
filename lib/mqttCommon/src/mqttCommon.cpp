@@ -22,7 +22,7 @@ bool MqttCommon::init() {
 bool MqttCommon::run() {
   if(isFileCheckDone) {
     isFileCheckDone = false;
-    sendResponse(isFileValid, Command::FILE_CHECK);
+    sendResponse(isFileValid);
     if(!isFileValid) {
       Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), dataTransfer.getErrorCode());
     } else {
@@ -40,118 +40,64 @@ void MqttCommon::fileValidCb(bool isValid) {
   isFileValid = isValid;
 }
 
-bool MqttCommon::sendResponse(bool result, Command command) {
-  const bool sendingResult = MqttBase::sendResponse(
-    (result ? MqttBase::Response::ACK : MqttBase::Response::NACK), static_cast<uint16_t>(command));
+bool MqttCommon::sendResponse(bool result) {
+  const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U);
   if(!sendingResult) {
-    Logger::get().printf_P(PSTR("[COMMON] Failed to send respons '%hu' for command: '%hu'\r\n"),
-      static_cast<uint8_t>(result), static_cast<uint16_t>(command));
+    Logger::get().printf_P(PSTR("[COMMON] Failed to send respons '%hu'\r\n"), static_cast<uint8_t>(result));
   }
   return sendingResult;
 }
 
 void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
-  JsonVariant cmdJsonVar = payloadJson[F("cmd")];
-  if(!cmdJsonVar.is<uint8_t>()) {
-    Logger::get().printf_P(PSTR("[COMMON] No 'cmd' key detected in JSON file!\r\n"));
+  JsonVariant binIdJsonVar = payloadJson[F("binId")];
+  JsonVariant fileNameJsonVar = payloadJson[F("name")];
+  JsonVariant fileSizeJsonVar = payloadJson[F("fileSize")];
+  JsonVariant fileCrc32JsonVar = payloadJson[F("crc32")];
+  JsonVariant filePieceJsonVar = payloadJson[F("piece")];
+  JsonVariant fileDataJsonVar = payloadJson[F("data")];
+
+  const bool binIdPresented = binIdJsonVar.is<const char*>();
+  const bool fileNamePresented = fileNameJsonVar.is<const char*>();
+  const bool fileSizePresented = fileSizeJsonVar.is<uint32_t>();
+  const bool fileCrc32Presented = fileCrc32JsonVar.is<uint32_t>();
+  const bool filePiecePresented = filePieceJsonVar.is<uint32_t>();
+  const bool fileDataPresented = fileDataJsonVar.is<const char*>();
+
+  const char* fileNamePtr = nullptr;
+  if(binIdPresented && fileSizePresented && fileCrc32Presented) {
+    const char* binId = binIdJsonVar.as<const char*>();
+    if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
+      Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
+      sendResponse(false);
+      return;
+    }
+    isRestartRequired = true;
+    fileNamePtr = FileName::getOtaFwLocation();
+  } else if(fileNamePresented &&  fileSizePresented && fileCrc32Presented) {
+    isRestartRequired = false;
+    fileNamePtr = fileNameJsonVar.as<const char*>();
+  } else if(filePiecePresented && fileDataPresented) {
+    const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
+    const char* filePieceB64 = fileDataJsonVar.as<const char*>();
+    const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
+    sendResponse(storingResult);
+    if(!storingResult) {
+      Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), dataTransfer.getErrorCode());
+      return;
+    }
+  } else {
+    Logger::get().printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));
     return;
   }
-  const Command command = static_cast<Command>(cmdJsonVar.as<uint8_t>());
-  switch(command) {
-    case Command::RESTART: {
-      ResetHandler::restartMCU();
-    } break;
-    case Command::FW_DT_START:
-    case Command::WIFI_CFG_DT_START:
-    case Command::EXT_FILE_DT_START:
-    case Command::EXT_FW_DT_START: {
-      const char* fileNamePtr = nullptr;
-      isRestartRequired = false;
-      if(command == Command::FW_DT_START) {
-        JsonVariant binIdJsonVar = payloadJson[F("binId")];
-        if(!binIdJsonVar.is<const char*>()) {
-          Logger::get().printf_P(PSTR("[COMMON] No 'binId' key detected in JSON file!\r\n"));
-          sendResponse(false, command);
-          break;
-        }
-        const char* binId = binIdJsonVar.as<const char*>();
-        if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-          Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
-          sendResponse(false, command);
-          break;
-        }
-        fileNamePtr = FileName::getOtaFwLocation();
-        isRestartRequired = true;
-      } else if(command == Command::WIFI_CFG_DT_START) {
-        fileNamePtr = FileName::getWifiConfigLocation();
-      } else if(command == Command::EXT_FILE_DT_START) {
-        JsonVariant fileNameJsonVar = payloadJson[F("name")];
-        if(!fileNameJsonVar.is<const char*>()) {
-          Logger::get().printf_P(PSTR("[COMMON] No 'name' key detected in JSON file!\r\n"));
-          sendResponse(false, command);
-          break;
-        }
-        fileNamePtr = fileNameJsonVar.as<const char*>();
-      } else if(command == Command::EXT_FW_DT_START) {
-        JsonVariant subclassJsonVar = payloadJson[F("subclass")];
-        if(!subclassJsonVar.is<const char*>()) {
-          Logger::get().printf_P(PSTR("[COMMON] No 'subclass' key detected in JSON file!\r\n"));
-          sendResponse(false, command);
-          break;
-        }
-        const char* subclass = subclassJsonVar.as<const char*>();
-        char extFwName[32U] = {'\0'};
-        const int32_t extFwNameSize = snprintf_P(extFwName, sizeof(extFwName), FileName::getExtOtaFwLocation(), subclass);
-        const bool extFwNameValid = (extFwNameSize >= 0 && extFwNameSize < static_cast<int32_t>(sizeof(extFwName)));
-        if(!extFwNameValid) {
-          Logger::get().printf_P(PSTR("[COMMON] External firmware name length invalid!\r\n"));
-          sendResponse(false, command);
-          break;
-        }
-        fileNamePtr = extFwName;
-      }
 
-      JsonVariant fileSizeJsonVar = payloadJson[F("fileSize")];
-      JsonVariant fileCrc32JsonVar = payloadJson[F("crc32")];
-      if(!fileSizeJsonVar.is<uint32_t>() || !fileCrc32JsonVar.is<uint32_t>()) {
-        Logger::get().printf_P(PSTR("[COMMON] No 'fileSize' or 'crc32' key detected in JSON file!\r\n"));
-        sendResponse(false, command);
-        break;
-      }
-      const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
-      const uint32_t fileCrc = fileCrc32JsonVar.as<uint32_t>();
-
-      if(fileNamePtr == nullptr) {
-        Logger::get().printf_P(PSTR("[COMMON] Wrong file name!\r\n"));
-        sendResponse(false, command);
-        break;
-      }
-      const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
-      sendResponse(transferBeginResult, command);
-      if(!transferBeginResult) {
-        Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, dataTransfer.getErrorCode());
-        break;
-      }
-    } break;
-    case Command::FILE_PIECE: {
-      JsonVariant filePieceJsonVar = payloadJson[F("piece")];
-      JsonVariant fileDataJsonVar = payloadJson[F("data")];
-      if(!filePieceJsonVar.is<uint32_t>() || !fileDataJsonVar.is<const char*>()) {
-        Logger::get().printf_P(PSTR("[COMMON] No 'piece' or 'data' key detected in JSON file!\r\n"));
-        sendResponse(false, command);
-        break;
-      }
-      const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
-      const char* filePieceB64 = fileDataJsonVar.as<const char*>();
-      const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
-      sendResponse(storingResult, command);
-      if(!storingResult) {
-        Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), dataTransfer.getErrorCode());
-        break;
-      }
-    } break;
-    default: {
-      Logger::get().printf_P(PSTR("[COMMON] Unknown command: %hu\r\n"), static_cast<uint8_t>(command));
-    } break;
-  };
+  if(fileNamePtr != nullptr) {
+    const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
+    const uint32_t fileCrc = fileCrc32JsonVar.as<uint32_t>();
+    const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
+    sendResponse(transferBeginResult);
+    if(!transferBeginResult) {
+      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, dataTransfer.getErrorCode());
+      return;
+    }
+  }
 }

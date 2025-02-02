@@ -81,7 +81,7 @@ def send_fw():
     start_message = {"cmd": 2, "fileSize": fw_size, "crc32": crc32_total, "binId": identifier}
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
     print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total} ", end="")
-    if not wait_for_ack(2):
+    if not wait_for_ack():
         print("-> ERR")
         exit_program()
     print("-> OK")
@@ -93,7 +93,7 @@ def send_fw():
             data = fw_file.read(read_size)
             piece_message = {"cmd": 3, "piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
             client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
-            if not wait_for_ack(3):
+            if not wait_for_ack():
                 print("NACK or timeout occurred during FW piece transmission!")
                 exit_program()
             piece_number += 1
@@ -103,7 +103,7 @@ def send_fw():
     check_message = {"cmd": 4}
     client.publish(mqtt_ota_send_topic, json.dumps(check_message))
     print("Checking FW ", end="")
-    if not wait_for_ack(4):
+    if not wait_for_ack():
         print("-> ERR")
         exit_program()
     print("-> OK")
@@ -118,19 +118,22 @@ def exit_program():
 def signal_handler(sig, frame):
     exit_program()
 
-command_status = {2: False, 3: False, 4: False}
+ack_received = False
 
 def on_message(client, userdata, msg):
+    global ack_received
     message = json.loads(msg.payload)
-    command_status[message["cmd"]] = message["type"] != 0
+    if "type" in message:
+        ack_received = message["type"] != 0
 
-def wait_for_ack(cmd):
+def wait_for_ack():
+    global ack_received
     timeout, start_time = 25, time.time()
-    while not command_status[cmd]:
+    ack_received = False
+    while not ack_received:
         if time.time() - start_time > timeout:
             return False
         time.sleep(0.05)
-    command_status[cmd] = False
     return True
 
 signal.signal(signal.SIGINT, signal_handler)
