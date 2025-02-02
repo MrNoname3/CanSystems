@@ -1,13 +1,13 @@
 import json
 import os
 import time
-import threading
 import zlib
 import base64
 import sys
 from tqdm import tqdm
 import subprocess
 import signal
+import enum
 
 try:
     import paho.mqtt.client as mqtt
@@ -19,15 +19,11 @@ except ModuleNotFoundError:
 # Get the directory of the current script
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Navigate to the data directory
 data_dir = os.path.join(current_dir, 'data', 'config')
-
-# Read MQTT credentials from server.json
 server_json_path = os.path.join(data_dir, 'server.json')
 with open(server_json_path, 'r') as file:
     mqtt_credentials = json.load(file)
 
-# MQTT configuration
 mqtt_username = mqtt_credentials['mqttUserName']
 mqtt_password = mqtt_credentials['mqttPassword']
 mqtt_server_name = mqtt_credentials['mqttServerUrl']
@@ -37,17 +33,28 @@ mqtt_client_id = 'Python_OTA'
 mqtt_ota_send_topic = 'iot/stod/fcf5c401bd83/common'
 mqtt_ota_receive_topic = 'iot/dtos/fcf5c401bd83/common'
 
-# Set the path to firmware.bin
 firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin')
 
-# Callback function on connecting to MQTT broker
-def on_connect(client, userdata, flags, rc):
-    print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
-    client.subscribe(mqtt_ota_receive_topic)
-    send_fw_thread = threading.Thread(target=send_fw, daemon=False)
-    send_fw_thread.start()
+# Define states for the firmware update process
+class OTAState(enum.Enum):
+    IDLE = 0
+    WAIT_START_ACK = 1
+    SENDING_FW = 2
+    WAIT_PIECE_ACK = 3
+    WAIT_CHECK_ACK = 4
+    DONE = 5
+    ERROR = 6
 
-# Calculate CRC32 of the firmware file
+state = OTAState.IDLE
+piece_number = 0
+fw_size = 0
+remaining_bytes = 0
+crc32_total = 0
+fw_file = None
+progress_bar = None
+timer_start = 0
+piece_size = 336
+
 def calculate_crc32(file_path):
     crc = 0
     with open(file_path, 'rb') as f:
@@ -68,47 +75,70 @@ def get_fw_id(file_path):
     print("ID not found for the file!")
     return False, ""
 
-# Function to send firmware pieces
-def send_fw():
-    piece_size = 336
-    piece_number = 0
+def on_connect(client, userdata, flags, rc):
+    global state, fw_size, crc32_total, fw_file, remaining_bytes, timer_start
+    print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
+    client.subscribe(mqtt_ota_receive_topic)
+    
     fw_size = os.path.getsize(firmware_path_bin)
     crc32_total = calculate_crc32(firmware_path_bin)
     success, identifier = get_fw_id(firmware_path_bin)
     if not success:
-        exit_program()
-
+        state = OTAState.ERROR
+        return
+    
     start_message = {"cmd": 2, "fileSize": fw_size, "crc32": crc32_total, "binId": identifier}
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
-    print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total} ", end="")
-    if not wait_for_ack():
-        print("-> ERR")
-        exit_program()
-    print("-> OK")
-
-    remaining_bytes = fw_size
-    with open(firmware_path_bin, 'rb') as fw_file, tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True) as progress_bar:
-        while remaining_bytes:
-            read_size = min(remaining_bytes, piece_size)
-            data = fw_file.read(read_size)
-            piece_message = {"cmd": 3, "piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
-            client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
-            if not wait_for_ack():
-                print("NACK or timeout occurred during FW piece transmission!")
-                exit_program()
-            piece_number += 1
-            remaining_bytes -= read_size
-            progress_bar.update(read_size)
+    print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total}")
     
-    check_message = {"cmd": 4}
-    client.publish(mqtt_ota_send_topic, json.dumps(check_message))
-    print("Checking FW ", end="")
-    if not wait_for_ack():
-        print("-> ERR")
-        exit_program()
-    print("-> OK")
-    print("Upload done, exiting...")
-    exit_program()
+    state = OTAState.WAIT_START_ACK
+    timer_start = time.time()
+
+def on_message(client, userdata, msg):
+    global state, piece_number, remaining_bytes, fw_file, timer_start, progress_bar
+    message = json.loads(msg.payload)
+    
+    if "type" in message:
+        ack = message["type"] != 0
+        if state == OTAState.WAIT_START_ACK and ack:
+            fw_file = open(firmware_path_bin, 'rb')
+            remaining_bytes = fw_size
+            piece_number = 0
+            progress_bar = tqdm(total=fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
+            state = OTAState.SENDING_FW
+        elif state == OTAState.WAIT_PIECE_ACK and ack:
+            state = OTAState.SENDING_FW
+        elif state == OTAState.WAIT_CHECK_ACK and ack:
+            state = OTAState.DONE
+            print("\nUpload done, exiting...")
+            exit_program()
+        else:
+            state = OTAState.ERROR
+            print("\nError occurred during OTA!")
+            exit_program()
+
+def process_state():
+    global state, piece_number, remaining_bytes, fw_file, timer_start, progress_bar
+    if state == OTAState.SENDING_FW and remaining_bytes > 0:
+        read_size = min(remaining_bytes, piece_size)
+        data = fw_file.read(read_size)
+        piece_message = {"cmd": 3, "piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
+        client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
+        state = OTAState.WAIT_PIECE_ACK
+        timer_start = time.time()
+        piece_number += 1
+        remaining_bytes -= read_size
+        progress_bar.update(read_size)
+    elif state == OTAState.SENDING_FW and remaining_bytes == 0:
+        check_message = {"cmd": 4}
+        client.publish(mqtt_ota_send_topic, json.dumps(check_message))
+        state = OTAState.WAIT_CHECK_ACK
+        timer_start = time.time()
+    elif state in (OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK):
+        if time.time() - timer_start > 25:
+            state = OTAState.ERROR
+            print("\nTimeout occurred!")
+            exit_program()
 
 def exit_program():
     client.disconnect()
@@ -118,24 +148,6 @@ def exit_program():
 def signal_handler(sig, frame):
     exit_program()
 
-ack_received = False
-
-def on_message(client, userdata, msg):
-    global ack_received
-    message = json.loads(msg.payload)
-    if "type" in message:
-        ack_received = message["type"] != 0
-
-def wait_for_ack():
-    global ack_received
-    timeout, start_time = 25, time.time()
-    ack_received = False
-    while not ack_received:
-        if time.time() - start_time > timeout:
-            return False
-        time.sleep(0.05)
-    return True
-
 signal.signal(signal.SIGINT, signal_handler)
 client = mqtt.Client(client_id=mqtt_client_id)
 client.username_pw_set(username=mqtt_username, password=mqtt_password)
@@ -143,4 +155,7 @@ client.tls_set(ca_certs=mqtt_ca_cert)
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect(mqtt_server_name, mqtt_server_port, 60)
-client.loop_forever()
+
+while True:
+    client.loop(timeout=0.1)
+    process_state()
