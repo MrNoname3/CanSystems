@@ -53,10 +53,10 @@ class OTAUpdater:
     def __init__(self):
         self.state = OTAState.IDLE
         self.piece_number = 0
-        self.fw_size = 0
-        self.remaining_bytes = 0
-        self.crc32_total = 0
-        self.fw_file = None
+        self.fw_size = os.path.getsize(firmware_path_bin)
+        self.fw_file_data = self.read_firmware()
+        self.crc32_total = self.calculate_crc32()
+        self.remaining_bytes = self.fw_size
         self.progress_bar = None
         self.timer_start = 0
         self.piece_size = 100
@@ -68,21 +68,19 @@ class OTAUpdater:
         self.client.on_message = self.on_message
         self.client.connect(mqtt_server_name, mqtt_server_port, 60)
 
-    def calculate_crc32(self, file_path):
-        crc = 0
-        with open(file_path, 'rb') as f:
-            while chunk := f.read(4096):
-                crc = zlib.crc32(chunk, crc)
-        return crc & 0xFFFFFFFF
+    def calculate_crc32(self):
+        return zlib.crc32(self.fw_file_data) & 0xFFFFFFFF
 
-    def get_fw_id(self, file_path):
+    def read_firmware(self):
+        with open(firmware_path_bin, 'rb') as f:
+            return f.read()
+
+    def get_fw_id(self):
         begin_of_id = b"project_"
-        with open(file_path, 'rb') as file:
-            data = file.read()
-        start_index = data.find(begin_of_id)
+        start_index = self.fw_file_data.find(begin_of_id)
         if start_index != -1:
-            end_index = data.find(b'\0', start_index + len(begin_of_id))
-            identifier = data[start_index:end_index].decode('utf-8')
+            end_index = self.fw_file_data.find(b'\0', start_index + len(begin_of_id))
+            identifier = self.fw_file_data[start_index:end_index].decode('utf-8')
             print(f"ID of bin file: \"{identifier}\"")
             return True, identifier
         print("ID not found for the file!")
@@ -92,9 +90,7 @@ class OTAUpdater:
         print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
         client.subscribe(mqtt_ota_receive_topic)
         
-        self.fw_size = os.path.getsize(firmware_path_bin)
-        self.crc32_total = self.calculate_crc32(firmware_path_bin)
-        success, identifier = self.get_fw_id(firmware_path_bin)
+        success, identifier = self.get_fw_id()
         if not success:
             self.state = OTAState.ERROR
             return
@@ -112,9 +108,6 @@ class OTAUpdater:
         if "type" in message:
             ack = message["type"] != 0
             if self.state == OTAState.WAIT_START_ACK and ack:
-                self.fw_file = open(firmware_path_bin, 'rb')
-                self.remaining_bytes = self.fw_size
-                self.piece_number = 0
                 self.progress_bar = tqdm(total=self.fw_size, desc="Sending Firmware", unit="B", unit_scale=True)
                 self.state = OTAState.SENDING_FW
             elif self.state == OTAState.WAIT_PIECE_ACK and ack:
@@ -129,24 +122,24 @@ class OTAUpdater:
                 self.exit_program()
 
     def process_state(self):
+        current_time = time.time()
         if self.state == OTAState.SENDING_FW and self.remaining_bytes > 0:
             read_size = min(self.remaining_bytes, self.piece_size)
-            data = self.fw_file.read(read_size)
+            data = self.fw_file_data[self.fw_size - self.remaining_bytes:self.fw_size - self.remaining_bytes + read_size]
             piece_message = {"piece": self.piece_number, "data": base64.b64encode(data).decode('utf-8')}
             self.client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
             self.state = OTAState.WAIT_PIECE_ACK
-            self.timer_start = time.time()
+            self.timer_start = current_time
             self.piece_number += 1
             self.remaining_bytes -= read_size
             self.progress_bar.update(read_size)
         elif self.state == OTAState.SENDING_FW and self.remaining_bytes == 0:
             self.state = OTAState.WAIT_CHECK_ACK
-            self.timer_start = time.time()
-        elif self.state in (OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK):
-            if time.time() - self.timer_start > 25:
-                self.state = OTAState.ERROR
-                print("Timeout occurred!")
-                self.exit_program()
+            self.timer_start = current_time
+        elif self.state in {OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK} and current_time - self.timer_start > 25:
+            self.state = OTAState.ERROR
+            print("Timeout occurred!")
+            self.exit_program()
 
     def exit_program(self):
         self.client.disconnect()
