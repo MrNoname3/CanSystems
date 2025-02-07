@@ -58,7 +58,7 @@ crc32_total = 0
 fw_file = None
 progress_bar = None
 timer_start = 0
-piece_size = 336
+piece_size = 100
 
 def calculate_crc32(file_path):
     crc = 0
@@ -92,7 +92,7 @@ def on_connect(client, userdata, flags, rc):
         state = OTAState.ERROR
         return
     
-    start_message = {"cmd": 2, "fileSize": fw_size, "crc32": crc32_total, "binId": identifier}
+    start_message = {"fileSize": fw_size, "crc32": crc32_total, "binId": identifier}
     client.publish(mqtt_ota_send_topic, json.dumps(start_message))
     print(f"Starting OTA! FW size: {fw_size}, CRC32: {crc32_total}")
     
@@ -127,7 +127,7 @@ def process_state():
     if state == OTAState.SENDING_FW and remaining_bytes > 0:
         read_size = min(remaining_bytes, piece_size)
         data = fw_file.read(read_size)
-        piece_message = {"cmd": 3, "piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
+        piece_message = {"piece": piece_number, "data": base64.b64encode(data).decode('utf-8')}
         client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
         state = OTAState.WAIT_PIECE_ACK
         timer_start = time.time()
@@ -135,8 +135,6 @@ def process_state():
         remaining_bytes -= read_size
         progress_bar.update(read_size)
     elif state == OTAState.SENDING_FW and remaining_bytes == 0:
-        check_message = {"cmd": 4}
-        client.publish(mqtt_ota_send_topic, json.dumps(check_message))
         state = OTAState.WAIT_CHECK_ACK
         timer_start = time.time()
     elif state in (OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK):
