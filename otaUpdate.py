@@ -30,10 +30,14 @@ mqtt_server_name = mqtt_credentials['mqttServerUrl']
 mqtt_server_port = mqtt_credentials['mqttServerPort']
 mqtt_ca_cert = os.path.join(data_dir, 'mosq-ca.crt')
 mqtt_client_id = 'Python_OTA'
-mqtt_ota_send_topic = 'iot/stod/fcf5c401bd83/common'
-mqtt_ota_receive_topic = 'iot/dtos/fcf5c401bd83/common'
 
-firmware_path_bin = os.path.join(current_dir, '.pio/build/project_esp32_can/firmware.bin')
+mac_address = "fcf5c401bd83"
+project_name = "project_esp32_can"
+
+mqtt_ota_send_topic = f'iot/stod/{mac_address}/common'
+mqtt_ota_receive_topic = f'iot/dtos/{mac_address}/common'
+
+firmware_path_bin = os.path.join(current_dir, f'.pio/build/{project_name}/firmware.bin')
 
 # Define states for the firmware update process
 class OTAState(enum.Enum):
@@ -137,7 +141,7 @@ def process_state():
     elif state in (OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK):
         if time.time() - timer_start > 25:
             state = OTAState.ERROR
-            print("\nTimeout occurred!")
+            print("Timeout occurred!")
             exit_program()
 
 def exit_program():
