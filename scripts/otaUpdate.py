@@ -16,10 +16,11 @@ except ModuleNotFoundError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "paho-mqtt"])
     import paho.mqtt.client as mqtt
 
-# Get the directory of the current script
+# Get the directory of the current script and move one folder back
 current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
 
-data_dir = os.path.join(current_dir, 'data', 'config')
+data_dir = os.path.join(parent_dir, 'data', 'config')
 server_json_path = os.path.join(data_dir, 'server.json')
 with open(server_json_path, 'r') as file:
     mqtt_credentials = json.load(file)
@@ -37,7 +38,7 @@ project_name = "project_esp32_can"
 mqtt_ota_send_topic = f'iot/stod/{mac_address}/common'
 mqtt_ota_receive_topic = f'iot/dtos/{mac_address}/common'
 
-firmware_path_bin = os.path.join(current_dir, f'.pio/build/{project_name}/firmware.bin')
+firmware_path_bin = os.path.join(parent_dir, f'.pio/build/{project_name}/firmware.bin')
 
 # Define states for the firmware update process
 class OTAState(enum.Enum):
