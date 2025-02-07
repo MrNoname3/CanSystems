@@ -53,11 +53,10 @@ class OTAUpdater:
     def __init__(self):
         self.state = OTAState.IDLE
         self.piece_number = 0
-        self.fw_size = os.path.getsize(firmware_path_bin)
         self.fw_file_data = self.read_firmware()
+        self.fw_size = len(self.fw_file_data)
         self.crc32_total = self.calculate_crc32()
         self.remaining_bytes = self.fw_size
-        self.progress_bar = None
         self.timer_start = 0
         self.piece_size = 100
 
@@ -89,22 +88,22 @@ class OTAUpdater:
     def on_connect(self, client, userdata, flags, rc):
         print(f"MQTT broker connection: {'SUCCESS' if rc == 0 else f'FAILED Result code {rc}'}")
         client.subscribe(mqtt_ota_receive_topic)
-        
+
         success, identifier = self.get_fw_id()
         if not success:
             self.state = OTAState.ERROR
             return
-        
+
         start_message = {"fileSize": self.fw_size, "crc32": self.crc32_total, "binId": identifier}
         client.publish(mqtt_ota_send_topic, json.dumps(start_message))
         print(f"Starting OTA! FW size: {self.fw_size}, CRC32: {self.crc32_total}")
-        
+
         self.state = OTAState.WAIT_START_ACK
         self.timer_start = time.time()
 
     def on_message(self, client, userdata, msg):
         message = json.loads(msg.payload)
-        
+
         if "type" in message:
             ack = message["type"] != 0
             if self.state == OTAState.WAIT_START_ACK and ack:
@@ -124,8 +123,9 @@ class OTAUpdater:
     def process_state(self):
         current_time = time.time()
         if self.state == OTAState.SENDING_FW and self.remaining_bytes > 0:
+            offset = self.fw_size - self.remaining_bytes
             read_size = min(self.remaining_bytes, self.piece_size)
-            data = self.fw_file_data[self.fw_size - self.remaining_bytes:self.fw_size - self.remaining_bytes + read_size]
+            data = self.fw_file_data[offset:offset + read_size]
             piece_message = {"piece": self.piece_number, "data": base64.b64encode(data).decode('utf-8')}
             self.client.publish(mqtt_ota_send_topic, json.dumps(piece_message))
             self.state = OTAState.WAIT_PIECE_ACK
