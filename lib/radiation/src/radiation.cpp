@@ -1,57 +1,51 @@
 #include "radiation.hpp"
 
-volatile uint16_t Radiation::cpm = 0;
+volatile uint16_t Radiation::cpm = 0U;
 volatile bool Radiation::measureDone = false;
-volatile uint16_t Radiation::cpmToSend = 0;
-const char Radiation::CPM_MSG_FRAME[] PROGMEM = {
-  "{"
-    "\"Time\":\"%s\","
-    "\"cpm\":%hu"
-  "}"
-};
+volatile uint16_t Radiation::cpmToSend = 0U;
 
-Radiation::Radiation(Connectivity& connectivity, const char* classID, uint8_t sensorPin) :
-  MqttComBase(connectivity, classID),
+Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin) :
+  MqttBase(connectivity, subtopic),
+  measureTicker(),
   sensorPin(sensorPin)
 {
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::begin() {
-  constexpr const uint16_t measureTime = 60000;  //millisec
+bool Radiation::init() {
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
-  measureTimer.attach_ms(measureTime, measure);
-  cpm = 0;
+  measureTicker.attach_ms(measureTime, measure);
+  cpm = 0U;
   return true;
 }
 
 void Radiation::end() {
   detachInterrupt(digitalPinToInterrupt(sensorPin));
-  measureTimer.detach();
-  cpm = 0;
+  measureTicker.detach();
+  cpm = 0U;
   measureDone = false;
 }
 
-bool Radiation::loop() {
+bool Radiation::run() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), CPM_MSG_FRAME, MqttComBase::getIsoTime(), cpmToSend);
+    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), cpmMessageFrame, cpmToSend);
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
-    MqttComBase::messageSend(dataOut);
+    if(!MqttBase::sendMessage(dataOut)) { return false; }
   }
   return true;
 }
 
-void Radiation::messageReceived(uint8_t* payload, uint32_t length) {}
-
-void Radiation::counter() { cpm++; }
+void Radiation::counter() {
+  cpm++;
+}
 
 void Radiation::measure() {
   cli();
   cpmToSend = cpm;
-  cpm = 0;
+  cpm = 0U;
   measureDone = true;
   sei();
 }

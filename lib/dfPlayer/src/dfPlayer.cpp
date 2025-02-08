@@ -31,7 +31,7 @@ void DFPlayer::play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, 
   }
 }
 
-void DFPlayer::run() {
+bool DFPlayer::run() {
   const uint32_t actualTime = millis();
   switch(playingState) {
     case PlayingStates::IDLE: {
@@ -102,4 +102,5 @@ void DFPlayer::run() {
       playingState = PlayingStates::IDLE;
     } break;
   }
+  return true;
 }

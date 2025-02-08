@@ -1,892 +1,250 @@
 #include "connectivity.hpp"
-#include <LittleFS.h>                         /// Use FLASH filesystem.
-#include <ArduinoJson.h>                      /// Handle JSON files.
-#ifdef ESP8266
-#include <Updater.h>
-#elif defined ESP32
-#include <Update.h>
-#include <esp_task_wdt.h>
-#endif
-#include "crc32.hpp"
-#include "base64.hpp"
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include <time.h>
 
-#ifdef ESP8266
-// Monitor the internal VCC level, it varies with WiFi load.
-// Don't connect anything to the analog input pin!
-ADC_MODE(ADC_VCC);
-#elif defined ESP32
-bool Connectivity::ethConnected = false;
-#endif
-bool Connectivity::isDeviceOnline = true;
-
-const char Connectivity::wifiFileLocation[] PROGMEM         = "/config/wifi.json";
-const char Connectivity::BASE_TOPIC[] PROGMEM               = "iot";
-const char Connectivity::SENDER_TOPIC[] PROGMEM             = "dtos";
-const char Connectivity::RECEIVER_TOPIC[] PROGMEM           = "stod";
-const char Connectivity::OK_STATE[] PROGMEM                 = " [OK]";                    // OK status.
-const char Connectivity::ERR_STATE[] PROGMEM                = " [ERR]";                   // Error status.
-const char Connectivity::DEVICE_TYPE[] PROGMEM              = BUILD_ENV_NAME;
-const char Connectivity::INIT_PREFIX[] PROGMEM              = "[INIT] ";
-const char Connectivity::FS_PREFIX[] PROGMEM                = "[FS] ";
-const char Connectivity::ETH_PREFIX[] PROGMEM               = "[ETH] ";
-const char Connectivity::WIFI_PREFIX[] PROGMEM              = "[WIFI] ";
-const char Connectivity::NTP_PREFIX[] PROGMEM               = "[NTP] ";
-const char Connectivity::JSON_PREFIX[] PROGMEM              = "[JSON] ";
-const char Connectivity::TCP_PREFIX[] PROGMEM               = "[TCP] ";
-const char Connectivity::MQTT_PREFIX[] PROGMEM              = "[MQTT] ";
-const char Connectivity::RUN_PREFIX[] PROGMEM               = "[RUN] ";
-
-const char Connectivity::WL_NO_SHIELD_STR[] PROGMEM                 = "WL_NO_SHIELD";
-const char Connectivity::WL_IDLE_STATUS_STR[] PROGMEM               = "WL_IDLE_STATUS";
-const char Connectivity::WL_NO_SSID_AVAIL_STR[] PROGMEM             = "WL_NO_SSID_AVAIL";
-const char Connectivity::WL_SCAN_COMPLETED_STR[] PROGMEM            = "WL_SCAN_COMPLETED";
-const char Connectivity::WL_CONNECTED_STR[] PROGMEM                 = "WL_CONNECTED";
-const char Connectivity::WL_CONNECT_FAILED_STR[] PROGMEM            = "WL_CONNECT_FAILED";
-const char Connectivity::WL_CONNECTION_LOST_STR[] PROGMEM           = "WL_CONNECTION_LOST";
-const char Connectivity::WL_WRONG_PASSWORD_STR[] PROGMEM            = "WL_WRONG_PASSWORD";
-const char Connectivity::WL_DISCONNECTED_STR[] PROGMEM              = "WL_DISCONNECTED";
-const char Connectivity::WL_UNKNOWN_STATUS_STR[] PROGMEM            = "WL_UNKNOWN_STATUS";
-const char Connectivity::MQTT_CONNECTION_TIMEOUT_STR[] PROGMEM      = "MQTT_CONNECTION_TIMEOUT";
-const char Connectivity::MQTT_CONNECTION_LOST_STR[] PROGMEM         = "MQTT_CONNECTION_LOST";
-const char Connectivity::MQTT_CONNECT_FAILED_STR[] PROGMEM          = "MQTT_CONNECT_FAILED";
-const char Connectivity::MQTT_DISCONNECTED_STR[] PROGMEM            = "MQTT_DISCONNECTED";
-const char Connectivity::MQTT_CONNECTED_STR[] PROGMEM               = "MQTT_CONNECTED";
-const char Connectivity::MQTT_CONNECT_BAD_PROTOCOL_STR[] PROGMEM    = "MQTT_CONNECT_BAD_PROTOCOL";
-const char Connectivity::MQTT_CONNECT_BAD_CLIENT_ID_STR[] PROGMEM   = "MQTT_CONNECT_BAD_CLIENT_ID";
-const char Connectivity::MQTT_CONNECT_UNAVAILABLE_STR[] PROGMEM     = "MQTT_CONNECT_UNAVAILABLE";
-const char Connectivity::MQTT_CONNECT_BAD_CREDENTIALS_STR[] PROGMEM = "MQTT_CONNECT_BAD_CREDENTIALS";
-const char Connectivity::MQTT_CONNECT_UNAUTHORIZED_STR[] PROGMEM    = "MQTT_CONNECT_UNAUTHORIZED";
-const char Connectivity::MQTT_UNKNOWN_STATUS_STR[] PROGMEM          = "MQTT_UNKNOWN_STATUS";
-
-Connectivity::Connectivity(HardwareSerial& serial, const uint8_t ethCS, uint8_t dbgLedPin, bool dbgLedOnState) :
-  serialPort(serial),
-#ifdef ESP8266
-  ethInt(ethCS),
-#endif
+Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
+  networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
-  usedInterface(Interface::UNKNOWN),
-  interfaceStatus(WL_CONNECTED),
+  mqttCredentials(),
+  networkState(true),
   mqttState(MQTT_CONNECTED),
-  cppVersion(__cplusplus),
-  fwVersion(GIT_COMMIT_COUNT),
-  gitHash(GIT_COMMIT_HASH),
-  debugLed(dbgLedPin, dbgLedOnState),
-  timeTracker(deviceResetTime),
-  loopTimeTracker(1),
-  dataTransfer(&serialPort),
-  common(*this, "common")
-{
-  serialPort.begin(MONITOR_BAUD);
-  delay(1);
-  serialPort.println();
-}
-
-void Connectivity::begin(Interface interface, bool errorHandling) {
-  WdtHandler.enableHwWdt();
-  TimeTracker conTime;
-  conTime.startTime();
-  const bool conResult = beginSimple(interface);
-  serialPort.printf_P(PSTR("%sIOT connection:%s\r\n"), INIT_PREFIX, (conResult ? OK_STATE : ERR_STATE));
-  serialPort.printf_P(PSTR("%sInit time was: %ums\r\n"), INIT_PREFIX, conTime.stopTime());
-  if(!conResult && errorHandling) { common.restartESP(); }
-}
-
-bool Connectivity::beginSimple(Interface interface) {
-  const char loadingMark = '.';
-  WdtHandler.setEnabledResetNumber(4);
-  debugLed.startTicker(500);
-  serialPort.printf_P(PSTR("%sCPP: %u\r\n"), INIT_PREFIX, cppVersion);
-  serialPort.printf_P(PSTR("%sFW: %hu\r\n"), INIT_PREFIX, fwVersion);
-  serialPort.printf_P(PSTR("%sGit hash: %x\r\n"), INIT_PREFIX, gitHash);
+  onlineState(true),
+  deviceResetTimer(0U),
+  debugLed(debugLedFunc),
+  resetWdt(resetWdtFunc),
+  subtopicOffset(0U),
+  reconnectTimer(0U),
 #ifdef ESP8266
-  serialPort.printf_P(PSTR("%sInternal VCC: %humV\r\n"), INIT_PREFIX, ESP.getVcc());
+  serverCert{},
 #endif
-  serialPort.printf_P(PSTR("%sBegin connection...\r\n"), INIT_PREFIX);
-  serialPort.flush();
+  messageHandlerList{}
+{}
 
-  // Init filesystem.
-  {
-    delay(10);
-    const bool initFS = LittleFS.begin();
-    serialPort.printf_P(PSTR("%sInitialising filesystem:%s\r\n"), FS_PREFIX, (initFS ? OK_STATE : ERR_STATE));
+bool Connectivity::init() {
+  { // Initialise the file system.
+    delay(10U);
+    uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
+    const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
+    Logger::get().printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
     if(!initFS) { return false; }
-#ifdef ESP8266
-    {
-      FSInfo fsInfo;
-      LittleFS.info(fsInfo);
-      serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n  Block size: %u\r\n  Page size: %u\r\n  Max open files: %u\r\n  Max path lengths: %u\r\n"),
-        fsInfo.totalBytes, fsInfo.usedBytes, (fsInfo.totalBytes - fsInfo.usedBytes), fsInfo.blockSize, fsInfo.pageSize, fsInfo.maxOpenFiles, fsInfo.maxPathLength);
+    Logger::get().printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
+  }
+  { // Start network interface.
+    resetWatchdogTimer();
+    const uint16_t connResult = networkManager.connect();
+    const bool connResultOk = (connResult == 0U);
+    Logger::get().printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
+    if(!connResultOk) {
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), connResult);
+      return false;
     }
-#elif defined ESP32
-    serialPort.printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"),
-      LittleFS.totalBytes(), LittleFS.usedBytes(), (LittleFS.totalBytes() - LittleFS.usedBytes()));
-#endif
   }
-
-  // Get MAC.
-  uint8_t mac[6] = { 0 };
-#ifdef ESP8266
-  wifi_get_macaddr(STATION_IF, mac);
-#endif
-
-  // Start interface.
-  WdtHandler.resetHwWdtIfPossible();
-  if(interface == Interface::ETHERNET) {
-    WiFi.mode(WIFI_OFF);
-#ifdef ESP8266
-    ethInt.setDefault();         // default route set through this interface
-    const bool ethInit = ethInt.begin(mac);
-#elif defined ESP32
-    WiFi.onEvent(Connectivity::WiFiEvent);
-    const bool ethInit = ETH.begin(ETH_PHY_ADDR_, ETH_PHY_POWER_, ETH_PHY_MDC_, ETH_PHY_MDIO_, ETH_PHY_TYPE_, ETH_CLK_MODE_);
-#endif
-    serialPort.printf_P(PSTR("%sInitialising ethernet modul:%s\r\n"), ETH_PREFIX, ethInit ? OK_STATE : ERR_STATE);
-    if(!ethInit) { return false; }
-    serialPort.printf_P(PSTR("%sConnecting to router"), ETH_PREFIX);
-#ifdef ESP8266
-    while(!ethInt.connected()) {
-#elif defined ESP32
-    while(!ethConnected) {    // Wait until the device receives an IP address.
-#endif
-      yield();
-      serialPort.print(loadingMark);
-      delay(300);
+  { // Set time via NTP, as required for x.509 validation.
+    resetWatchdogTimer();
+    syncNtpTime();
+    char dateTimeStr[dateTimeStrBufSize] = {'\0'};
+    const bool dateTimeValid = getIsoTimeString(dateTimeStr);
+    if(dateTimeValid) {
+      Logger::get().printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
+    } else {
+      Logger::get().printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
+      return false;
     }
-#ifdef ESP8266
-    serialPort.printf_P(PSTR("%s\r\n"), ethInt.connected() ? OK_STATE : ERR_STATE);
-    if(!ethInt.connected()) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), ethInt.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), ethInt.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), ethInt.subnetMask().toString().c_str());
-#elif defined ESP32
-    serialPort.printf_P(PSTR("%s\r\n"), ethConnected ? OK_STATE : ERR_STATE);
-    if(!ethConnected) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), ETH.subnetMask().toString().c_str());
-#endif
   }
-  else if(interface == Interface::WIFI) {
-    const bool wifiInit = WiFi.mode(WIFI_STA);
-    serialPort.printf_P(PSTR("%sInitialising wifi:%s\r\n"), WIFI_PREFIX, wifiInit ? OK_STATE : ERR_STATE);
-    if(!wifiInit) { return false; }
-    WiFi.setAutoReconnect(true);
-    if(!startWifi()) { return false; }
-    serialPort.printf_P(PSTR("%sConnecting to router"), WIFI_PREFIX);
-    while(WiFi.status() != WL_CONNECTED) {
-      yield();
-      serialPort.print(loadingMark);
-      delay(300);
+  { // Get MQTT server credentials.
+    const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
+    const bool credResultOk = (credResult == 0U);
+    Logger::get().printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
+    if(!credResultOk) {
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), credResult);
+      return false;
     }
-    serialPort.printf_P(PSTR("%s\r\n"), (WiFi.status() == WL_CONNECTED) ? OK_STATE : ERR_STATE);
-    if(WiFi.status() != WL_CONNECTED) { return false; }
-    serialPort.printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
-    serialPort.printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
-    serialPort.printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str());
   }
-  else {
-    return false;
-  }
-#ifdef ESP32
-  ETH.setHostname(BUILD_ENV_NAME);
-  ETH.macAddress(mac);
-#endif
-  serialPort.printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  usedInterface = interface;
-  char macAddress[macStringSize] = { '\0' };
-  {
-    const int32_t macAddressSize = snprintf(macAddress, sizeof(macAddress), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macValid = (macAddressSize >= 0 && macAddressSize < static_cast<int32_t>(sizeof(macAddress)));
-    serialPort.printf_P(PSTR("%sMake string from MAC:%s\r\n"), INIT_PREFIX, macValid ? OK_STATE : ERR_STATE);
-    if(!macValid) { return false; }
-  }
-
-  // Set time via NTP, as required for x.509 validation.
-  yield();
-  WdtHandler.resetHwWdtIfPossible();
-  {
-    serialPort.printf_P(PSTR("%sWaiting for NTP time sync"), NTP_PREFIX);
-    configTime(0, 0, "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org");
-    time_t nowSecs = time(nullptr);
-    while(nowSecs < 8 * 3600 * 2) {
-      delay(300);
-      serialPort.print(loadingMark);
-      nowSecs = time(nullptr);
+  { // Setup MQTT topics.
+    uint8_t mac[6] = { 0U };
+    if(!networkManager.getMacAddress(mac)) { return false; }
+    const char* pioEnv = Build::getPioEnv();
+    if(pioEnv == nullptr) { return false; }
+    const char* underscore = strchr(pioEnv, '_');
+    if(underscore == nullptr || *(underscore + 1) == '\0') {
+      Logger::get().printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
+      return false;
     }
-    serialPort.printf_P(PSTR("\r\n%sUTC ISO time: %s\r\n"), NTP_PREFIX, getISODateTime());
-  }
-
-  // Setup MQTT topics.
-  {
-    memccpy_P(mqttCredentials.userName, mqttSettings::userName, '\0', sizeof(mqttCredentials.userName));
-    memccpy_P(mqttCredentials.password, mqttSettings::password, '\0', sizeof(mqttCredentials.password));
-    memccpy_P(mqttCredentials.serverName, mqttSettings::serverName, '\0', sizeof(mqttCredentials.serverName));
-    mqttCredentials.serverPort = mqttSettings::serverPort;
-    const char* deviceID = strchr(DEVICE_TYPE, '_') + 1;
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), "%s_%s", deviceID, macAddress);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), "%s/%s/%s", BASE_TOPIC, SENDER_TOPIC, macAddress);
-    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), "%s/%s/%s/#", BASE_TOPIC, RECEIVER_TOPIC, macAddress);
+    const char* deviceId = underscore + 1;
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], PSTR("%s"));
+    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    serialPort.printf_P(PSTR("%sClient name:%s\r\n"), MQTT_PREFIX, clientNameValid ? OK_STATE : ERR_STATE);
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.clientName, clientNameSize);
-    serialPort.printf_P(PSTR("%sSender topic:%s\r\n"), MQTT_PREFIX, senderTopicValid ? OK_STATE : ERR_STATE);
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.senderTopic, senderTopicSize);
-    serialPort.printf_P(PSTR("%sReceiver topic:%s\r\n"), MQTT_PREFIX, receiverTopicValid ? OK_STATE : ERR_STATE);
-    serialPort.printf_P(PSTR("  %s Length: %d\r\n"), mqttCredentials.receiverTopic, receiverTopicSize);
-    serialPort.flush();
-    if(!clientNameValid) { return false; }
-    if(!senderTopicValid) { return false; }
-    if(!receiverTopicValid) { return false; }
+    Logger::get().printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
+    if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
+    subtopicOffset = senderTopicSize - 2U;
   }
-
-  if(!connect()) { return false; }
-  mqttClient.setCallback([this](const char* topic, uint8_t* payload, uint32_t length) { receiveMqttMessage(topic, payload, length); });
-
-  {
-    char versionString[64];
+  { // Open certificate.
+    const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\",\"VCC\":%hu""}"), cppVersion, fwVersion, gitHash, ESP.getVcc());
+      serverCert.emplace(certFile, certFileSize);
+      if(!serverCert.has_value()) { return false; }
+      tcpClient.setTrustAnchors(&serverCert.value());
+      tcpClient.setTimeout(Time::secToMs(5U));
+      return true;
 #elif defined ESP32
-    const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), PSTR("{""\"CPP\":%u,\"FW\":%hu,\"GH\":\"%x\"}"), cppVersion, fwVersion, gitHash);
+      tcpClient.setTimeout(10U);
+      return tcpClient.loadCACert(certFile, certFileSize);
 #endif
-    const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
-    if(!versionStringValid) { return false; }
-    common.messageSend(versionString);
-  }
-
-  WdtHandler.resetHwWdtIfPossible();
-  serialPort.printf_P(PSTR("%sInit registered objects:\r\n"), INIT_PREFIX);
-  for(std::size_t i = 0; i < messageMap.size(); ++i) {
-    const auto& currentObject = messageMap[i];
-    if(currentObject != nullptr) {
-      const bool beginResult = currentObject->begin();
-      serialPort.printf_P(PSTR("  %zu. %s ->%s\r\n"), i, currentObject->getClassId(), beginResult ? OK_STATE : ERR_STATE);
-    }
-    else {
-      serialPort.printf_P(PSTR("  %zu. No object here!\r\n"), i);
+    });
+    const bool certResultOk = (certResult == 0U);
+    Logger::get().printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
+    if(!certResultOk) {
+      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), certResult);
+      return false;
     }
   }
-
-  debugLed.stopTicker();
-  WdtHandler.resetHwWdtIfPossible();
-  return true;
-}
-
-bool Connectivity::startWifi() {
-  bool retVal = false;
-  const bool wifiFileExists = LittleFS.exists(FPSTR(wifiFileLocation));
-  serialPort.printf_P(PSTR("%sCheck wifi config:\r\n"), FS_PREFIX);
-  serialPort.printf_P(PSTR("  %s ->%s\r\n"), wifiFileLocation, wifiFileExists ? OK_STATE : ERR_STATE);
-  if(!wifiFileExists) { return retVal; }
-
-  File wifiFile = LittleFS.open(FPSTR(wifiFileLocation), "r");
-  serialPort.printf_P(PSTR("%sOpening: %s%s\r\n"), FS_PREFIX, wifiFileLocation, wifiFile ? OK_STATE : ERR_STATE);
-  if(!wifiFile) { wifiFile.close(); return retVal; }
-
-  JsonDocument wifiJson;
-  DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(deSerResult) {
-    JsonVariant ssidJsonVar = wifiJson[F("ssid")];
-    JsonVariant passwordJsonVar = wifiJson[F("password")];
-    if(ssidJsonVar.is<const char*>() && passwordJsonVar.is<const char*>()) {
-      constexpr uint8_t maxSsidLength = 48;
-      constexpr uint8_t maxPassLength = 48;
-      const char* ssid = ssidJsonVar.as<const char*>();
-      const char* pass = passwordJsonVar.as<const char*>();
-      const uint8_t ssidLength = strnlen(ssid, maxSsidLength);
-      const uint8_t passLength = strnlen(pass, maxPassLength);
-      const bool ssidLengthValid = (ssidLength > 0) && (ssidLength < maxSsidLength);
-      const bool passLengthValid = (passLength > 0) && (passLength < maxPassLength);
-      if(ssidLengthValid && passLengthValid) {
-        WiFi.begin(ssid, pass);
-        retVal = true;
-      }
-      else {
-        serialPort.printf_P(PSTR("%sWifi credentials are empty!\r\n"), JSON_PREFIX);
-      }
-    }
-    else {
-      serialPort.printf_P(PSTR("%sKeys are not presented in the file!\r\n"), JSON_PREFIX);
-    }
-  }
-  else {
-    serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), JSON_PREFIX, deserializationError.f_str());
-  }
-  wifiFile.close();
-  return retVal;
-}
-
-bool Connectivity::connect() {
-  yield();
-#ifdef ESP8266
-  // Open cert.
-  X509List cert(mqttSettings::caCert);
-  tcpClient.setTrustAnchors(&cert);
-  tcpClient.setTimeout(5000);
-
-  // TCP connection.
-  //tcpClient.getLastSSLError() == BR_ERR_OK ?
-  const bool tcpStopResult = tcpClient.stop(2000);
-  serialPort.printf_P(PSTR("%sReset connection for fresh start%s\r\n"), TCP_PREFIX, tcpStopResult ? OK_STATE : ERR_STATE);
-  if(!tcpStopResult) { return false; }
-#elif defined ESP32
-  //tcpClient.stop();
-  tcpClient.setCACert(mqttSettings::caCert);
-  tcpClient.setTimeout(10);
-#endif
-  const bool tcpConResult = tcpClient.connect(mqttCredentials.serverName, mqttCredentials.serverPort);
-  serialPort.printf_P(PSTR("%sConnecting to: %s:%hu%s\r\n"), TCP_PREFIX, mqttCredentials.serverName, mqttCredentials.serverPort, tcpConResult ? OK_STATE : ERR_STATE);
-  if(!tcpConResult) { return false; }
-
-  // MQTT connection.
+  // Setup MQTT client.
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
-  const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
-  serialPort.printf_P(PSTR("%sConnecting to MQTT broker:%s\r\n  State: %s\r\n"), MQTT_PREFIX, mqttConResult ? OK_STATE : ERR_STATE, getMqttStatusStr(mqttClient.state()));
-  if(!mqttConResult) { return false; }
-  const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1);
-  serialPort.printf_P(PSTR("%sSubscription:%s\r\n"), MQTT_PREFIX, subResult ? OK_STATE : ERR_STATE);
-  if(!subResult) { return false; }
-  return true;
-}
-
-void Connectivity::loop() {
-  loopTimeTracker.startTime();
-  const bool loopingResult = loopSimple();
-  const bool statusChanged = loopingResult != isDeviceOnline;
-  if(statusChanged) {
-    isDeviceOnline = loopingResult;
-    if(isDeviceOnline) {
-      debugLed.stopTicker();
-      timeTracker.resetTime();
-    } 
-    else {
-      debugLed.startTicker(250);
-      timeTracker.startTime();
+  mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
+    if((topic == nullptr) || (payload == nullptr) || (length ==  0U)) { return; }
+    const char* subtopic = topic + subtopicOffset;
+    if(!MqttBase::isSubtopicValid(subtopic)) { return; }
+    for(const auto &currentMessageHandler : messageHandlerList) {
+      if(currentMessageHandler == nullptr) { continue; }
+      if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
+        JsonDocument payloadJson;
+        DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
+        if(parsingError != DeserializationError::Code::Ok) {
+        Logger::get().printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
+          currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+          return;
+        }
+        currentMessageHandler->messageArrivedCallback(payloadJson);
+        return;
+      }
     }
-    serialPort.printf_P(PSTR("%sDevice is: %s\r\n"), RUN_PREFIX, isDeviceOnline ? F("ONLINE") : F("OFFLINE"));
+    Logger::get().printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+  });
+  // List message handlers.
+  Logger::get().printf_P(PSTR("[MQTT] Message handlers:\r\n"));
+  for(std::size_t i = 0U; i < messageHandlerList.size(); ++i) {
+    if(messageHandlerList[i] != nullptr) {
+      Logger::get().printf_P(PSTR("  %zu. %s\r\n"), i, messageHandlerList[i]->getSubtopic());
+    } else {
+      Logger::get().printf_P(PSTR("  %zu. No object here!\r\n"), i);
+    }
   }
-  if(timeTracker.isGoalReached()) {
-    serialPort.printf_P(PSTR("%sDevice is offline since: %ums\r\n"), RUN_PREFIX, timeTracker.getElapsedTime());
-    common.restartESP();
-  }
-  if(loopTimeTracker.isGoalReached()) {
-    const uint32_t loopTime = loopTimeTracker.stopTime();
-    serialPort.printf_P(PSTR("%sMax loop time is: %ums\r\n"), RUN_PREFIX, loopTime);
-    loopTimeTracker.setGoal(loopTime + 1);
-  }
+
+  return connectToMqttServer();
 }
 
-bool Connectivity::loopSimple() {
-  yield();
-  WdtHandler.resetHwWdt();
+bool Connectivity::connectToMqttServer() {
+  const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
+  Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
+    mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+  if(!mqttConResult) { return false; }
+  const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
+  Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
+  return subResult;
+}
 
-  static wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
-  const char* intPrefix;
-  if(usedInterface == Interface::ETHERNET) {
-#ifdef ESP8266
-    actualInterfaceStatus = ethInt.status();
-#elif defined ESP32
-    actualInterfaceStatus = ethConnected ? WL_CONNECTED : WL_DISCONNECTED;
-#endif
-    intPrefix = ETH_PREFIX;
+bool Connectivity::run() {
+  const uint32_t actualTime = millis();
+  const bool actualNetworkState = networkManager.isNetworkAvailable();
+  if(actualNetworkState != networkState) {
+    networkState = actualNetworkState;
+    if(networkState) {
+      connectToMqttServer();
+    } else {
+      mqttClient.disconnect();
+    }
   }
-  else if(usedInterface == Interface::WIFI) { actualInterfaceStatus = WiFi.status();  intPrefix = WIFI_PREFIX; }
-  else { return false; }
-  if(interfaceStatus != actualInterfaceStatus) {
-    serialPort.printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), intPrefix, getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
-    interfaceStatus = actualInterfaceStatus;
-    if(interfaceStatus == WL_CONNECTED) { connect(); }
-    else { mqttClient.disconnect(); }
-  }
-
   const int8_t actualMqttState = mqttClient.state();
   if(mqttState != actualMqttState) {
-    serialPort.printf_P(PSTR("%sStatus changed: %s -> %s\r\n"), MQTT_PREFIX, getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
+    Logger::get().printf_P(PSTR("[MQTT] Status changed: %s -> %s\r\n"), getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
     mqttState = actualMqttState;
   }
 
-  if(!mqttClient.loop()) {
-    if((mqttState < MQTT_CONNECTED) && (interfaceStatus == WL_CONNECTED)) {
-      static uint32_t reconnectTimer = millis();
-      if(millis() - reconnectTimer >= 10000) {
+  if(mqttClient.loop()) {
+    reconnectTimer = millis();
+  } else {
+    if((mqttState < MQTT_CONNECTED) && networkState) {
+      if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
         reconnectTimer = millis();
-        connect();
+        connectToMqttServer();
       }
     }
   }
 
-  for(const auto &currentObject : messageMap) {
-    if(currentObject != nullptr) {
-      currentObject->loop();
-    }
+  const bool actualOnlineState = networkState && (mqttState == MQTT_CONNECTED);
+  if(actualOnlineState) {
+    deviceResetTimer = actualTime;
+  }
+  if(actualOnlineState != onlineState) {
+    onlineState = actualOnlineState;
+    if(debugLed != nullptr) { debugLed(onlineState); }
+    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
   }
 
-  return ((interfaceStatus == WL_CONNECTED) && (mqttState == MQTT_CONNECTED));
-}
-
-bool Connectivity::getConnectionState() { return isDeviceOnline; }
-
-void Connectivity::receiveMqttMessage(const char* topic, uint8_t* payload, uint32_t length) {
-  const char* classID = strrchr(topic, '/') + 1;
-  if(!classID) { return; }
-  for(const auto &currentObject : messageMap) {
-    if(currentObject == nullptr) { return; }
-    if(strcmp(currentObject->getClassId(), classID) == 0) {
-      currentObject->messageReceived(payload, length);
-      return;
-    }
+  if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
+    Logger::get().printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
+    ResetHandler::restartMCU();
   }
-  serialPort.printf_P(PSTR("%sNo handler -> %s\r\n"), MQTT_PREFIX, classID);
-}
-
-void Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
-  char actualTopic[sizeof(mqttCredentials.senderTopic)];
-  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), "%s/%s", mqttCredentials.senderTopic, subTopic);
-  const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
-  if(!actualTopicValid) { return; }
-  mqttClient.publish(actualTopic, payload);
-}
-
-const char* Connectivity::getISODateTime() {
-  const time_t time_ = time(nullptr);
-  static char buffer[24];
-  memset(buffer, '\0', sizeof(buffer));
-  struct tm * timeinfo;
-  timeinfo = gmtime(&time_); // Convert time to UTC time structure
-  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo); // Format as ISO UTC string
-  return static_cast<const char*>(buffer);
-}
-
-bool Connectivity::registerCallback(Connectivity::MqttComBase* obj) {
-  if(!obj) { return false; }
-  messageMap.push_back(obj);
   return true;
 }
 
-const char* Connectivity::getIntStatusStr(wl_status_t status) {
-  switch(status) {
-    case WL_NO_SHIELD: { return WL_NO_SHIELD_STR; } break;
-    case WL_IDLE_STATUS: { return WL_IDLE_STATUS_STR; } break;
-    case WL_NO_SSID_AVAIL: { return WL_NO_SSID_AVAIL_STR; } break;
-    case WL_SCAN_COMPLETED: { return WL_SCAN_COMPLETED_STR; } break;
-    case WL_CONNECTED: { return WL_CONNECTED_STR; } break;
-    case WL_CONNECT_FAILED: { return WL_CONNECT_FAILED_STR; } break;
-    case WL_CONNECTION_LOST: { return WL_CONNECTION_LOST_STR; } break;
-#ifdef ESP8266
-    case WL_WRONG_PASSWORD: { return WL_WRONG_PASSWORD_STR; } break;
-#endif
-    case WL_DISCONNECTED: { return WL_DISCONNECTED_STR; } break;
-    default: { return WL_UNKNOWN_STATUS_STR; } break;
+bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
+  if(subTopic == nullptr || payload == nullptr ) { return false; }
+  char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
+  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
+  const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
+  if(!actualTopicValid) { return false; }
+  return mqttClient.publish(actualTopic, payload);
+}
+
+void Connectivity::syncNtpTime() const {
+  const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
+  constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
+
+  Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
+  configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
+  time_t currentTime = time(nullptr);
+  while(currentTime < minValidTime) {
+    yield();
+    currentTime = time(nullptr);
   }
+}
+
+bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) const {
+  memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
+  const time_t currentTime = time(nullptr);
+  if(currentTime == -1) { return false; }           // Check if time retrieval failed.
+  const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
+  if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
+  const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
+  if(formattedSize == 0U || formattedSize >= sizeof(dateTimeBuffer)) { return false; }
+  return true;
+}
+
+bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
+  if(mqttBasePtr == nullptr) { return false; }
+  messageHandlerList.push_back(mqttBasePtr);
+  return true;
 }
 
 const char* Connectivity::getMqttStatusStr(int8_t status) {
   switch(status) {
-    case MQTT_CONNECTION_TIMEOUT: { return MQTT_CONNECTION_TIMEOUT_STR; } break;
-    case MQTT_CONNECTION_LOST: { return MQTT_CONNECTION_LOST_STR; } break;
-    case MQTT_CONNECT_FAILED: { return MQTT_CONNECT_FAILED_STR; } break;
-    case MQTT_DISCONNECTED: { return MQTT_DISCONNECTED_STR; } break;
-    case MQTT_CONNECTED: { return MQTT_CONNECTED_STR; } break;
-    case MQTT_CONNECT_BAD_PROTOCOL: { return MQTT_CONNECT_BAD_PROTOCOL_STR; } break;
-    case MQTT_CONNECT_BAD_CLIENT_ID: { return MQTT_CONNECT_BAD_CLIENT_ID_STR; } break;
-    case MQTT_CONNECT_UNAVAILABLE: { return MQTT_CONNECT_UNAVAILABLE_STR; } break;
-    case MQTT_CONNECT_BAD_CREDENTIALS: { return MQTT_CONNECT_BAD_CREDENTIALS_STR; } break;
-    case MQTT_CONNECT_UNAUTHORIZED: { return MQTT_CONNECT_UNAUTHORIZED_STR; } break;
-    default: { return MQTT_UNKNOWN_STATUS_STR; } break;
+    case MQTT_CONNECTION_TIMEOUT: { return mqttConnectionTimeoutStr; } break;
+    case MQTT_CONNECTION_LOST: { return mqttConnectionLostStr; } break;
+    case MQTT_CONNECT_FAILED: { return mqttConnectFailedStr; } break;
+    case MQTT_DISCONNECTED: { return mqttDisconnectedStr; } break;
+    case MQTT_CONNECTED: { return mqttConnectedStr; } break;
+    case MQTT_CONNECT_BAD_PROTOCOL: { return mqttConnectBadProtocolStr; } break;
+    case MQTT_CONNECT_BAD_CLIENT_ID: { return mqttConnectBadClientIdStr; } break;
+    case MQTT_CONNECT_UNAVAILABLE: { return mqttConnectUnavailableStr; } break;
+    case MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; } break;
+    case MQTT_CONNECT_UNAUTHORIZED: { return mqttConnectUnauthorizedStr; } break;
+    default: { return mqttUnknownStatusStr; } break;
   }
-}
-
-#ifdef ESP32
-  void Connectivity::WiFiEvent(WiFiEvent_t event) {
-  switch(event) {
-    case ARDUINO_EVENT_ETH_START: {} break;
-    case ARDUINO_EVENT_ETH_CONNECTED: {} break;
-    case ARDUINO_EVENT_ETH_GOT_IP: { ethConnected = true; } break;
-    case ARDUINO_EVENT_ETH_DISCONNECTED: { ethConnected = false; } break;
-    case ARDUINO_EVENT_ETH_STOP: { ethConnected = false; } break;
-    default: {} break;
-  }
-}
-#endif
-
-//////////////////// -- WDT class-- ////////////////////
-
-void Connectivity::WdtWrapper::enableHwWdt() {
-#ifdef ESP8266
-  wdt_disable();                                          // Disables the SW watchdog and enables the HW watchdog -> ~8400ms
-#elif defined ESP32
-  constexpr uint8_t WDT_TIMEOUT = 10;                     // Temout in sec.
-  esp_task_wdt_init(WDT_TIMEOUT, true);                   // Enable panic so ESP32 restarts.
-  esp_task_wdt_add(nullptr);                              // Add current thread to WDT watch.
-#endif
-}
-
-void Connectivity::WdtWrapper::resetHwWdt() {
-  this->enabledResetNumber_ = 0;
-#ifdef ESP8266
-  wdt_reset();
-#elif defined ESP32
-  esp_task_wdt_reset();
-#endif
-}
-
-void Connectivity::WdtWrapper::resetHwWdtIfPossible() {
-  if(this->enabledResetNumber_ > 0) {
-    this->enabledResetNumber_--;
-#ifdef ESP8266
-    wdt_reset();
-#elif defined ESP32
-    esp_task_wdt_reset();
-#endif
-  }
-}
-void Connectivity::WdtWrapper::setEnabledResetNumber(uint8_t enabledResetNumber) {
-  this->enabledResetNumber_ = enabledResetNumber;
-}
-
-//////////////////// -- Debug LED class-- ////////////////////
-
-uint8_t Connectivity::DebugLED::ledPin_ = -1;
-
-Connectivity::DebugLED::DebugLED(uint8_t ledPin, bool ledOnState) : ledOnState_(ledOnState) {
-  ledPin_ = ledPin;
-  pinMode(this->ledPin_, OUTPUT);
-}
-
-void Connectivity::DebugLED::ledOn() { this->ledOnState_ ? ledLow() : ledHigh(); }
-
-void Connectivity::DebugLED::ledOff() { this->ledOnState_ ? ledHigh() : ledLow(); }
-
-void Connectivity::DebugLED::startTicker(uint32_t tickInterval_ms) {
-  ledOff();
-  this->ledTicker.attach_ms(tickInterval_ms, ledToggle);
-}
-
-void Connectivity::DebugLED::stopTicker() {
-  this->ledTicker.detach();
-  ledOff();
-}
-
-void Connectivity::DebugLED::ledToggle() {
-  digitalWrite(ledPin_, !digitalRead(ledPin_));   // LED pin toggle.
-}
-
-void Connectivity::DebugLED::ledHigh() {
-  digitalWrite(this->ledPin_, HIGH);                          // LED pin high.
-}
-void Connectivity::DebugLED::ledLow() {
-  digitalWrite(this->ledPin_, LOW);                           // LED pin low.
-}
-
-//////////////////// -- TimeTracker class-- ////////////////////
-
-Connectivity::TimeTracker::TimeTracker(uint32_t goalTime) : startTime_(0), goalTime_(goalTime) {}
-
-void Connectivity::TimeTracker::startTime() { startTime_ = millis(); }
-
-void Connectivity::TimeTracker::resetTime() { startTime_ = 0; }
-
-void Connectivity::TimeTracker::setGoal(uint32_t goalTime) { goalTime_ = goalTime; }
-
-uint32_t Connectivity::TimeTracker::stopTime() { 
-  const uint32_t stoppedTime = getElapsedTime();
-  resetTime();
-  return stoppedTime;
- }
-
-uint32_t Connectivity::TimeTracker::getElapsedTime() { return (millis() - startTime_); }
-
-bool Connectivity::TimeTracker::isGoalReached() {
-  if(startTime_ == 0) { return false; }
-  return (getElapsedTime() >= goalTime_);
-}
-
-//////////////////// -- DataTransfer class-- ////////////////////
-
-const char Connectivity::DataTransfer::FILE_TRANSFER_PREFIX[] PROGMEM     = "[FT] ";
-const char Connectivity::DataTransfer::otaFwLocation[] PROGMEM            = "/config/espFirmware.bin";
-const char Connectivity::DataTransfer::wifiTempFileLocation[] PROGMEM     = "/config/wifi.json.tmp";
-
-Connectivity::DataTransfer::DataTransfer(Stream* serial) :
-  serialPort(serial),
-  fileSize_(0),
-  fileCrc_(0),
-  nextFilePieceNumber_(-1),
-  remainingFileSize_(0),
-  fileName_(nullptr),
-  fileTransferStarted_(false) {}
-
-bool Connectivity::DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
-  if(this->fileTransferStarted_) { stop(true); }
-  this->fileTransferStarted_ = true;
-  this->fileSize_ = fileSize;
-  this->fileCrc_ = fileCrc;
-  this->nextFilePieceNumber_ = 0;
-  this->remainingFileSize_ = fileSize;
-  if(fileName == nullptr) { stop(true); return false; }
-  this->fileName_ = fileName;
-  {
-#ifdef ESP8266
-    FSInfo fsInfo;
-    LittleFS.info(fsInfo);
-    const uint32_t freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
-#elif defined ESP32
-    const uint32_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-#endif
-    const bool isEnoughFreeSpace = freeSpace > this->fileSize_;
-    if(!isEnoughFreeSpace) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sNot enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), FILE_TRANSFER_PREFIX, freeSpace, this->fileSize_); }
-      return false;
-    }
-  }
-  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
-  if(fileExists) {
-    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
-    if(!rmFileResult) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-      stop(true);
-      return false;
-    }
-  }
-  if(this->serialPort) {
-    this->serialPort->printf_P(PSTR("%sFile transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"),
-      FILE_TRANSFER_PREFIX, this->fileName_, this->fileSize_, this->fileCrc_);
-  }
-  if(fileSize == 0) { stop(true); return false; }
-  return true;
-}
-
-bool Connectivity::DataTransfer::stop(bool deleteFile) {
-  this->fileTransferStarted_ = false;
-  this->fileSize_ = 0;
-  this->fileCrc_ = 0;
-  this->nextFilePieceNumber_ = -1;
-  this->remainingFileSize_ = 0;
-
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile transfer stopped, cleaning up done!\r\n"), FILE_TRANSFER_PREFIX); }
-  const bool fileExists = LittleFS.exists(FPSTR(this->fileName_));
-  if(fileExists && deleteFile) {
-    const bool rmFileResult = LittleFS.remove(FPSTR(this->fileName_));
-    if(!rmFileResult) {
-      if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDeleting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-      return false;
-    }
-  }
-  this->fileName_ = nullptr;
-  return true;
-}
-
-bool Connectivity::DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
-  if(!this->fileTransferStarted_) { return false; }
-  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
-  if(this->remainingFileSize_ == 0) { return false; }
-  constexpr uint16_t maxB64Length = receivedFilePieceSize * 4 / 3;
-  const uint32_t filePieceB64Size = strnlen(fileData, maxB64Length);
-  if(filePieceB64Size == 0) { return false; }
-
-  uint8_t decodedData[receivedFilePieceSize];
-  const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
-  if(decodedPreSize > sizeof(decodedData)) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile piece size error!\r\n"), FILE_TRANSFER_PREFIX); }
-    return false;
-  }
-  const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size);
-  if(decodedPreSize != decodedPostSize) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sDecoded size check error!\r\n"), FILE_TRANSFER_PREFIX); }
-    return false;
-  }
-  const bool storingResult = store(filePieceNumber, decodedData, decodedPreSize);
-  if(!storingResult) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sFile storing failed!\r\n"), FILE_TRANSFER_PREFIX); }
-  }
-  return storingResult;
-}
-
-bool Connectivity::DataTransfer::store(uint32_t filePieceNumber, const uint8_t* fileData, uint16_t fileDataSize) {
-  if(!this->fileTransferStarted_) { return false; }
-  if(filePieceNumber != this->nextFilePieceNumber_) { return false; }
-  if(fileDataSize == 0) { return false; }
-  if(this->remainingFileSize_ == 0) { return false; }
-
-  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "a");
-  if(!receivedFile) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sOpening failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-    receivedFile.close();
-    return false;
-  }
-  const uint32_t writtenBytes = receivedFile.write(fileData, fileDataSize);
-  receivedFile.close();
-  if(writtenBytes != fileDataSize) {
-    if(this->serialPort) { this->serialPort->printf_P(PSTR("%sWriting failed: %s\r\n"), FILE_TRANSFER_PREFIX, this->fileName_); }
-    return false;
-  }
-  this->nextFilePieceNumber_++;
-  this->remainingFileSize_ -= fileDataSize;
-  return true;
-}
-
-bool Connectivity::DataTransfer::checkValidity() {
-  if(!this->fileTransferStarted_) { return false; }
-  if(this->remainingFileSize_ != 0) { return false; }
-  File receivedFile = LittleFS.open(FPSTR(this->fileName_), "r");
-  if(this->serialPort) {
-    this->serialPort->printf_P(PSTR("%sChecking received file:%s\r\n"),
-      FILE_TRANSFER_PREFIX, receivedFile ? Connectivity::OK_STATE : Connectivity::ERR_STATE);
-  }
-  if(!receivedFile) { receivedFile.close(); return false; }
-  const bool fileSizeOk = (receivedFile.size() == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Size ->%s\r\n"), fileSizeOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!fileSizeOk) { receivedFile.close(); return false; }
-  Crc32 crc32;
-  while(receivedFile.available() > 0) { crc32.next(receivedFile.read()); }
-  const uint32_t calcFileCrc32 = crc32.get();
-  const bool fileCrcOk = (calcFileCrc32 == this->fileCrc_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  CRC ->%s\r\n"), fileCrcOk ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!fileCrcOk) { receivedFile.close(); return false; }
-  if(this->fileName_ != otaFwLocation) {
-    receivedFile.close();
-    stop(false);
-    return true;
-  }
-
-  receivedFile.seek(0, SeekSet);
-  const bool updateBeginResult = Update.begin(this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Begin ->%s\r\n"), updateBeginResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!updateBeginResult) { receivedFile.close(); return false; }
-  const bool updateStreamResult = (Update.writeStream(receivedFile) == this->fileSize_);
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  Stream ->%s\r\n"), updateStreamResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  if(!updateStreamResult) { receivedFile.close(); return false; }
-  receivedFile.close();
-  const bool updateEndResult = Update.end();
-  if(this->serialPort) { this->serialPort->printf_P(PSTR("  End ->%s\r\n"), updateEndResult ? Connectivity::OK_STATE : Connectivity::ERR_STATE); }
-  stop(true);
-  if(!updateEndResult) { return false; }
-  return true;
-}
-
-//////////////////// -- MqttComBase class-- ////////////////////
-
-Connectivity::MqttComBase::MqttComBase(Connectivity& connectivity, const char* classID) : conn(connectivity) {
-  strlcpy(this->classId, classID, sizeof(this->classId));
-  conn.registerCallback(this);
-}
-
-void Connectivity::MqttComBase::messageSend(const char* payload) const {
-  conn.sendMqttMessage(getClassId(), payload);
-}
-
-const char* Connectivity::MqttComBase::getIsoTime() { return conn.getISODateTime(); }
-
-bool Connectivity::MqttComBase::sendResponse(Response resp, uint16_t cmd) {
-  static constexpr const uint8_t respBufSize = 28;
-  char respBuf[respBufSize] = { '\0' };
-  const int32_t respBufRealSize = snprintf_P(respBuf, sizeof(respBuf), PSTR("{""\"type\":%hu,""\"cmd\":%hu""}"), static_cast<uint8_t>(resp), cmd);
-  const bool respBufValid = (respBufRealSize >= 0 && respBufRealSize < static_cast<int32_t>(sizeof(respBuf)));
-  if(!respBufValid) { return false; }
-  messageSend(respBuf);
-  return true;
-}
-
-const char* Connectivity::MqttComBase::getClassId() const { return classId; }
-
-//////////////////// -- Common class-- ////////////////////
-
-const char Connectivity::Common::COMMON_PREFIX[] PROGMEM              = "[COMMON] ";
-
-Connectivity::Common::Common(Connectivity& connectivity, const char* classID) :
-  MqttComBase(connectivity, classID),
-  externalFileName{'\0'} {}
-
-void Connectivity::Common::messageReceived(uint8_t* payload, uint32_t length) {
-  JsonDocument cmdJson;
-  DeserializationError deserializationError = deserializeJson(cmdJson, payload, length);
-  const bool deSerResult = (deserializationError == DeserializationError::Code::Ok);
-  if(!deSerResult) {
-    conn.serialPort.printf_P(PSTR("%sDeserialisation failed: %s\r\n"), COMMON_PREFIX, deserializationError.f_str());
-    return;
-  }
-  const uint8_t cmd = cmdJson[F("cmd")].as<uint8_t>();
-  Command command = static_cast<Command>(cmd);
-  switch(command) {
-    case Command::BLANK: {} break;
-    case Command::RESTART: { restartESP(); } break;
-    case Command::FW_DT_START:
-    case Command::WIFICFG_DT_START:
-    case Command::EXT_FILE_DT_START: {
-      const uint32_t fileSize = cmdJson[F("fileSize")].as<uint32_t>();
-      const uint32_t fileCrc = cmdJson[F("crc32")].as<uint32_t>();
-      const char* fileNamePtr = nullptr;
-      switch(command) {
-        case Command::FW_DT_START: {
-          const char* binId = cmdJson[F("binId")].as<const char*>();
-          if(strncmp_P(binId, DEVICE_TYPE, sizeof(DEVICE_TYPE)) != 0) {
-            conn.serialPort.printf_P(PSTR("%sWrong FW file ID: %s\r\n"), COMMON_PREFIX, binId);
-            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-            return;
-          }
-          fileNamePtr = DataTransfer::otaFwLocation;
-          } break;
-        case Command::WIFICFG_DT_START: { fileNamePtr = DataTransfer::wifiTempFileLocation; } break;
-        case Command::EXT_FILE_DT_START: {
-          const char* fileName = cmdJson[F("name")].as<const char*>();
-          memset(externalFileName, '\0', sizeof(externalFileName));
-          if(fileName != nullptr) { memccpy(externalFileName, fileName, '\0', sizeof(externalFileName)); }
-          uint32_t externalFileNameSize =  strnlen(externalFileName, sizeof(externalFileName));
-          if(externalFileNameSize == 0 || externalFileNameSize >= sizeof(externalFileName)) {
-            conn.serialPort.printf_P(PSTR("%sWrong file name: missing / too long!\r\n"), COMMON_PREFIX);
-            MqttComBase::sendResponse(MqttComBase::Response::NACK, cmd);
-            return;
-          }
-          fileNamePtr = static_cast<const char*>(externalFileName);
-        } break;
-        default: {} break;
-      }
-      const bool transferBeginResult = conn.dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
-      MqttComBase::sendResponse((transferBeginResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-      if(!transferBeginResult) {
-        conn.serialPort.printf_P(PSTR("%sCan't begin file transfer:\r\n  Name: %s\r\n"), COMMON_PREFIX, fileNamePtr);
-        return;
-      }
-    } break;
-    case Command::FW_DT_DATA:
-    case Command::WIFICFG_DT_DATA:
-    case Command::EXT_FILE_DT_DATA: {
-      const uint32_t filePieceNumber = cmdJson[F("piece")].as<uint32_t>();
-      const char* filePieceB64 = cmdJson["data"].as<const char*>();
-      const bool storingResult = conn.dataTransfer.storeBase64(filePieceNumber, filePieceB64);
-      MqttComBase::sendResponse(storingResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK, cmd);
-      if(!storingResult) {
-        conn.serialPort.printf_P(PSTR("%sFile storing failed!\r\n"), COMMON_PREFIX);
-      }
-    } break;
-    case Command::FW_DT_END:
-    case Command::WIFICFG_DT_END:
-    case Command::EXT_FILE_DT_END: {
-      const bool validityCheckResult = conn.dataTransfer.checkValidity();
-      MqttComBase::sendResponse((validityCheckResult ? MqttComBase::Response::ACK : MqttComBase::Response::NACK), cmd);
-      if(!validityCheckResult) {
-        conn.serialPort.printf_P(PSTR("%sStored file is not valid!\r\n"), COMMON_PREFIX);
-      }
-      if(validityCheckResult && (command == Command::FW_DT_END)) { restartESP(); }
-    } break;
-  };
-}
-
-bool Connectivity::Common::begin() { return true; }
-
-bool Connectivity::Common::loop() { return true; }
-
-void Connectivity::Common::messageSend(const char* payload) const {
-  MqttComBase::messageSend(payload);
-}
-
-void Connectivity::Common::restartESP() {
-  conn.serialPort.printf_P(PSTR("%sRestarting...\r\n"), COMMON_PREFIX);
-  conn.serialPort.flush();                            // Sends out data from serial buffer, before reset.
-  ESP.restart();
-  while(true) {};                                     // Prevent doing anything before restart.
 }

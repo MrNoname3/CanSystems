@@ -7,7 +7,7 @@ PushButtonHandler::PushButtonHandler(const CanHandler& canHandler, bool (*button
   btnCallback(nullptr)
 {}
 
-void PushButtonHandler::run() {
+bool PushButtonHandler::run() {
   const uint8_t event = readButtonValue == nullptr ? 0U : button.buttonCheck(millis(), readButtonValue());
   const bool eventValid = event > 0U;
   if(eventValid) {
@@ -17,6 +17,7 @@ void PushButtonHandler::run() {
       btnCallback(static_cast<BtnEvent>(event));
     }
   }
+  return true;
 }
 
 void PushButtonHandler::addBtnCallback(void (*btnCallback)(BtnEvent btnEvent)) {

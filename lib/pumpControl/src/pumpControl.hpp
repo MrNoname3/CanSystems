@@ -11,6 +11,9 @@
 /// @class PumpControl
 /// @brief Controls irrigation pumps, monitors flow rate, and manages irrigation schedules and safety limits.
 class PumpControl final : public Task {
+private:
+  using PumpControlErrorType = uint8_t;                             // Underlying type for pump control error states.
+
 public:
   /// @brief Constructor for the PumpControl class.
   /// @param pcf8574 Reference to the I2C GPIO expander.
@@ -29,7 +32,8 @@ public:
   virtual bool init() override;
 
   /// @brief Runs the main irrigation control loop.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   /// @brief Creates a new irrigation schedule.
   /// @param irrigationInfo Information on the irrigation task.
@@ -48,11 +52,11 @@ public:
 
   /// @brief Calculates the consumed current of the pump.
   /// @return The current value in mA.
-  inline int16_t calculateCurrent() const;
+  int16_t calculateCurrent() const;
 
   /// @brief Calculates only positive current and dont't care with negative ones.
   /// @return Returns the positive current value. In negative case it returns with 0.
-  inline uint16_t getPositiveCurrent() const;
+  uint16_t getPositiveCurrent() const;
 
   /// @brief Adds a limit switch for a specific channel.
   /// @param channel The irrigation channel.
@@ -158,7 +162,7 @@ private:
   };
 
   /// @brief Represents error states in the pump control system.
-  enum class ERROR : uint8_t {
+  enum class PumpControlError : PumpControlErrorType {
     NONE          = 0U,                     // No error.
     CH_SELECT     = 1 << 0U,                // Channel select error.
     FLOW_STUCK    = 1 << 1U,                // Flow meter stuck error.
@@ -175,18 +179,7 @@ private:
   /// @brief Selects an irrigation channel for use.
   /// @param channel The channel to select.
   /// @return True if the channel was successfully selected, false otherwise.
-  inline bool selectChannel(uint8_t channel) const;
-
-  /// @brief Sets the error state for the pump control system.
-  /// @param err The error to set.
-  inline void setError(ERROR err);
-
-  /// @brief Retrieves the current error state.
-  /// @return The current error state.
-  inline const uint8_t getError() const;
-
-  /// @brief Clears the current error state.
-  inline void clearError();
+  bool selectChannel(uint8_t channel) const;
 
   /// @brief Schedules an irrigation task.
   /// @param irrigationElement The irrigation task details.
@@ -197,7 +190,7 @@ private:
 
   /// @brief Resets the timer used for monitoring safety timers on a specific channel.
   /// @param channel The channel to reset the timer for.
-  inline void resetSafetyIrrigationTimer(uint8_t channel);
+  void resetSafetyIrrigationTimer(uint8_t channel);
 
   static constexpr uint8_t channelCount = 4U;                               // Number of irrigation channels.
   static constexpr uint8_t channelSafetyMask = channelCount - 1U;           // Channel mask to prevent memory overlapping.
@@ -218,7 +211,7 @@ private:
   uint16_t analogValue;                                                     // Filtered analog value from sensor.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
   uint32_t errorCheckTimer;                                                 // Timer variable for error checking.
-  uint8_t error;                                                            // Current error state.
+  ErrorState<PumpControlError, PumpControlErrorType> pumpControlErrState;   // Error code handler object.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
   bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.

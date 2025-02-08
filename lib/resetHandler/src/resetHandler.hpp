@@ -1,25 +1,26 @@
 #ifndef RESET_HANDLER_HPP
 #define RESET_HANDLER_HPP
 
-#include <Arduino.h>                                                /// Arduino libraries header.
-#include <avr/wdt.h>                                                /// Watchdog timer library.
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 /// @brief Class for handling system resets.
 class ResetHandler final {
+private:
+  /// @brief Delete constructor.
+  ResetHandler() = delete;
+
+  /// @brief Delete destructor.
+  ~ResetHandler() = delete;
+
 public:
-  /// @brief Default constructor.
-  ResetHandler() = default;
-
-  /// @brief Default destructor.
-  ~ResetHandler() = default;
-
   /// @brief Resets the microcontroller unit (MCU) by triggering a watchdog reset.
-  static inline void restartMCU() {
-    Serial.println(F("Restarting..."));                 // Logs a restart message to the serial monitor.
-    Serial.flush();                                     // Sends out data from the serial buffer before reset.
-    wdt_enable(WDTO_15MS);                              // Configures the watchdog timer for a 15-ms timeout.
-    while(true) {};                                     // Triggers a reset by waiting indefinitely.
-  }
+  static void restartMCU();
+
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Retrieves the reason for the last system reset.
+  /// @return A `uint8_t` value representing the reset reason, where each value corresponds to a specific reset cause.
+  static uint8_t getResetReason();
+#endif
 
   ResetHandler(const ResetHandler&) = delete;                       // Define copy constructor.
   ResetHandler& operator=(const ResetHandler&) = delete;            // Define copy assignment operator.

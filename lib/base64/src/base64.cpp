@@ -1,20 +1,24 @@
 #include "base64.hpp"
 
 uint32_t Base64::encodedLength(uint32_t plainLength) {
-  int32_t n = plainLength;
-  return (n + 2 - ((n + 2) % 3)) / 3 * 4;
+  return (plainLength + 2 - ((plainLength + 2) % 3)) / 3 * 4;
 }
 
 uint32_t Base64::decodedLength(const uint8_t input[], uint32_t inputLength) {
-  int32_t i = 0;
-  int32_t numEq = 0;
-  for(i = inputLength - 1; input[i] == '='; i--) { numEq++; }
+  uint32_t numEq = 0;
+  for(int32_t i = inputLength - 1; input[i] == '=' && i >= 0; i--) {
+    numEq++;
+  }
   return ((6 * inputLength) / 8) - numEq;
 }
 
-uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0;
-  int32_t encodedLength_ = 0;
+uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength, uint32_t outputLength) {
+  if(outputLength < encodedLength(inputLength)) {
+    return 0; // Output buffer too small
+  }
+
+  uint32_t i = 0;
+  uint32_t encodedLength_ = 0;
   uint8_t A3[3];
   uint8_t A4[4];
 
@@ -23,62 +27,81 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
     if(i == 3) {
       fromA3ToA4(A4, A3);
       for(i = 0; i < 4; i++) {
-        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[i]]);
+        output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable[A4[i]]);
       }
       i = 0;
     }
   }
-  if(i) {
-    int32_t j = 0;
-    for(j = i; j < 3; j++) {
+  if(i > 0) {
+    for(uint32_t j = i; j < 3; j++) {
       A3[j] = '\0';
     }
     fromA3ToA4(A4, A3);
-    for(j = 0; j < i + 1; j++) {
-      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable_[A4[j]]);
+    for(uint32_t j = 0; j < i + 1; j++) {
+      output[encodedLength_++] = pgm_read_byte(&base64AlphabetTable[A4[j]]);
     }
-    while((i++ < 3)) {
+    while(i++ < 3) {
       output[encodedLength_++] = '=';
     }
+  }
+  if(encodedLength_ >= outputLength) {
+    return 0; // Prevent overflow
   }
   output[encodedLength_] = '\0';
   return encodedLength_;
 }
 
-uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength) {
-  int32_t i = 0;
-  uint32_t decodedLength_ = 0;
-  uint8_t A3[3];
-  uint8_t A4[4];
+uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength, uint32_t outputLength) {
+  uint32_t decodedLength_ = 0U;
+  uint32_t i = 0U;
+  uint8_t A3[3] = {0U};
+  uint8_t A4[4] = {0U};
+
+  if(outputLength < decodedLength(input, inputLength)) {
+    return 0U; // Output buffer too small
+  }
 
   while(inputLength--) {
-    if(*input == '=') { break; }
+    if(*input == '=') {
+      break;
+    }
     A4[i++] = *(input++);
-    if(i == 4) {
-      for(i = 0; i < 4; i++) {
+    if(i == 4U) {
+      for(i = 0U; i < 4U; i++) {
         A4[i] = lookupTable(A4[i]);
+        if(A4[i] == 255U) { // Invalid character
+          return 0U;
+        }
       }
       fromA4ToA3(A3, A4);
-      for(i = 0; i < 3; i++) {
+      for(i = 0U; i < 3U; i++) {
         output[decodedLength_++] = A3[i];
       }
-      i = 0;
+      i = 0U;
     }
   }
-  if(i) {
-    int32_t j = 0;
-    for(j = i; j < 4; j++) {
-      A4[j] = '\0';
+  if(i > 0U) {
+    for(uint32_t j = i; j < 4U; j++) {
+      A4[j] = 0U;
     }
-    for(j = 0; j < 4; j++) {
-      A4[j] = lookupTable(A4[j]);
+    for(uint32_t j = 0U; j < 4U; j++) {
+      if(A4[j] != 0U) {
+        A4[j] = lookupTable(A4[j]);
+      }
+      if(A4[j] == 255U) { // Invalid character
+        return 0U;
+      }
     }
     fromA4ToA3(A3, A4);
-    for(j = 0; j < i - 1; j++) {
+    for(uint32_t j = 0U; j < i - 1U; j++) {
       output[decodedLength_++] = A3[j];
     }
   }
-  output[decodedLength_] = '\0';
+  if(decodedLength_ >= outputLength) {
+    return 0U; // Prevent overflow
+  } else {
+    output[decodedLength_] = '\0';
+  }
   return decodedLength_;
 }
 
@@ -96,15 +119,20 @@ void Base64::fromA4ToA3(uint8_t* A3, const uint8_t* A4) {
 }
 
 uint8_t Base64::lookupTable(char c) {
-  if(c >='A' && c <='Z') { return c - 'A'; }
-  if(c >='a' && c <='z') { return c - 71; }
-  if(c >='0' && c <='9') { return c + 4; }
-  if(c == '+') { return 62; }
-  if(c == '/') { return 63; }
-  return -1;
+  if(c >= 'A' && c <= 'Z') {
+    return c - 'A';
+  }
+  if(c >= 'a' && c <= 'z') {
+    return c - 71;
+  }
+  if(c >= '0' && c <= '9') {
+    return c + 4;
+  }
+  if(c == '+') {
+    return 62;
+  }
+  if(c == '/') {
+    return 63;
+  }
+  return 255; // Invalid character
 }
-
-const char Base64::base64AlphabetTable_[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  "abcdefghijklmnopqrstuvwxyz"
-  "0123456789+/";

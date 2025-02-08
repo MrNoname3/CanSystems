@@ -1,22 +1,8 @@
 #include "mq135Handler.hpp"
-
-const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
-  "{"
-    "\"Time\":\"%s\","
-    "\"Gas\":"
-    "{"
-      "\"CO\":%.2f,"
-      "\"Alcohol\":%.2f,"
-      "\"CO2\":%.2f,"
-      "\"Toluene\":%.2f,"
-      "\"NH4\":%.2f,"
-      "\"Acetone\":%.2f"
-    "}"
-  "}"
-};
+#include "common.hpp"                                               /// Common definitions and functions.
 
  Mq135Handler::Mq135Handler(Connectivity& connectivity, const char* classID, AdcReader& adcReader, AdcReader::Channel channel, uint32_t measureTime) :
-  MqttComBase(connectivity, classID),
+  MqttBase(connectivity, classID),
   adcReader(adcReader),
   channel(channel),
   mq135("", sensorVoltage, adcResolution, adcPin, ""),
@@ -29,7 +15,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     mq135.setRL(rlValue);
   }
 
-  bool Mq135Handler::begin() {
+  bool Mq135Handler::init() {
     bool ret = true;
     readIndex = 0;
     mq135.setR0(r0Value);
@@ -38,8 +24,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     return ret;
   }
 
-  bool Mq135Handler::loop() {
-    bool ret = true;
+  bool Mq135Handler::run() {
     switch(gasReadState) {
       case GasReadState::IDLE: {
         if((millis()- measureTimer >= measureTime) && adcReader.readyToRead()) {
@@ -66,18 +51,16 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
       } break;
       case GasReadState::SEND: {
         char dataOut[dataOutBufSize] = { '\0' };
-        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MQTT_MSG_FRAME, MqttComBase::getIsoTime(),
+        const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
           gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(!dataOutValid) { return false; }
-        MqttComBase::messageSend(dataOut);
+        if(!MqttBase::sendMessage(dataOut)) { return false; }
         gasReadState = GasReadState::IDLE;
       } break;
     }
-    return ret;
+    return true;
   }
-
-  void Mq135Handler::messageReceived(uint8_t* payload, uint32_t length) {}
 
   bool Mq135Handler::startCalibration() {
     const uint16_t adcValue = getAnalogValue();
@@ -85,7 +68,7 @@ const char Mq135Handler::MQTT_MSG_FRAME[] PROGMEM = {
     const float calcR0 = mq135.calibrate(ratioMQ135CleanAir);
     mq135.setR0(calcR0);
     const bool calSuccess = (!isinf(calcR0)) && (calcR0 > 0);
-    Serial.println(calcR0);
+    Logger::get().println(calcR0);
     return calSuccess;
   }
 

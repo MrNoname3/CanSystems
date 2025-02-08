@@ -2,6 +2,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
 #include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
@@ -40,13 +41,14 @@ static_assert(digitalPinToInterrupt(DFP_BUSY) != (NOT_AN_INTERRUPT), "DFPlayer m
 
 //--- Driver objects ---//
 WdtHandler wdt(WdtHandler::WDT::T_1S);
-CanHandler canHandler(Serial, CAN_CS, CAN_INT, LED_PIN, FLASH_CS);
+DebugLedHandler debugLed(LED_PIN, HIGH);
+CanHandler canHandler(debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool {return (analogRead(BUTTON_PIN) > 500);});
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-Performance performance(canHandler, 3U, maxLoopTimeCallback);
+Performance performance(3U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[5] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
@@ -55,13 +57,14 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  wdt.feed();
+  wdt.resetWatchdog();
   Serial.begin(MONITOR_BAUD);
-  canHandler.ledOn();
+  debugLed.ledOn();
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
-  Serial.println(F("\r\n********\r\nStarting..."));
+  Logger::get().println(F("\r\n********\r\nStarting..."));
+  Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
 
@@ -69,21 +72,21 @@ void setup() {
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Serial.print(F("Init: "));
-  Serial.println(initSuccess ? Str::getOkStr() : Str::getErrStr());
+  Logger::get().print(F("Init: "));
+  Logger::get().println(Str::getStateStr(initSuccess));
   if(!initSuccess) {
-    Serial.print(F("Code: "));
-    Serial.println(initResult, BIN);
+    Logger::get().print(F("Code: "));
+    Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
-  Serial.println(F("********\r\nLooping..."));
-  canHandler.ledOff();
+  Logger::get().println(F("********\r\nLooping..."));
+  debugLed.ledOff();
 }
 
 void loop() {
-  wdt.feed();
-  taskHandler.runTasks();
+  wdt.resetWatchdog();
+  (void)taskHandler.runTasks();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
@@ -101,8 +104,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
-  Serial.print(F("Btn: "));
-  Serial.println(static_cast<uint8_t>(btnEvent));
+  Logger::get().print(F("Btn: "));
+  Logger::get().println(static_cast<uint8_t>(btnEvent));
   switch(btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       static bool rgbLedState = false;
@@ -114,6 +117,13 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Serial.print(F("Max loop time: "));
-  Serial.println(maxLoopTime);
+  Logger::get().print(F("Max loop time: "));
+  Logger::get().println(maxLoopTime);
+  canHandler.send(CanCmd::LOOP_TIME_MAX, {
+    static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
+    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),
+    0U, 0U, 0U, 0U
+  });
 }

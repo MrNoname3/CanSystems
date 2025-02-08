@@ -24,7 +24,8 @@ public:
   virtual bool init() override;
 
   /// @brief Provides an empty implementation of the method.
-  virtual void run() override {}
+  /// @return `true`.
+  virtual bool run() override { return true; }
 
   /// @brief Writes a byte to the PCF8574 register.
   /// @param reg The byte to write to the PCF8574.
@@ -38,7 +39,7 @@ public:
 
   /// @brief Retrieves the current value of the PCF8574 register.
   /// @return The last known value written to or read from the PCF8574 register.
-  const uint8_t getRegisterValue() const;
+  uint8_t getRegisterValue() const;
 
   /// @brief Configures a specific pin as an input.
   /// @param pin The pin number (0-7) to set as an input.

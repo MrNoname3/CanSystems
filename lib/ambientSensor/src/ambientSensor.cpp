@@ -23,7 +23,7 @@ bool AmbientSensor::init() {
   return si7021BeginResult;
 }
 
-void AmbientSensor::run() {
+bool AmbientSensor::run() {
   const uint32_t actualTime = millis();
   lightValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(lightPin)), lightValue);
   switch(event) {
@@ -57,4 +57,5 @@ void AmbientSensor::run() {
       event = Event::IDLE;
     } break;
   };
+  return true;
 }

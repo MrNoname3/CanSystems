@@ -39,7 +39,8 @@ public:
 
   /// @brief Processes button events and sends them via CAN or callback.
   /// @details Checks for button press events, sends them to the CAN handler, and invokes a user-defined callback if set.
-  virtual void run() override;
+  /// @return `true`.
+  virtual bool run() override;
 
   /// @brief Adds a callback function for button press events.
   /// @param btnCallback Function pointer to the callback to handle button events.

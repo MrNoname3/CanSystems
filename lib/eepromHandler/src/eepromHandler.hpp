@@ -24,7 +24,7 @@ public:
   /// @brief Saves the data pointed to by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
   bool save() {
-    if (data == nullptr) { return false; } // Null pointer check.
+    if(data == nullptr) { return false; }
     return save(data);
   }
 
@@ -32,16 +32,23 @@ public:
   /// @param data Pointer to the data to be stored.
   /// @return True if the operation was successful; false otherwise.
   static bool save(T* data) {
+#if defined(ESP8266) || defined(ESP32)
+    if(!init()) { return false; }
+#endif
+    if(data == nullptr) { return false; }
     EEPROMData eepromData;
     eepromData.data = *data;
     eepromData.crc = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
 
     // Write the data to EEPROM.
     EEPROM.put(eepromAddress, eepromData);
+#if defined(ESP8266) || defined(ESP32)
+    if(!EEPROM.commit()) { return false; }
+#endif
 
     // Verify the written data.
-    for (uint16_t i = 0; i < sizeof(EEPROMData); ++i) {
-      if (EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
+    for(uint16_t i = 0U; i < sizeof(EEPROMData); ++i) {
+      if(EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
         return false;  // Write operation failed.
       }
     }
@@ -51,7 +58,7 @@ public:
   /// @brief Loads data into the memory address stored by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
   bool load() {
-    if (data == nullptr) { return false; } ///< Null pointer check.
+    if(data == nullptr) { return false; }
     return load(data);
   }
 
@@ -59,16 +66,20 @@ public:
   /// @param data Pointer to the memory where the data will be loaded.
   /// @return True if the operation was successful; false otherwise.
   static bool load(T* data) {
+#if defined(ESP8266) || defined(ESP32)
+    if(!init()) { return false; }
+#endif
+    if(data == nullptr) { return false; }
     // Read the data from EEPROM.
     EEPROMData eepromData;
     EEPROM.get(eepromAddress, eepromData);
 
     // Validate CRC.
     uint16_t crcReceived = eepromData.crc;
-    eepromData.crc = 0;
+    eepromData.crc = 0U;
     uint16_t crcCalculated = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
 
-    if (crcReceived == crcCalculated) {
+    if(crcReceived == crcCalculated) {
       *data = eepromData.data;
       return true;  // CRC validation succeeded.
     } else {
@@ -86,14 +97,28 @@ public:
   EEPROMHandler& operator=(EEPROMHandler&&) = delete;         // Define move assignment operator.
 
 private:
+#if defined(ESP8266) || defined(ESP32)
+  /// @brief Initialize the EEPROM for storing data.
+  /// @return `true` if the EEPROM is successfully initialized or was already initialized; 
+  ///         `false` if the initialization fails.
+  static inline bool init() {
+    if(eepromInitialised) { return true; }
+    eepromInitialised = EEPROM.begin(sizeof(EEPROMData));
+    return eepromInitialised;
+  }
+#endif
+
   /// @brief Data structure representing the stored frame in EEPROM.
   struct __attribute__((packed))
   EEPROMData {
-    uint16_t crc;                               // CRC16 value of the data.
-    T data;                                     // User-defined data type.
-    EEPROMData() : crc(0), data() {}            // Default constructor initializes members to zero.
+    uint16_t crc;                                   // CRC16 value of the data.
+    T data;                                         // User-defined data type.
+    EEPROMData() : crc(0U), data() {}               // Default constructor initializes members to zero.
   };
+#if defined(ESP8266) || defined(ESP32)
+  static inline bool eepromInitialised = false;     //Tracks whether the EEPROM has been initialized.
+#endif
 
-  T* data;                                      // Pointer to the user-defined data type.
+  T* data;                                          // Pointer to the user-defined data type.
 };
 #endif // EEPROM_HANDLER_HPP

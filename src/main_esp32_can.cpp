@@ -1,52 +1,78 @@
 //--- Headers ---//
-#include <Arduino.h>                          /// Arduino libraries header.
-#include "connectivity.hpp"
-#include "radiation.hpp"
-#include "rfHandler.hpp"
-#include "canHandler.hpp"
-#include "canAlertDriver.hpp"
+#include <Arduino.h>                                                /// Arduino libraries header.
+#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
+#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
+#include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "common.hpp"                                               /// Common definitions and functions.
+#include "performance.hpp"                                          /// Performance measurement class.
+#include "networkManager.hpp"                                       /// Manages the network connection.
+#include "connectivity.hpp"                                         /// Handles the MQTT connection.
+#include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
+#include "canHandler.hpp"                                           /// CAN handler library.
+#include "canAlertDriver.hpp"                                       /// Driver for the alert client.
 
 //--- Constants ---//
-static constexpr const uint8_t LED                    = 2;            // Status LED.
-static constexpr const uint8_t SPI_CS                 = -1;           // Ethernet shield SPI CS.
+static constexpr uint8_t LED_PIN                    = 2U;           // Pin of the LED.
 
 //--- Functions ---//
-void canTask(void *pvParameters);
+void maxLoopTimeCallback(uint32_t maxLoopTime);
 
-//--- Variables ---//
-const char separator[] PROGMEM = "******************************************************";
-TaskHandle_t canTaskHandle = nullptr;
-
-//--- Networking ---//
-Connectivity iotConn(Serial, SPI_CS, LED, false);
+//--- Driver objects ---//
+DebugLedHandler debugLed(LED_PIN, HIGH);
+Performance performance(2U, maxLoopTimeCallback);
+NetworkManager networkManager(NetworkManager::Interface::LAN8720);
+Connectivity iotConn(
+  networkManager,
+  [](bool state) -> void {
+    state ? debugLed.stopTicker() : debugLed.startTicker(250U);
+  },
+  []() -> void {
+    WdtHandler::resetWatchdog();
+  }
+);
 
 //--- MQTT handler objects ---//
-CanHandler canHandler(Serial);
+MqttCommon mqttCommon (iotConn, "common");
+CanHandler canHandler;
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
-void setup() {
-  Serial.printf_P(PSTR("%s\r\nStarting...\r\n"), separator);
-  iotConn.begin(Connectivity::Interface::ETHERNET, true);
-  Serial.printf_P(PSTR("%s\r\nLoop starting...\r\n"), separator);
+//--- Handling tasks ---//
+Task *task[6] = {&iotConn, &performance, &mqttCommon, &canHandler, &canAlert1, &canAlert2};
+static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+TaskHandler<taskNum, false> taskHandler(task);
 
-  if(xTaskCreateUniversal(canTask, "canTask", 8192U, nullptr, 1, &canTaskHandle, 0) != pdTRUE) {
-    Serial.printf_P(PSTR("Error creating the CAN task!"));
+void setup() {
+  const uint32_t initTime = millis();
+  WdtHandler::enableWatchdog();
+  Serial.begin(MONITOR_BAUD);
+  debugLed.startTicker(500U);
+  delay(1U);
+  Logger::get().printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
+  Build::printBuildInfo();
+
+  const uint32_t initResult = taskHandler.initTasks();
+  const bool initSuccess = (initResult == 0U);
+  Logger::get().printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));
+  if(!initSuccess) {
+    Logger::get().printf_P(PSTR("  Code: "));
+    Logger::get().println(initResult, BIN);
+    ResetHandler::restartMCU();
   }
+
+  Logger::get().printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
+  Logger::get().printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+  debugLed.stopTicker();
+  performance.resetTimer();
 }
 
 void loop() {
-  iotConn.loop();
-  vTaskDelay(5);
+  WdtHandler::resetWatchdog();
+  (void)taskHandler.runTasks();
+  taskYIELD();
 }
 
-void canTask(void *pvParameters) {
-  Serial.printf_P(PSTR("%s\r\nStarting CAN task...\r\n"), separator);
-  canHandler.begin(500E3);
-  Serial.printf_P(PSTR("%s\r\nCAN loop starting...\r\n"), separator);
-  while(true) {
-    canHandler.loop();
-    vTaskDelay(5);
-  }
-  vTaskDelete(nullptr);
+void maxLoopTimeCallback(uint32_t maxLoopTime) {
+  Logger::get().printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
 }
