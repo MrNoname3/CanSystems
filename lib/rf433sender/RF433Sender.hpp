@@ -42,19 +42,19 @@ public:
   void send(const uint8_t* __restrict__ code, uint8_t bitLength, uint8_t repeatCount = 5) {
     // Repeat transmission
     for (uint8_t repeat = 0; repeat < repeatCount; ++repeat) {
-      // Send header (sync pulse) - inlined for performance
+      // Send header
       digitalWrite(transmitterPin, HIGH);
       delayMicroseconds(headerHighTime);
       digitalWrite(transmitterPin, LOW);
       delayMicroseconds(headerLowTime);
 
-      // Send data bits from MSB to LSB
-      for (int8_t i = bitLength - 1; i >= 0; --i) {
-        const uint8_t byteIndex = (bitLength - 1 - i) >> 3;  // Which byte (corrected)
-        const uint8_t bitIndex = i & 7;    // Which bit within byte (MSB first)
-        const uint8_t bitMask = 1 << bitIndex;
+      // Send bits from MSB to LSB (matching RC-Switch expectation)
+      for (int16_t bitPos = bitLength - 1; bitPos >= 0; bitPos--) {
+        const uint8_t byteIndex = bitPos >> 3;          // Which byte
+        const uint8_t bitIndex = bitPos & 7;            // Which bit within byte
+        const bool bitValue = (code[byteIndex] >> bitIndex) & 1;
 
-        if (code[byteIndex] & bitMask) {
+        if (bitValue) {
           // Send '1' bit - inlined
           digitalWrite(transmitterPin, HIGH);
           delayMicroseconds(oneHighTime);
@@ -69,8 +69,6 @@ public:
         }
       }
     }
-
-    // Ensure line is low after transmission
     digitalWrite(transmitterPin, LOW);
   }
 
