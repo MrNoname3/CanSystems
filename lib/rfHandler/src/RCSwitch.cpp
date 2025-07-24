@@ -33,6 +33,27 @@
 
 #include "RCSwitch.h"
 
+#ifdef RaspberryPi
+    // PROGMEM and _P functions are for AVR based microprocessors,
+    // so we must normalize these for the ARM processor:
+    #define PROGMEM
+    #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
+#endif
+
+#if defined(ESP8266)
+    // interrupt handler and related code must be in RAM on ESP8266,
+    // according to issue #46.
+    #define RECEIVE_ATTR IRAM_ATTR
+    #define VAR_ISR_ATTR
+#elif defined(ESP32)
+    #define RECEIVE_ATTR IRAM_ATTR
+    #define VAR_ISR_ATTR DRAM_ATTR
+#else
+    #define RECEIVE_ATTR
+    #define VAR_ISR_ATTR
+#endif
+
+
 /* Protocol description format
  *
  * {
@@ -88,9 +109,9 @@
  */
 
 #if defined(ESP8266) || defined(ESP32)
-  static const VAR_ISR_ATTR RCSwitch::Protocol proto[] = {
+static const VAR_ISR_ATTR RCSwitch::Protocol proto[] = {
 #else
-  static const RCSwitch::Protocol PROGMEM proto[] = {
+static const RCSwitch::Protocol PROGMEM proto[] = {
 #endif
   { 350,  0, { 0, 0 }, 1, {  1, 31 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 01 (Princeton, PT-2240)
   { 650,  0, { 0, 0 }, 1, {  1, 10 }, { 1,  2 }, { 2, 1 }, false,  0 },  // 02
@@ -133,34 +154,35 @@
   { 250,  0, { 0, 0 }, 1, {  18,  6 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 36 Dooya remote DC2700AC for Dooya DT82TV curtains motor
   { 200,  0, { 0, 0 }, 0, {   0,  0 }, { 1,  3 }, { 3, 1 }, false, 20 },  // 37 DEWENWILS Power Strip
   { 500,  0, { 0, 0 }, 1, {   7,  1 }, { 2,  1 }, { 4, 1 }, true,   0 },  // 38 temperature and humidity sensor, various brands, nexus protocol, 36 bits + start impulse
+  { 560,  0, { 0, 0 }, 1, {   15, 1 }, { 3,  1 }, { 7, 1 }, true,   0 }   // 39 Hyundai WS Senzor 77/77TH, 36 bits (requires disabled protocol 38: 'RfProtocol38 0')
 };
 
 enum {
-  numProto = sizeof(proto) / sizeof(proto[0])
+   numProto = sizeof(proto) / sizeof(proto[0])
 };
 
 #if not defined( RCSwitchDisableReceiving )
-  volatile unsigned long long RCSwitch::nReceivedValue = 0;
-  volatile unsigned long long RCSwitch::nReceiveProtocolMask;
-  volatile unsigned int RCSwitch::nReceivedBitlength = 0;
-  volatile unsigned int RCSwitch::nReceivedDelay = 0;
-  volatile unsigned int RCSwitch::nReceivedProtocol = 0;
-  int RCSwitch::nReceiveTolerance = 60;
-  const unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
-  unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
-  unsigned int RCSwitch::buftimings[4];
+volatile unsigned long long RCSwitch::nReceivedValue = 0;
+volatile unsigned long long RCSwitch::nReceiveProtocolMask;
+volatile unsigned int RCSwitch::nReceivedBitlength = 0;
+volatile unsigned int RCSwitch::nReceivedDelay = 0;
+volatile unsigned int RCSwitch::nReceivedProtocol = 0;
+int RCSwitch::nReceiveTolerance = 60;
+const unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
+unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
+unsigned int RCSwitch::buftimings[4];
 #endif
 
 RCSwitch::RCSwitch() {
   this->nTransmitterPin = -1;
   this->setRepeatTransmit(5);
   this->setProtocol(1);
-#if not defined( RCSwitchDisableReceiving )
+  #if not defined( RCSwitchDisableReceiving )
   this->nReceiverInterrupt = -1;
   this->setReceiveTolerance(60);
   RCSwitch::nReceivedValue = 0;
   RCSwitch::nReceiveProtocolMask = (1ULL << numProto)-1ULL;  //pow(2,numProto)-1;
-#endif
+  #endif
 }
 
 uint8_t RCSwitch::getNumProtos() {
@@ -308,8 +330,8 @@ void RCSwitch::switchOff(int nAddressCode, int nChannelCode) {
  * Deprecated, use switchOn(const char* sGroup, const char* sDevice) instead!
  * Switch a remote switch on (Type A with 10 pole DIP switches)
  *
- * @param sGroup  Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- * @param nChannel  of the switch itself (1..5)
+ * @param sGroup        Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
+ * @param nChannelCode  Number of the switch itself (1..5)
  */
 void RCSwitch::switchOn(const char* sGroup, int nChannel) {
   const char* code[6] = { "00000", "10000", "01000", "00100", "00010", "00001" };
@@ -320,8 +342,8 @@ void RCSwitch::switchOn(const char* sGroup, int nChannel) {
  * Deprecated, use switchOff(const char* sGroup, const char* sDevice) instead!
  * Switch a remote switch off (Type A with 10 pole DIP switches)
  *
- * @param sGroup  Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- * @param nChannel  Number of the switch itself (1..5)
+ * @param sGroup        Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
+ * @param nChannelCode  Number of the switch itself (1..5)
  */
 void RCSwitch::switchOff(const char* sGroup, int nChannel) {
   const char* code[6] = { "00000", "10000", "01000", "00100", "00010", "00001" };
@@ -596,17 +618,6 @@ void RCSwitch::send(unsigned long long code, unsigned int length) {
       else
         this->transmit(protocol.zero);
     }
-    // for kilok, there should be a duration of 66, and 64 significant data codes are stored
-    // send two more bits for even count
-    if (length == 64) {
-      if (nRepeat == 0) {
-        this->transmit(protocol.zero);
-        this->transmit(protocol.zero);
-      } else {
-        this->transmit(protocol.one);
-        this->transmit(protocol.one);
-      }
-     }
     // Set the guard Time
     if (protocol.Guard > 0) {
       digitalWrite(this->nTransmitterPin, LOW);
@@ -703,11 +714,14 @@ unsigned int* RCSwitch::getReceivedRawdata() {
 }
 
 /* helper function for the receiveProtocol method */
-unsigned int RCSwitch::diff(int A, int B) {
+static inline unsigned int diff(int A, int B) {
   return abs(A - B);
 }
 
-bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
+/**
+ *
+ */
+bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
 #if defined(ESP8266) || defined(ESP32)
     const Protocol &pro = proto[p-1];
 #else
@@ -802,7 +816,7 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
     return false;
 }
 
-void RCSwitch::handleInterrupt() {
+void RECEIVE_ATTR RCSwitch::handleInterrupt() {
 
   static unsigned int changeCount = 0;
   static unsigned long lastTime = 0;
