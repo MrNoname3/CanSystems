@@ -11,3 +11,4 @@ scripts/__pycache__
 data/config/*
 data/*.bin
 lib/connectivity/src/server.hpp
+scripts/config.yaml
