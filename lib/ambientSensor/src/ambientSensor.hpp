@@ -3,7 +3,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "canHandler.hpp"                                           /// CAN handler library.
-#include <SI7021.hpp>                                               /// Temperature and humidity sensor driver.
+#include "si7021.hpp"                                               /// Temperature and humidity sensor driver.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Manages ambient measurements including temperature, humidity, and light intensity.
