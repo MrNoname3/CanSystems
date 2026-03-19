@@ -17,6 +17,7 @@ import signal
 import enum
 import logging
 import uuid
+import hashlib
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, Union
 from dataclasses import dataclass
@@ -175,6 +176,7 @@ class FirmwareManager:
         self.firmware_path = firmware_path
         self._firmware_data: Optional[bytes] = None
         self._crc32: Optional[int] = None
+        self._md5: Optional[str] = None
         self._firmware_id: Optional[str] = None
 
     @property
@@ -195,6 +197,15 @@ class FirmwareManager:
         if self._crc32 is None:
             self._crc32 = zlib.crc32(self.firmware_data) & 0xFFFFFFFF
         return self._crc32
+
+    @property
+    def md5(self) -> str:
+        """Calculate and cache MD5 hash"""
+        if self._md5 is None:
+            md5_hash = hashlib.md5()
+            md5_hash.update(self.firmware_data)
+            self._md5 = md5_hash.hexdigest()
+        return self._md5
 
     @property
     def firmware_id(self) -> str:
@@ -353,11 +364,14 @@ class OTAUpdater:
         start_message = {
             "fileSize": self.firmware_manager.size,
             "crc32": self.firmware_manager.crc32,
+            "md5": self.firmware_manager.md5,
             "binId": self.firmware_manager.firmware_id
         }
 
         self.mqtt_client.publish(self.device_config.send_topic, json.dumps(start_message))
-        logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes, CRC32: {self.firmware_manager.crc32}")
+        logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes")
+        logging.info(f"  CRC32: {self.firmware_manager.crc32}")
+        logging.info(f"  MD5:   {self.firmware_manager.md5}")
 
         self.state = OTAState.WAIT_START_ACK
         self.remaining_bytes = self.firmware_manager.size
