@@ -22,22 +22,8 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, Union
 from dataclasses import dataclass
 from tqdm import tqdm
-import subprocess
-
-# Try to import required libraries, install if not available
-try:
-    import paho.mqtt.client as mqtt
-except ModuleNotFoundError:
-    print("Paho MQTT library not found. Installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "paho-mqtt"])
-    import paho.mqtt.client as mqtt
-
-try:
-    import yaml
-except ModuleNotFoundError:
-    print("PyYAML library not found. Installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml"])
-    import yaml
+import yaml
+import paho.mqtt.client as mqtt
 
 
 class OTAState(enum.Enum):
@@ -252,10 +238,14 @@ class MQTTClient:
     def _setup_client(self):
         """Set up MQTT client based on configuration"""
         if self.config.protocol == "mqtt":
-            self.client = mqtt.Client(client_id=self.config.client_id)
+            self.client = mqtt.Client(
+                client_id=self.config.client_id,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+            )
         elif self.config.protocol == "ws":
             self.client = mqtt.Client(
                 client_id=self.config.client_id,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
                 transport="websockets"
             )
             # Set WebSocket path
@@ -340,14 +330,13 @@ class OTAUpdater:
         # Set up logging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-    def _on_connect(self, client, userdata, flags, rc):
-        """Handle MQTT connection event"""
-        if rc == 0:
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
             logging.info("Successfully connected to MQTT broker")
             client.subscribe(self.device_config.receive_topic)
             self._send_start_message()
         else:
-            logging.error(f"Failed to connect to MQTT broker. Result code: {rc}")
+            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
             self.state = OTAState.ERROR
 
     def _on_message(self, client, userdata, msg):
@@ -488,7 +477,7 @@ def main():
     """Main entry point"""
     # Device configuration - modify these values for your device
     device_config = DeviceConfig(
-        mac_address="bcddc2b622c9",
+        mac_address="40f52033765d",
         project_name="project_esp8266_smoke"
     )
 
