@@ -435,7 +435,11 @@ class FirmwareManager:
 # ---------------------------------------------------------------------------
 
 class FileDataProvider:
-    """Reads an arbitrary binary file and provides size and checksum properties"""
+    """Reads an arbitrary binary file and provides size and checksum properties.
+    For .json files, automatically serializes the content (removes whitespace)
+    before transfer, unless the file is already serialized. This ensures the
+    device always receives compact JSON regardless of how it is stored locally.
+    The size, CRC32 and MD5 are all computed from the serialized bytes."""
 
     def __init__(self, file_path: Path):
         self.file_path = file_path
@@ -445,30 +449,58 @@ class FileDataProvider:
 
     @property
     def data(self) -> bytes:
-        """Lazy loading of file data"""
+        """Lazy loading of file data. JSON files are serialized automatically."""
         if self._data is None:
             try:
                 with open(self.file_path, 'rb') as f:
-                    self._data = f.read()
+                    raw = f.read()
             except IOError as e:
                 raise IOError(f"Failed to read file: {e}")
+
+            if self.file_path.suffix.lower() == '.json':
+                self._data = self._serialize_json(raw)
+            else:
+                self._data = raw
         return self._data
+
+    def _serialize_json(self, raw: bytes) -> bytes:
+        """Parse and re-serialize JSON to remove whitespace.
+        If the content is already serialized (compact), it is returned as-is.
+        Raises ValueError if the content is not valid JSON."""
+        try:
+            text = raw.decode('utf-8')
+            parsed = json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise ValueError(f"Invalid JSON file '{self.file_path.name}': {e}")
+
+        # Serialize without any whitespace
+        serialized = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False)
+        serialized_bytes = serialized.encode('utf-8')
+
+        # Check if the file was already serialized by comparing the result
+        # to the stripped original. If they match, no transformation was needed.
+        if serialized_bytes == raw.strip():
+            logging.info(f"JSON file '{self.file_path.name}' is already serialized, no transformation needed")
+        else:
+            logging.info(f"JSON file '{self.file_path.name}' serialized: {len(raw)} -> {len(serialized_bytes)} bytes")
+
+        return serialized_bytes
 
     @property
     def size(self) -> int:
-        """Get file size"""
+        """Get file size (of serialized content for JSON files)"""
         return len(self.data)
 
     @property
     def crc32(self) -> int:
-        """Calculate and cache CRC32 checksum"""
+        """Calculate and cache CRC32 checksum (of serialized content for JSON files)"""
         if self._crc32 is None:
             self._crc32 = zlib.crc32(self.data) & 0xFFFFFFFF
         return self._crc32
 
     @property
     def md5(self) -> str:
-        """Calculate and cache MD5 hash"""
+        """Calculate and cache MD5 hash (of serialized content for JSON files)"""
         if self._md5 is None:
             md5_hash = hashlib.md5()
             md5_hash.update(self.data)
