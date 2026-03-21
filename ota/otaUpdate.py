@@ -581,6 +581,10 @@ class OTAUpdater:
         self.timeout_seconds = 25
         self.progress_bar: Optional[tqdm] = None
 
+        # Queue for incoming MQTT messages to avoid race conditions between
+        # the MQTT callback thread and the main loop
+        self._pending_messages: List[Dict[str, Any]] = []
+
         # Set up MQTT callbacks
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
 
@@ -597,10 +601,12 @@ class OTAUpdater:
             self.state = OTAState.ERROR
 
     def _on_message(self, client, userdata, msg):
-        """Handle incoming MQTT messages"""
+        """Queue incoming MQTT messages for processing in the main loop.
+        This avoids race conditions where an ACK arrives before the state
+        machine has transitioned to the expected state."""
         try:
             message = json.loads(msg.payload.decode())
-            self._process_ota_response(message)
+            self._pending_messages.append(message)
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
             self.state = OTAState.ERROR
@@ -642,7 +648,13 @@ class OTAUpdater:
             self.state = OTAState.SENDING_FW
 
         elif self.state == OTAState.WAIT_PIECE_ACK and ack:
-            self.state = OTAState.SENDING_FW
+            if self.remaining_bytes > 0:
+                self.state = OTAState.SENDING_FW
+            else:
+                self._close_progress_bar()
+                logging.info("All firmware pieces sent, waiting for final verification")
+                self.state = OTAState.WAIT_CHECK_ACK
+                self.timer_start = time.time()
 
         elif self.state == OTAState.WAIT_CHECK_ACK and ack:
             self.state = OTAState.DONE
@@ -679,7 +691,13 @@ class OTAUpdater:
             self.progress_bar = None
 
     def _process_state(self):
-        """Process current OTA state"""
+        """Process current OTA state.
+        Pending messages are handled first to ensure the state machine has
+        fully transitioned before acting on incoming ACKs."""
+        for message in self._pending_messages:
+            self._process_ota_response(message)
+        self._pending_messages.clear()
+
         current_time = time.time()
 
         if self.state == OTAState.SENDING_FW:
@@ -754,8 +772,15 @@ class FileTransfer:
         self.timeout_seconds = 25
         self.progress_bar: Optional[tqdm] = None
 
+        # Queue for incoming MQTT messages to avoid race conditions between
+        # the MQTT callback thread and the main loop
+        self._pending_messages: List[Dict[str, Any]] = []
+
         # Set up MQTT callbacks
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+        # Set up logging
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
@@ -767,10 +792,12 @@ class FileTransfer:
             self.state = OTAState.ERROR
 
     def _on_message(self, client, userdata, msg):
-        """Handle incoming MQTT messages"""
+        """Queue incoming MQTT messages for processing in the main loop.
+        This avoids race conditions where an ACK arrives before the state
+        machine has transitioned to the expected state."""
         try:
             message = json.loads(msg.payload.decode())
-            self._process_response(message)
+            self._pending_messages.append(message)
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
             self.state = OTAState.ERROR
@@ -815,7 +842,13 @@ class FileTransfer:
             self.state = OTAState.SENDING_FW
 
         elif self.state == OTAState.WAIT_PIECE_ACK and ack:
-            self.state = OTAState.SENDING_FW
+            if self.remaining_bytes > 0:
+                self.state = OTAState.SENDING_FW
+            else:
+                self._close_progress_bar()
+                logging.info("All file pieces sent, waiting for final verification")
+                self.state = OTAState.WAIT_CHECK_ACK
+                self.timer_start = time.time()
 
         elif self.state == OTAState.WAIT_CHECK_ACK and ack:
             self.state = OTAState.DONE
@@ -852,7 +885,13 @@ class FileTransfer:
             self.progress_bar = None
 
     def _process_state(self):
-        """Process current transfer state"""
+        """Process current transfer state.
+        Pending messages are handled first to ensure the state machine has
+        fully transitioned before acting on incoming ACKs."""
+        for message in self._pending_messages:
+            self._process_response(message)
+        self._pending_messages.clear()
+
         current_time = time.time()
 
         if self.state == OTAState.SENDING_FW:
