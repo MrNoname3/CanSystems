@@ -20,9 +20,6 @@ projects:
           - name: "Server configuration"
             local_path: files/40f52033765d/server.json
             device_path: /config/server.json
-          - name: "WiFi cerdentials"
-            local_path: files/40f52033765d/wifi.json
-            device_path: /config/wifi.json
 
   - name: "Radiation detector"
     pio_project: project_esp8266_rad

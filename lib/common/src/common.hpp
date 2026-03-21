@@ -250,7 +250,7 @@ public:
 
   /// @brief Retrieves the Wi-Fi configuration file location.
   /// @return Constant string representing the path to the Wi-Fi configuration file.
-  static constexpr const char* getWifiConfigLocation() { return wifiConfigLocation; }
+  static constexpr const char* getWifiConfigLocation() { return getMqttServerCredentialsLocation(); }
 
   /// @brief Retrieves the MQTT server certificate file location.
   /// @return Constant string representing the path to the MQTT server certificate file.
@@ -271,7 +271,7 @@ private:
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
   static constexpr const char PROGMEM otaFwLocation[]          = "/espFirmware.bin";      // File location for the OTA firmware.
   static constexpr const char PROGMEM extOtaFwLocation[]       = "/%sFirmware.bin";       // File location for external device OTA firmware.
-  static constexpr const char PROGMEM wifiConfigLocation[]     = "/config/wifi.json";     // File location for the Wi-Fi configuration.
+//  static constexpr const char PROGMEM wifiConfigLocation[]     = "/config/wifi.json";     // File location for the Wi-Fi configuration.
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.
   static constexpr const char PROGMEM mqttServerCredLocation[] = "/config/server.json";   // File location for the MQTT server credentials.
 #endif
