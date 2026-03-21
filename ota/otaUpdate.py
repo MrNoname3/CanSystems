@@ -18,13 +18,18 @@ import enum
 import logging
 import uuid
 import hashlib
+import curses
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, Union
-from dataclasses import dataclass
+from typing import Optional, Tuple, Dict, Any, List
+from dataclasses import dataclass, field
 from tqdm import tqdm
 import yaml
 import paho.mqtt.client as mqtt
 
+
+# ---------------------------------------------------------------------------
+# Enums & Data classes
+# ---------------------------------------------------------------------------
 
 class OTAState(enum.Enum):
     """States for the OTA update process"""
@@ -85,8 +90,29 @@ class MQTTConfig:
 
 
 @dataclass
+class DeviceEntry:
+    """A single device entry from devices.yaml"""
+    mac: str
+    friendly_name: Optional[str] = None
+
+    @property
+    def display_name(self) -> str:
+        if self.friendly_name:
+            return f"{self.friendly_name}  ({self.mac})"
+        return self.mac
+
+
+@dataclass
+class ProjectEntry:
+    """A project entry from devices.yaml"""
+    name: str
+    pio_project: str
+    devices: List[DeviceEntry] = field(default_factory=list)
+
+
+@dataclass
 class DeviceConfig:
-    """Configuration data for the target device"""
+    """Configuration data for the target device (used by OTAUpdater)"""
     mac_address: str
     project_name: str
 
@@ -98,6 +124,153 @@ class DeviceConfig:
     def receive_topic(self) -> str:
         return f'iot/dtos/{self.mac_address}/common'
 
+
+# ---------------------------------------------------------------------------
+# Device list manager
+# ---------------------------------------------------------------------------
+
+class DeviceManager:
+    """Loads and provides access to the devices.yaml device list"""
+
+    def __init__(self, script_path: str):
+        self.script_dir = Path(script_path).parent
+        self.devices_file = self.script_dir / 'devices.yaml'
+
+    def load(self) -> List[ProjectEntry]:
+        if not self.devices_file.exists():
+            raise FileNotFoundError(
+                f"Device list file not found: {self.devices_file}\n"
+                f"Please create a devices.yaml file in the same directory as the script."
+            )
+
+        try:
+            with open(self.devices_file, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Failed to parse devices.yaml: {e}")
+
+        if not data or 'projects' not in data:
+            raise ValueError("devices.yaml must contain a 'projects' key")
+
+        projects: List[ProjectEntry] = []
+        for p in data['projects']:
+            if 'name' not in p or 'pio_project' not in p:
+                raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
+
+            devices: List[DeviceEntry] = []
+            for d in p.get('devices', []):
+                if 'mac' not in d:
+                    raise ValueError(f"Each device entry must have a 'mac' field (project: {p['name']})")
+                devices.append(DeviceEntry(
+                    mac=d['mac'],
+                    friendly_name=d.get('friendly_name')
+                ))
+
+            projects.append(ProjectEntry(
+                name=p['name'],
+                pio_project=p['pio_project'],
+                devices=devices
+            ))
+
+        if not projects:
+            raise ValueError("devices.yaml contains no projects")
+
+        return projects
+
+
+# ---------------------------------------------------------------------------
+# Interactive curses menu
+# ---------------------------------------------------------------------------
+
+class MenuSelector:
+    """Arrow-key driven interactive menu using curses"""
+
+    # Return sentinels
+    BACK = "__BACK__"
+    CANCEL = "__CANCEL__"
+
+    def select(self, title: str, options: List[str], show_back: bool = False) -> str | None:
+        """
+        Display an interactive menu and return the selected option string,
+        MenuSelector.BACK, or MenuSelector.CANCEL.
+        """
+        result = curses.wrapper(self._run, title, options, show_back)
+        return result
+
+    def _run(self, stdscr, title: str, options: List[str], show_back: bool):
+        curses.curs_set(0)
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)   # selected item
+        curses.init_pair(2, curses.COLOR_CYAN,  -1)                  # title
+        curses.init_pair(3, curses.COLOR_YELLOW, -1)                 # hint line
+
+        # Build full item list: real options + navigation entries
+        nav_items = []
+        if show_back:
+            nav_items.append("← Back")
+        nav_items.append("✕ Cancel")
+
+        all_items = options + nav_items
+        current = 0
+
+        while True:
+            stdscr.clear()
+            height, width = stdscr.getmaxyx()
+
+            # Title
+            stdscr.attron(curses.color_pair(2) | curses.A_BOLD)
+            stdscr.addstr(1, 2, title[:width - 4])
+            stdscr.attroff(curses.color_pair(2) | curses.A_BOLD)
+
+            # Separator
+            stdscr.addstr(2, 2, "─" * min(len(title) + 2, width - 4))
+
+            # Items
+            for idx, item in enumerate(all_items):
+                row = 4 + idx
+                if row >= height - 2:
+                    break
+                is_nav = idx >= len(options)
+                prefix = "  "
+                if idx == current:
+                    stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+                    stdscr.addstr(row, 2, f" {prefix}{item} ".ljust(width - 4)[:width - 4])
+                    stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+                else:
+                    if is_nav:
+                        stdscr.attron(curses.A_DIM)
+                    stdscr.addstr(row, 2, f" {prefix}{item}"[:width - 4])
+                    if is_nav:
+                        stdscr.attroff(curses.A_DIM)
+
+            # Hint
+            hint = "↑↓ Navigate   Enter Select   Esc Cancel"
+            stdscr.attron(curses.color_pair(3))
+            stdscr.addstr(height - 1, 2, hint[:width - 4])
+            stdscr.attroff(curses.color_pair(3))
+
+            stdscr.refresh()
+            key = stdscr.getch()
+
+            if key == curses.KEY_UP:
+                current = (current - 1) % len(all_items)
+            elif key == curses.KEY_DOWN:
+                current = (current + 1) % len(all_items)
+            elif key in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+                selected = all_items[current]
+                if selected == "✕ Cancel":
+                    return self.CANCEL
+                if selected == "← Back":
+                    return self.BACK
+                return selected
+            elif key == 27:  # Escape
+                return self.CANCEL
+
+
+# ---------------------------------------------------------------------------
+# Config manager
+# ---------------------------------------------------------------------------
 
 class ConfigManager:
     """Manages YAML configuration loading and validation"""
@@ -121,7 +294,7 @@ class ConfigManager:
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML configuration file: {e}")
         except UnicodeDecodeError as e:
-            raise ValueError(f"Configuration file encoding error. Please ensure the file is UTF-8 encoded: {e}")
+            raise ValueError(f"Configuration file encoding error: {e}")
         except Exception as e:
             raise IOError(f"Failed to read configuration file: {e}")
 
@@ -145,15 +318,19 @@ class ConfigManager:
         except (ValueError, FileNotFoundError) as e:
             raise ValueError(f"Configuration validation error: {e}")
 
-    def get_firmware_path(self, project_name: str) -> Path:
+    def get_firmware_path(self, pio_project: str) -> Path:
         """Get the firmware binary path"""
-        firmware_path = self.parent_dir / '.pio' / 'build' / project_name / 'firmware.bin'
+        firmware_path = self.parent_dir / '.pio' / 'build' / pio_project / 'firmware.bin'
 
         if not firmware_path.exists():
             raise FileNotFoundError(f"Firmware file not found: {firmware_path}")
 
         return firmware_path
 
+
+# ---------------------------------------------------------------------------
+# Firmware manager
+# ---------------------------------------------------------------------------
 
 class FirmwareManager:
     """Handles firmware file operations and validation"""
@@ -226,6 +403,10 @@ class FirmwareManager:
         logging.error("Firmware ID not found in binary")
         return False, ""
 
+
+# ---------------------------------------------------------------------------
+# MQTT client
+# ---------------------------------------------------------------------------
 
 class MQTTClient:
     """MQTT client wrapper with connection management"""
@@ -306,6 +487,10 @@ class MQTTClient:
         self.client.disconnect()
         self.client.loop_stop()
 
+
+# ---------------------------------------------------------------------------
+# OTA updater
+# ---------------------------------------------------------------------------
 
 class OTAUpdater:
     """Main OTA update orchestrator"""
@@ -473,33 +658,83 @@ class OTAUpdater:
             self._cleanup()
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def select_device(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, DeviceEntry]]:
+    """
+    Interactive two-level menu: first pick a project, then pick a device.
+    Returns (project, device) or None if the user cancelled.
+    """
+    menu = MenuSelector()
+
+    while True:
+        # --- Level 1: project selection ---
+        project_names = [p.name for p in projects]
+        choice = menu.select("Select project", project_names, show_back=False)
+
+        if choice in (MenuSelector.CANCEL, None):
+            return None
+
+        selected_project = next(p for p in projects if p.name == choice)
+
+        # --- Level 2: device selection ---
+        while True:
+            device_labels = [d.display_name for d in selected_project.devices]
+            choice = menu.select(
+                f"Select device  [{selected_project.name}]",
+                device_labels,
+                show_back=True
+            )
+
+            if choice == MenuSelector.CANCEL:
+                return None
+            if choice == MenuSelector.BACK:
+                break  # go back to project selection
+
+            selected_device = next(d for d in selected_project.devices if d.display_name == choice)
+            return selected_project, selected_device
+
+
 def main():
     """Main entry point"""
-    # Device configuration - modify these values for your device
-    device_config = DeviceConfig(
-        mac_address="40f52033765d",
-        project_name="project_esp8266_smoke"
-    )
-
     try:
-        # Load configuration from config.yaml
         config_manager = ConfigManager(__file__)
+        device_manager = DeviceManager(__file__)
 
-        print("Loading MQTT configuration from config.yaml...")
+        print("Loading configuration...")
         mqtt_config = config_manager.load_mqtt_config()
+        projects = device_manager.load()
 
-        print(f"✅ Configuration loaded successfully:")
-        print(f"  Protocol: {mqtt_config.protocol}")
-        print(f"  Host: {mqtt_config.host}")
-        print(f"  Port: {mqtt_config.port}")
-        print(f"  Client ID: {mqtt_config.client_id}")
+        # Interactive device selection
+        result = select_device(projects)
+        if result is None:
+            print("Cancelled.")
+            sys.exit(0)
+
+        selected_project, selected_device = result
+
+        print(f"\n✅ Configuration loaded successfully:")
+        print(f"  Protocol:    {mqtt_config.protocol}")
+        print(f"  Host:        {mqtt_config.host}")
+        print(f"  Port:        {mqtt_config.port}")
+        print(f"  Client ID:   {mqtt_config.client_id}")
         print(f"  TLS Enabled: {mqtt_config.tls_enabled}")
-        print(f"  Authentication: {'Yes' if mqtt_config.username else 'No'}")
+        print(f"  Auth:        {'Yes' if mqtt_config.username else 'No'}")
+        print(f"\n🎯 Target:")
+        print(f"  Project:     {selected_project.name}  ({selected_project.pio_project})")
+        print(f"  Device:      {selected_device.display_name}")
 
         # Get firmware path
-        firmware_path = config_manager.get_firmware_path(device_config.project_name)
-        print(f"  Firmware path: {firmware_path}")
+        firmware_path = config_manager.get_firmware_path(selected_project.pio_project)
+        print(f"  Firmware:    {firmware_path}")
         print()
+
+        device_config = DeviceConfig(
+            mac_address=selected_device.mac,
+            project_name=selected_project.pio_project
+        )
 
         # Create and run OTA updater
         ota_updater = OTAUpdater(device_config, mqtt_config, firmware_path)
@@ -523,27 +758,12 @@ def main():
 
     except FileNotFoundError as e:
         print(f"❌ File Error: {e}")
-        print("\nTo fix this issue:")
-        print("1. Create a 'config.yaml' file in the same directory as this script")
-        print("2. Use the example configuration provided in the documentation")
-        print("3. Make sure the firmware binary exists in the PlatformIO build directory")
         sys.exit(1)
     except ValueError as e:
         print(f"❌ Configuration Error: {e}")
-        print("\nPlease check your config.yaml file for:")
-        print("- Correct YAML syntax")
-        print("- Valid protocol ('mqtt' or 'ws')")
-        print("- Valid host address")
-        print("- Valid port number (1-65535)")
-        print("- Correct file paths (if using cafile)")
         sys.exit(1)
     except yaml.YAMLError as e:
         print(f"❌ YAML Parsing Error: {e}")
-        print("\nYour config.yaml file has invalid YAML syntax.")
-        print("Please check for:")
-        print("- Proper indentation (use spaces, not tabs)")
-        print("- Correct colon placement (key: value)")
-        print("- Proper quoting of strings")
         sys.exit(1)
     except Exception as e:
         logging.error(f"Unexpected error: {e}")

@@ -1,0 +1,22 @@
+projects:
+  - name: "Smoke detector"
+    pio_project: project_esp8266_smoke
+    devices:
+      - mac: bcddc2b622c9
+        friendly_name: "Test1"
+      - mac: 40f52033765d
+        friendly_name: "Test2"
+
+  - name: "Radiation detector"
+    pio_project: project_esp8266_rad
+    devices:
+      - mac: c82b96034710
+        friendly_name: "Home BP"
+      - mac: cc50e30872d3
+        friendly_name: "Home H"
+
+  - name: "CAN gateway"
+    pio_project: project_esp32_can
+    devices:
+      - mac: fcf5c401bd83
+        friendly_name: "Home BP living room"
