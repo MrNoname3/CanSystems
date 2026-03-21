@@ -3,8 +3,9 @@
 ESP8266/ESP32 Over-The-Air (OTA) Update Tool via MQTT
 
 This tool provides a modular approach to updating ESP devices firmware
-through MQTT communication with proper error handling and progress tracking.
-Uses YAML configuration file (config.yaml) instead of JSON.
+and transferring configuration files through MQTT communication with
+proper error handling and progress tracking.
+Uses YAML configuration file (config.yaml) and device list (devices.yaml).
 """
 
 import json
@@ -90,10 +91,19 @@ class MQTTConfig:
 
 
 @dataclass
+class FileEntry:
+    """A transferable file entry from devices.yaml"""
+    name: str                  # Display name shown in the menu
+    local_path: Path           # Local path to the file (relative to ota/ directory)
+    device_path: str           # Destination path on the device (sent as 'name' in JSON)
+
+
+@dataclass
 class DeviceEntry:
     """A single device entry from devices.yaml"""
     mac: str
     friendly_name: Optional[str] = None
+    files: List[FileEntry] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:
@@ -112,7 +122,7 @@ class ProjectEntry:
 
 @dataclass
 class DeviceConfig:
-    """Configuration data for the target device (used by OTAUpdater)"""
+    """Configuration data for the target device (used by OTAUpdater and FileTransfer)"""
     mac_address: str
     project_name: str
 
@@ -161,9 +171,25 @@ class DeviceManager:
             for d in p.get('devices', []):
                 if 'mac' not in d:
                     raise ValueError(f"Each device entry must have a 'mac' field (project: {p['name']})")
+
+                # Parse optional file entries for this device
+                files: List[FileEntry] = []
+                for f in d.get('files', []):
+                    if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
+                        raise ValueError(
+                            f"Each file entry must have 'name', 'local_path' and 'device_path' fields "
+                            f"(device: {d['mac']})"
+                        )
+                    files.append(FileEntry(
+                        name=f['name'],
+                        local_path=self.script_dir / f['local_path'],
+                        device_path=f['device_path']
+                    ))
+
                 devices.append(DeviceEntry(
                     mac=d['mac'],
-                    friendly_name=d.get('friendly_name')
+                    friendly_name=d.get('friendly_name'),
+                    files=files
                 ))
 
             projects.append(ProjectEntry(
@@ -405,6 +431,52 @@ class FirmwareManager:
 
 
 # ---------------------------------------------------------------------------
+# Generic file data provider (used by FileTransfer)
+# ---------------------------------------------------------------------------
+
+class FileDataProvider:
+    """Reads an arbitrary binary file and provides size and checksum properties"""
+
+    def __init__(self, file_path: Path):
+        self.file_path = file_path
+        self._data: Optional[bytes] = None
+        self._crc32: Optional[int] = None
+        self._md5: Optional[str] = None
+
+    @property
+    def data(self) -> bytes:
+        """Lazy loading of file data"""
+        if self._data is None:
+            try:
+                with open(self.file_path, 'rb') as f:
+                    self._data = f.read()
+            except IOError as e:
+                raise IOError(f"Failed to read file: {e}")
+        return self._data
+
+    @property
+    def size(self) -> int:
+        """Get file size"""
+        return len(self.data)
+
+    @property
+    def crc32(self) -> int:
+        """Calculate and cache CRC32 checksum"""
+        if self._crc32 is None:
+            self._crc32 = zlib.crc32(self.data) & 0xFFFFFFFF
+        return self._crc32
+
+    @property
+    def md5(self) -> str:
+        """Calculate and cache MD5 hash"""
+        if self._md5 is None:
+            md5_hash = hashlib.md5()
+            md5_hash.update(self.data)
+            self._md5 = md5_hash.hexdigest()
+        return self._md5
+
+
+# ---------------------------------------------------------------------------
 # MQTT client
 # ---------------------------------------------------------------------------
 
@@ -493,7 +565,7 @@ class MQTTClient:
 # ---------------------------------------------------------------------------
 
 class OTAUpdater:
-    """Main OTA update orchestrator"""
+    """Main OTA firmware update orchestrator"""
 
     def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path):
         self.device_config = device_config
@@ -659,13 +731,194 @@ class OTAUpdater:
 
 
 # ---------------------------------------------------------------------------
+# File transfer (config files, certificates, or any arbitrary file)
+# ---------------------------------------------------------------------------
+
+class FileTransfer:
+    """Transfers an arbitrary file to the device via MQTT.
+    Uses 'name' + 'fileSize' + 'crc32' + 'md5' in the start message instead of 'binId',
+    which signals to the device that this is a generic file transfer, not a firmware update."""
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
+        self.device_config = device_config
+        self.file_entry = file_entry
+        self.file_provider = FileDataProvider(file_entry.local_path)
+        self.mqtt_client = MQTTClient(mqtt_config)
+
+        # Transfer state management (reuses OTAState for consistency)
+        self.state = OTAState.IDLE
+        self.piece_number = 0
+        self.remaining_bytes = 0
+        self.timer_start = 0
+        self.piece_size = 100
+        self.timeout_seconds = 25
+        self.progress_bar: Optional[tqdm] = None
+
+        # Set up MQTT callbacks
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            logging.info("Successfully connected to MQTT broker")
+            client.subscribe(self.device_config.receive_topic)
+            self._send_start_message()
+        else:
+            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
+            self.state = OTAState.ERROR
+
+    def _on_message(self, client, userdata, msg):
+        """Handle incoming MQTT messages"""
+        try:
+            message = json.loads(msg.payload.decode())
+            self._process_response(message)
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse MQTT message: {e}")
+            self.state = OTAState.ERROR
+
+    def _send_start_message(self):
+        """Send file transfer start message to device.
+        Uses 'name' (device destination path) instead of 'binId' to signal a generic file transfer."""
+        start_message = {
+            "name": self.file_entry.device_path,
+            "fileSize": self.file_provider.size,
+            "crc32": self.file_provider.crc32,
+            "md5": self.file_provider.md5
+        }
+
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(start_message))
+        logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
+        logging.info(f"  Device path: {self.file_entry.device_path}")
+        logging.info(f"  Size:  {self.file_provider.size} bytes")
+        logging.info(f"  CRC32: {self.file_provider.crc32}")
+        logging.info(f"  MD5:   {self.file_provider.md5}")
+
+        self.state = OTAState.WAIT_START_ACK
+        self.remaining_bytes = self.file_provider.size
+        self.timer_start = time.time()
+
+    def _process_response(self, message: Dict[str, Any]):
+        """Process response messages from device"""
+        if "type" not in message:
+            logging.warning("Received message without 'type' field")
+            return
+
+        ack = message["type"] != 0
+
+        if self.state == OTAState.WAIT_START_ACK and ack:
+            logging.info("Start acknowledgment received, beginning file transfer")
+            self.progress_bar = tqdm(
+                total=self.file_provider.size,
+                desc=f"Sending {self.file_entry.local_path.name}",
+                unit="B",
+                unit_scale=True
+            )
+            self.state = OTAState.SENDING_FW
+
+        elif self.state == OTAState.WAIT_PIECE_ACK and ack:
+            self.state = OTAState.SENDING_FW
+
+        elif self.state == OTAState.WAIT_CHECK_ACK and ack:
+            self.state = OTAState.DONE
+
+        else:
+            logging.error(f"Received negative acknowledgment or unexpected state. Message: {message}")
+            self.state = OTAState.ERROR
+
+    def _send_file_piece(self):
+        """Send a piece of the file to the device"""
+        offset = self.file_provider.size - self.remaining_bytes
+        read_size = min(self.remaining_bytes, self.piece_size)
+        data = self.file_provider.data[offset:offset + read_size]
+
+        piece_message = {
+            "piece": self.piece_number,
+            "data": base64.b64encode(data).decode('utf-8')
+        }
+
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(piece_message))
+
+        self.state = OTAState.WAIT_PIECE_ACK
+        self.timer_start = time.time()
+        self.piece_number += 1
+        self.remaining_bytes -= read_size
+
+        if self.progress_bar:
+            self.progress_bar.update(read_size)
+
+    def _close_progress_bar(self):
+        """Close and clean up the progress bar"""
+        if self.progress_bar:
+            self.progress_bar.close()
+            self.progress_bar = None
+
+    def _process_state(self):
+        """Process current transfer state"""
+        current_time = time.time()
+
+        if self.state == OTAState.SENDING_FW:
+            if self.remaining_bytes > 0:
+                self._send_file_piece()
+            else:
+                # Close progress bar immediately when transfer is complete
+                self._close_progress_bar()
+                logging.info("All file pieces sent, waiting for final verification")
+                self.state = OTAState.WAIT_CHECK_ACK
+                self.timer_start = current_time
+
+        elif self.state in {OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK}:
+            if current_time - self.timer_start > self.timeout_seconds:
+                logging.error(f"Timeout occurred in state: {self.state.name}")
+                self.state = OTAState.ERROR
+
+    def _cleanup(self):
+        """Clean up resources"""
+        self._close_progress_bar()
+        self.mqtt_client.disconnect()
+
+    def run(self) -> bool:
+        """Run the file transfer process"""
+        if not self.mqtt_client.connect():
+            return False
+
+        try:
+            while self.state not in {OTAState.DONE, OTAState.ERROR}:
+                self.mqtt_client.loop(timeout=0.1)
+                self._process_state()
+
+            success = self.state == OTAState.DONE
+            if success:
+                logging.info("File transfer completed successfully")
+            else:
+                logging.error("File transfer failed")
+
+            return success
+
+        except KeyboardInterrupt:
+            logging.info("File transfer interrupted by user")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error during file transfer: {e}")
+            return False
+        finally:
+            self._cleanup()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def select_device(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, DeviceEntry]]:
+# Sentinel used in the action menu to identify the firmware upload option
+_FW_OPTION = "Firmware upload"
+
+
+def select_target(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, DeviceEntry, Optional[FileEntry]]]:
     """
-    Interactive two-level menu: first pick a project, then pick a device.
-    Returns (project, device) or None if the user cancelled.
+    Interactive three-level menu:
+      1. Select project
+      2. Select device
+      3. Select action (firmware upload or a configured file transfer)
+    Returns (project, device, file_entry) where file_entry is None for firmware upload,
+    or None if the user cancelled.
     """
     menu = MenuSelector()
 
@@ -679,8 +932,8 @@ def select_device(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, 
 
         selected_project = next(p for p in projects if p.name == choice)
 
-        # --- Level 2: device selection ---
         while True:
+            # --- Level 2: device selection ---
             device_labels = [d.display_name for d in selected_project.devices]
             choice = menu.select(
                 f"Select device  [{selected_project.name}]",
@@ -694,7 +947,27 @@ def select_device(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, 
                 break  # go back to project selection
 
             selected_device = next(d for d in selected_project.devices if d.display_name == choice)
-            return selected_project, selected_device
+
+            while True:
+                # --- Level 3: action selection ---
+                # Always offer firmware upload; append any device-specific files below
+                action_options = [_FW_OPTION] + [f.name for f in selected_device.files]
+                choice = menu.select(
+                    f"Select action  [{selected_device.display_name}]",
+                    action_options,
+                    show_back=True
+                )
+
+                if choice == MenuSelector.CANCEL:
+                    return None
+                if choice == MenuSelector.BACK:
+                    break  # go back to device selection
+
+                if choice == _FW_OPTION:
+                    return selected_project, selected_device, None
+                else:
+                    selected_file = next(f for f in selected_device.files if f.name == choice)
+                    return selected_project, selected_device, selected_file
 
 
 def main():
@@ -707,13 +980,13 @@ def main():
         mqtt_config = config_manager.load_mqtt_config()
         projects = device_manager.load()
 
-        # Interactive device selection
-        result = select_device(projects)
+        # Interactive target selection (project → device → action)
+        result = select_target(projects)
         if result is None:
             print("Cancelled.")
             sys.exit(0)
 
-        selected_project, selected_device = result
+        selected_project, selected_device, selected_file = result
 
         print(f"\n✅ Configuration loaded successfully:")
         print(f"  Protocol:    {mqtt_config.protocol}")
@@ -726,23 +999,33 @@ def main():
         print(f"  Project:     {selected_project.name}  ({selected_project.pio_project})")
         print(f"  Device:      {selected_device.display_name}")
 
-        # Get firmware path
-        firmware_path = config_manager.get_firmware_path(selected_project.pio_project)
-        print(f"  Firmware:    {firmware_path}")
-        print()
-
         device_config = DeviceConfig(
             mac_address=selected_device.mac,
             project_name=selected_project.pio_project
         )
 
-        # Create and run OTA updater
-        ota_updater = OTAUpdater(device_config, mqtt_config, firmware_path)
+        if selected_file is None:
+            # Firmware upload
+            firmware_path = config_manager.get_firmware_path(selected_project.pio_project)
+            print(f"  Action:      Firmware feltöltés")
+            print(f"  Firmware:    {firmware_path}")
+            print()
+            worker = OTAUpdater(device_config, mqtt_config, firmware_path)
+        else:
+            # Generic file transfer
+            if not selected_file.local_path.exists():
+                print(f"❌ File Error: Local file not found: {selected_file.local_path}")
+                sys.exit(1)
+            print(f"  Action:      {selected_file.name}")
+            print(f"  Local file:  {selected_file.local_path}")
+            print(f"  Device path: {selected_file.device_path}")
+            print()
+            worker = FileTransfer(device_config, mqtt_config, selected_file)
 
         # Set up signal handler for graceful shutdown
         def signal_handler(sig, frame):
             logging.info("Received interrupt signal, shutting down...")
-            ota_updater._cleanup()
+            worker._cleanup()
             sys.exit(0)
 
         # Register signal handlers (SIGINT works on both Windows and Unix)
@@ -752,8 +1035,8 @@ def main():
         if hasattr(signal, 'SIGTERM'):
             signal.signal(signal.SIGTERM, signal_handler)
 
-        # Run the update
-        success = ota_updater.run()
+        # Run the selected operation
+        success = worker.run()
         sys.exit(0 if success else 1)
 
     except FileNotFoundError as e:

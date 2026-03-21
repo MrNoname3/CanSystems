@@ -13,3 +13,6 @@ data/*.bin
 lib/connectivity/src/server.hpp
 ota/config.yaml
 ota/.venv
+ota/files/**/*.crt
+ota/files/**/server.json
+ota/files/**/wifi.json

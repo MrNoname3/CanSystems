@@ -4,19 +4,57 @@ projects:
     devices:
       - mac: bcddc2b622c9
         friendly_name: "Test1"
+        files:
+          - name: "CA certificate"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration"
+            local_path: files/common/server.json
+            device_path: /config/server.json
       - mac: 40f52033765d
         friendly_name: "Test2"
+        files:
+          - name: "CA certificate"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration"
+            local_path: files/40f52033765d/server.json
+            device_path: /config/server.json
+          - name: "WiFi cerdentials"
+            local_path: files/40f52033765d/wifi.json
+            device_path: /config/wifi.json
 
   - name: "Radiation detector"
     pio_project: project_esp8266_rad
     devices:
       - mac: c82b96034710
         friendly_name: "Home BP"
+        files:
+          - name: "CA certificate"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration"
+            local_path: files/common/server.json
+            device_path: /config/server.json
       - mac: cc50e30872d3
         friendly_name: "Home H"
+        files:
+          - name: "CA certificate"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration"
+            local_path: files/common/server.json
+            device_path: /config/server.json
 
   - name: "CAN gateway"
     pio_project: project_esp32_can
     devices:
       - mac: fcf5c401bd83
         friendly_name: "Home BP living room"
+        files:
+          - name: "CA certificate"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration"
+            local_path: files/common/server.json
+            device_path: /config/server.json
