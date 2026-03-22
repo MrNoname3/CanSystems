@@ -9,14 +9,14 @@
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   checkOkCallback(checkOkCallback),
   fileSizeLocal(0U),
-  fileCrcLocal(0U),
+  fileMd5Local{'\0'},
   nextFilePieceNumberLocal(invalidFilePieceNumber),
   remainingFileSizeLocal(0U),
   fileNameLocal{'\0'},
   transferState(TransferState::IDLE),
   transferTimeoutTimer(0U),
   receivedFile(),
-  crc32()
+  md5()
 {}
 
 DataTransfer::~DataTransfer() {
@@ -25,13 +25,15 @@ DataTransfer::~DataTransfer() {
   }
 }
 
-bool DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName) {
+bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fileName) {
   if(fileSize == 0U) {
     dataTransferErrState.setError(DataTransferError::FILE_SIZE_ZERO);
     return false;
   }
   fileSizeLocal = fileSize;
-  fileCrcLocal = fileCrc;
+  memset(fileMd5Local, '\0', sizeof(fileMd5Local));
+  strncpy(fileMd5Local, fileMd5, sizeof(fileMd5Local) - 1U);
+  fileMd5Local[sizeof(fileMd5Local) - 1U] = '\0';
   nextFilePieceNumberLocal = 0U;
   remainingFileSizeLocal = fileSize;
   if(fileName == nullptr) {
@@ -72,7 +74,7 @@ bool DataTransfer::begin(uint32_t fileSize, uint32_t fileCrc, const char* fileNa
     dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
     return false;
   }
-  Logger::get().printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  CRC32: %u\r\n"), fileNameLocal, fileSizeLocal, fileCrcLocal);
+  Logger::get().printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  MD5: %s\r\n"), fileNameLocal, fileSizeLocal, fileMd5Local);
   transferState = TransferState::STORING;
   return true;
 }
@@ -139,7 +141,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
       dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
       return false;
     }
-    crc32.reset();
+    md5.begin();
     transferState = TransferState::CHECK;
     transferTimeoutTimer = millis();
   }
@@ -162,13 +164,14 @@ void DataTransfer::runValidityCheck() {
         uint8_t readBuffer[readBufferSize] = {0U};
         const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
         receivedFile.read(readBuffer, readLength);
-        crc32.next(readBuffer, readLength);
+        md5.add(readBuffer, readLength);
       } else {
         transferState = TransferState::CLEANUP;
-        const bool fileCrcOk = (crc32.get() == fileCrcLocal);
-        if(!fileCrcOk) {
-          Logger::get().printf_P(PSTR("[FT] File CRC mismatch! %u != %u\r\n"), crc32.get(), fileCrcLocal);
-          dataTransferErrState.setError(DataTransferError::FILE_CRC_ERROR);
+        md5.calculate();
+        const bool fileMd5Ok = (strncasecmp(md5.toString().c_str(), fileMd5Local, sizeof(fileMd5Local)) == 0);
+        if(!fileMd5Ok) {
+          Logger::get().printf_P(PSTR("[FT] File MD5 mismatch! %s != %s\r\n"), md5.toString().c_str(), fileMd5Local);
+          dataTransferErrState.setError(DataTransferError::FILE_MD5_ERROR);
           break;
         } else {
           if(receivedFile) {
@@ -227,10 +230,9 @@ void DataTransfer::runValidityCheck() {
     } break;
     case TransferState::CLEANUP: {
       fileSizeLocal = 0U;
-      fileCrcLocal = 0U;
+      memset(fileMd5Local, '\0', sizeof(fileMd5Local));
       nextFilePieceNumberLocal = invalidFilePieceNumber;
       remainingFileSizeLocal = 0U;
-      crc32.reset();
       if(receivedFile) {
         receivedFile.close();
       }

@@ -52,19 +52,19 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   JsonVariant binIdJsonVar = payloadJson[F("binId")];
   JsonVariant fileNameJsonVar = payloadJson[F("name")];
   JsonVariant fileSizeJsonVar = payloadJson[F("fileSize")];
-  JsonVariant fileCrc32JsonVar = payloadJson[F("crc32")];
+  JsonVariant fileMd5JsonVar = payloadJson[F("md5")];
   JsonVariant filePieceJsonVar = payloadJson[F("piece")];
   JsonVariant fileDataJsonVar = payloadJson[F("data")];
 
   const bool binIdPresented = binIdJsonVar.is<const char*>();
   const bool fileNamePresented = fileNameJsonVar.is<const char*>();
   const bool fileSizePresented = fileSizeJsonVar.is<uint32_t>();
-  const bool fileCrc32Presented = fileCrc32JsonVar.is<uint32_t>();
+  const bool fileMd5Presented = fileMd5JsonVar.is<const char*>();
   const bool filePiecePresented = filePieceJsonVar.is<uint32_t>();
   const bool fileDataPresented = fileDataJsonVar.is<const char*>();
 
   const char* fileNamePtr = nullptr;
-  if(binIdPresented && fileSizePresented && fileCrc32Presented) {
+  if(binIdPresented && fileSizePresented && fileMd5Presented) {
     const char* binId = binIdJsonVar.as<const char*>();
     if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
       Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
@@ -73,7 +73,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     }
     isRestartRequired = true;
     fileNamePtr = FileName::getOtaFwLocation();
-  } else if(fileNamePresented &&  fileSizePresented && fileCrc32Presented) {
+  } else if(fileNamePresented && fileSizePresented && fileMd5Presented) {
     isRestartRequired = false;
     fileNamePtr = fileNameJsonVar.as<const char*>();
   } else if(filePiecePresented && fileDataPresented) {
@@ -92,8 +92,8 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
 
   if(fileNamePtr != nullptr) {
     const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
-    const uint32_t fileCrc = fileCrc32JsonVar.as<uint32_t>();
-    const bool transferBeginResult = dataTransfer.begin(fileSize, fileCrc, fileNamePtr);
+    const char* fileMd5 = fileMd5JsonVar.as<const char*>();
+    const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileNamePtr);
     sendResponse(transferBeginResult);
     if(!transferBeginResult) {
       Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, dataTransfer.getErrorCode());

@@ -2,12 +2,13 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
-#include "crc32.hpp"                                                /// Utility for calculating CRC32 checksums.
+#include <MD5Builder.h>                                             /// Utility for calculating MD5 checksums.
 
 /// @brief Class to handle file transfer and firmware upgrade operations.
 class DataTransfer final {
 private:
   static constexpr uint8_t fileNameSize = 32U;                          // Maximum length of the file name.
+  static constexpr uint8_t fileMd5Size = 33U;                           // MD5 hex string length (32 chars + null terminator).
   static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);   // Timeout period for the transfer process.
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
   static constexpr uint32_t invalidFilePieceNumber = 0xFFFFFFFFU;       // Indicator for an invalid file piece number.
@@ -32,7 +33,7 @@ private:
     TEMP_FILE_OPENING_ERROR   = 1 << 12U,               // Error opening the temporary file for writing.
     TEMP_FILE_WRITING_ERROR   = 1 << 13U,               // Error writing to the temporary file.
     RECEIVED_FILE_SIZE_ERROR  = 1 << 14U,               // The received file size does not match the expected size.
-    FILE_CRC_ERROR            = 1 << 15U,               // CRC32 checksum validation failed.
+    FILE_MD5_ERROR            = 1 << 15U,               // MD5 checksum validation failed.
     TEMP_FILE_RENAMING_ERROR  = 1 << 16U,               // Error renaming the temporary file.
     FW_FILE_OPENING_ERROR     = 1 << 17U,               // Error opening the firmware file.
     FW_UPGRADE_BEGIN_FAILED   = 1 << 18U,               // Firmware upgrade initialization failed.
@@ -45,7 +46,7 @@ public:
   enum class TransferState : uint8_t {
     IDLE = 0U,                // No transfer is in progress.
     STORING,                  // Currently receiving and storing file pieces.
-    CHECK,                    // Validating the received file (e.g., via CRC32).
+    CHECK,                    // Validating the received file (e.g., via MD5).
     UPGRADE_FW,               // Initiating firmware upgrade after a valid file transfer.
     CLEANUP                   // Cleaning up resources after the transfer or in case of an error.
   };
@@ -60,10 +61,10 @@ public:
 
   /// @brief Begins a new file transfer.
   /// @param fileSize The size of the file to be transferred in bytes.
-  /// @param fileCrc The CRC32 checksum of the file.
+  /// @param fileMd5 The MD5 checksum of the file as a hex string.
   /// @param fileName The name of the file to be transferred.
   /// @return True if the transfer is successfully initiated, false otherwise.
-  bool begin(uint32_t fileSize, uint32_t fileCrc, const char* fileName);
+  bool begin(uint32_t fileSize, const char* fileMd5, const char* fileName);
 
   /// @brief Stores a piece of the file, provided in base64 format.
   /// @param filePieceNumber The sequential piece number of the file being transferred.
@@ -76,8 +77,7 @@ public:
   DataTransferErrorType getErrorCode();
 
   /// @brief Validates the received file.
-  /// Checks the file size and CRC32 checksum to ensure the file was transferred correctly.
-  /// @return True if the file is valid, false otherwise.
+  /// Checks the file size and MD5 checksum to ensure the file was transferred correctly.
   void runValidityCheck();
 
   DataTransfer(const DataTransfer&) = delete;                       // Define copy constructor.
@@ -88,7 +88,7 @@ public:
 private:
   void (*checkOkCallback)(bool isValid);                            // Callback function invoked on transfer completion.
   uint32_t fileSizeLocal;                                           // Expected size of the file being transferred (in bytes).
-  uint32_t fileCrcLocal;                                            // Expected CRC32 checksum of the file.
+  char fileMd5Local[fileMd5Size];                                   // Expected MD5 checksum of the file as a hex string.
   uint32_t nextFilePieceNumberLocal;                                // The next expected file piece number.
   uint32_t remainingFileSizeLocal;                                  // Remaining number of bytes to be received.
   char fileNameLocal[fileNameSize];                                 // Buffer storing the name of the file.
@@ -96,5 +96,5 @@ private:
   ErrorState<DataTransferError, DataTransferErrorType> dataTransferErrState;  // Error state manager.
   uint32_t transferTimeoutTimer;                                    // Timer to track transfer timeout.
   File receivedFile;                                                // File object for the temporary storage of the transferred file.
-  Crc32 crc32;                                                      // CRC32 calculator used for file integrity verification.
+  MD5Builder md5;                                                   // MD5 calculator used for file integrity verification.
 };
