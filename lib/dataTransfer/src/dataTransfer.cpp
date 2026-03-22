@@ -13,6 +13,7 @@ DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   nextFilePieceNumberLocal(invalidFilePieceNumber),
   remainingFileSizeLocal(0U),
   fileNameLocal{'\0'},
+  isFwTransfer(false),
   transferState(TransferState::IDLE),
   transferTimeoutTimer(0U),
   receivedFile(),
@@ -43,17 +44,30 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   memset(fileNameLocal, '\0', sizeof(fileNameLocal));
   strncpy_P(fileNameLocal, fileName, sizeof(fileNameLocal) - 1U);
   fileNameLocal[sizeof(fileNameLocal) - 1U] = '\0';
-  const uint32_t fileNameSize = strlen(fileNameLocal);
-  if(fileNameSize == 0U) {
+  const uint32_t fileNameLength = strlen(fileNameLocal);
+  if(fileNameLength == 0U) {
     dataTransferErrState.setError(DataTransferError::FILE_NAME_INVALID);
     return false;
   }
   if(receivedFile) {
     receivedFile.close();
   }
-  LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
-  LittleFS.remove(FPSTR(FileName::getOtaFwLocation()));
-  {
+  isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
+  if(isFwTransfer) {
+    Update.end(false);
+    if(!Update.setMD5(fileMd5Local)) {
+      Logger::get().printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
+      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
+      return false;
+    }
+    const bool updateBeginResult = Update.begin(fileSizeLocal);
+    Logger::get().printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
+    if(!updateBeginResult) {
+      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
+      return false;
+    }
+  } else {
+    LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
 #ifdef ESP8266
     FSInfo fsInfo;
     LittleFS.info(fsInfo);
@@ -67,12 +81,12 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
       dataTransferErrState.setError(DataTransferError::NOT_ENOUGH_STORAGE);
       return false;
     }
-  }
-  receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
-  if(!receivedFile) {
-    Logger::get().printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
-    dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
-    return false;
+    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
+    if(!receivedFile) {
+      Logger::get().printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
+      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      return false;
+    }
   }
   Logger::get().printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  MD5: %s\r\n"), fileNameLocal, fileSizeLocal, fileMd5Local);
   transferState = TransferState::STORING;
@@ -101,7 +115,6 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::B64_FILE_DATA_SIZE_ERROR);
     return false;
   }
-
   const uint16_t filePieceSize = filePieceB64Size * 3U / 4U + 1U;
   if(filePieceSize > maxFilePieceLength) {
     dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_OVEFLOW);
@@ -120,30 +133,56 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::B64_DECODED_SIZE_ERROR);
     return false;
   }
-  const uint32_t writtenBytes = receivedFile.write(decodedData, decodedPostSize);
-  if(writtenBytes != decodedPostSize) {
-    Logger::get().printf_P(PSTR("[FT] Writing failed: %s\r\n"), FileName::getTempFileLocation());
-    dataTransferErrState.setError(DataTransferError::TEMP_FILE_WRITING_ERROR);
-    return false;
+  if(isFwTransfer) {
+    const uint32_t writtenBytes = Update.write(decodedData, decodedPostSize);
+    if(writtenBytes != decodedPostSize) {
+      Logger::get().printf_P(PSTR("[FT] Firmware write failed!\r\n"));
+      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_WRITE_FAILED);
+      Update.end(false);
+      transferState = TransferState::CLEANUP;
+      return false;
+    }
+  } else {
+    const uint32_t writtenBytes = receivedFile.write(decodedData, decodedPostSize);
+    if(writtenBytes != decodedPostSize) {
+      Logger::get().printf_P(PSTR("[FT] Writing failed: %s\r\n"), FileName::getTempFileLocation());
+      dataTransferErrState.setError(DataTransferError::TEMP_FILE_WRITING_ERROR);
+      return false;
+    }
   }
   nextFilePieceNumberLocal++;
   remainingFileSizeLocal -= decodedPostSize;
   if(remainingFileSizeLocal == 0U) {
-    receivedFile.close();
-    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
-    if(!receivedFile) {
-      Logger::get().printf_P(PSTR("[FT] Opening file for read failed: %s\r\n"), FileName::getTempFileLocation());
-      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
-      return false;
+    if(isFwTransfer) {
+      const bool updateEndResult = Update.end();
+      Logger::get().printf_P(PSTR("[FT] Firmware update end -> %s\r\n"), Str::getStateStr(updateEndResult));
+      if(!updateEndResult) {
+        dataTransferErrState.setError(DataTransferError::FW_UPGRADE_END_FAILED);
+        transferState = TransferState::CLEANUP;
+        return false;
+      }
+      Logger::get().printf_P(PSTR("[FT] Firmware received and verified: %s\r\n"), fileNameLocal);
+      transferState = TransferState::CLEANUP;
+      if(checkOkCallback != nullptr) {
+        checkOkCallback(true);
+      }
+    } else {
+      receivedFile.close();
+      receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
+      if(!receivedFile) {
+        Logger::get().printf_P(PSTR("[FT] Opening file for read failed: %s\r\n"), FileName::getTempFileLocation());
+        dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+        return false;
+      }
+      if(receivedFile.size() != fileSizeLocal) {
+        Logger::get().printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
+        dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
+        return false;
+      }
+      md5.begin();
+      transferState = TransferState::CHECK;
+      transferTimeoutTimer = millis();
     }
-    if(receivedFile.size() != fileSizeLocal) {
-      Logger::get().printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
-      dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
-      return false;
-    }
-    md5.begin();
-    transferState = TransferState::CHECK;
-    transferTimeoutTimer = millis();
   }
   return true;
 }
@@ -173,59 +212,20 @@ void DataTransfer::runValidityCheck() {
           Logger::get().printf_P(PSTR("[FT] File MD5 mismatch! %s != %s\r\n"), md5.toString().c_str(), fileMd5Local);
           dataTransferErrState.setError(DataTransferError::FILE_MD5_ERROR);
           break;
-        } else {
-          if(receivedFile) {
-            receivedFile.close();
-          }
-          LittleFS.remove(FPSTR(fileNameLocal));
-          if(!LittleFS.rename(FPSTR(FileName::getTempFileLocation()), fileNameLocal)) {
-            Logger::get().printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
-            dataTransferErrState.setError(DataTransferError::TEMP_FILE_RENAMING_ERROR);
-            break;
-          }
+        }
+        if(receivedFile) {
+          receivedFile.close();
+        }
+        LittleFS.remove(FPSTR(fileNameLocal));
+        if(!LittleFS.rename(FPSTR(FileName::getTempFileLocation()), fileNameLocal)) {
+          Logger::get().printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
+          dataTransferErrState.setError(DataTransferError::TEMP_FILE_RENAMING_ERROR);
+          break;
         }
         Logger::get().printf_P(PSTR("[FT] File received: %s\r\n"), fileNameLocal);
-        if(strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0) {
-          transferState = TransferState::UPGRADE_FW;
-        } else {
-          if(checkOkCallback != nullptr) {
-            checkOkCallback(true);
-          }
+        if(checkOkCallback != nullptr) {
+          checkOkCallback(true);
         }
-      }
-    } break;
-    case TransferState::UPGRADE_FW: {
-      transferState = TransferState::CLEANUP;
-      receivedFile = LittleFS.open(FPSTR(FileName::getOtaFwLocation()), "r");
-      if(!receivedFile) {
-        Logger::get().printf_P(PSTR("[FT] Opening FW file for read failed: %s\r\n"), FileName::getOtaFwLocation());
-        dataTransferErrState.setError(DataTransferError::FW_FILE_OPENING_ERROR);
-        break;
-      }
-      const uint32_t fwFileSize = receivedFile.size();
-      Logger::get().printf_P(PSTR("[FT] Checking firmware file:\r\n"));
-      const bool updateBeginResult = Update.begin(fwFileSize);
-      Logger::get().printf_P(PSTR("  Begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
-      if(!updateBeginResult) {
-        dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
-        break;
-      }
-      const bool updateStreamResult = (Update.writeStream(receivedFile) == fwFileSize);
-      Logger::get().printf_P(PSTR("  Stream -> %s\r\n"), Str::getStateStr(updateStreamResult));
-      if(!updateStreamResult) {
-        dataTransferErrState.setError(DataTransferError::FW_UPGRADE_STREAM_FAILED);
-        break;
-      }
-      const bool updateEndResult = Update.end();
-      Logger::get().printf_P(PSTR("  End -> %s\r\n"), Str::getStateStr(updateEndResult));
-      if(!updateEndResult) {
-        dataTransferErrState.setError(DataTransferError::FW_UPGRADE_END_FAILED);
-        break;
-      }
-      receivedFile.close();
-      LittleFS.remove(FPSTR(FileName::getOtaFwLocation()));
-      if(checkOkCallback != nullptr) {
-        checkOkCallback(true);
       }
     } break;
     case TransferState::CLEANUP: {
@@ -233,6 +233,7 @@ void DataTransfer::runValidityCheck() {
       memset(fileMd5Local, '\0', sizeof(fileMd5Local));
       nextFilePieceNumberLocal = invalidFilePieceNumber;
       remainingFileSizeLocal = 0U;
+      isFwTransfer = false;
       if(receivedFile) {
         receivedFile.close();
       }

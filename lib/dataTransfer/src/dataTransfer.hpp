@@ -35,19 +35,17 @@ private:
     RECEIVED_FILE_SIZE_ERROR  = 1 << 14U,               // The received file size does not match the expected size.
     FILE_MD5_ERROR            = 1 << 15U,               // MD5 checksum validation failed.
     TEMP_FILE_RENAMING_ERROR  = 1 << 16U,               // Error renaming the temporary file.
-    FW_FILE_OPENING_ERROR     = 1 << 17U,               // Error opening the firmware file.
-    FW_UPGRADE_BEGIN_FAILED   = 1 << 18U,               // Firmware upgrade initialization failed.
-    FW_UPGRADE_STREAM_FAILED  = 1 << 19U,               // Firmware upgrade stream write failed.
-    FW_UPGRADE_END_FAILED     = 1 << 20U                // Firmware upgrade finalization failed.
+    FW_UPGRADE_BEGIN_FAILED   = 1 << 17U,               // Firmware upgrade initialization failed.
+    FW_UPGRADE_WRITE_FAILED   = 1 << 18U,               // Firmware upgrade chunk write failed.
+    FW_UPGRADE_END_FAILED     = 1 << 19U                // Firmware upgrade finalization failed.
   };
 
 public:
-  /// @brief Represents the current state of the file transfer process
+  /// @brief Represents the current state of the file transfer process.
   enum class TransferState : uint8_t {
     IDLE = 0U,                // No transfer is in progress.
     STORING,                  // Currently receiving and storing file pieces.
     CHECK,                    // Validating the received file (e.g., via MD5).
-    UPGRADE_FW,               // Initiating firmware upgrade after a valid file transfer.
     CLEANUP                   // Cleaning up resources after the transfer or in case of an error.
   };
 
@@ -76,7 +74,7 @@ public:
   /// @return A DataTransferErrorType value representing the error code.
   DataTransferErrorType getErrorCode();
 
-  /// @brief Validates the received file.
+  /// @brief Executes periodic validation tasks for non-firmware file transfers.
   /// Checks the file size and MD5 checksum to ensure the file was transferred correctly.
   void runValidityCheck();
 
@@ -92,9 +90,10 @@ private:
   uint32_t nextFilePieceNumberLocal;                                // The next expected file piece number.
   uint32_t remainingFileSizeLocal;                                  // Remaining number of bytes to be received.
   char fileNameLocal[fileNameSize];                                 // Buffer storing the name of the file.
+  bool isFwTransfer;                                                // Flag indicating whether the current transfer is a firmware upgrade.
   TransferState transferState;                                      // Current state of the file transfer process.
   ErrorState<DataTransferError, DataTransferErrorType> dataTransferErrState;  // Error state manager.
   uint32_t transferTimeoutTimer;                                    // Timer to track transfer timeout.
   File receivedFile;                                                // File object for the temporary storage of the transferred file.
-  MD5Builder md5;                                                   // MD5 calculator used for file integrity verification.
+  MD5Builder md5;                                                   // MD5 calculator used for non-firmware file integrity verification.
 };
