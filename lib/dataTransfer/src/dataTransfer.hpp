@@ -36,8 +36,9 @@ private:
     FILE_MD5_ERROR            = 1 << 15U,               // MD5 checksum validation failed.
     TEMP_FILE_RENAMING_ERROR  = 1 << 16U,               // Error renaming the temporary file.
     FW_UPGRADE_BEGIN_FAILED   = 1 << 17U,               // Firmware upgrade initialization failed.
-    FW_UPGRADE_WRITE_FAILED   = 1 << 18U,               // Firmware upgrade chunk write failed.
-    FW_UPGRADE_END_FAILED     = 1 << 19U                // Firmware upgrade finalization failed.
+    FW_UPGRADE_SET_MD5_FAILED = 1 << 18U,               // Firmware upgrade MD5 configuration failed.
+    FW_UPGRADE_WRITE_FAILED   = 1 << 19U,               // Firmware upgrade chunk write failed.
+    FW_UPGRADE_END_FAILED     = 1 << 20U                // Firmware upgrade finalization failed.
   };
 
 public:

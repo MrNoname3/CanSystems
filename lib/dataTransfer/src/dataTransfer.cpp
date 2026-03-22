@@ -55,15 +55,16 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
   if(isFwTransfer) {
     Update.end(false);
-    if(!Update.setMD5(fileMd5Local)) {
-      Logger::get().printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
-      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
-      return false;
-    }
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get().printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
     if(!updateBeginResult) {
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
+      return false;
+    }
+    if(!Update.setMD5(fileMd5Local)) {
+      Logger::get().printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
+      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_SET_MD5_FAILED);
+      Update.end(false);
       return false;
     }
   } else {
