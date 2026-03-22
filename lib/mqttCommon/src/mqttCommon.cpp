@@ -4,15 +4,15 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
-  MqttBase(connectivity, subtopic),
-  dataTransfer(fileValidCb),
-  isRestartRequired(false)
+MqttBase(connectivity, subtopic),
+dataTransfer(fileValidCb),
+isRestartRequired(false)
 {}
 
 bool MqttCommon::init() {
   char versionString[dataOutBufSize] = {'\0'};
   const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), versionMessageFrame,
-    Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
+  Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
   const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
   if(!versionStringValid) { return false; }
   if(!MqttBase::sendMessage(versionString)) { return false; }
@@ -55,14 +55,21 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   JsonVariant fileMd5JsonVar = payloadJson[F("md5")];
   JsonVariant filePieceJsonVar = payloadJson[F("piece")];
   JsonVariant fileDataJsonVar = payloadJson[F("data")];
+  JsonVariant cmdJsonVar = payloadJson[F("cmd")];
 
+  // Check for a command message first, before any file transfer fields.
+  if(cmdJsonVar.is<const char*>()) {
+    dispatchCommand(cmdJsonVar.as<const char*>());
+    return;
+  }
+  
   const bool binIdPresented = binIdJsonVar.is<const char*>();
   const bool fileNamePresented = fileNameJsonVar.is<const char*>();
   const bool fileSizePresented = fileSizeJsonVar.is<uint32_t>();
   const bool fileMd5Presented = fileMd5JsonVar.is<const char*>();
   const bool filePiecePresented = filePieceJsonVar.is<uint32_t>();
   const bool fileDataPresented = fileDataJsonVar.is<const char*>();
-
+  
   const char* fileNamePtr = nullptr;
   if(binIdPresented && fileSizePresented && fileMd5Presented) {
     const char* binId = binIdJsonVar.as<const char*>();
@@ -89,7 +96,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     Logger::get().printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));
     return;
   }
-
+  
   if(fileNamePtr != nullptr) {
     const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
     const char* fileMd5 = fileMd5JsonVar.as<const char*>();
@@ -100,4 +107,26 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
       return;
     }
   }
+}
+
+// Lookup table mapping command strings to their handler functions.
+const MqttCommon::CmdEntry MqttCommon::cmdTable[] = {
+  { cmdReboot, &MqttCommon::handleReboot },
+};
+
+void MqttCommon::dispatchCommand(const char* cmd) {
+  for(const auto& entry : cmdTable) {
+    if(strncmp_P(cmd, entry.name, maxCmdLength) == 0) {
+      (this->*entry.handler)();
+      return;
+    }
+  }
+  Logger::get().printf_P(PSTR("[COMMON] Unknown cmd: '%s'\r\n"), cmd);
+  sendResponse(false);
+}
+
+void MqttCommon::handleReboot() {
+  Logger::get().printf_P(PSTR("[COMMON] Reboot command received.\r\n"));
+  sendResponse(true);
+  ResetHandler::restartMCU();
 }

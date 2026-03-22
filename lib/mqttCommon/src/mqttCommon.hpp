@@ -7,8 +7,11 @@
 class MqttCommon final : public MqttBase {
 private:
   static constexpr uint8_t dataOutBufSize = 68U;                    // Buffer size for outgoing data messages.
+  static constexpr uint8_t maxCmdLength   = 16U;                    // Maximum length of a command string.
   // Format string for version messages.
   static constexpr const char PROGMEM versionMessageFrame[] = R"({"CPP":%u,"FW":%hu,"GH":"%x","Dirty":%hu,"RR":%hu})";
+
+  static constexpr const char PROGMEM cmdReboot[] = "reboot";       // Command name strings stored in flash.
 
 public:
   /// @brief Constructs a new MqttCommon object.
@@ -45,6 +48,27 @@ private:
   /// @param result Outcome of the previous operation (`true` for success, `false` for failure).
   /// @return `true` if the response is sent successfully, `false` otherwise.
   bool sendResponse(bool result);
+
+  /// @brief Dispatches an incoming command string to the appropriate handler.
+  /// @param cmd Null-terminated command string received via MQTT.
+  void dispatchCommand(const char* cmd);
+
+  // --- Command handlers ---
+
+  /// @brief Handles the reboot command by restarting the MCU.
+  void handleReboot();
+
+  // --- Command dispatch table types ---
+
+  using CmdHandler = void (MqttCommon::*)();                    // Pointer-to-member type for command handlers.
+
+  /// @brief Entry in the command lookup table, pairing a command name with its handler.
+  struct CmdEntry {
+    const char* name;                                           // PROGMEM string pointer to the command name.
+    CmdHandler  handler;                                        // Pointer to the member function handling the command.
+  };
+
+  static const CmdEntry cmdTable[];                             // Lookup table mapping command strings to handlers.
 
   static inline bool isFileCheckDone = false;       // Flag indicating that a file validity check is completed.
   static inline bool isFileValid = false;           // Flag indicating the result of the file validity check.
