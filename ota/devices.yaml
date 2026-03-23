@@ -1,6 +1,16 @@
+common:
+  commands:
+    - name: Reboot
+      description: Restarts the device
+      cmd: "reboot"
+
 projects:
   - name: "Smoke detector"
     pio_project: project_esp8266_smoke
+    commands:
+      - name: Clear config
+        description: Deletes the stored configuration file
+        cmd: "clearConfig"
     devices:
       - mac: bcddc2b622c9
         friendly_name: "Test1"
@@ -9,7 +19,7 @@ projects:
             local_path: files/common/mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration"
-            local_path: files/common/server.json
+            local_path: files/bcddc2b622c9/server.json
             device_path: /config/server.json
       - mac: 40f52033765d
         friendly_name: "Test2"
@@ -31,7 +41,7 @@ projects:
             local_path: files/common/mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration"
-            local_path: files/common/server.json
+            local_path: files/c82b96034710/server.json
             device_path: /config/server.json
       - mac: cc50e30872d3
         friendly_name: "Home H"
@@ -40,7 +50,7 @@ projects:
             local_path: files/common/mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration"
-            local_path: files/common/server.json
+            local_path: files/cc50e30872d3/server.json
             device_path: /config/server.json
 
   - name: "CAN gateway"
@@ -53,5 +63,5 @@ projects:
             local_path: files/common/mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration"
-            local_path: files/common/server.json
+            local_path: files/fcf5c401bd83/server.json
             device_path: /config/server.json

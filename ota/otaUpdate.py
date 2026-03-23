@@ -91,6 +91,21 @@ class MQTTConfig:
 
 
 @dataclass
+class CommandEntry:
+    """A single command entry from devices.yaml"""
+    name: str                               # Display name shown in the menu
+    cmd: str                                # Command string sent to the device
+    description: Optional[str] = None       # Optional description shown in the menu
+
+    @property
+    def display_name(self) -> str:
+        """Return the formatted menu label, including description if present."""
+        if self.description:
+            return f"{self.name}  ({self.description})"
+        return self.name
+
+
+@dataclass
 class FileEntry:
     """A transferable file entry from devices.yaml"""
     name: str                  # Display name shown in the menu
@@ -117,7 +132,19 @@ class ProjectEntry:
     """A project entry from devices.yaml"""
     name: str
     pio_project: str
+    commands: List[CommandEntry] = field(default_factory=list)  # Merged common + project commands.
     devices: List[DeviceEntry] = field(default_factory=list)
+
+
+@dataclass
+class ActionResult:
+    """Holds the result of the interactive menu selection.
+    Exactly one of `file` or `command` is not None; the other is always None.
+    If both are None, the selected action is a firmware upload."""
+    project: ProjectEntry
+    device: DeviceEntry
+    file: Optional[FileEntry] = None        # Set when a file transfer was selected.
+    command: Optional[CommandEntry] = None  # Set when a command was selected.
 
 
 @dataclass
@@ -162,10 +189,20 @@ class DeviceManager:
         if not data or 'projects' not in data:
             raise ValueError("devices.yaml must contain a 'projects' key")
 
+        # Parse common commands shared across all projects.
+        common_commands = self._parse_commands(
+            data.get('common', {}).get('commands', []),
+            context="common"
+        )
+
         projects: List[ProjectEntry] = []
         for p in data['projects']:
             if 'name' not in p or 'pio_project' not in p:
                 raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
+
+            # Merge common commands with project-level commands.
+            project_commands = self._parse_commands(p.get('commands', []), context=p['name'])
+            merged_commands = common_commands + project_commands
 
             devices: List[DeviceEntry] = []
             for d in p.get('devices', []):
@@ -195,6 +232,7 @@ class DeviceManager:
             projects.append(ProjectEntry(
                 name=p['name'],
                 pio_project=p['pio_project'],
+                commands=merged_commands,
                 devices=devices
             ))
 
@@ -202,6 +240,21 @@ class DeviceManager:
             raise ValueError("devices.yaml contains no projects")
 
         return projects
+
+    def _parse_commands(self, raw: list, context: str) -> List[CommandEntry]:
+        """Parse a list of raw command dicts into CommandEntry objects."""
+        commands = []
+        for c in raw:
+            if 'name' not in c or 'cmd' not in c:
+                raise ValueError(
+                    f"Each command entry must have 'name' and 'cmd' fields (context: {context})"
+                )
+            commands.append(CommandEntry(
+                name=c['name'],
+                cmd=c['cmd'],
+                description=c.get('description')
+            ))
+        return commands
 
 
 # ---------------------------------------------------------------------------
@@ -975,21 +1028,137 @@ class FileTransfer:
 
 
 # ---------------------------------------------------------------------------
+# Command sender
+# ---------------------------------------------------------------------------
+
+class CommandSender:
+    """Sends a single command to the device via MQTT and waits for an ACK response.
+    The command is sent as a JSON payload with a 'cmd' key. A timeout is applied
+    while waiting for the device acknowledgment, consistent with the other workers."""
+
+    # Dedicated state enum for the simple two-step send → wait flow.
+    class _State(enum.Enum):
+        IDLE     = 0
+        WAIT_ACK = 1
+        DONE     = 2
+        ERROR    = 3
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, command: CommandEntry):
+        self.device_config = device_config
+        self.command = command
+        self.mqtt_client = MQTTClient(mqtt_config)
+
+        self.state = self._State.IDLE
+        self.timer_start = 0.0
+        self.timeout_seconds = 25
+
+        # Queue for incoming MQTT messages to avoid race conditions between
+        # the MQTT callback thread and the main loop.
+        self._pending_messages: List[Dict[str, Any]] = []
+
+        # Set up MQTT callbacks
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+        # Set up logging
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            logging.info("Successfully connected to MQTT broker")
+            client.subscribe(self.device_config.receive_topic)
+            self._send_command()
+        else:
+            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
+            self.state = self._State.ERROR
+
+    def _on_message(self, client, userdata, msg):
+        """Queue incoming MQTT messages for processing in the main loop."""
+        try:
+            message = json.loads(msg.payload.decode())
+            self._pending_messages.append(message)
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse MQTT message: {e}")
+            self.state = self._State.ERROR
+
+    def _send_command(self):
+        """Publish the command message to the device topic."""
+        payload = json.dumps({"cmd": self.command.cmd})
+        self.mqtt_client.publish(self.device_config.send_topic, payload)
+        logging.info(f"Command sent: '{self.command.cmd}'")
+        self.state = self._State.WAIT_ACK
+        self.timer_start = time.time()
+
+    def _process_response(self, message: Dict[str, Any]):
+        """Interpret the ACK/NACK response from the device."""
+        if "type" not in message:
+            logging.warning("Received message without 'type' field")
+            return
+
+        ack = message["type"] != 0
+        if ack:
+            self.state = self._State.DONE
+        else:
+            logging.error(f"Command rejected by device. Message: {message}")
+            self.state = self._State.ERROR
+
+    def _process_state(self):
+        """Process pending messages and check for timeout."""
+        for message in self._pending_messages:
+            self._process_response(message)
+        self._pending_messages.clear()
+
+        if self.state == self._State.WAIT_ACK:
+            if time.time() - self.timer_start > self.timeout_seconds:
+                logging.error("Timeout waiting for command acknowledgment")
+                self.state = self._State.ERROR
+
+    def _cleanup(self):
+        """Clean up resources."""
+        self.mqtt_client.disconnect()
+
+    def run(self) -> bool:
+        """Send the command and wait for the device acknowledgment."""
+        if not self.mqtt_client.connect():
+            return False
+
+        try:
+            while self.state not in {self._State.DONE, self._State.ERROR}:
+                self.mqtt_client.loop(timeout=0.1)
+                self._process_state()
+
+            success = self.state == self._State.DONE
+            if success:
+                logging.info(f"Command '{self.command.cmd}' acknowledged successfully")
+            else:
+                logging.error(f"Command '{self.command.cmd}' failed or timed out")
+
+            return success
+
+        except KeyboardInterrupt:
+            logging.info("Command interrupted by user")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error during command sending: {e}")
+            return False
+        finally:
+            self._cleanup()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-# Sentinel used in the action menu to identify the firmware upload option
+# Sentinel used in the action menu to identify the firmware upload option.
 _FW_OPTION = "Firmware upload"
 
 
-def select_target(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, DeviceEntry, Optional[FileEntry]]]:
+def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
     """
     Interactive three-level menu:
       1. Select project
       2. Select device
-      3. Select action (firmware upload or a configured file transfer)
-    Returns (project, device, file_entry) where file_entry is None for firmware upload,
-    or None if the user cancelled.
+      3. Select action (firmware upload, file transfer, or command)
+    Returns an ActionResult, or None if the user cancelled.
     """
     menu = MenuSelector()
 
@@ -1021,8 +1190,11 @@ def select_target(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, 
 
             while True:
                 # --- Level 3: action selection ---
-                # Always offer firmware upload; append any device-specific files below
-                action_options = [_FW_OPTION] + [f.name for f in selected_device.files]
+                # Order: firmware upload → file transfers → commands.
+                file_labels    = [f.name for f in selected_device.files]
+                command_labels = [c.display_name for c in selected_project.commands]
+                action_options = [_FW_OPTION] + file_labels + command_labels
+
                 choice = menu.select(
                     f"Select action  [{selected_device.display_name}]",
                     action_options,
@@ -1035,10 +1207,17 @@ def select_target(projects: List[ProjectEntry]) -> Optional[Tuple[ProjectEntry, 
                     break  # go back to device selection
 
                 if choice == _FW_OPTION:
-                    return selected_project, selected_device, None
-                else:
-                    selected_file = next(f for f in selected_device.files if f.name == choice)
-                    return selected_project, selected_device, selected_file
+                    return ActionResult(project=selected_project, device=selected_device)
+
+                # Check if a file was selected.
+                matched_file = next((f for f in selected_device.files if f.name == choice), None)
+                if matched_file is not None:
+                    return ActionResult(project=selected_project, device=selected_device, file=matched_file)
+
+                # Otherwise a command was selected.
+                matched_cmd = next((c for c in selected_project.commands if c.display_name == choice), None)
+                if matched_cmd is not None:
+                    return ActionResult(project=selected_project, device=selected_device, command=matched_cmd)
 
 
 def main():
@@ -1057,8 +1236,6 @@ def main():
             print("Cancelled.")
             sys.exit(0)
 
-        selected_project, selected_device, selected_file = result
-
         print(f"\n✅ Configuration loaded successfully:")
         print(f"  Protocol:    {mqtt_config.protocol}")
         print(f"  Host:        {mqtt_config.host}")
@@ -1067,31 +1244,38 @@ def main():
         print(f"  TLS Enabled: {mqtt_config.tls_enabled}")
         print(f"  Auth:        {'Yes' if mqtt_config.username else 'No'}")
         print(f"\n🎯 Target:")
-        print(f"  Project:     {selected_project.name}  ({selected_project.pio_project})")
-        print(f"  Device:      {selected_device.display_name}")
+        print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
+        print(f"  Device:      {result.device.display_name}")
 
         device_config = DeviceConfig(
-            mac_address=selected_device.mac,
-            project_name=selected_project.pio_project
+            mac_address=result.device.mac,
+            project_name=result.project.pio_project
         )
 
-        if selected_file is None:
+        if result.command is not None:
+            # Command dispatch
+            print(f"  Action:      {result.command.display_name}")
+            print()
+            worker = CommandSender(device_config, mqtt_config, result.command)
+
+        elif result.file is not None:
+            # Generic file transfer
+            if not result.file.local_path.exists():
+                print(f"❌ File Error: Local file not found: {result.file.local_path}")
+                sys.exit(1)
+            print(f"  Action:      {result.file.name}")
+            print(f"  Local file:  {result.file.local_path}")
+            print(f"  Device path: {result.file.device_path}")
+            print()
+            worker = FileTransfer(device_config, mqtt_config, result.file)
+
+        else:
             # Firmware upload
-            firmware_path = config_manager.get_firmware_path(selected_project.pio_project)
-            print(f"  Action:      Firmware feltöltés")
+            firmware_path = config_manager.get_firmware_path(result.project.pio_project)
+            print(f"  Action:      Firmware upload")
             print(f"  Firmware:    {firmware_path}")
             print()
             worker = OTAUpdater(device_config, mqtt_config, firmware_path)
-        else:
-            # Generic file transfer
-            if not selected_file.local_path.exists():
-                print(f"❌ File Error: Local file not found: {selected_file.local_path}")
-                sys.exit(1)
-            print(f"  Action:      {selected_file.name}")
-            print(f"  Local file:  {selected_file.local_path}")
-            print(f"  Device path: {selected_file.device_path}")
-            print()
-            worker = FileTransfer(device_config, mqtt_config, selected_file)
 
         # Set up signal handler for graceful shutdown
         def signal_handler(sig, frame):
