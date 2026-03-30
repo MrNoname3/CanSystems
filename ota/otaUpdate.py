@@ -11,7 +11,6 @@ Uses YAML configuration file (config.yaml) and device list (devices.yaml).
 import json
 import os
 import time
-import zlib
 import base64
 import sys
 import signal
@@ -401,7 +400,6 @@ class FirmwareManager:
     def __init__(self, firmware_path: Path):
         self.firmware_path = firmware_path
         self._firmware_data: Optional[bytes] = None
-        self._crc32: Optional[int] = None
         self._md5: Optional[str] = None
         self._firmware_id: Optional[str] = None
 
@@ -415,13 +413,6 @@ class FirmwareManager:
     @property
     def size(self) -> int:
         return len(self.firmware_data)
-
-    @property
-    def crc32(self) -> int:
-        """Calculate and cache CRC32 checksum"""
-        if self._crc32 is None:
-            self._crc32 = zlib.crc32(self.firmware_data) & 0xFFFFFFFF
-        return self._crc32
 
     @property
     def md5(self) -> str:
@@ -472,12 +463,11 @@ class FileDataProvider:
     For .json files, automatically serializes the content (removes whitespace)
     before transfer, unless the file is already serialized. This ensures the
     device always receives compact JSON regardless of how it is stored locally.
-    The size, CRC32 and MD5 are all computed from the serialized bytes."""
+    The size and MD5 are both computed from the serialized bytes."""
 
     def __init__(self, file_path: Path):
         self.file_path = file_path
         self._data: Optional[bytes] = None
-        self._crc32: Optional[int] = None
         self._md5: Optional[str] = None
 
     @property
@@ -513,13 +503,6 @@ class FileDataProvider:
     def size(self) -> int:
         """Get file size (of serialized content for JSON files)"""
         return len(self.data)
-
-    @property
-    def crc32(self) -> int:
-        """Calculate and cache CRC32 checksum (of serialized content for JSON files)"""
-        if self._crc32 is None:
-            self._crc32 = zlib.crc32(self.data) & 0xFFFFFFFF
-        return self._crc32
 
     @property
     def md5(self) -> str:
@@ -809,14 +792,12 @@ class OTAUpdater(_BaseTransfer):
     def _build_start_message(self) -> dict:
         return {
             "fileSize": self.firmware_manager.size,
-            "crc32":    self.firmware_manager.crc32,
             "md5":      self.firmware_manager.md5,
             "binId":    self.firmware_manager.firmware_id,
         }
 
     def _start_log_info(self):
         logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes")
-        logging.info(f"  CRC32: {self.firmware_manager.crc32}")
         logging.info(f"  MD5:   {self.firmware_manager.md5}")
 
 
@@ -826,7 +807,7 @@ class OTAUpdater(_BaseTransfer):
 
 class FileTransfer(_BaseTransfer):
     """Transfers an arbitrary file to the device via MQTT.
-    Uses 'name' + 'fileSize' + 'crc32' + 'md5' in the start message instead of 'binId',
+    Uses 'name' + 'fileSize' + 'md5' in the start message instead of 'binId',
     which signals to the device that this is a generic file transfer, not a firmware update."""
 
     def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
@@ -850,7 +831,6 @@ class FileTransfer(_BaseTransfer):
         return {
             "name":     self.file_entry.device_path,
             "fileSize": self.file_provider.size,
-            "crc32":    self.file_provider.crc32,
             "md5":      self.file_provider.md5,
         }
 
@@ -858,7 +838,6 @@ class FileTransfer(_BaseTransfer):
         logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
         logging.info(f"  Device path: {self.file_entry.device_path}")
         logging.info(f"  Size:  {self.file_provider.size} bytes")
-        logging.info(f"  CRC32: {self.file_provider.crc32}")
         logging.info(f"  MD5:   {self.file_provider.md5}")
 
 
