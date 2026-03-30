@@ -32,8 +32,8 @@ import paho.mqtt.client as mqtt
 # Enums & Data classes
 # ---------------------------------------------------------------------------
 
-class OTAState(enum.Enum):
-    """States for the OTA update / file transfer process"""
+class TransferState(enum.Enum):
+    """States for the OTA update / file transfer / command process"""
     IDLE = 0
     WAIT_START_ACK = 1
     SENDING_FW = 2
@@ -613,7 +613,7 @@ class _BaseTransfer:
         self.device_config = device_config
         self.mqtt_client = MQTTClient(mqtt_config)
 
-        self.state = OTAState.IDLE
+        self.state = TransferState.IDLE
         self.piece_number = 0
         self.remaining_bytes = 0
         self.timer_start = 0.0
@@ -657,7 +657,7 @@ class _BaseTransfer:
             self._send_start_message()
         else:
             logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = OTAState.ERROR
+            self.state = TransferState.ERROR
 
     def _on_message(self, client, userdata, msg):
         """Queue incoming MQTT messages for processing in the main loop.
@@ -667,7 +667,7 @@ class _BaseTransfer:
             self._pending_messages.append(json.loads(msg.payload.decode()))
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
-            self.state = OTAState.ERROR
+            self.state = TransferState.ERROR
 
     # --- Internal helpers -----------------------------------------------------
 
@@ -675,7 +675,7 @@ class _BaseTransfer:
         """Publish the start message and transition to WAIT_START_ACK."""
         self._start_log_info()
         self.mqtt_client.publish(self.device_config.send_topic, json.dumps(self._build_start_message()))
-        self.state = OTAState.WAIT_START_ACK
+        self.state = TransferState.WAIT_START_ACK
         self.remaining_bytes = self.size
         self.timer_start = time.time()
 
@@ -687,26 +687,26 @@ class _BaseTransfer:
 
         ack = message["type"] != 0
 
-        if self.state == OTAState.WAIT_START_ACK and ack:
+        if self.state == TransferState.WAIT_START_ACK and ack:
             logging.info("Start acknowledgment received, beginning transfer")
             self.progress_bar = tqdm(total=self.size, desc=self._progress_desc, unit="B", unit_scale=True)
-            self.state = OTAState.SENDING_FW
+            self.state = TransferState.SENDING_FW
 
-        elif self.state == OTAState.WAIT_PIECE_ACK and ack:
+        elif self.state == TransferState.WAIT_PIECE_ACK and ack:
             if self.remaining_bytes > 0:
-                self.state = OTAState.SENDING_FW
+                self.state = TransferState.SENDING_FW
             else:
                 self._close_progress_bar()
                 logging.info("All pieces sent, waiting for final verification")
-                self.state = OTAState.WAIT_CHECK_ACK
+                self.state = TransferState.WAIT_CHECK_ACK
                 self.timer_start = time.time()
 
-        elif self.state == OTAState.WAIT_CHECK_ACK and ack:
-            self.state = OTAState.DONE
+        elif self.state == TransferState.WAIT_CHECK_ACK and ack:
+            self.state = TransferState.DONE
 
         else:
             logging.error(f"Received negative acknowledgment or unexpected state. Message: {message}")
-            self.state = OTAState.ERROR
+            self.state = TransferState.ERROR
 
     def _send_piece(self):
         """Send the next data piece to the device."""
@@ -718,7 +718,7 @@ class _BaseTransfer:
             "data": base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
         }))
 
-        self.state = OTAState.WAIT_PIECE_ACK
+        self.state = TransferState.WAIT_PIECE_ACK
         self.timer_start = time.time()
         self.piece_number += 1
         self.remaining_bytes -= read_size
@@ -740,19 +740,19 @@ class _BaseTransfer:
             self._process_response(message)
         self._pending_messages.clear()
 
-        if self.state == OTAState.SENDING_FW:
+        if self.state == TransferState.SENDING_FW:
             if self.remaining_bytes > 0:
                 self._send_piece()
             else:
                 self._close_progress_bar()
                 logging.info("All pieces sent, waiting for final verification")
-                self.state = OTAState.WAIT_CHECK_ACK
+                self.state = TransferState.WAIT_CHECK_ACK
                 self.timer_start = time.time()
 
-        elif self.state in {OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK}:
+        elif self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}:
             if time.time() - self.timer_start > self.timeout_seconds:
                 logging.error(f"Timeout occurred in state: {self.state.name}")
-                self.state = OTAState.ERROR
+                self.state = TransferState.ERROR
 
     def _cleanup(self):
         """Clean up resources."""
@@ -765,11 +765,11 @@ class _BaseTransfer:
             return False
 
         try:
-            while self.state not in {OTAState.DONE, OTAState.ERROR}:
+            while self.state not in {TransferState.DONE, TransferState.ERROR}:
                 self.mqtt_client.loop(timeout=0.1)
                 self._process_state()
 
-            success = self.state == OTAState.DONE
+            success = self.state == TransferState.DONE
             logging.info("Transfer completed successfully" if success else "Transfer failed")
             return success
 
@@ -876,8 +876,8 @@ class CommandSender:
         self.command = command
         self.mqtt_client = MQTTClient(mqtt_config)
 
-        # Reuse OTAState: IDLE → WAIT_START_ACK → DONE / ERROR
-        self.state = OTAState.IDLE
+        # Reuse TransferState: IDLE → WAIT_START_ACK → DONE / ERROR
+        self.state = TransferState.IDLE
         self.timer_start = 0.0
         self.timeout_seconds = 25
         self._pending_messages: List[Dict[str, Any]] = []
@@ -892,7 +892,7 @@ class CommandSender:
             self._send_command()
         else:
             logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = OTAState.ERROR
+            self.state = TransferState.ERROR
 
     def _on_message(self, client, userdata, msg):
         """Queue incoming MQTT messages for processing in the main loop."""
@@ -900,13 +900,13 @@ class CommandSender:
             self._pending_messages.append(json.loads(msg.payload.decode()))
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
-            self.state = OTAState.ERROR
+            self.state = TransferState.ERROR
 
     def _send_command(self):
         """Publish the command message to the device topic."""
         self.mqtt_client.publish(self.device_config.send_topic, json.dumps({"cmd": self.command.cmd}))
         logging.info(f"Command sent: '{self.command.cmd}'")
-        self.state = OTAState.WAIT_START_ACK
+        self.state = TransferState.WAIT_START_ACK
         self.timer_start = time.time()
 
     def _process_state(self):
@@ -916,16 +916,16 @@ class CommandSender:
                 logging.warning("Received message without 'type' field")
                 continue
             if message["type"] != 0:
-                self.state = OTAState.DONE
+                self.state = TransferState.DONE
             else:
                 logging.error(f"Command rejected by device. Message: {message}")
-                self.state = OTAState.ERROR
+                self.state = TransferState.ERROR
         self._pending_messages.clear()
 
-        if self.state == OTAState.WAIT_START_ACK:
+        if self.state == TransferState.WAIT_START_ACK:
             if time.time() - self.timer_start > self.timeout_seconds:
                 logging.error("Timeout waiting for command acknowledgment")
-                self.state = OTAState.ERROR
+                self.state = TransferState.ERROR
 
     def _cleanup(self):
         """Clean up resources."""
@@ -937,11 +937,11 @@ class CommandSender:
             return False
 
         try:
-            while self.state not in {OTAState.DONE, OTAState.ERROR}:
+            while self.state not in {TransferState.DONE, TransferState.ERROR}:
                 self.mqtt_client.loop(timeout=0.1)
                 self._process_state()
 
-            success = self.state == OTAState.DONE
+            success = self.state == TransferState.DONE
             if success:
                 logging.info(f"Command '{self.command.cmd}' acknowledged successfully")
             else:
