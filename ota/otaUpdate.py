@@ -9,7 +9,6 @@ Uses YAML configuration file (config.yaml) and device list (devices.yaml).
 """
 
 import json
-import os
 import time
 import base64
 import sys
@@ -194,44 +193,7 @@ class DeviceManager:
             context="common"
         )
 
-        projects: List[ProjectEntry] = []
-        for p in data['projects']:
-            if 'name' not in p or 'pio_project' not in p:
-                raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
-
-            # Merge common commands with project-level commands.
-            merged_commands = common_commands + self._parse_commands(p.get('commands', []), context=p['name'])
-
-            devices: List[DeviceEntry] = []
-            for d in p.get('devices', []):
-                if 'mac' not in d:
-                    raise ValueError(f"Each device entry must have a 'mac' field (project: {p['name']})")
-
-                files: List[FileEntry] = []
-                for f in d.get('files', []):
-                    if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
-                        raise ValueError(
-                            f"Each file entry must have 'name', 'local_path' and 'device_path' fields "
-                            f"(device: {d['mac']})"
-                        )
-                    files.append(FileEntry(
-                        name=f['name'],
-                        local_path=self.script_dir / f['local_path'],
-                        device_path=f['device_path']
-                    ))
-
-                devices.append(DeviceEntry(
-                    mac=d['mac'],
-                    friendly_name=d.get('friendly_name'),
-                    files=files
-                ))
-
-            projects.append(ProjectEntry(
-                name=p['name'],
-                pio_project=p['pio_project'],
-                commands=merged_commands,
-                devices=devices
-            ))
+        projects = [self._parse_project(p, common_commands) for p in data['projects']]
 
         if not projects:
             raise ValueError("devices.yaml contains no projects")
@@ -252,6 +214,42 @@ class DeviceManager:
                 description=c.get('description')
             ))
         return commands
+
+    def _parse_file(self, f: dict, mac: str) -> FileEntry:
+        """Parse a single file entry dict into a FileEntry object."""
+        if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
+            raise ValueError(
+                f"Each file entry must have 'name', 'local_path' and 'device_path' fields "
+                f"(device: {mac})"
+            )
+        return FileEntry(
+            name=f['name'],
+            local_path=self.script_dir / f['local_path'],
+            device_path=f['device_path']
+        )
+
+    def _parse_device(self, d: dict, project_name: str) -> DeviceEntry:
+        """Parse a single device entry dict into a DeviceEntry object."""
+        if 'mac' not in d:
+            raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
+        return DeviceEntry(
+            mac=d['mac'],
+            friendly_name=d.get('friendly_name'),
+            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])]
+        )
+
+    def _parse_project(self, p: dict, common_commands: List[CommandEntry]) -> ProjectEntry:
+        """Parse a single project entry dict into a ProjectEntry object."""
+        if 'name' not in p or 'pio_project' not in p:
+            raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
+        # Merge common commands with project-level commands.
+        merged_commands = common_commands + self._parse_commands(p.get('commands', []), context=p['name'])
+        return ProjectEntry(
+            name=p['name'],
+            pio_project=p['pio_project'],
+            commands=merged_commands,
+            devices=[self._parse_device(d, p['name']) for d in p.get('devices', [])]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -637,10 +635,14 @@ class _BaseTransfer:
         if reason_code == 0:
             logging.info("Successfully connected to MQTT broker")
             client.subscribe(self.device_config.receive_topic)
-            self._send_start_message()
+            self._on_connected()
         else:
             logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
             self.state = TransferState.ERROR
+
+    def _on_connected(self):
+        """Called after a successful connection. Override to customize post-connect behavior."""
+        self._send_start_message()
 
     def _on_message(self, client, userdata, msg):
         """Queue incoming MQTT messages for processing in the main loop.
@@ -856,14 +858,8 @@ class CommandSender(_BaseTransfer):
         # Reuse TransferState: IDLE → WAIT_START_ACK → DONE / ERROR
         self.command = command
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties):
-        if reason_code == 0:
-            logging.info("Successfully connected to MQTT broker")
-            client.subscribe(self.device_config.receive_topic)
-            self._send_command()
-        else:
-            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = TransferState.ERROR
+    def _on_connected(self):
+        self._send_command()
 
     def _send_command(self):
         """Publish the command message to the device topic."""
@@ -934,10 +930,10 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
     Returns an ActionResult, or None if the user cancelled.
     """
     menu = MenuSelector()
+    project_map = {p.name: p for p in projects}
 
     while True:
         # --- Level 1: project selection ---
-        project_map = {p.name: p for p in projects}
         choice = menu.select("Select project", list(project_map), show_back=False)
         if choice in (MenuSelector.CANCEL, None):
             return None
