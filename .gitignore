@@ -8,7 +8,6 @@ logs/device-monitor-*
 notes.txt
 audio/*
 scripts/__pycache__
-data/config/*
 data/*.bin
 lib/connectivity/src/server.hpp
 ota/config.yaml
