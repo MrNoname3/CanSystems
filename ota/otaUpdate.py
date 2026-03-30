@@ -20,7 +20,7 @@ import uuid
 import hashlib
 import curses
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Dict, Any, List, ClassVar
 from dataclasses import dataclass, field
 from tqdm import tqdm
 import yaml
@@ -56,12 +56,12 @@ class MQTTConfig:
     cafile: Optional[str] = None             # CA certificate file path
 
     # Default ports keyed by (protocol, tls_enabled)
-    _DEFAULT_PORTS: dict = field(default_factory=lambda: {
+    _DEFAULT_PORTS: ClassVar[dict] = {
         ("mqtt", False): 1883,
         ("mqtt", True):  8883,
         ("ws",   False): 80,
         ("ws",   True):  443,
-    }, init=False, repr=False, compare=False)
+    }
 
     def __post_init__(self):
         """Validate and set defaults after initialization"""
@@ -425,8 +425,8 @@ class FirmwareManager:
     def firmware_id(self) -> str:
         """Extract and cache firmware ID"""
         if self._firmware_id is None:
-            success, fw_id = self._extract_firmware_id()
-            if not success:
+            fw_id = self._extract_firmware_id()
+            if fw_id is None:
                 raise ValueError("Could not extract firmware ID from binary")
             self._firmware_id = fw_id
         return self._firmware_id
@@ -438,7 +438,7 @@ class FirmwareManager:
         except IOError as e:
             raise IOError(f"Failed to read firmware file: {e}")
 
-    def _extract_firmware_id(self) -> Tuple[bool, str]:
+    def _extract_firmware_id(self) -> Optional[str]:
         """Extract firmware identifier from binary"""
         begin_of_id = b"project_"
         start_index = self.firmware_data.find(begin_of_id)
@@ -448,10 +448,10 @@ class FirmwareManager:
             if end_index != -1:
                 identifier = self.firmware_data[start_index:end_index].decode('utf-8')
                 logging.info(f"Firmware ID found: \"{identifier}\"")
-                return True, identifier
+                return identifier
 
         logging.error("Firmware ID not found in binary")
-        return False, ""
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -679,10 +679,7 @@ class _BaseTransfer:
             if self.remaining_bytes > 0:
                 self.state = TransferState.SENDING_FW
             else:
-                self._close_progress_bar()
-                logging.info("All pieces sent, waiting for final verification")
-                self.state = TransferState.WAIT_CHECK_ACK
-                self.timer_start = time.time()
+                self._finish_sending()
 
         elif self.state == TransferState.WAIT_CHECK_ACK and ack:
             self.state = TransferState.DONE
@@ -715,6 +712,13 @@ class _BaseTransfer:
             self.progress_bar.close()
             self.progress_bar = None
 
+    def _finish_sending(self):
+        """Transition to WAIT_CHECK_ACK after all pieces have been sent."""
+        self._close_progress_bar()
+        logging.info("All pieces sent, waiting for final verification")
+        self.state = TransferState.WAIT_CHECK_ACK
+        self.timer_start = time.time()
+
     def _process_state(self):
         """Process current transfer state.
         Pending messages are handled first to ensure the state machine has
@@ -727,10 +731,7 @@ class _BaseTransfer:
             if self.remaining_bytes > 0:
                 self._send_piece()
             else:
-                self._close_progress_bar()
-                logging.info("All pieces sent, waiting for final verification")
-                self.state = TransferState.WAIT_CHECK_ACK
-                self.timer_start = time.time()
+                self._finish_sending()
 
         elif self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}:
             if time.time() - self.timer_start > self.timeout_seconds:
@@ -845,24 +846,15 @@ class FileTransfer(_BaseTransfer):
 # Command sender
 # ---------------------------------------------------------------------------
 
-class CommandSender:
+class CommandSender(_BaseTransfer):
     """Sends a single command to the device via MQTT and waits for an ACK response.
     The command is sent as a JSON payload with a 'cmd' key. A timeout is applied
     while waiting for the device acknowledgment, consistent with the other workers."""
 
     def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, command: CommandEntry):
-        self.device_config = device_config
-        self.command = command
-        self.mqtt_client = MQTTClient(mqtt_config)
-
+        super().__init__(device_config, mqtt_config)
         # Reuse TransferState: IDLE → WAIT_START_ACK → DONE / ERROR
-        self.state = TransferState.IDLE
-        self.timer_start = 0.0
-        self.timeout_seconds = 25
-        self._pending_messages: List[Dict[str, Any]] = []
-
-        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        self.command = command
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
@@ -871,14 +863,6 @@ class CommandSender:
             self._send_command()
         else:
             logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = TransferState.ERROR
-
-    def _on_message(self, client, userdata, msg):
-        """Queue incoming MQTT messages for processing in the main loop."""
-        try:
-            self._pending_messages.append(json.loads(msg.payload.decode()))
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse MQTT message: {e}")
             self.state = TransferState.ERROR
 
     def _send_command(self):
@@ -905,10 +889,6 @@ class CommandSender:
             if time.time() - self.timer_start > self.timeout_seconds:
                 logging.error("Timeout waiting for command acknowledgment")
                 self.state = TransferState.ERROR
-
-    def _cleanup(self):
-        """Clean up resources."""
-        self.mqtt_client.disconnect()
 
     def run(self) -> bool:
         """Send the command and wait for the device acknowledgment."""
