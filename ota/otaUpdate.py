@@ -33,7 +33,7 @@ import paho.mqtt.client as mqtt
 # ---------------------------------------------------------------------------
 
 class OTAState(enum.Enum):
-    """States for the OTA update process"""
+    """States for the OTA update / file transfer process"""
     IDLE = 0
     WAIT_START_ACK = 1
     SENDING_FW = 2
@@ -47,34 +47,36 @@ class OTAState(enum.Enum):
 class MQTTConfig:
     """Configuration data for MQTT connection"""
     protocol: str = "mqtt"                    # "mqtt" or "ws"
-    host: str = ""                           # Server hostname or IP
-    port: int = 0                            # Server port (auto-determined if None)
-    basepath: str = "/"                      # Only used with WebSocket
-    client_id: str = ""                      # Unique client ID (auto-generated if None)
-    username: Optional[str] = None           # MQTT username
-    password: Optional[str] = None           # MQTT password
-    tls_enabled: bool = False                # Use TLS encryption
+    host: str = ""                            # Server hostname or IP
+    port: int = 0                             # Server port (auto-determined if 0)
+    basepath: str = "/"                       # Only used with WebSocket
+    client_id: str = ""                       # Unique client ID
+    username: Optional[str] = None            # MQTT username
+    password: Optional[str] = None            # MQTT password
+    tls_enabled: bool = False                 # Use TLS encryption
     cafile: Optional[str] = None             # CA certificate file path
+
+    # Default ports keyed by (protocol, tls_enabled)
+    _DEFAULT_PORTS: dict = field(default_factory=lambda: {
+        ("mqtt", False): 1883,
+        ("mqtt", True):  8883,
+        ("ws",   False): 80,
+        ("ws",   True):  443,
+    }, init=False, repr=False, compare=False)
 
     def __post_init__(self):
         """Validate and set defaults after initialization"""
-        # Validate protocol
-        if self.protocol not in ["mqtt", "ws"]:
+        if self.protocol not in ("mqtt", "ws"):
             raise ValueError(f"Unsupported protocol: {self.protocol}. Must be 'mqtt' or 'ws'")
 
         # Set default port based on protocol and TLS
-        if self.port is None:
-            if self.protocol == "mqtt":
-                self.port = 8883 if self.tls_enabled else 1883
-            else:  # ws
-                self.port = 443 if self.tls_enabled else 80
+        if not self.port:
+            self.port = self._DEFAULT_PORTS[(self.protocol, self.tls_enabled)]
 
-        # Validate port range
         if not (1 <= self.port <= 65535):
             raise ValueError(f"Invalid port: {self.port}. Must be between 1 and 65535")
 
-        # Generate random client ID if not provided
-        if self.client_id is None:
+        if not self.client_id:
             self.client_id = f"Python_OTA_{uuid.uuid4().hex[:8]}"
 
         # Validate CA file path if provided (handle Windows paths correctly)
@@ -82,10 +84,8 @@ class MQTTConfig:
             ca_path = Path(self.cafile).expanduser().resolve()
             if not ca_path.exists():
                 raise FileNotFoundError(f"CA certificate file not found: {ca_path}")
-            # Update with resolved path for consistency
             self.cafile = str(ca_path)
 
-        # Validate host is provided
         if not self.host.strip():
             raise ValueError("Host is required and cannot be empty")
 
@@ -201,15 +201,13 @@ class DeviceManager:
                 raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
 
             # Merge common commands with project-level commands.
-            project_commands = self._parse_commands(p.get('commands', []), context=p['name'])
-            merged_commands = common_commands + project_commands
+            merged_commands = common_commands + self._parse_commands(p.get('commands', []), context=p['name'])
 
             devices: List[DeviceEntry] = []
             for d in p.get('devices', []):
                 if 'mac' not in d:
                     raise ValueError(f"Each device entry must have a 'mac' field (project: {p['name']})")
 
-                # Parse optional file entries for this device
                 files: List[FileEntry] = []
                 for f in d.get('files', []):
                     if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
@@ -273,8 +271,7 @@ class MenuSelector:
         Display an interactive menu and return the selected option string,
         MenuSelector.BACK, or MenuSelector.CANCEL.
         """
-        result = curses.wrapper(self._run, title, options, show_back)
-        return result
+        return curses.wrapper(self._run, title, options, show_back)
 
     def _run(self, stdscr, title: str, options: List[str], show_back: bool):
         curses.curs_set(0)
@@ -285,11 +282,7 @@ class MenuSelector:
         curses.init_pair(3, curses.COLOR_YELLOW, -1)                 # hint line
 
         # Build full item list: real options + navigation entries
-        nav_items = []
-        if show_back:
-            nav_items.append("← Back")
-        nav_items.append("✕ Cancel")
-
+        nav_items = (["← Back"] if show_back else []) + ["✕ Cancel"]
         all_items = options + nav_items
         current = 0
 
@@ -311,22 +304,20 @@ class MenuSelector:
                 if row >= height - 2:
                     break
                 is_nav = idx >= len(options)
-                prefix = "  "
                 if idx == current:
                     stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
-                    stdscr.addstr(row, 2, f" {prefix}{item} ".ljust(width - 4)[:width - 4])
+                    stdscr.addstr(row, 2, f"   {item} ".ljust(width - 4)[:width - 4])
                     stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
                 else:
                     if is_nav:
                         stdscr.attron(curses.A_DIM)
-                    stdscr.addstr(row, 2, f" {prefix}{item}"[:width - 4])
+                    stdscr.addstr(row, 2, f"   {item}"[:width - 4])
                     if is_nav:
                         stdscr.attroff(curses.A_DIM)
 
             # Hint
-            hint = "↑↓ Navigate   Enter Select   Esc Cancel"
             stdscr.attron(curses.color_pair(3))
-            stdscr.addstr(height - 1, 2, hint[:width - 4])
+            stdscr.addstr(height - 1, 2, "↑↓ Navigate   Enter Select   Esc Cancel"[:width - 4])
             stdscr.attroff(curses.color_pair(3))
 
             stdscr.refresh()
@@ -369,7 +360,7 @@ class ConfigManager:
 
         try:
             with open(self.config_file, 'r', encoding='utf-8') as file:
-                config_data = yaml.safe_load(file)
+                config_data = yaml.safe_load(file) or {}
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML configuration file: {e}")
         except UnicodeDecodeError as e:
@@ -377,12 +368,8 @@ class ConfigManager:
         except Exception as e:
             raise IOError(f"Failed to read configuration file: {e}")
 
-        if config_data is None:
-            config_data = {}
-
-        # Extract configuration values with defaults
         try:
-            mqtt_config = MQTTConfig(
+            return MQTTConfig(
                 protocol=config_data.get('protocol', 'mqtt'),
                 host=config_data.get('host', ''),
                 port=config_data.get('port', 0),
@@ -393,17 +380,14 @@ class ConfigManager:
                 tls_enabled=config_data.get('tls_enabled', False),
                 cafile=config_data.get('cafile')
             )
-            return mqtt_config
         except (ValueError, FileNotFoundError) as e:
             raise ValueError(f"Configuration validation error: {e}")
 
     def get_firmware_path(self, pio_project: str) -> Path:
         """Get the firmware binary path"""
         firmware_path = self.parent_dir / '.pio' / 'build' / pio_project / 'firmware.bin'
-
         if not firmware_path.exists():
             raise FileNotFoundError(f"Firmware file not found: {firmware_path}")
-
         return firmware_path
 
 
@@ -430,7 +414,6 @@ class FirmwareManager:
 
     @property
     def size(self) -> int:
-        """Get firmware size"""
         return len(self.firmware_data)
 
     @property
@@ -444,9 +427,7 @@ class FirmwareManager:
     def md5(self) -> str:
         """Calculate and cache MD5 hash"""
         if self._md5 is None:
-            md5_hash = hashlib.md5()
-            md5_hash.update(self.firmware_data)
-            self._md5 = md5_hash.hexdigest()
+            self._md5 = hashlib.md5(self.firmware_data).hexdigest()
         return self._md5
 
     @property
@@ -462,8 +443,7 @@ class FirmwareManager:
     def _read_firmware(self) -> bytes:
         """Read firmware binary file"""
         try:
-            with open(self.firmware_path, 'rb') as f:
-                return f.read()
+            return self.firmware_path.read_bytes()
         except IOError as e:
             raise IOError(f"Failed to read firmware file: {e}")
 
@@ -505,15 +485,10 @@ class FileDataProvider:
         """Lazy loading of file data. JSON files are serialized automatically."""
         if self._data is None:
             try:
-                with open(self.file_path, 'rb') as f:
-                    raw = f.read()
+                raw = self.file_path.read_bytes()
             except IOError as e:
                 raise IOError(f"Failed to read file: {e}")
-
-            if self.file_path.suffix.lower() == '.json':
-                self._data = self._serialize_json(raw)
-            else:
-                self._data = raw
+            self._data = self._serialize_json(raw) if self.file_path.suffix.lower() == '.json' else raw
         return self._data
 
     def _serialize_json(self, raw: bytes) -> bytes:
@@ -521,17 +496,12 @@ class FileDataProvider:
         If the content is already serialized (compact), it is returned as-is.
         Raises ValueError if the content is not valid JSON."""
         try:
-            text = raw.decode('utf-8')
-            parsed = json.loads(text)
+            parsed = json.loads(raw.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise ValueError(f"Invalid JSON file '{self.file_path.name}': {e}")
 
-        # Serialize without any whitespace
-        serialized = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False)
-        serialized_bytes = serialized.encode('utf-8')
+        serialized_bytes = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
-        # Check if the file was already serialized by comparing the result
-        # to the stripped original. If they match, no transformation was needed.
         if serialized_bytes == raw.strip():
             logging.info(f"JSON file '{self.file_path.name}' is already serialized, no transformation needed")
         else:
@@ -555,9 +525,7 @@ class FileDataProvider:
     def md5(self) -> str:
         """Calculate and cache MD5 hash (of serialized content for JSON files)"""
         if self._md5 is None:
-            md5_hash = hashlib.md5()
-            md5_hash.update(self.data)
-            self._md5 = md5_hash.hexdigest()
+            self._md5 = hashlib.md5(self.data).hexdigest()
         return self._md5
 
 
@@ -571,42 +539,24 @@ class MQTTClient:
     def __init__(self, config: MQTTConfig):
         self.config = config
         self._setup_client()
-        self._connected = False
 
     def _setup_client(self):
         """Set up MQTT client based on configuration"""
-        if self.config.protocol == "mqtt":
-            self.client = mqtt.Client(
-                client_id=self.config.client_id,
-                callback_api_version=mqtt.CallbackAPIVersion.VERSION2
-            )
-        elif self.config.protocol == "ws":
-            self.client = mqtt.Client(
-                client_id=self.config.client_id,
-                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-                transport="websockets"
-            )
-            # Set WebSocket path
-            if hasattr(self.client, 'ws_set_options'):
-                self.client.ws_set_options(path=self.config.basepath)
-        else:
-            raise ValueError(f"Unsupported protocol: {self.config.protocol}")
+        transport = "websockets" if self.config.protocol == "ws" else "tcp"
+        self.client = mqtt.Client(
+            client_id=self.config.client_id,
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            transport=transport
+        )
 
-        # Set authentication if provided
+        if self.config.protocol == "ws" and hasattr(self.client, 'ws_set_options'):
+            self.client.ws_set_options(path=self.config.basepath)
+
         if self.config.username is not None and self.config.password is not None:
-            self.client.username_pw_set(
-                username=self.config.username,
-                password=self.config.password
-            )
+            self.client.username_pw_set(username=self.config.username, password=self.config.password)
 
-        # Set up TLS if enabled
         if self.config.tls_enabled:
-            if self.config.cafile:
-                # Use provided CA certificate file
-                self.client.tls_set(ca_certs=self.config.cafile)
-            else:
-                # Use system default certificate store
-                self.client.tls_set()
+            self.client.tls_set(ca_certs=self.config.cafile)  # cafile=None uses system store
 
     def set_callbacks(self, on_connect_callback, on_message_callback):
         """Set MQTT event callbacks"""
@@ -619,7 +569,6 @@ class MQTTClient:
             logging.info(f"Connecting to {self.config.protocol.upper()} broker at {self.config.host}:{self.config.port}")
             if self.config.tls_enabled:
                 logging.info("Using TLS encryption")
-
             self.client.connect(self.config.host, self.config.port, 60)
             return True
         except Exception as e:
@@ -646,22 +595,28 @@ class MQTTClient:
 
 
 # ---------------------------------------------------------------------------
-# OTA updater
+# Base transfer class (shared logic for OTAUpdater and FileTransfer)
 # ---------------------------------------------------------------------------
 
-class OTAUpdater:
-    """Main OTA firmware update orchestrator"""
+class _BaseTransfer:
+    """Common state-machine and MQTT plumbing shared by OTAUpdater and FileTransfer.
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path):
+    Subclasses must implement:
+      - `_build_start_message()  -> dict`   – the initial JSON payload
+      - `_start_log_info()`                 – log lines shown after connect
+      - `_progress_desc`         (property) – tqdm description string
+      - `data`                   (property) – bytes to send
+      - `size`                   (property) – total byte count
+    """
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig):
         self.device_config = device_config
-        self.firmware_manager = FirmwareManager(firmware_path)
         self.mqtt_client = MQTTClient(mqtt_config)
 
-        # OTA state management
         self.state = OTAState.IDLE
         self.piece_number = 0
         self.remaining_bytes = 0
-        self.timer_start = 0
+        self.timer_start = 0.0
         self.piece_size = 100
         self.timeout_seconds = 25
         self.progress_bar: Optional[tqdm] = None
@@ -670,11 +625,30 @@ class OTAUpdater:
         # the MQTT callback thread and the main loop
         self._pending_messages: List[Dict[str, Any]] = []
 
-        # Set up MQTT callbacks
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-
-        # Set up logging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    # --- Abstract interface ---------------------------------------------------
+
+    def _build_start_message(self) -> dict:
+        raise NotImplementedError
+
+    def _start_log_info(self):
+        raise NotImplementedError
+
+    @property
+    def _progress_desc(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def data(self) -> bytes:
+        raise NotImplementedError
+
+    @property
+    def size(self) -> int:
+        raise NotImplementedError
+
+    # --- MQTT callbacks -------------------------------------------------------
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
@@ -690,226 +664,23 @@ class OTAUpdater:
         This avoids race conditions where an ACK arrives before the state
         machine has transitioned to the expected state."""
         try:
-            message = json.loads(msg.payload.decode())
-            self._pending_messages.append(message)
+            self._pending_messages.append(json.loads(msg.payload.decode()))
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
             self.state = OTAState.ERROR
 
-    def _send_start_message(self):
-        """Send OTA start message to device"""
-        start_message = {
-            "fileSize": self.firmware_manager.size,
-            "crc32": self.firmware_manager.crc32,
-            "md5": self.firmware_manager.md5,
-            "binId": self.firmware_manager.firmware_id
-        }
-
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(start_message))
-        logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes")
-        logging.info(f"  CRC32: {self.firmware_manager.crc32}")
-        logging.info(f"  MD5:   {self.firmware_manager.md5}")
-
-        self.state = OTAState.WAIT_START_ACK
-        self.remaining_bytes = self.firmware_manager.size
-        self.timer_start = time.time()
-
-    def _process_ota_response(self, message: Dict[str, Any]):
-        """Process OTA response messages from device"""
-        if "type" not in message:
-            logging.warning("Received message without 'type' field")
-            return
-
-        ack = message["type"] != 0
-
-        if self.state == OTAState.WAIT_START_ACK and ack:
-            logging.info("Start acknowledgment received, beginning firmware transfer")
-            self.progress_bar = tqdm(
-                total=self.firmware_manager.size,
-                desc="Sending Firmware",
-                unit="B",
-                unit_scale=True
-            )
-            self.state = OTAState.SENDING_FW
-
-        elif self.state == OTAState.WAIT_PIECE_ACK and ack:
-            if self.remaining_bytes > 0:
-                self.state = OTAState.SENDING_FW
-            else:
-                self._close_progress_bar()
-                logging.info("All firmware pieces sent, waiting for final verification")
-                self.state = OTAState.WAIT_CHECK_ACK
-                self.timer_start = time.time()
-
-        elif self.state == OTAState.WAIT_CHECK_ACK and ack:
-            self.state = OTAState.DONE
-
-        else:
-            logging.error(f"Received negative acknowledgment or unexpected state. Message: {message}")
-            self.state = OTAState.ERROR
-
-    def _send_firmware_piece(self):
-        """Send a piece of firmware to the device"""
-        offset = self.firmware_manager.size - self.remaining_bytes
-        read_size = min(self.remaining_bytes, self.piece_size)
-        data = self.firmware_manager.firmware_data[offset:offset + read_size]
-
-        piece_message = {
-            "piece": self.piece_number,
-            "data": base64.b64encode(data).decode('utf-8')
-        }
-
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(piece_message))
-
-        self.state = OTAState.WAIT_PIECE_ACK
-        self.timer_start = time.time()
-        self.piece_number += 1
-        self.remaining_bytes -= read_size
-
-        if self.progress_bar:
-            self.progress_bar.update(read_size)
-
-    def _close_progress_bar(self):
-        """Close and clean up the progress bar"""
-        if self.progress_bar:
-            self.progress_bar.close()
-            self.progress_bar = None
-
-    def _process_state(self):
-        """Process current OTA state.
-        Pending messages are handled first to ensure the state machine has
-        fully transitioned before acting on incoming ACKs."""
-        for message in self._pending_messages:
-            self._process_ota_response(message)
-        self._pending_messages.clear()
-
-        current_time = time.time()
-
-        if self.state == OTAState.SENDING_FW:
-            if self.remaining_bytes > 0:
-                self._send_firmware_piece()
-            else:
-                # Close progress bar immediately when transfer is complete
-                self._close_progress_bar()
-                logging.info("All firmware pieces sent, waiting for final verification")
-                self.state = OTAState.WAIT_CHECK_ACK
-                self.timer_start = current_time
-
-        elif self.state in {OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK}:
-            if current_time - self.timer_start > self.timeout_seconds:
-                logging.error(f"Timeout occurred in state: {self.state.name}")
-                self.state = OTAState.ERROR
-
-    def _cleanup(self):
-        """Clean up resources"""
-        self._close_progress_bar()
-        self.mqtt_client.disconnect()
-
-    def run(self) -> bool:
-        """Run the OTA update process"""
-        if not self.mqtt_client.connect():
-            return False
-
-        try:
-            while self.state not in {OTAState.DONE, OTAState.ERROR}:
-                self.mqtt_client.loop(timeout=0.1)
-                self._process_state()
-
-            success = self.state == OTAState.DONE
-            if success:
-                logging.info("OTA update completed successfully")
-            else:
-                logging.error("OTA update failed")
-
-            return success
-
-        except KeyboardInterrupt:
-            logging.info("OTA update interrupted by user")
-            return False
-        except Exception as e:
-            logging.error(f"Unexpected error during OTA update: {e}")
-            return False
-        finally:
-            self._cleanup()
-
-
-# ---------------------------------------------------------------------------
-# File transfer (config files, certificates, or any arbitrary file)
-# ---------------------------------------------------------------------------
-
-class FileTransfer:
-    """Transfers an arbitrary file to the device via MQTT.
-    Uses 'name' + 'fileSize' + 'crc32' + 'md5' in the start message instead of 'binId',
-    which signals to the device that this is a generic file transfer, not a firmware update."""
-
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
-        self.device_config = device_config
-        self.file_entry = file_entry
-        self.file_provider = FileDataProvider(file_entry.local_path)
-        self.mqtt_client = MQTTClient(mqtt_config)
-
-        # Transfer state management (reuses OTAState for consistency)
-        self.state = OTAState.IDLE
-        self.piece_number = 0
-        self.remaining_bytes = 0
-        self.timer_start = 0
-        self.piece_size = 100
-        self.timeout_seconds = 25
-        self.progress_bar: Optional[tqdm] = None
-
-        # Queue for incoming MQTT messages to avoid race conditions between
-        # the MQTT callback thread and the main loop
-        self._pending_messages: List[Dict[str, Any]] = []
-
-        # Set up MQTT callbacks
-        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-
-        # Set up logging
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-    def _on_connect(self, client, userdata, flags, reason_code, properties):
-        if reason_code == 0:
-            logging.info("Successfully connected to MQTT broker")
-            client.subscribe(self.device_config.receive_topic)
-            self._send_start_message()
-        else:
-            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = OTAState.ERROR
-
-    def _on_message(self, client, userdata, msg):
-        """Queue incoming MQTT messages for processing in the main loop.
-        This avoids race conditions where an ACK arrives before the state
-        machine has transitioned to the expected state."""
-        try:
-            message = json.loads(msg.payload.decode())
-            self._pending_messages.append(message)
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse MQTT message: {e}")
-            self.state = OTAState.ERROR
+    # --- Internal helpers -----------------------------------------------------
 
     def _send_start_message(self):
-        """Send file transfer start message to device.
-        Uses 'name' (device destination path) instead of 'binId' to signal a generic file transfer."""
-        start_message = {
-            "name": self.file_entry.device_path,
-            "fileSize": self.file_provider.size,
-            "crc32": self.file_provider.crc32,
-            "md5": self.file_provider.md5
-        }
-
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(start_message))
-        logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
-        logging.info(f"  Device path: {self.file_entry.device_path}")
-        logging.info(f"  Size:  {self.file_provider.size} bytes")
-        logging.info(f"  CRC32: {self.file_provider.crc32}")
-        logging.info(f"  MD5:   {self.file_provider.md5}")
-
+        """Publish the start message and transition to WAIT_START_ACK."""
+        self._start_log_info()
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(self._build_start_message()))
         self.state = OTAState.WAIT_START_ACK
-        self.remaining_bytes = self.file_provider.size
+        self.remaining_bytes = self.size
         self.timer_start = time.time()
 
     def _process_response(self, message: Dict[str, Any]):
-        """Process response messages from device"""
+        """Process ACK/NACK response messages from device."""
         if "type" not in message:
             logging.warning("Received message without 'type' field")
             return
@@ -917,13 +688,8 @@ class FileTransfer:
         ack = message["type"] != 0
 
         if self.state == OTAState.WAIT_START_ACK and ack:
-            logging.info("Start acknowledgment received, beginning file transfer")
-            self.progress_bar = tqdm(
-                total=self.file_provider.size,
-                desc=f"Sending {self.file_entry.local_path.name}",
-                unit="B",
-                unit_scale=True
-            )
+            logging.info("Start acknowledgment received, beginning transfer")
+            self.progress_bar = tqdm(total=self.size, desc=self._progress_desc, unit="B", unit_scale=True)
             self.state = OTAState.SENDING_FW
 
         elif self.state == OTAState.WAIT_PIECE_ACK and ack:
@@ -931,7 +697,7 @@ class FileTransfer:
                 self.state = OTAState.SENDING_FW
             else:
                 self._close_progress_bar()
-                logging.info("All file pieces sent, waiting for final verification")
+                logging.info("All pieces sent, waiting for final verification")
                 self.state = OTAState.WAIT_CHECK_ACK
                 self.timer_start = time.time()
 
@@ -942,18 +708,15 @@ class FileTransfer:
             logging.error(f"Received negative acknowledgment or unexpected state. Message: {message}")
             self.state = OTAState.ERROR
 
-    def _send_file_piece(self):
-        """Send a piece of the file to the device"""
-        offset = self.file_provider.size - self.remaining_bytes
+    def _send_piece(self):
+        """Send the next data piece to the device."""
+        offset = self.size - self.remaining_bytes
         read_size = min(self.remaining_bytes, self.piece_size)
-        data = self.file_provider.data[offset:offset + read_size]
 
-        piece_message = {
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({
             "piece": self.piece_number,
-            "data": base64.b64encode(data).decode('utf-8')
-        }
-
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps(piece_message))
+            "data": base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
+        }))
 
         self.state = OTAState.WAIT_PIECE_ACK
         self.timer_start = time.time()
@@ -964,7 +727,7 @@ class FileTransfer:
             self.progress_bar.update(read_size)
 
     def _close_progress_bar(self):
-        """Close and clean up the progress bar"""
+        """Close and clean up the progress bar."""
         if self.progress_bar:
             self.progress_bar.close()
             self.progress_bar = None
@@ -977,30 +740,27 @@ class FileTransfer:
             self._process_response(message)
         self._pending_messages.clear()
 
-        current_time = time.time()
-
         if self.state == OTAState.SENDING_FW:
             if self.remaining_bytes > 0:
-                self._send_file_piece()
+                self._send_piece()
             else:
-                # Close progress bar immediately when transfer is complete
                 self._close_progress_bar()
-                logging.info("All file pieces sent, waiting for final verification")
+                logging.info("All pieces sent, waiting for final verification")
                 self.state = OTAState.WAIT_CHECK_ACK
-                self.timer_start = current_time
+                self.timer_start = time.time()
 
         elif self.state in {OTAState.WAIT_START_ACK, OTAState.WAIT_PIECE_ACK, OTAState.WAIT_CHECK_ACK}:
-            if current_time - self.timer_start > self.timeout_seconds:
+            if time.time() - self.timer_start > self.timeout_seconds:
                 logging.error(f"Timeout occurred in state: {self.state.name}")
                 self.state = OTAState.ERROR
 
     def _cleanup(self):
-        """Clean up resources"""
+        """Clean up resources."""
         self._close_progress_bar()
         self.mqtt_client.disconnect()
 
     def run(self) -> bool:
-        """Run the file transfer process"""
+        """Run the transfer process."""
         if not self.mqtt_client.connect():
             return False
 
@@ -1010,21 +770,96 @@ class FileTransfer:
                 self._process_state()
 
             success = self.state == OTAState.DONE
-            if success:
-                logging.info("File transfer completed successfully")
-            else:
-                logging.error("File transfer failed")
-
+            logging.info("Transfer completed successfully" if success else "Transfer failed")
             return success
 
         except KeyboardInterrupt:
-            logging.info("File transfer interrupted by user")
+            logging.info("Transfer interrupted by user")
             return False
         except Exception as e:
-            logging.error(f"Unexpected error during file transfer: {e}")
+            logging.error(f"Unexpected error during transfer: {e}")
             return False
         finally:
             self._cleanup()
+
+
+# ---------------------------------------------------------------------------
+# OTA updater
+# ---------------------------------------------------------------------------
+
+class OTAUpdater(_BaseTransfer):
+    """Firmware OTA update – sends firmware.bin to the device via MQTT."""
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path):
+        super().__init__(device_config, mqtt_config)
+        self.firmware_manager = FirmwareManager(firmware_path)
+
+    @property
+    def data(self) -> bytes:
+        return self.firmware_manager.firmware_data
+
+    @property
+    def size(self) -> int:
+        return self.firmware_manager.size
+
+    @property
+    def _progress_desc(self) -> str:
+        return "Sending Firmware"
+
+    def _build_start_message(self) -> dict:
+        return {
+            "fileSize": self.firmware_manager.size,
+            "crc32":    self.firmware_manager.crc32,
+            "md5":      self.firmware_manager.md5,
+            "binId":    self.firmware_manager.firmware_id,
+        }
+
+    def _start_log_info(self):
+        logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes")
+        logging.info(f"  CRC32: {self.firmware_manager.crc32}")
+        logging.info(f"  MD5:   {self.firmware_manager.md5}")
+
+
+# ---------------------------------------------------------------------------
+# File transfer (config files, certificates, or any arbitrary file)
+# ---------------------------------------------------------------------------
+
+class FileTransfer(_BaseTransfer):
+    """Transfers an arbitrary file to the device via MQTT.
+    Uses 'name' + 'fileSize' + 'crc32' + 'md5' in the start message instead of 'binId',
+    which signals to the device that this is a generic file transfer, not a firmware update."""
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
+        super().__init__(device_config, mqtt_config)
+        self.file_entry = file_entry
+        self.file_provider = FileDataProvider(file_entry.local_path)
+
+    @property
+    def data(self) -> bytes:
+        return self.file_provider.data
+
+    @property
+    def size(self) -> int:
+        return self.file_provider.size
+
+    @property
+    def _progress_desc(self) -> str:
+        return f"Sending {self.file_entry.local_path.name}"
+
+    def _build_start_message(self) -> dict:
+        return {
+            "name":     self.file_entry.device_path,
+            "fileSize": self.file_provider.size,
+            "crc32":    self.file_provider.crc32,
+            "md5":      self.file_provider.md5,
+        }
+
+    def _start_log_info(self):
+        logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
+        logging.info(f"  Device path: {self.file_entry.device_path}")
+        logging.info(f"  Size:  {self.file_provider.size} bytes")
+        logging.info(f"  CRC32: {self.file_provider.crc32}")
+        logging.info(f"  MD5:   {self.file_provider.md5}")
 
 
 # ---------------------------------------------------------------------------
@@ -1036,30 +871,18 @@ class CommandSender:
     The command is sent as a JSON payload with a 'cmd' key. A timeout is applied
     while waiting for the device acknowledgment, consistent with the other workers."""
 
-    # Dedicated state enum for the simple two-step send → wait flow.
-    class _State(enum.Enum):
-        IDLE     = 0
-        WAIT_ACK = 1
-        DONE     = 2
-        ERROR    = 3
-
     def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, command: CommandEntry):
         self.device_config = device_config
         self.command = command
         self.mqtt_client = MQTTClient(mqtt_config)
 
-        self.state = self._State.IDLE
+        # Reuse OTAState: IDLE → WAIT_START_ACK → DONE / ERROR
+        self.state = OTAState.IDLE
         self.timer_start = 0.0
         self.timeout_seconds = 25
-
-        # Queue for incoming MQTT messages to avoid race conditions between
-        # the MQTT callback thread and the main loop.
         self._pending_messages: List[Dict[str, Any]] = []
 
-        # Set up MQTT callbacks
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-
-        # Set up logging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
@@ -1069,48 +892,40 @@ class CommandSender:
             self._send_command()
         else:
             logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
-            self.state = self._State.ERROR
+            self.state = OTAState.ERROR
 
     def _on_message(self, client, userdata, msg):
         """Queue incoming MQTT messages for processing in the main loop."""
         try:
-            message = json.loads(msg.payload.decode())
-            self._pending_messages.append(message)
+            self._pending_messages.append(json.loads(msg.payload.decode()))
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse MQTT message: {e}")
-            self.state = self._State.ERROR
+            self.state = OTAState.ERROR
 
     def _send_command(self):
         """Publish the command message to the device topic."""
-        payload = json.dumps({"cmd": self.command.cmd})
-        self.mqtt_client.publish(self.device_config.send_topic, payload)
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({"cmd": self.command.cmd}))
         logging.info(f"Command sent: '{self.command.cmd}'")
-        self.state = self._State.WAIT_ACK
+        self.state = OTAState.WAIT_START_ACK
         self.timer_start = time.time()
-
-    def _process_response(self, message: Dict[str, Any]):
-        """Interpret the ACK/NACK response from the device."""
-        if "type" not in message:
-            logging.warning("Received message without 'type' field")
-            return
-
-        ack = message["type"] != 0
-        if ack:
-            self.state = self._State.DONE
-        else:
-            logging.error(f"Command rejected by device. Message: {message}")
-            self.state = self._State.ERROR
 
     def _process_state(self):
         """Process pending messages and check for timeout."""
         for message in self._pending_messages:
-            self._process_response(message)
+            if "type" not in message:
+                logging.warning("Received message without 'type' field")
+                continue
+            if message["type"] != 0:
+                self.state = OTAState.DONE
+            else:
+                logging.error(f"Command rejected by device. Message: {message}")
+                self.state = OTAState.ERROR
         self._pending_messages.clear()
 
-        if self.state == self._State.WAIT_ACK:
+        if self.state == OTAState.WAIT_START_ACK:
             if time.time() - self.timer_start > self.timeout_seconds:
                 logging.error("Timeout waiting for command acknowledgment")
-                self.state = self._State.ERROR
+                self.state = OTAState.ERROR
 
     def _cleanup(self):
         """Clean up resources."""
@@ -1122,16 +937,15 @@ class CommandSender:
             return False
 
         try:
-            while self.state not in {self._State.DONE, self._State.ERROR}:
+            while self.state not in {OTAState.DONE, OTAState.ERROR}:
                 self.mqtt_client.loop(timeout=0.1)
                 self._process_state()
 
-            success = self.state == self._State.DONE
+            success = self.state == OTAState.DONE
             if success:
                 logging.info(f"Command '{self.command.cmd}' acknowledged successfully")
             else:
                 logging.error(f"Command '{self.command.cmd}' failed or timed out")
-
             return success
 
         except KeyboardInterrupt:
@@ -1164,42 +978,33 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
     while True:
         # --- Level 1: project selection ---
-        project_names = [p.name for p in projects]
-        choice = menu.select("Select project", project_names, show_back=False)
-
+        project_map = {p.name: p for p in projects}
+        choice = menu.select("Select project", list(project_map), show_back=False)
         if choice in (MenuSelector.CANCEL, None):
             return None
 
-        selected_project = next(p for p in projects if p.name == choice)
+        selected_project = project_map[choice]
 
         while True:
             # --- Level 2: device selection ---
-            device_labels = [d.display_name for d in selected_project.devices]
-            choice = menu.select(
-                f"Select device  [{selected_project.name}]",
-                device_labels,
-                show_back=True
-            )
+            device_map = {d.display_name: d for d in selected_project.devices}
+            choice = menu.select(f"Select device  [{selected_project.name}]", list(device_map), show_back=True)
 
             if choice == MenuSelector.CANCEL:
                 return None
             if choice == MenuSelector.BACK:
                 break  # go back to project selection
 
-            selected_device = next(d for d in selected_project.devices if d.display_name == choice)
+            selected_device = device_map[choice]
 
             while True:
                 # --- Level 3: action selection ---
                 # Order: firmware upload → file transfers → commands.
-                file_labels    = [f.name for f in selected_device.files]
-                command_labels = [c.display_name for c in selected_project.commands]
-                action_options = [_FW_OPTION] + file_labels + command_labels
+                file_map    = {f.name: f for f in selected_device.files}
+                command_map = {c.display_name: c for c in selected_project.commands}
+                action_options = [_FW_OPTION] + list(file_map) + list(command_map)
 
-                choice = menu.select(
-                    f"Select action  [{selected_device.display_name}]",
-                    action_options,
-                    show_back=True
-                )
+                choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
                 if choice == MenuSelector.CANCEL:
                     return None
@@ -1208,16 +1013,36 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
                 if choice == _FW_OPTION:
                     return ActionResult(project=selected_project, device=selected_device)
+                if choice in file_map:
+                    return ActionResult(project=selected_project, device=selected_device, file=file_map[choice])
+                if choice in command_map:
+                    return ActionResult(project=selected_project, device=selected_device, command=command_map[choice])
 
-                # Check if a file was selected.
-                matched_file = next((f for f in selected_device.files if f.name == choice), None)
-                if matched_file is not None:
-                    return ActionResult(project=selected_project, device=selected_device, file=matched_file)
 
-                # Otherwise a command was selected.
-                matched_cmd = next((c for c in selected_project.commands if c.display_name == choice), None)
-                if matched_cmd is not None:
-                    return ActionResult(project=selected_project, device=selected_device, command=matched_cmd)
+def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig):
+    """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender)."""
+    device_config = DeviceConfig(mac_address=result.device.mac, project_name=result.project.pio_project)
+
+    if result.command is not None:
+        print(f"  Action:      {result.command.display_name}")
+        print()
+        return CommandSender(device_config, mqtt_config, result.command)
+
+    if result.file is not None:
+        if not result.file.local_path.exists():
+            raise FileNotFoundError(f"Local file not found: {result.file.local_path}")
+        print(f"  Action:      {result.file.name}")
+        print(f"  Local file:  {result.file.local_path}")
+        print(f"  Device path: {result.file.device_path}")
+        print()
+        return FileTransfer(device_config, mqtt_config, result.file)
+
+    # Firmware upload
+    firmware_path = config_manager.get_firmware_path(result.project.pio_project)
+    print(f"  Action:      Firmware upload")
+    print(f"  Firmware:    {firmware_path}")
+    print()
+    return OTAUpdater(device_config, mqtt_config, firmware_path)
 
 
 def main():
@@ -1247,35 +1072,7 @@ def main():
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
 
-        device_config = DeviceConfig(
-            mac_address=result.device.mac,
-            project_name=result.project.pio_project
-        )
-
-        if result.command is not None:
-            # Command dispatch
-            print(f"  Action:      {result.command.display_name}")
-            print()
-            worker = CommandSender(device_config, mqtt_config, result.command)
-
-        elif result.file is not None:
-            # Generic file transfer
-            if not result.file.local_path.exists():
-                print(f"❌ File Error: Local file not found: {result.file.local_path}")
-                sys.exit(1)
-            print(f"  Action:      {result.file.name}")
-            print(f"  Local file:  {result.file.local_path}")
-            print(f"  Device path: {result.file.device_path}")
-            print()
-            worker = FileTransfer(device_config, mqtt_config, result.file)
-
-        else:
-            # Firmware upload
-            firmware_path = config_manager.get_firmware_path(result.project.pio_project)
-            print(f"  Action:      Firmware upload")
-            print(f"  Firmware:    {firmware_path}")
-            print()
-            worker = OTAUpdater(device_config, mqtt_config, firmware_path)
+        worker = _build_worker(result, config_manager, mqtt_config)
 
         # Set up signal handler for graceful shutdown
         def signal_handler(sig, frame):
@@ -1283,16 +1080,11 @@ def main():
             worker._cleanup()
             sys.exit(0)
 
-        # Register signal handlers (SIGINT works on both Windows and Unix)
         signal.signal(signal.SIGINT, signal_handler)
-
-        # On Unix systems, also handle SIGTERM
         if hasattr(signal, 'SIGTERM'):
             signal.signal(signal.SIGTERM, signal_handler)
 
-        # Run the selected operation
-        success = worker.run()
-        sys.exit(0 if success else 1)
+        sys.exit(0 if worker.run() else 1)
 
     except FileNotFoundError as e:
         print(f"❌ File Error: {e}")
