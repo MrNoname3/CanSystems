@@ -76,10 +76,10 @@ public:
   /// @return `true` if the callback is registered successfully; otherwise, `false`.
   bool registerCallback(MqttBase* mqttBasePtr);
 
-  Connectivity(const Connectivity&) = delete;                       // Define copy constructor.
-  Connectivity& operator=(const Connectivity&) = delete;            // Define copy assignment operator.
-  Connectivity(Connectivity&&) = delete;                            // Define move constructor.
-  Connectivity& operator=(Connectivity&&) = delete;                 // Define move assignment operator.
+  Connectivity(const Connectivity&) = delete;                       // Delete copy constructor.
+  Connectivity& operator=(const Connectivity&) = delete;            // Delete copy assignment operator.
+  Connectivity(Connectivity&&) = delete;                            // Delete move constructor.
+  Connectivity& operator=(Connectivity&&) = delete;                 // Delete move assignment operator.
 
 private:
   /// @brief Holds MQTT connection credentials.
@@ -156,7 +156,7 @@ public:
   /// @brief Enumeration for MQTT response types.
   enum class Response : uint8_t {
     NACK = 0U,        // Negative acknowledgment.
-    ACK = 1U          // Positive acknowledgmen.
+    ACK = 1U          // Positive acknowledgment.
   };
 
   /// @brief Initializes the MQTT base instance.
@@ -194,7 +194,7 @@ public:
   /// @param payload Pointer to the message payload.
   /// @return `true` if the message was sent successfully; otherwise, `false`.
   [[nodiscard]] inline bool sendMessage(const char* payload) {
-    if(payload == nullptr || subtopic == nullptr) { return false; }
+    if(payload == nullptr) { return false; }
     return connectivity.sendMqttMessage(subtopic, payload);
   }
 
@@ -205,17 +205,17 @@ public:
   [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command) {
     char responseBuffer[responseBufferSize] = { '\0' };
     const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
-      PSTR("{""\"type\":%hu,""\"cmd\":%hu""}"), static_cast<uint8_t>(response), command);
+      PSTR("{\"type\":%hu,\"cmd\":%hu}"), static_cast<uint8_t>(response), command);
     const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
       (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
     if(!responseBufferValid) { return false; }
     return sendMessage(responseBuffer);
   }
 
-  MqttBase(const MqttBase&) = delete;                       // Define copy constructor.
-  MqttBase& operator=(const MqttBase&) = delete;            // Define copy assignment operator.
-  MqttBase(MqttBase&&) = delete;                            // Define move constructor.
-  MqttBase& operator=(MqttBase&&) = delete;                 // Define move assignment operator
+  MqttBase(const MqttBase&) = delete;                       // Delete copy constructor.
+  MqttBase& operator=(const MqttBase&) = delete;            // Delete copy assignment operator.
+  MqttBase(MqttBase&&) = delete;                            // Delete move constructor.
+  MqttBase& operator=(MqttBase&&) = delete;                 // Delete move assignment operator.
 
 protected:
   /// @brief Constructs the MQTT base instance.

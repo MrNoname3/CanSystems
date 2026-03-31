@@ -169,7 +169,7 @@ bool Connectivity::run() {
   if(mqttClient.loop()) {
     reconnectTimer = millis();
   } else {
-    if((mqttState < MQTT_CONNECTED) && networkState) {
+    if((mqttState != MQTT_CONNECTED) && networkState) {
       if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
         reconnectTimer = millis();
         connectToMqttServer();
@@ -184,7 +184,7 @@ bool Connectivity::run() {
   if(actualOnlineState != onlineState) {
     onlineState = actualOnlineState;
     if(debugLed != nullptr) { debugLed(onlineState); }
-    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), reinterpret_cast<const char*>(onlineState ? F("ONLINE") : F("OFFLINE")));
+    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), onlineState ? PSTR("ONLINE") : PSTR("OFFLINE"));
   }
 
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
