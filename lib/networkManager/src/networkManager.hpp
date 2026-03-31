@@ -98,13 +98,10 @@ private:
     INVALID_INTERFACE     = 1 << 0U,              // Invalid network interface selected.
     WIFI_INIT_FAILED      = 1 << 1U,              // Wi-Fi initialization failed.
     WIFI_CONFIG_ERROR     = 1 << 2U,              // Wi-Fi configuration error.
-    WIFI_CONN_FAILED      = 1 << 3U,              // Wi-Fi connection failed.
-    ENC28J60_NO_DRIVER    = 1 << 4U,              // ENC28J60 driver not initialized.
-    ENC28J60_INIT_FAILED  = 1 << 5U,              // ENC28J60 initialization failed.
-    ENC28J60_CONN_FAILED  = 1 << 6U,              // ENC28J60 connection failed.
-    LAN8720_INIT_FAILED   = 1 << 7U,              // LAN8720 initialization failed.
-    LAN8720_CONN_FAILED   = 1 << 8U,              // LAN8720 connection failed.
-    MAC_ADDRESS_INVALID   = 1 << 9U               // Invalid MAC address.
+    ENC28J60_NO_DRIVER    = 1 << 3U,              // ENC28J60 driver not initialized.
+    ENC28J60_INIT_FAILED  = 1 << 4U,              // ENC28J60 initialization failed.
+    LAN8720_INIT_FAILED   = 1 << 5U,              // LAN8720 initialization failed.
+    MAC_ADDRESS_INVALID   = 1 << 6U               // Invalid MAC address.
   };
 
 #ifdef ESP32

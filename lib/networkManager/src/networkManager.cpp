@@ -42,6 +42,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         return networkErrState.getRawErrorState();
       }
       WiFi.setAutoReconnect(true);
+      WiFi.persistent(false);                           // Credentials stored in LittleFS; prevent redundant flash writes.
       char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
       char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
       const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
@@ -52,15 +53,16 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
         return networkErrState.getRawErrorState();
       } else {
+#ifdef ESP8266
+        WiFi.hostname(Build::getPioEnv());
+#elif defined ESP32
+        WiFi.setHostname(Build::getPioEnv());
+#endif
         WiFi.begin(ssid, password);
       }
       Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
       while(WiFi.status() != WL_CONNECTED) {
         yield();
-      }
-      if(WiFi.status() != WL_CONNECTED) {
-        networkErrState.setError(NetworkError::WIFI_CONN_FAILED);
-        return networkErrState.getRawErrorState();
       }
       Logger::get().printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
       Logger::get().printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
@@ -86,10 +88,6 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       while(!ethernetEnc28j60.value().connected()) {
         yield();
       }
-      if(!ethernetEnc28j60.value().connected()) {
-        networkErrState.setError(NetworkError::ENC28J60_CONN_FAILED);
-        return networkErrState.getRawErrorState();
-      }
       Logger::get().printf_P(PSTR("  IP: %s\r\n"), ethernetEnc28j60.value().localIP().toString().c_str());
       Logger::get().printf_P(PSTR("  GW: %s\r\n"), ethernetEnc28j60.value().gatewayIP().toString().c_str());
       Logger::get().printf_P(PSTR("  SNM: %s\r\n"), ethernetEnc28j60.value().subnetMask().toString().c_str());
@@ -108,10 +106,6 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
-      }
-      if(!ethConnected) {
-        networkErrState.setError(NetworkError::LAN8720_CONN_FAILED);
-        return networkErrState.getRawErrorState();
       }
       Logger::get().printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
       Logger::get().printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
@@ -139,7 +133,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
 }
 
 bool NetworkManager::isNetworkAvailable() {
-  yield();
+  yield();                                             // Keeps the network stack alive and processes pending events.
   wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   switch(networkInterface) {
     case Interface::WIFI: {
