@@ -44,7 +44,6 @@ class TaskHandler final {
 private:
   static constexpr uint8_t taskNum = taskNumber;                  // The number of tasks managed by the handler.
   static constexpr bool singleTaskOnly = (taskNum == 1U);         // Indicates if the task handler has only 1 task.
-  static constexpr bool fullRoundRobinL = fullRoundRobin;         // Configures the type of round-robin scheduling.
 
   // Ensures the number of tasks is within the valid range.
   static_assert(taskNum > 0U, "TaskHandler requires at least one task!");
@@ -92,7 +91,7 @@ public:
   [[nodiscard]] uint32_t runTasks() {
     if constexpr(singleTaskOnly) {
       return runSingleTask();
-    } else if constexpr(fullRoundRobinL) {
+    } else if constexpr(fullRoundRobin) {
       return runFullRoundRobin();
     } else {
       return runPartialRoundRobin();
@@ -125,7 +124,7 @@ private:
         failureMask |= (1U << currentTask);
       }
     }
-    currentTask = (currentTask + 1U) % taskNum;
+    if(++currentTask >= taskNum) { currentTask = 0U; }
     return failureMask;
   }
 
@@ -138,7 +137,7 @@ private:
         failureMask |= 1U;
       }
     }
-    currentTask = (currentTask % (taskNum - 1U)) + 1U;
+    if(++currentTask >= taskNum) { currentTask = 1U; }
     if(taskList[currentTask] != nullptr) {
       if(!taskList[currentTask]->run()) {
         failureMask |= (1U << currentTask);
