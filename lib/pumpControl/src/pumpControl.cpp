@@ -170,7 +170,7 @@ int16_t PumpControl::calculateCurrent() const {
   // Calculate the sensor output voltage in millivolts from the analog value.
   const int32_t sensorVoltageMV = (int32_t(analogValue) * voltageReference) / adcResolution;
   // Calculate the current in milliamps (mA). (sensorVoltageMV - zeroCurrentOffset) gives the voltage deviation from 0A.
-  const int32_t currentMA = ((sensorVoltageMV - zeroCurrentOffset) * 1000U) / sensorSensitivity;
+  const int32_t currentMA = ((sensorVoltageMV - zeroCurrentOffset) * 1000) / sensorSensitivity;
   return static_cast<int16_t>(currentMA);
 }
 
@@ -207,9 +207,9 @@ void PumpControl::skipAllIrrigations() {
 }
 
 void PumpControl::checkSafetyIrrigations() {
-  for(uint8_t i = 0U; i < channelCount; ++i) {
-    if((safetyIrrigation[i].time > 0U) && (millis() - safetyIrrigation[i].timer > Time::minToMs(safetyIrrigation[i].time))) {
-      createIrrigation(safetyIrrigation[i].irrigation);
+  for(auto& element : safetyIrrigation) {
+    if((element.time > 0U) && (millis() - element.timer > Time::minToMs(element.time))) {
+      createIrrigation(element.irrigation);
     }
   }
 }

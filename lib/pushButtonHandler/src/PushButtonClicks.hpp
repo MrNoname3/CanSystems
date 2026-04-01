@@ -27,7 +27,7 @@ public:
   ///   - 2: Long release event (button held for longer than `longPressTime` and released).
   ///   - 3: Single tap event.
   ///   - 4 or higher: Multiple tap event (e.g., 4 = double tap).
-  uint8_t buttonCheck(const uint32_t currentMillis, bool currentPinStatus);
+  uint8_t buttonCheck(uint32_t currentMillis, bool currentPinStatus);
 
   PushButton(const PushButton&) = delete;               // Define copy constructor.
   PushButton& operator=(const PushButton&) = delete;    // Define copy assignment operator.

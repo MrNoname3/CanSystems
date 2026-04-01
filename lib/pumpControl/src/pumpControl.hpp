@@ -139,7 +139,7 @@ private:
     IrrigationQueueElement irrigation;      // Irrigation task details.
 
     /// @brief Default constructor initializes all values to zero.
-    SafetyIrrigationElement() : time(0U), timer(0U), irrigation{} {}
+    SafetyIrrigationElement() : time(0U), timer(0U) {}
 
     /// @brief Constructor initializing all members for a safety irrigation task.
     /// @param time Scheduled safety irrigation time in minutes.
