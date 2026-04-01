@@ -29,11 +29,11 @@ public:
 
   /// @brief Initializes the radiation sensor and measurement system.
   /// @return `true` if initialization was successful; otherwise, `false`.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Executes the radiation monitoring logic and sends data if ready.
   /// @return `true` if the operation was successful; otherwise, `false`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Stops the radiation monitoring and detaches interrupts.
   void end();
@@ -41,7 +41,7 @@ public:
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.
   /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override {
     (void)payloadJson;
   }
 

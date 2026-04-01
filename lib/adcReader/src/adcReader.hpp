@@ -33,22 +33,22 @@ public:
   AdcReader(Connectivity& connectivity, const char* subTopic, uint16_t measureTime, uint8_t rdyPin, uint8_t sdaPin = SDA, uint8_t sclPin = SCL, uint8_t address = 0x48);
 
   /// @brief Destructor of the object.
-  virtual ~AdcReader() = default;
+  ~AdcReader() override = default;
 
   /// @brief Initializes the ADC and configures necessary settings.
   /// @return `true` if initialization was successful, `false` otherwise.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Stops the ADC and releases resources.
   void end();
 
   /// @brief Main loop method for handling ADC state transitions and MQTT message sending.
   /// @return `true` if the ADC and MQTT operations were successful, `false` otherwise.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Handles incoming MQTT messages. Not used in this implementation.
   /// @param payloadJson JSON document containing the received MQTT message.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override {
     (void)payloadJson;
   }
 

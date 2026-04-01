@@ -22,11 +22,11 @@ public:
 
   /// @brief Initializes the sensor and communication interfaces.
   /// @return `true` if the execution was successfully, `false` otherwise.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Periodically reads sensors and sends data via CAN.
   /// @return `true`.
-  virtual bool run() override;
+  bool run() override;
 
   AmbientSensor(const AmbientSensor&) = delete;                       // Define copy constructor.
   AmbientSensor& operator=(const AmbientSensor&) = delete;            // Define copy assignment operator.

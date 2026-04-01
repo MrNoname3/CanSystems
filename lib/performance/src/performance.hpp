@@ -25,7 +25,7 @@ public:
 
   /// @brief Initializes the performance tracker.
   /// @return Always returns `true`, indicating successful initialization.
-  virtual bool init() override {
+  bool init() override {
     resetTimer();
     return true;
   }
@@ -35,7 +35,7 @@ public:
   /// it exceeds the current maximum loop time. If a new maximum is recorded, it calls the 
   /// provided callback function (if not null).
   /// @return `true`.
-  virtual bool run() override {
+  bool run() override {
     const uint32_t actualTime = millis();
     uint32_t actualLoopTime = actualTime - lastLoopTime;
     lastLoopTime = actualTime;

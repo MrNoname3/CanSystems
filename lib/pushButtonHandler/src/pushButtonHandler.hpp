@@ -35,12 +35,12 @@ public:
   /// @brief Initializes the handler.
   /// @details This function is intentionally left empty in this implementation but can be overridden if needed.
   /// @return `true`.
-  virtual bool init() override { return true; };
+  bool init() override { return true; };
 
   /// @brief Processes button events and sends them via CAN or callback.
   /// @details Checks for button press events, sends them to the CAN handler, and invokes a user-defined callback if set.
   /// @return `true`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Adds a callback function for button press events.
   /// @param btnCallback Function pointer to the callback to handle button events.

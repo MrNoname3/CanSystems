@@ -30,19 +30,19 @@ public:
 private:
   /// @brief Perform any local initialization required by the driver.
   /// @return Always returns `true` for this implementation.
-  virtual bool initLocal() override { return true; }
+  bool initLocal() override { return true; }
 
   /// @brief Execute local periodic tasks for the driver.
   /// @return  Always returns `true` for this implementation.
-  virtual bool runLocal() override { return true; }
+  bool runLocal() override { return true; }
 
   /// @brief Process a received MQTT message.
   /// @param payloadJson The JSON document containing the received message payload.
-  virtual void processMessageArrived(JsonDocument& payloadJson) override;
+  void processMessageArrived(JsonDocument& payloadJson) override;
 
   /// @brief Process a received CAN frame.
   /// @param canFrame The CAN frame containing command and data bytes.
-  virtual void processCanFrameArrived(const CanHandler::CanFrame& canFrame) override;
+  void processCanFrameArrived(const CanHandler::CanFrame& canFrame) override;
 
   const float tempOffset;                                           // Offset to adjust temperature readings.
 };

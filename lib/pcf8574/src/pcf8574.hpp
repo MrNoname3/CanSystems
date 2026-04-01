@@ -21,11 +21,11 @@ public:
 
   /// @brief Initializes the PCF8574 device.
   /// @return `true` if the device is successfully initialized, `false` otherwise.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Provides an empty implementation of the method.
   /// @return `true`.
-  virtual bool run() override { return true; }
+  bool run() override { return true; }
 
   /// @brief Writes a byte to the PCF8574 register.
   /// @param reg The byte to write to the PCF8574.

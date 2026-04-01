@@ -29,11 +29,11 @@ public:
 
   /// @brief Initializes the pump control system.
   /// @return `true`.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Runs the main irrigation control loop.
   /// @return `true`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Creates a new irrigation schedule.
   /// @param irrigationInfo Information on the irrigation task.

@@ -45,7 +45,7 @@ public:
   DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t enPin, uint8_t intPin, uint32_t timeout = 10UL);
 
   /// @brief Default destructor.
-  virtual ~DFPlayer() = default;
+  ~DFPlayer() override = default;
 
   /// @brief Adds a track to the play queue.
   /// @param track Track number (1-9999).
@@ -57,12 +57,12 @@ public:
 
   /// @brief Initializes the DFPlayer (currently unused).
   /// @return `true`.
-  virtual bool init() override { return true; };
+  bool init() override { return true; };
 
   /// @brief Manages the state machine for track playback.
   /// Should be called periodically in the main loop.
   /// @return `true`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Prints errors from the DFPlayer module.
   using DFPlayerMiniFast::printError;

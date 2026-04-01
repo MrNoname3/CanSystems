@@ -133,16 +133,16 @@ protected:
     Connectivity& connectivity, const char* subTopic);
 
   /// @brief Virtual destructor of the object.
-  virtual ~CanMqttGateway() = default;
+  ~CanMqttGateway() override = default;
 
 private:
   /// @brief Initializes the gateway.
   /// @return True on successful initialization.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Runs the gateway logic.
   /// @return True if successful, false otherwise.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Handles client ping logic.
   void handlePing();
@@ -157,11 +157,11 @@ private:
 
   /// @brief Handles the arrival of an MQTT message.
   /// @param payloadJson The JSON document containing the message payload.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   /// @brief Handles the arrival of a CAN frame.
   /// @param canFrame The received CAN frame to be processed.
-  virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override;
+  void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override;
 
   CanOta canOta;                  // CanOta instance responsible for handling OTA updates.
   uint32_t clientPingTimer;       // Timer for tracking the interval of client pings.

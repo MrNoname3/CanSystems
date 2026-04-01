@@ -104,11 +104,11 @@ public:
 
   /// @brief Initializes the CAN handler.
   /// @return `true` if initialization succeeds, `false` otherwise.
-  [[nodiscard]] virtual bool init() = 0;
+  [[nodiscard]] bool init() override = 0;
 
   /// @brief Executes the task logic.
   /// @return `true` if the task ran successfully, `false` otherwise.
-  [[nodiscard]] virtual bool run() = 0;
+  [[nodiscard]] bool run() override = 0;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 10-bit command value representing the specific action or request.

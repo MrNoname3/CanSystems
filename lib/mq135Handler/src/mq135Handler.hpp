@@ -15,13 +15,13 @@ public:
   Mq135Handler(Connectivity& connectivity, const char* classID, AdcReader& adcReader, AdcReader::Channel channel, uint32_t measureTime);
 
   /// @brief Destructor of the object.
-  virtual ~Mq135Handler() = default;
+  ~Mq135Handler() override = default;
 
-  virtual bool init() override;
+  bool init() override;
 
-  virtual bool run() override;
+  bool run() override;
 
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override {
     (void)payloadJson;
   }
 

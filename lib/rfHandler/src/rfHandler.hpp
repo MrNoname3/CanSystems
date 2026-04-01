@@ -28,16 +28,16 @@ public:
 
   /// @brief Initializes the RF handler. No additional setup is required in this implementation.
   /// @return Always returns `true`.
-  virtual bool init() override { return true; }
+  bool init() override { return true; }
 
   /// @brief Executes the RF handling logic, including receiving and sending RF data.
   /// @return `true` if the operation was successful; otherwise, `false`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.
   /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   RfHandler(const RfHandler&) = delete;                       // Define copy constructor.
   RfHandler& operator=(const RfHandler&) = delete;            // Define copy assignment operator.

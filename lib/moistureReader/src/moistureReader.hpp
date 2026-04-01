@@ -28,11 +28,11 @@ public:
 
   /// @brief Initializes the MoistureReader, setting up its internal timer.
   /// @return `true`.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Executes the state machine to read moisture data.
   /// @return `true`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Triggers an immediate measurement by resetting the timer.
   void triggerImmediateMeasurement();

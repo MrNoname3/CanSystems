@@ -59,11 +59,11 @@ public:
 
   /// @brief Initializes the connectivity system.
   /// @return `true` if initialization succeeds; otherwise, `false`.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Main execution loop for the connectivity system.
   /// @return `true` if the task executes successfully; otherwise, `false`.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Sends a message to the MQTT broker.
   /// @param subTopic The subtopic to publish to.
@@ -161,11 +161,11 @@ public:
 
   /// @brief Initializes the MQTT base instance.
   /// @return `true` if the initialization was successful; otherwise, `false`.
-  [[nodiscard]] virtual bool init() = 0;
+  [[nodiscard]] bool init() override = 0;
 
   /// @brief Executes the MQTT task logic.
   /// @return `true` if the task ran successfully; otherwise, `false`.
-  [[nodiscard]] virtual bool run() = 0;
+  [[nodiscard]] bool run() override = 0;
 
   /// @brief Checks whether a given subtopic is valid.
   /// A subtopic is considered valid if it is non-null and its length is within the allowed range.
@@ -232,7 +232,7 @@ protected:
   }
 
   /// @brief Virtual destructor of the object.
-  virtual ~MqttBase() = default;
+  ~MqttBase() override = default;
 
 private:
   Connectivity& connectivity;       // Reference to the connectivity object used for MQTT communication.

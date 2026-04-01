@@ -24,15 +24,15 @@ public:
 
   /// @brief Initializes the MQTT common functionalities.
   /// @return `true` if initialization is successful, `false` otherwise.
-  virtual bool init() override;
+  bool init() override;
 
   /// @brief Executes periodic tasks for file transfer and command processing.
   /// @return `true` if the run cycle is executed successfully, `false` otherwise.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Processes an incoming MQTT message in JSON format.
   /// @param payloadJson JSON document containing the received MQTT message.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   MqttCommon(const MqttCommon&) = delete;                       // Define copy constructor.
   MqttCommon& operator=(const MqttCommon&) = delete;            // Define copy assignment operator.
