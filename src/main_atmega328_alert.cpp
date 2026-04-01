@@ -59,7 +59,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 void setup() {
   wdt.resetWatchdog();
   Serial.begin(MONITOR_BAUD);
-  debugLed.ledOn();
+  DebugLedHandler::ledOn();
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
@@ -81,7 +81,7 @@ void setup() {
   }
 
   Logger::get().println(F("********\r\nLooping..."));
-  debugLed.ledOff();
+  DebugLedHandler::ledOff();
 }
 
 void loop() {
