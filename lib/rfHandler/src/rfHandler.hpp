@@ -24,7 +24,7 @@ public:
   RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin);
 
   /// @brief Destructor of the object.
-  ~RfHandler() = default;
+  ~RfHandler() override = default;
 
   /// @brief Initializes the RF handler. No additional setup is required in this implementation.
   /// @return Always returns `true`.

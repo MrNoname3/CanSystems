@@ -20,12 +20,6 @@ private:
     "0123456789+/"
   };
 
-  /// @brief Private constructor to prevent instantiation of the class.
-  Base64() = delete;
-
-  /// @brief Private destructor to prevent instantiation of the class.
-  ~Base64() = delete;
-
 public:
   /// @brief Calculates the length of a Base64-encoded string for a given number of bytes of input data.
   /// @param plainLength Number of bytes in the input binary data.
@@ -54,6 +48,8 @@ public:
   /// @return Number of bytes written to the decoded binary output, or 0 on error.
   static uint32_t decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength, uint32_t outputLength);
 
+  Base64() = delete;                                   // Delete constructor.
+  ~Base64() = delete;                                  // Delete destructor.
   Base64(const Base64&) = delete;                       // Define copy constructor.
   Base64& operator=(const Base64&) = delete;            // Define copy assignment operator.
   Base64(Base64&&) = delete;                            // Define move constructor.

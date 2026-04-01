@@ -5,13 +5,6 @@
 
 /// @brief Class for handling system resets.
 class ResetHandler final {
-private:
-  /// @brief Delete constructor.
-  ResetHandler() = delete;
-
-  /// @brief Delete destructor.
-  ~ResetHandler() = delete;
-
 public:
   /// @brief Resets the microcontroller unit (MCU) by triggering a watchdog reset.
   static void restartMCU();
@@ -22,6 +15,8 @@ public:
   static uint8_t getResetReason();
 #endif
 
+  ResetHandler() = delete;                                           // Delete constructor.
+  ~ResetHandler() = delete;                                          // Delete destructor.
   ResetHandler(const ResetHandler&) = delete;                       // Define copy constructor.
   ResetHandler& operator=(const ResetHandler&) = delete;            // Define copy assignment operator.
   ResetHandler(ResetHandler&&) = delete;                            // Define move constructor.

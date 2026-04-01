@@ -4,10 +4,8 @@
 
 RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
   MqttBase(connectivity, subtopic),
-  rfTransciever(),
   rfRxPin(rfRxPin),
   rfTxPin(rfTxPin),
-  lastRfData(),
   dataCheckTimer(0U)
 {
   pinMode(this->rfRxPin, INPUT_PULLUP);
@@ -55,10 +53,10 @@ void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();
     const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
     if(rfOutProtocol > 0U) {
-      rfTransciever.setProtocol(rfOutProtocol);
+      rfTransciever.setProtocol(static_cast<int>(rfOutProtocol));
     }
     if(rfOutPulseLength > 0U) {
-      rfTransciever.setPulseLength(rfOutPulseLength);
+      rfTransciever.setPulseLength(static_cast<int>(rfOutPulseLength));
     }
     if(rfOutData > 0U && rfOutBitLength > 0U) {
       rfTransciever.send(rfOutData, rfOutBitLength);

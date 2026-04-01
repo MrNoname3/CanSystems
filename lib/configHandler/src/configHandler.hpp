@@ -17,12 +17,6 @@ private:
   static constexpr uint8_t maxMqttPasswordSize = 24U;                 // Maximum size of the MQTT password string.
   static constexpr uint8_t maxMqttServerUrlSize = 32U;                // Maximum size of the MQTT server URL string.
 
-  /// @brief Delete constructor.
-  ConfigHandler() = delete;
-
-  /// @brief Delete destructor.
-  ~ConfigHandler() = delete;
-
 public:
   /// @brief Initializes the file system and retrieves usage statistics.
   /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
@@ -72,10 +66,12 @@ public:
   [[nodiscard]] static ServerCredErrorType getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
     char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort);
 
+  ConfigHandler() = delete;                                           // Delete constructor.
+  ~ConfigHandler() = delete;                                          // Delete destructor.
   ConfigHandler(const ConfigHandler&) = delete;                       // Define copy constructor.
   ConfigHandler& operator=(const ConfigHandler&) = delete;            // Define copy assignment operator.
   ConfigHandler(ConfigHandler&&) = delete;                            // Define move constructor.
-  ConfigHandler& operator=(ConfigHandler&&) = delete;                 // Define move assignment operator
+  ConfigHandler& operator=(ConfigHandler&&) = delete;                 // Define move assignment operator.
 
 private:
   /// @brief Enumeration representing possible error states for Wi-Fi configuration.
