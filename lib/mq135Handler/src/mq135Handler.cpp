@@ -9,7 +9,7 @@
   measureTime(measureTime),
   gasReadState(GasReadState::IDLE),
   readIndex(0),
-  gasValues{0.0f}
+  gasValues{0.0F}
   {
     mq135.setRegressionMethod(1);
     mq135.setRL(rlValue);

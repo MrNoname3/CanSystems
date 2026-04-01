@@ -34,33 +34,33 @@ public:
 
 private:
   // Gas sensor calibration values:
-  static constexpr float sensorVoltage = 5.0f;
+  static constexpr float sensorVoltage = 5.0F;
   static constexpr uint8_t adcResolution = 12U;
   static constexpr uint8_t adcPin = -1;
-  static constexpr float ratioMQ135CleanAir =  3.6f;      // RS/R0 = 3.6 ppm.
-  static constexpr float rlValue = 1.0f;
-  static constexpr float r0Value = 22.47f;
+  static constexpr float ratioMQ135CleanAir =  3.6F;      // RS/R0 = 3.6 ppm.
+  static constexpr float rlValue = 1.0F;
+  static constexpr float r0Value = 22.47F;
 
   // Exponential regression:
   static constexpr float gasEquationValues[][2] = {
-    {605.18f, -3.937f},  // CO
-    {77.255f, -3.180f},  // Alcohol
-    {110.47f, -2.862f},  // CO2
-    {44.947f, -3.445f},  // Toluene
-    {102.20f, -2.473f},  // NH4
-    {34.668f, -3.369f}   // Acetone
+    {605.18F, -3.937F},  // CO
+    {77.255F, -3.180F},  // Alcohol
+    {110.47F, -2.862F},  // CO2
+    {44.947F, -3.445F},  // Toluene
+    {102.20F, -2.473F},  // NH4
+    {34.668F, -3.369F}   // Acetone
   };
 
   // Number of rows (number of gases).
   static constexpr uint8_t numGases = sizeof(gasEquationValues) / sizeof(gasEquationValues[0]);
 
   static constexpr float gasReadOffset[numGases] = {
-    0.1f,   // CO
-    0.0f,   // Alcohol
-    400.0f, // CO2
-    0.0f,   // Toluene
-    0.0f,   // NH4
-    0.0f    // Acetone
+    0.1F,   // CO
+    0.0F,   // Alcohol
+    400.0F, // CO2
+    0.0F,   // Toluene
+    0.0F,   // NH4
+    0.0F    // Acetone
   };
 
   enum class EQ : uint8_t {
