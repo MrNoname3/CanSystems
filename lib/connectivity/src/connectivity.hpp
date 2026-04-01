@@ -55,7 +55,7 @@ public:
   Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
 
   /// @brief Destructor of the object.
-  ~Connectivity() = default;
+  ~Connectivity() override = default;
 
   /// @brief Initializes the connectivity system.
   /// @return `true` if initialization succeeds; otherwise, `false`.

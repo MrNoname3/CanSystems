@@ -30,7 +30,7 @@ public:
   PushButtonHandler(const CanHandler& canHandler, bool (*buttonReader)());
 
   /// @brief Destructor of the object.
-  ~PushButtonHandler() = default;
+  ~PushButtonHandler() override = default;
 
   /// @brief Initializes the handler.
   /// @details This function is intentionally left empty in this implementation but can be overridden if needed.

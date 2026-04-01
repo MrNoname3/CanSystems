@@ -24,7 +24,7 @@ public:
   MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper& rgbLed, const uint8_t (&channels)[N], uint32_t readTime, void (*dataSender)(const uint8_t (&data)[8]));
 
   /// @brief Default destructor.
-  ~MoistureReader() = default;
+  ~MoistureReader() override = default;
 
   /// @brief Initializes the MoistureReader, setting up its internal timer.
   /// @return `true`.

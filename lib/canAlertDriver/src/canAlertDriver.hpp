@@ -20,7 +20,7 @@ public:
   CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* subTopic, float tempOffset = 0.0F);
 
   /// @brief Default destructor.
-  ~CanAlertDriver() = default;
+  ~CanAlertDriver() override = default;
 
   CanAlertDriver(const CanAlertDriver&) = delete;                       // Define copy constructor.
   CanAlertDriver& operator=(const CanAlertDriver&) = delete;            // Define copy assignment operator.

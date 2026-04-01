@@ -21,7 +21,7 @@ public:
   {}
 
   /// @brief Default destructor.
-  ~Performance() = default;
+  ~Performance() override = default;
 
   /// @brief Initializes the performance tracker.
   /// @return Always returns `true`, indicating successful initialization.

@@ -18,7 +18,7 @@ public:
   AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod);
 
   /// @brief Destructor for the AmbientSensor object.
-  ~AmbientSensor() = default;
+  ~AmbientSensor() override = default;
 
   /// @brief Initializes the sensor and communication interfaces.
   /// @return `true` if the execution was successfully, `false` otherwise.

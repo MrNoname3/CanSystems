@@ -20,7 +20,7 @@ public:
   MqttCommon(Connectivity& connectivity, const char* subtopic);
 
   /// @brief Destructor of the object.
-  ~MqttCommon() = default;
+  ~MqttCommon() override = default;
 
   /// @brief Initializes the MQTT common functionalities.
   /// @return `true` if initialization is successful, `false` otherwise.

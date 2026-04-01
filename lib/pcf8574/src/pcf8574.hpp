@@ -17,7 +17,7 @@ public:
   PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire = Wire);
 
   /// @brief Destructor of the PCF8574 object.
-  ~PCF8574() = default;
+  ~PCF8574() override = default;
 
   /// @brief Initializes the PCF8574 device.
   /// @return `true` if the device is successfully initialized, `false` otherwise.

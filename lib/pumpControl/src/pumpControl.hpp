@@ -25,7 +25,7 @@ public:
   PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode));
 
   /// @brief Default destructor.
-  ~PumpControl() = default;
+  ~PumpControl() override = default;
 
   /// @brief Initializes the pump control system.
   /// @return `true`.

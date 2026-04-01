@@ -184,7 +184,7 @@ protected:
   {}
 
   /// @brief Default destructor.
-  ~CanHandlerBase() = default;
+  ~CanHandlerBase() override = default;
 
   /// @brief Loads the CAN IDs from EEPROM.
   /// @return `true` if the CAN IDs were loaded successfully, `false` otherwise.

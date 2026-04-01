@@ -25,7 +25,7 @@ public:
   Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin);
 
   /// @brief Destructor of the object.
-  ~Radiation() = default;
+  ~Radiation() override = default;
 
   /// @brief Initializes the radiation sensor and measurement system.
   /// @return `true` if initialization was successful; otherwise, `false`.
