@@ -90,36 +90,13 @@ public:
   /// - Partial round-robin (`false`): Always runs the first task, alternating with others.
   /// @return A bitmask representing tasks that failed execution. Each bit corresponds to a task index.
   [[nodiscard]] uint32_t runTasks() {
-    uint32_t failureMask = 0U;
-    if(singleTaskOnly) {
-      if(taskList[0] != nullptr) {
-        if(!taskList[0]->run()) {
-          failureMask = 1U;
-        }
-      }
+    if constexpr(singleTaskOnly) {
+      return runSingleTask();
+    } else if constexpr(fullRoundRobinL) {
+      return runFullRoundRobin();
     } else {
-      if constexpr(fullRoundRobinL) {
-        if(taskList[currentTask] != nullptr) {
-          if(!taskList[currentTask]->run()) {
-            failureMask |= (1U << currentTask);
-          }
-        }
-        currentTask = (currentTask + 1U) % taskNum;
-      } else {
-        if(taskList[0] != nullptr) {
-          if(!taskList[0]->run()) {
-            failureMask |= 1U;
-          }
-        }
-        currentTask = (currentTask % (taskNum - 1U)) + 1U;
-        if(taskList[currentTask] != nullptr) {
-          if(!taskList[currentTask]->run()) {
-            failureMask |= (1U << currentTask);
-          }
-        }
-      }
+      return runPartialRoundRobin();
     }
-    return failureMask;
   }
 
   TaskHandler(const TaskHandler&) = delete;                       // Define copy constructor.
@@ -128,6 +105,48 @@ public:
   TaskHandler& operator=(TaskHandler&&) = delete;                 // Define move assignment operator.
 
 private:
+  /// @brief Executes the single managed task.
+  /// @return A bitmask with bit 0 set if the task failed, otherwise 0.
+  [[nodiscard]] inline uint32_t runSingleTask() {
+    if(taskList[0] != nullptr) {
+      if(!taskList[0]->run()) {
+        return 1U;
+      }
+    }
+    return 0U;
+  }
+
+  /// @brief Executes the next task in full round-robin order.
+  /// @return A bitmask with the corresponding bit set if the task failed, otherwise 0.
+  [[nodiscard]] inline uint32_t runFullRoundRobin() {
+    uint32_t failureMask = 0U;
+    if(taskList[currentTask] != nullptr) {
+      if(!taskList[currentTask]->run()) {
+        failureMask |= (1U << currentTask);
+      }
+    }
+    currentTask = (currentTask + 1U) % taskNum;
+    return failureMask;
+  }
+
+  /// @brief Executes the first task and one additional task in partial round-robin order.
+  /// @return A bitmask with the corresponding bits set for any failed tasks, otherwise 0.
+  [[nodiscard]] inline uint32_t runPartialRoundRobin() {
+    uint32_t failureMask = 0U;
+    if(taskList[0] != nullptr) {
+      if(!taskList[0]->run()) {
+        failureMask |= 1U;
+      }
+    }
+    currentTask = (currentTask % (taskNum - 1U)) + 1U;
+    if(taskList[currentTask] != nullptr) {
+      if(!taskList[currentTask]->run()) {
+        failureMask |= (1U << currentTask);
+      }
+    }
+    return failureMask;
+  }
+
   Task *(&taskList)[taskNum];                                     // Reference to an array of task pointers.
   uint8_t currentTask;                                            // Index of the currently executing task.
 };
