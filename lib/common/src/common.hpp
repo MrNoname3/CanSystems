@@ -368,3 +368,11 @@ public:
 private:
   static inline HardwareSerial *serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
 };
+
+/// @brief Returns the number of elements in a fixed-size array.
+/// @tparam T Element type of the array.
+/// @tparam N Number of elements in the array.
+/// @param arr Reference to the fixed-size array.
+/// @return Number of elements as a compile-time constant.
+template <typename T, uint8_t N>
+constexpr uint8_t arraySize(T (&arr)[N]) { (void)arr; return N; }

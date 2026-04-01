@@ -41,7 +41,7 @@ Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U)
 
 //--- Handling tasks ---//
 Task *task[5] = {&iotConn, &performance, &mqttCommon, &adcReader, &mq135};
-static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {

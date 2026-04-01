@@ -41,7 +41,7 @@ RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 
 //--- Handling tasks ---//
 Task *task[5] = {&iotConn, &performance, &mqttCommon, &radiation, &rfHandler};
-static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {

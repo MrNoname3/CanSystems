@@ -40,7 +40,7 @@ CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 
 //--- Handling tasks ---//
 Task *task[6] = {&iotConn, &performance, &mqttCommon, &canHandler, &canAlert1, &canAlert2};
-static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {

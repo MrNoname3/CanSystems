@@ -71,7 +71,7 @@ Performance performance(2U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
 Task *task[6] = {&canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance};
-static constexpr uint8_t taskNum = sizeof(task) / sizeof(*task);
+static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
