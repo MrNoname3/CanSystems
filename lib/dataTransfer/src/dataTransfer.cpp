@@ -129,7 +129,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     return false;
   }
   const uint32_t decodedPostSize = Base64::decodeBase64(reinterpret_cast<const uint8_t*>(fileData), decodedData, filePieceB64Size, filePieceSize);
-  if(decodedPreSize != decodedPostSize || decodedPostSize == 0U) {
+  if(decodedPreSize != decodedPostSize) {
     Logger::get().printf_P(PSTR("[FT] Decoded size check error!\r\n"));
     dataTransferErrState.setError(DataTransferError::B64_DECODED_SIZE_ERROR);
     return false;
