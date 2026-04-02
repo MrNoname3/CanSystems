@@ -2,7 +2,7 @@
 #include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
-bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) {
+bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
   const bool initFS = LittleFS.begin();
   if(!initFS) { return false; }
 #ifdef ESP8266
@@ -65,7 +65,7 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   return wifiConfErrState.getRawErrorState();
 }
 
-ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) {
+ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) { // NOLINT(readability-convert-member-functions-to-static)
   ErrorState<ServerCertError, ServerCertErrorType> serverCertErrState;
   const bool certFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCertLocation()));
   if(!certFileExists) {

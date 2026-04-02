@@ -147,7 +147,7 @@ void PumpControl::handleCalibration(uint32_t actualTime) {
   }
 }
 
-void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) {
+void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) { // NOLINT(readability-convert-member-functions-to-static)
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(irrigationInfo, pwmValue, repeatNum));
   } else {
@@ -155,7 +155,7 @@ void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uin
   }
 }
 
-void PumpControl::createIrrigation(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) {
+void PumpControl::createIrrigation(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) { // NOLINT(readability-convert-member-functions-to-static)
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum));
   } else {
@@ -163,7 +163,7 @@ void PumpControl::createIrrigation(uint8_t channel, uint8_t duration, bool check
   }
 }
 
-void PumpControl::createIrrigation(IrrigationQueueElement irrigationElement) {
+void PumpControl::createIrrigation(IrrigationQueueElement irrigationElement) { // NOLINT(readability-convert-member-functions-to-static)
   if(!irrigationQueue.isFull()) {
     irrigationQueue.put(irrigationElement);
   } else {

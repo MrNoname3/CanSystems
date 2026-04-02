@@ -71,7 +71,7 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
   return otaStartErrState.getRawErrorState();
 }
 
-void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) {
+void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLINT(readability-convert-member-functions-to-static)
   const uint16_t command = static_cast<uint16_t>(canFrame.cmd);
   const CanHandler::Response response = static_cast<CanHandler::Response>(canFrame.data[0]);
   if((command == static_cast<uint16_t>(CanCmd::OTA_START)) || (command == static_cast<uint16_t>(CanCmd::OTA_SEND))) {

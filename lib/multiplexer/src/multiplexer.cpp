@@ -13,7 +13,7 @@ Multiplexer::Multiplexer(uint8_t readPin, uint8_t enablePin, const uint8_t (&chS
   }
 }
 
-void Multiplexer::selectChannel(uint8_t channel) const {
+void Multiplexer::selectChannel(uint8_t channel) const { // NOLINT(readability-convert-member-functions-to-static)
   channel &= 15U; // Ensure only the lower 4 bits are used.
   for(uint8_t i = 0U; i < numSelectPins; ++i) {
     // Set each pin HIGH or LOW based on the respective bit in 'channel'.

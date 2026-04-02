@@ -36,18 +36,18 @@ void DebugLedHandler::ledToggle() {
   digitalWrite(dbgLedPin, static_cast<uint8_t>(!static_cast<bool>(digitalRead(dbgLedPin))));
 }
 #elif defined(ESP8266) || defined(ESP32)
-void DebugLedHandler::ledToggle() {
+void DebugLedHandler::ledToggle() { // NOLINT(readability-convert-member-functions-to-static)
   if(dbgLedPin != invalidPin) {
     digitalWrite(dbgLedPin, static_cast<uint8_t>(!static_cast<bool>(digitalRead(dbgLedPin))));
   }
 }
 
-void DebugLedHandler::startTicker(uint32_t tickIntervalMs) {
+void DebugLedHandler::startTicker(uint32_t tickIntervalMs) { // NOLINT(readability-convert-member-functions-to-static)
   ledOff();
   ledTicker.attach_ms(tickIntervalMs, ledToggle);
 }
 
-void DebugLedHandler::stopTicker() {
+void DebugLedHandler::stopTicker() { // NOLINT(readability-convert-member-functions-to-static)
   ledTicker.detach();
   ledOff();
 }

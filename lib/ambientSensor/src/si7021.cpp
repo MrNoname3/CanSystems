@@ -36,7 +36,7 @@ bool SI7021::getHumidityPercent(uint16_t &humidity) {
   return true;
 }
 
-bool SI7021::writeReg(const uint8_t *reg, uint8_t regLen) {
+bool SI7021::writeReg(const uint8_t *reg, uint8_t regLen) { // NOLINT(readability-convert-member-functions-to-static)
   if(reg == nullptr || regLen == 0U) { return false; }
   wire.beginTransmission(address);
   for(uint8_t i = 0U; i < regLen; ++i) {
@@ -45,7 +45,7 @@ bool SI7021::writeReg(const uint8_t *reg, uint8_t regLen) {
   return (wire.endTransmission() == 0U);
 }
 
-bool SI7021::readReg(uint8_t *reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter)
+bool SI7021::readReg(uint8_t *reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter, readability-convert-member-functions-to-static)
   if(reg == nullptr || regLen == 0U) { return false; }
   const bool result = (wire.requestFrom(address, regLen) > 0U);
   if(result) {

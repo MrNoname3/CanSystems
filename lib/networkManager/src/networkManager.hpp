@@ -86,7 +86,7 @@ private:
   /// @brief Converts an internal Wi-Fi status to a string.
   /// @param status The Wi-Fi status to convert.
   /// @return A string representation of the Wi-Fi status.
-  [[nodiscard]] const char* getIntStatusStr(wl_status_t status);
+  [[nodiscard]] static const char* getIntStatusStr(wl_status_t status);
 #ifdef ESP32
   /// @brief Handles ESP32-specific Ethernet events.
   /// @param event The Wi-Fi event type.

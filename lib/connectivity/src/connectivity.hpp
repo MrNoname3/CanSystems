@@ -101,12 +101,12 @@ private:
   bool connectToMqttServer();
 
   /// @brief Synchronizes the system time using NTP.
-  void syncNtpTime() const;
+  static void syncNtpTime();
 
   /// @brief Retrieves the current time as an ISO8601 string.
   /// @param dateTimeBuffer Buffer to store the ISO8601 string.
   /// @return `true` if the time is retrieved successfully; otherwise, `false`.
-  [[nodiscard]] bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) const;
+  [[nodiscard]] static bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]);
 
   /// @brief Resets the watchdog timer.
   inline void resetWatchdogTimer() const {

@@ -251,7 +251,7 @@ void DataTransfer::runValidityCheck() {
   }
 }
 
-DataTransfer::DataTransferErrorType DataTransfer::getErrorCode() {
+DataTransfer::DataTransferErrorType DataTransfer::getErrorCode() { // NOLINT(readability-convert-member-functions-to-static)
   const DataTransferErrorType errCode = dataTransferErrState.getRawErrorState();
   dataTransferErrState.clearAllErrors();
   return errCode;

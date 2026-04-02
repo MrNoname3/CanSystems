@@ -38,11 +38,11 @@ bool Radiation::run() {
   return true;
 }
 
-void Radiation::counter() {
+void Radiation::counter() { // NOLINT(readability-convert-member-functions-to-static)
   cpm++;
 }
 
-void Radiation::measure() {
+void Radiation::measure() { // NOLINT(readability-convert-member-functions-to-static)
   cli();
   cpmToSend = cpm;
   cpm = 0U;

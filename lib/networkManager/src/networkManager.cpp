@@ -163,7 +163,7 @@ bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
   return memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) != 0;
 }
 
-const char* NetworkManager::getIntStatusStr(wl_status_t status) {
+const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(readability-convert-member-functions-to-static)
   switch(status) {
     case WL_NO_SHIELD: { return wlNoShieldStr; } break;
     case WL_IDLE_STATUS: { return wlIdleStatusStr; } break;

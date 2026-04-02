@@ -118,6 +118,6 @@ bool AdcReader::readyToRead() const {
   return valuesReady;
 }
 
-void AdcReader::intHandler() {
+void AdcReader::intHandler() { // NOLINT(readability-convert-member-functions-to-static)
   adcReady = true;
 }

@@ -141,7 +141,7 @@ bool Connectivity::init() {
   return connectToMqttServer();
 }
 
-bool Connectivity::connectToMqttServer() {
+bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
@@ -205,7 +205,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   return mqttClient.publish(actualTopic, payload);
 }
 
-void Connectivity::syncNtpTime() const {
+void Connectivity::syncNtpTime() {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
   constexpr time_t minValidTime = 8L * 3600L * 2L;  // Minimum valid epoch time (arbitrary example)
 
@@ -218,7 +218,7 @@ void Connectivity::syncNtpTime() const {
   }
 }
 
-bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) const {
+bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) {
   memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
   const time_t currentTime = time(nullptr);
   if(currentTime == -1) { return false; }           // Check if time retrieval failed.
@@ -228,7 +228,7 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
   return (formattedSize > 0U && formattedSize < sizeof(dateTimeBuffer));
 }
 
-bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
+bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(mqttBasePtr != nullptr) { messageHandlerList.push_back(mqttBasePtr); }
   return mqttBasePtr != nullptr;
 }
