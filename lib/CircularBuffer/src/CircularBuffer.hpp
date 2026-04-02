@@ -56,13 +56,13 @@ public:
 
 private:
   T buffer[buffSize];                         // Internal array to store elements.
-  uint16_t head;                              // Index for writing new elements.
-  uint16_t tail;                              // Index for reading the oldest elements.
-  bool full;                                  // Indicates whether the buffer is full.
+  uint16_t head = 0U;                         // Index for writing new elements.
+  uint16_t tail = 0U;                         // Index for reading the oldest elements.
+  bool full = false;                          // Indicates whether the buffer is full.
 };
 
 template<class T, uint16_t buffSize>
-CircularBuffer<T, buffSize>::CircularBuffer() : buffer(), head(0U), tail(0U), full(false) {}
+CircularBuffer<T, buffSize>::CircularBuffer() : buffer() {}
 
 template<class T, uint16_t buffSize>
 void CircularBuffer<T, buffSize>::put(T item) {
