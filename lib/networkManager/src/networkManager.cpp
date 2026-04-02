@@ -52,14 +52,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         Logger::get().printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
         networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
         return networkErrState.getRawErrorState();
-      } else {
-#ifdef ESP8266
-        WiFi.hostname(Build::getPioEnv());
-#elif defined ESP32
-        WiFi.setHostname(Build::getPioEnv());
-#endif
-        WiFi.begin(ssid, password);
       }
+#ifdef ESP8266
+      WiFi.hostname(Build::getPioEnv());
+#elif defined ESP32
+      WiFi.setHostname(Build::getPioEnv());
+#endif
+      WiFi.begin(ssid, password);
       Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
       while(WiFi.status() != WL_CONNECTED) {
         yield();
@@ -161,8 +160,7 @@ bool NetworkManager::isNetworkAvailable() {
 
 bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
   memcpy(macAddress, mac, sizeof(mac));
-  if((memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) == 0)) { return false; }
-  return true;
+  return memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) != 0;
 }
 
 const char* NetworkManager::getIntStatusStr(wl_status_t status) {
