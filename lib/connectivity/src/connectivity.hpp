@@ -84,24 +84,16 @@ public:
 private:
   /// @brief Holds MQTT connection credentials.
   struct MqttCredentials {
-    char userName[ConfigHandler::getMaxMqttUserNameSize()];         // MQTT username.
-    char password[ConfigHandler::getMaxMqttPasswordSize()];         // MQTT password.
-    char serverName[ConfigHandler::getMaxMqttServerUrlSize()];      // MQTT server URL.
-    uint16_t serverPort;                                            // MQTT server port.
-    char clientName[32];                                            // MQTT client identifier.
-    char senderTopic[28];                                           // MQTT topic for outgoing messages.
-    char receiverTopic[28];                                         // MQTT topic for incoming messages.
+    char userName[ConfigHandler::getMaxMqttUserNameSize()]{};       // MQTT username.
+    char password[ConfigHandler::getMaxMqttPasswordSize()]{};       // MQTT password.
+    char serverName[ConfigHandler::getMaxMqttServerUrlSize()]{};    // MQTT server URL.
+    uint16_t serverPort = 0U;                                       // MQTT server port.
+    char clientName[32]{};                                          // MQTT client identifier.
+    char senderTopic[28]{};                                         // MQTT topic for outgoing messages.
+    char receiverTopic[28]{};                                       // MQTT topic for incoming messages.
 
     /// @brief Initializes all members to default values.
-    MqttCredentials() :
-      userName{'\0'},
-      password{'\0'},
-      serverName{'\0'},
-      serverPort(0U),
-      clientName{'\0'},
-      senderTopic{'\0'},
-      receiverTopic{'\0'}
-    {}
+    MqttCredentials() = default;
   };
 
   /// @brief Establishes a connection to the MQTT broker.
@@ -205,7 +197,7 @@ public:
   [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command) {
     char responseBuffer[responseBufferSize] = { '\0' };
     const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
-      PSTR("{\"type\":%hu,\"cmd\":%hu}"), static_cast<uint8_t>(response), command);
+      PSTR(R"({"type":%hu,"cmd":%hu})"), static_cast<uint8_t>(response), command);
     const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
       (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
     if(!responseBufferValid) { return false; }
@@ -222,8 +214,7 @@ protected:
   /// @param connectivity Reference to the connectivity object managing MQTT operations.
   /// @param subTopic Pointer to the subtopic string to be associated with the instance.
   MqttBase(Connectivity& connectivity, const char* subTopic) :
-    connectivity(connectivity),
-    subtopic{'\0'}
+    connectivity(connectivity)
   {
     if(isSubtopicValid(subTopic)) {
       strlcpy(subtopic, subTopic, subtopicSize);
@@ -236,6 +227,6 @@ protected:
 
 private:
   Connectivity& connectivity;       // Reference to the connectivity object used for MQTT communication.
-  char subtopic[subtopicSize];      // Buffer storing the subtopic associated with the MQTT base instance.
+  char subtopic[subtopicSize]{};    // Buffer storing the subtopic associated with the MQTT base instance.
 };
 #endif

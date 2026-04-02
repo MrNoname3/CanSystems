@@ -6,7 +6,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   networkManager(networkManager),
   tcpClient(),
   mqttClient(tcpClient),
-  mqttCredentials(),
   networkState(true),
   mqttState(MQTT_CONNECTED),
   onlineState(true),
@@ -24,7 +23,9 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 bool Connectivity::init() {
   { // Initialise the file system.
     delay(10U);
-    uint32_t totalBytes = 0U, usedBytes = 0U, freeBytes = 0U;
+    uint32_t totalBytes = 0U;
+    uint32_t usedBytes = 0U;
+    uint32_t freeBytes = 0U;
     const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
     Logger::get().printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
     if(!initFS) { return false; }
@@ -88,10 +89,11 @@ bool Connectivity::init() {
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
       serverCert.emplace(certFile, certFileSize);
-      if(!serverCert.has_value()) { return false; }
-      tcpClient.setTrustAnchors(&serverCert.value());
-      tcpClient.setTimeout(Time::secToMs(5U));
-      return true;
+      if(serverCert.has_value()) {
+        tcpClient.setTrustAnchors(&serverCert.value());
+        tcpClient.setTimeout(Time::secToMs(5U));
+      }
+      return serverCert.has_value();
 #elif defined ESP32
       tcpClient.setTimeout(10U);
       return tcpClient.loadCACert(certFile, certFileSize);
@@ -205,7 +207,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 
 void Connectivity::syncNtpTime() const {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
-  constexpr time_t minValidTime = 8 * 3600 * 2;     // Minimum valid epoch time (arbitrary example)
+  constexpr time_t minValidTime = 8L * 3600L * 2L;  // Minimum valid epoch time (arbitrary example)
 
   Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
@@ -223,14 +225,12 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
   const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
   if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
   const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
-  if(formattedSize == 0U || formattedSize >= sizeof(dateTimeBuffer)) { return false; }
-  return true;
+  return (formattedSize > 0U && formattedSize < sizeof(dateTimeBuffer));
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
-  if(mqttBasePtr == nullptr) { return false; }
-  messageHandlerList.push_back(mqttBasePtr);
-  return true;
+  if(mqttBasePtr != nullptr) { messageHandlerList.push_back(mqttBasePtr); }
+  return mqttBasePtr != nullptr;
 }
 
 const char* Connectivity::getMqttStatusStr(int8_t status) {
