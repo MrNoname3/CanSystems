@@ -126,7 +126,7 @@ bool PumpControl::run() {
     } break;
     case IrrigationState::CALIBRATION: {
       if(Time::hasElapsed(actualTime, eventTimer, Time::secToMs(5U))) {
-        const int16_t calValue = 511 - static_cast<int16_t>(analogValue);
+        const int16_t calValue = static_cast<int16_t>(511 - static_cast<int16_t>(analogValue));
         if(static_cast<uint16_t>(abs(calValue)) < 20U) {
           calibrationValue = calValue;
         }
