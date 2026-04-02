@@ -178,8 +178,7 @@ public:
 
 protected:
   /// @brief Default constructor for derived classes.
-  CanHandlerBase() :
-    canId(),
+  CanHandlerBase() : // NOLINT(modernize-use-equals-default)
     eepromHandler(&canId)
   {}
 

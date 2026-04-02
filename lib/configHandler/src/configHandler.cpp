@@ -99,8 +99,7 @@ ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bo
 ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],
   char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
   ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
-  const bool credFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()));
-  if(!credFileExists) {
+  if(!LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()))) {
     serverCredErrState.setError(ServerCredError::NO_SERVER_CRED_FILE);
     return serverCredErrState.getRawErrorState();
   }
@@ -113,47 +112,51 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
 
   JsonDocument serverCredJson;
   DeserializationError deserializationError = deserializeJson(serverCredJson, credFile);
-  const bool isDeserializationSuccessful  = (deserializationError == DeserializationError::Code::Ok);
-  if(isDeserializationSuccessful ) {
-    JsonVariant mqttUserNameVar = serverCredJson[F("mqttUserName")];
-    JsonVariant mqttPasswordVar = serverCredJson[F("mqttPassword")];
-    JsonVariant mqttServerUrlVar = serverCredJson[F("mqttServerUrl")];
-    JsonVariant mqttServerPortVar = serverCredJson[F("mqttServerPort")];
-    const bool mqttUserNameKeyOk = mqttUserNameVar.is<const char*>();
-    const bool mqttPasswordKeyOk = mqttPasswordVar.is<const char*>();
-    const bool mqttServerUrlKeyOk = mqttServerUrlVar.is<const char*>();
-    const bool mqttServerPortKeyOk = mqttServerPortVar.is<uint16_t>();
-    if(!mqttUserNameKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_USER); }
-    if(!mqttPasswordKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PASS); }
-    if(!mqttServerUrlKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_URL); }
-    if(!mqttServerPortKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PORT); }
-    if(mqttUserNameKeyOk && mqttPasswordKeyOk && mqttServerUrlKeyOk && mqttServerPortKeyOk) {
-      const char* mqttUserNamePtr = mqttUserNameVar.as<const char*>();
-      const char* mqttPasswordPtr = mqttPasswordVar.as<const char*>();
-      const char* mqttServerUrlPtr = mqttServerUrlVar.as<const char*>();
-      const uint16_t mqttServerPortNum = mqttServerPortVar.as<uint16_t>();
-      const uint8_t mqttUserNameLength = strnlen(mqttUserNamePtr, maxMqttUserNameSize);
-      const uint8_t mqttPasswordLength = strnlen(mqttPasswordPtr, maxMqttPasswordSize);
-      const uint8_t mqttServerUrlLength = strnlen(mqttServerUrlPtr, maxMqttServerUrlSize);
-      const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize);
-      const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize);
-      const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize);
-      const bool mqttServerPortNumValid = (mqttServerPortNum > 0U);
-      if(!mqttUserNameLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_USER_LENGTH_ERR); }
-      if(!mqttPasswordLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_PASS_LENGTH_ERR); }
-      if(!mqttServerUrlLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_URL_LENGTH_ERR); }
-      if(!mqttServerPortNumValid) { serverCredErrState.setError(ServerCredError::MQTT_PORT_NUM_ERR); }
-      if(mqttUserNameLengthValid && mqttPasswordLengthValid && mqttServerUrlLengthValid && mqttServerPortNumValid) {
-        strlcpy(mqttUserName, mqttUserNamePtr, maxMqttUserNameSize);
-        strlcpy(mqttPassword, mqttPasswordPtr, maxMqttPasswordSize);
-        strlcpy(mqttServerUrl, mqttServerUrlPtr, maxMqttServerUrlSize);
-        mqttServerPort = mqttServerPortNum;
-      }
-    }
-  } else {
+  credFile.close();
+
+  if(deserializationError != DeserializationError::Code::Ok) {
     serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR);
+    return serverCredErrState.getRawErrorState();
   }
 
-  credFile.close();
+  JsonVariant mqttUserNameVar = serverCredJson[F("mqttUserName")];
+  JsonVariant mqttPasswordVar = serverCredJson[F("mqttPassword")];
+  JsonVariant mqttServerUrlVar = serverCredJson[F("mqttServerUrl")];
+  JsonVariant mqttServerPortVar = serverCredJson[F("mqttServerPort")];
+  const bool mqttUserNameKeyOk = mqttUserNameVar.is<const char*>();
+  const bool mqttPasswordKeyOk = mqttPasswordVar.is<const char*>();
+  const bool mqttServerUrlKeyOk = mqttServerUrlVar.is<const char*>();
+  const bool mqttServerPortKeyOk = mqttServerPortVar.is<uint16_t>();
+  if(!mqttUserNameKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_USER); }
+  if(!mqttPasswordKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PASS); }
+  if(!mqttServerUrlKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_URL); }
+  if(!mqttServerPortKeyOk) { serverCredErrState.setError(ServerCredError::MISSING_MQTT_PORT); }
+  if(!mqttUserNameKeyOk || !mqttPasswordKeyOk || !mqttServerUrlKeyOk || !mqttServerPortKeyOk) {
+    return serverCredErrState.getRawErrorState();
+  }
+
+  const char* mqttUserNamePtr = mqttUserNameVar.as<const char*>();
+  const char* mqttPasswordPtr = mqttPasswordVar.as<const char*>();
+  const char* mqttServerUrlPtr = mqttServerUrlVar.as<const char*>();
+  const uint16_t mqttServerPortNum = mqttServerPortVar.as<uint16_t>();
+  const uint8_t mqttUserNameLength = strnlen(mqttUserNamePtr, maxMqttUserNameSize);
+  const uint8_t mqttPasswordLength = strnlen(mqttPasswordPtr, maxMqttPasswordSize);
+  const uint8_t mqttServerUrlLength = strnlen(mqttServerUrlPtr, maxMqttServerUrlSize);
+  const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize);
+  const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize);
+  const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize);
+  const bool mqttServerPortNumValid = (mqttServerPortNum > 0U);
+  if(!mqttUserNameLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_USER_LENGTH_ERR); }
+  if(!mqttPasswordLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_PASS_LENGTH_ERR); }
+  if(!mqttServerUrlLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_URL_LENGTH_ERR); }
+  if(!mqttServerPortNumValid) { serverCredErrState.setError(ServerCredError::MQTT_PORT_NUM_ERR); }
+  if(!mqttUserNameLengthValid || !mqttPasswordLengthValid || !mqttServerUrlLengthValid || !mqttServerPortNumValid) {
+    return serverCredErrState.getRawErrorState();
+  }
+
+  strlcpy(mqttUserName, mqttUserNamePtr, maxMqttUserNameSize);
+  strlcpy(mqttPassword, mqttPasswordPtr, maxMqttPasswordSize);
+  strlcpy(mqttServerUrl, mqttServerUrlPtr, maxMqttServerUrlSize);
+  mqttServerPort = mqttServerPortNum;
   return serverCredErrState.getRawErrorState();
 }

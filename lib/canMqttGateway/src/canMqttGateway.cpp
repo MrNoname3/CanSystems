@@ -7,7 +7,6 @@ CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   storageNumber(0U),
   fileSize(0U),
   transferState(TransferState::IDLE),
-  crc16(),
   otaTimeoutTimer(0U),
   fileNameLocal{'\0'}
 {}
