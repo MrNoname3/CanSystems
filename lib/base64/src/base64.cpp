@@ -6,7 +6,7 @@ uint32_t Base64::encodedLength(uint32_t plainLength) {
 
 uint32_t Base64::decodedLength(const uint8_t input[], uint32_t inputLength) {
   uint32_t numEq = 0;
-  for(int32_t i = inputLength - 1; input[i] == '=' && i >= 0; i--) {
+  for(int32_t i = static_cast<int32_t>(inputLength) - 1; input[i] == '=' && i >= 0; i--) {
     numEq++;
   }
   return ((6 * inputLength) / 8) - numEq;
@@ -22,7 +22,7 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
   uint8_t A3[3];
   uint8_t A4[4];
 
-  while(inputLength--) {
+  while(inputLength-- != 0U) {
     A3[i++] = *(input++);
     if(i == 3) {
       fromA3ToA4(A4, A3);
@@ -51,57 +51,57 @@ uint32_t Base64::encodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
   return encodedLength_;
 }
 
+bool Base64::processFullBlock(uint8_t (&A4)[4], uint8_t output[], uint32_t &decodedLength) {
+  uint8_t A3[3] = {0U};
+  for(uint8_t &val : A4) {
+    val = lookupTable(static_cast<char>(val));
+    if(val == 255U) { return false; } // Invalid character
+  }
+  fromA4ToA3(A3, A4);
+  for(uint8_t val : A3) {
+    output[decodedLength++] = val;
+  }
+  return true;
+}
+
+bool Base64::processPartialBlock(uint8_t (&A4)[4], uint32_t count, uint8_t output[], uint32_t &decodedLength) {
+  uint8_t A3[3] = {0U};
+  for(uint32_t j = count; j < 4U; j++) { A4[j] = 0U; }
+  for(uint8_t &val : A4) {
+    if(val != 0U) { val = lookupTable(static_cast<char>(val)); }
+    if(val == 255U) { return false; } // Invalid character
+  }
+  fromA4ToA3(A3, A4);
+  for(uint32_t j = 0U; j < count - 1U; j++) {
+    output[decodedLength++] = A3[j];
+  }
+  return true;
+}
+
 uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t inputLength, uint32_t outputLength) {
   uint32_t decodedLength_ = 0U;
   uint32_t i = 0U;
-  uint8_t A3[3] = {0U};
   uint8_t A4[4] = {0U};
 
   if(outputLength < decodedLength(input, inputLength)) {
     return 0U; // Output buffer too small
   }
 
-  while(inputLength--) {
-    if(*input == '=') {
-      break;
-    }
+  while(inputLength-- != 0U) {
+    if(*input == '=') { break; }
     A4[i++] = *(input++);
     if(i == 4U) {
-      for(i = 0U; i < 4U; i++) {
-        A4[i] = lookupTable(A4[i]);
-        if(A4[i] == 255U) { // Invalid character
-          return 0U;
-        }
-      }
-      fromA4ToA3(A3, A4);
-      for(i = 0U; i < 3U; i++) {
-        output[decodedLength_++] = A3[i];
-      }
+      if(!processFullBlock(A4, output, decodedLength_)) { return 0U; }
       i = 0U;
     }
   }
   if(i > 0U) {
-    for(uint32_t j = i; j < 4U; j++) {
-      A4[j] = 0U;
-    }
-    for(uint32_t j = 0U; j < 4U; j++) {
-      if(A4[j] != 0U) {
-        A4[j] = lookupTable(A4[j]);
-      }
-      if(A4[j] == 255U) { // Invalid character
-        return 0U;
-      }
-    }
-    fromA4ToA3(A3, A4);
-    for(uint32_t j = 0U; j < i - 1U; j++) {
-      output[decodedLength_++] = A3[j];
-    }
+    if(!processPartialBlock(A4, i, output, decodedLength_)) { return 0U; }
   }
   if(decodedLength_ >= outputLength) {
     return 0U; // Prevent overflow
-  } else {
-    output[decodedLength_] = '\0';
   }
+  output[decodedLength_] = '\0';
   return decodedLength_;
 }
 
