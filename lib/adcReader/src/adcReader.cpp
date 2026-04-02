@@ -114,7 +114,7 @@ void AdcReader::disableMqttSending() {
   enableSending = false;
 }
 
-bool AdcReader::readyToRead() {
+bool AdcReader::readyToRead() const {
   return valuesReady;
 }
 

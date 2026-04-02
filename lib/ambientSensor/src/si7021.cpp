@@ -9,7 +9,7 @@ SI7021::SI7021(uint32_t timeoutUs, uint8_t address, TwoWire &wire) :
   this->wire.setWireTimeout(timeoutUs, true);             // Set I2C timeout.
 }
 
-bool SI7021::init() {
+bool SI7021::init() { // NOLINT(readability-make-member-function-const)
   wire.begin();
   wire.beginTransmission(address);
   deviceExists = (wire.endTransmission() == 0U);
@@ -45,7 +45,7 @@ bool SI7021::writeReg(const uint8_t *reg, uint8_t regLen) {
   return (wire.endTransmission() == 0U);
 }
 
-bool SI7021::readReg(uint8_t *reg, uint8_t regLen) {
+bool SI7021::readReg(uint8_t *reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter)
   if(reg == nullptr || regLen == 0U) { return false; }
   const bool result = (wire.requestFrom(address, regLen) > 0U);
   if(result) {

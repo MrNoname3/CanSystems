@@ -71,7 +71,7 @@ public:
 
   /// @brief Checks if ADC values are ready for reading.
   /// @return `true` if values are ready, `false` otherwise.
-  bool readyToRead();
+  bool readyToRead() const;
 
   AdcReader(const AdcReader&) = delete;                       // Define copy constructor.
   AdcReader& operator=(const AdcReader&) = delete;            // Define copy assignment operator.
