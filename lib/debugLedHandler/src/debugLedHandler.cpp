@@ -33,12 +33,12 @@ void DebugLedHandler::ledOff() {
 #if defined(__AVR_ATmega328P__)
 void DebugLedHandler::ledToggle() {
   if(dbgLedPin == invalidPin) {return;}
-  digitalWrite(dbgLedPin, !digitalRead(dbgLedPin));
+  digitalWrite(dbgLedPin, static_cast<uint8_t>(!static_cast<bool>(digitalRead(dbgLedPin))));
 }
 #elif defined(ESP8266) || defined(ESP32)
 void DebugLedHandler::ledToggle() {
   if(dbgLedPin != invalidPin) {
-    digitalWrite(dbgLedPin, !digitalRead(dbgLedPin));
+    digitalWrite(dbgLedPin, static_cast<uint8_t>(!static_cast<bool>(digitalRead(dbgLedPin))));
   }
 }
 
