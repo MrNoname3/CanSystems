@@ -6,7 +6,6 @@
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
-#include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Handles reading moisture sensor data through an analog multiplexer.
 /// @tparam N Number of channels to read.
@@ -64,11 +63,11 @@ private:
   RgbLedWrapper& rgbLed;                                                    // Reference to the RGB LED wrapper object.
   const uint8_t (&channels)[channelNum];                                    // Array of channels to read from.
   const uint32_t readTime;                                                  // Interval between consecutive reads in milliseconds.
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  uint32_t eventTimer = 0UL;                                                // Class wide variable for universal timings.
   void (*dataSender)(const uint8_t (&data)[8]);                             // Function pointer for sending data.
   ReadState readState;                                                      // Current state of the moisture reader.
-  uint8_t readIndex;                                                        // Current index of the channel being read.
-  uint16_t moistureValue;                                                   // Filtered analog moisture value.
+  uint8_t readIndex = 0U;                                                   // Current index of the channel being read.
+  uint16_t moistureValue = 0U;                                              // Filtered analog moisture value.
 };
 
 template<uint8_t N>
@@ -77,11 +76,8 @@ MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper&
   rgbLed(rgbLed),
   channels(channels),
   readTime(readTime),
-  eventTimer(0UL),
   dataSender(dataSender),
-  readState(ReadState::IDLE),
-  readIndex(0U),
-  moistureValue(0U)
+  readState(ReadState::IDLE)
 {}
 
 template<uint8_t N>

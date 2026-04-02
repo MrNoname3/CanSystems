@@ -82,9 +82,8 @@ public:
     if(crcReceived == crcCalculated) {
       *data = eepromData.data;
       return true;  // CRC validation succeeded.
-    } else {
-      return false; // CRC validation failed.
     }
+    return false; // CRC validation failed.
   }
 
   /// @brief Retrieves the size of the data frame stored in EEPROM.
@@ -111,9 +110,9 @@ private:
   /// @brief Data structure representing the stored frame in EEPROM.
   struct __attribute__((packed))
   EEPROMData {
-    uint16_t crc;                                   // CRC16 value of the data.
+    uint16_t crc = 0U;                              // CRC16 value of the data.
     T data;                                         // User-defined data type.
-    EEPROMData() : crc(0U), data() {}               // Default constructor initializes members to zero.
+    EEPROMData() = default;                         // Default constructor initializes members to zero.
   };
 #if defined(ESP8266) || defined(ESP32)
   static inline bool eepromInitialised = false;     //Tracks whether the EEPROM has been initialized.

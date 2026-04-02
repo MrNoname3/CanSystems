@@ -77,7 +77,7 @@
     // The analog input channel has a voltage divider to limit the maximum signal voltage from 5V to 3.3V.
     constexpr int16_t maxAnalogValue = 17600;
     int16_t adcValue = adcReader.analogRead(channel);
-    adcValue = adcValue < 0 ? 0 : adcValue;                                                       // Avoid negative values.
+    adcValue = adcValue < 0 ? int16_t{0} : adcValue;                                                       // Avoid negative values.
     adcValue = adcValue > maxAnalogValue ? maxAnalogValue : adcValue;                             // Set maximum allowed value.
     const uint16_t result = static_cast<uint16_t>(map(adcValue, 0U, maxAnalogValue, 0U, 4095U));  // Limit the result to 12bit.
     return result;
