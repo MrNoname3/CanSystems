@@ -173,6 +173,12 @@ private:
     QUEUE_FULL    = 1 << 6U                 // Irrigation queue is full.
   };
 
+  void handleIdle(uint32_t actualTime);
+  void handleRun(uint32_t actualTime);
+  void handleStop();
+  void handleError();
+  void handleCalibration(uint32_t actualTime);
+
   /// @brief Interrupt handler to update flow count when flow sensor is triggered.
   static void irqHandler();
 

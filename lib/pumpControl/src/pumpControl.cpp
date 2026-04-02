@@ -35,106 +35,116 @@ bool PumpControl::run() {
   const uint32_t actualTime = millis();
   analogValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue), analogValue);
   switch(irrigationState) {
-    case IrrigationState::IDLE: {
-      if(!irrigationQueue.isEmpty()) {
-        const bool chSelectionSuccess = selectChannel(irrigationQueue.peek().channel);
-        if(chSelectionSuccess) {
-          analogWrite(pwmPin, irrigationQueue.peek().pwmValue);
-          eventTimer = actualTime;
-          errorCheckTimer = actualTime;
-          prevFlowCounter = flowCounter = 0U;
-          resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
-          rgbLed.setColor(irrStartColors[0], irrStartColors[1], irrStartColors[2], false);
-          irrigationState = IrrigationState::RUN;
+    case IrrigationState::IDLE:        handleIdle(actualTime);        break;
+    case IrrigationState::RUN:         handleRun(actualTime);         break;
+    case IrrigationState::STOP:        handleStop();                  break;
+    case IrrigationState::ERROR:       handleError();                 break;
+    case IrrigationState::CALIBRATION: handleCalibration(actualTime); break;
+  }
+  return true;
+}
+
+void PumpControl::handleIdle(uint32_t actualTime) {
+  if(!irrigationQueue.isEmpty()) {
+    const bool chSelectionSuccess = selectChannel(irrigationQueue.peek().channel);
+    if(chSelectionSuccess) {
+      analogWrite(pwmPin, irrigationQueue.peek().pwmValue);
+      eventTimer = actualTime;
+      errorCheckTimer = actualTime;
+      prevFlowCounter = flowCounter = 0U;
+      resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
+      rgbLed.setColor(irrStartColors[0], irrStartColors[1], irrStartColors[2], false);
+      irrigationState = IrrigationState::RUN;
+    } else {
+      pumpControlErrState.setError(PumpControlError::CH_SELECT);
+      irrigationState = IrrigationState::ERROR;
+    }
+  } else {
+    checkSafetyIrrigations();
+    if(flowCounter > 0U) {
+      pumpControlErrState.setError(PumpControlError::FLOW_OVERRUN);
+      irrigationState = IrrigationState::ERROR;
+    }
+    if(getPositiveCurrent() > maxAllowedStandbyCurrent) {
+      pumpControlErrState.setError(PumpControlError::PUMP_OVERRUN);
+      irrigationState = IrrigationState::ERROR;
+    }
+  }
+  if((pumpControlErrState.getRawErrorState() > 0U) && (reportError != nullptr)) {
+    reportError(pumpControlErrState.getRawErrorState());
+    pumpControlErrState.clearAllErrors();
+  }
+}
+
+void PumpControl::handleRun(uint32_t actualTime) {
+  const uint8_t actualCh = irrigationQueue.peek().channel;
+  const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
+  if(Time::hasElapsed(actualTime, eventTimer, Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
+    prevFlowCounter = flowCounter = 0U;
+    irrigationState = IrrigationState::STOP;
+  } else {
+    if(Time::hasElapsed(actualTime, errorCheckTimer, errorCheckTime)) {
+      errorCheckTimer = actualTime;
+      if(static_cast<bool>(irrigationQueue.peek().checkFlow)) {
+        const bool flowCheckSuccess = flowCounter > prevFlowCounter;
+        if(flowCheckSuccess) {
+          prevFlowCounter = flowCounter;
         } else {
-          pumpControlErrState.setError(PumpControlError::CH_SELECT);
-          irrigationState = IrrigationState::ERROR;
-        }
-      } else {
-        checkSafetyIrrigations();
-        if(flowCounter > 0U) {
-          pumpControlErrState.setError(PumpControlError::FLOW_OVERRUN);
-          irrigationState = IrrigationState::ERROR;
-        }
-        if(getPositiveCurrent() > maxAllowedStandbyCurrent) {
-          pumpControlErrState.setError(PumpControlError::PUMP_OVERRUN);
+          pumpControlErrState.setError(PumpControlError::FLOW_STUCK);
           irrigationState = IrrigationState::ERROR;
         }
       }
-      if((pumpControlErrState.getRawErrorState() > 0U) && (reportError != nullptr)) {
-        reportError(pumpControlErrState.getRawErrorState());
-        pumpControlErrState.clearAllErrors();
-      }
-    } break;
-    case IrrigationState::RUN: {
-      const uint8_t actualCh = irrigationQueue.peek().channel;
-      const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
-      if(Time::hasElapsed(actualTime, eventTimer, Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
-        prevFlowCounter = flowCounter = 0U;
-        irrigationState = IrrigationState::STOP;
-      } else {
-        if(Time::hasElapsed(actualTime, errorCheckTimer, errorCheckTime)) {
-          errorCheckTimer = actualTime;
-          if(static_cast<bool>(irrigationQueue.peek().checkFlow)) {
-            const bool flowCheckSuccess = flowCounter > prevFlowCounter;
-            if(flowCheckSuccess) {
-              prevFlowCounter = flowCounter;
-            } else {
-              pumpControlErrState.setError(PumpControlError::FLOW_STUCK);
-              irrigationState = IrrigationState::ERROR;
-            }
-          }
-          if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
-            const uint16_t actualCurrent = getPositiveCurrent();
-            if(actualCurrent < maxAllowedStandbyCurrent) {
-              pumpControlErrState.setError(PumpControlError::PUMP_UC);
-              irrigationState = IrrigationState::ERROR;
-            }
-            if(actualCurrent > maxAllowedCurrent) {
-              pumpControlErrState.setError(PumpControlError::PUMP_OC);
-              irrigationState = IrrigationState::ERROR;
-            }
-          }
+      if(static_cast<bool>(irrigationQueue.peek().checkCurrent)) {
+        const uint16_t actualCurrent = getPositiveCurrent();
+        if(actualCurrent < maxAllowedStandbyCurrent) {
+          pumpControlErrState.setError(PumpControlError::PUMP_UC);
+          irrigationState = IrrigationState::ERROR;
+        }
+        if(actualCurrent > maxAllowedCurrent) {
+          pumpControlErrState.setError(PumpControlError::PUMP_OC);
+          irrigationState = IrrigationState::ERROR;
         }
       }
-    } break;
-    case IrrigationState::STOP: {
-      IrrigationQueueElement actualElement = irrigationQueue.pop();
-      if(actualElement.repeatNum > 0U) {
-        actualElement.repeatNum--;
-        checkSafetyIrrigations();
-        createIrrigation(actualElement);
-      }
-      if(irrigationQueue.isEmpty()) {
-        digitalWrite(pwmPin, LOW);
-        rgbLed.clear();
-      } else {
-        if(actualElement.channel != irrigationQueue.peek().channel) {
-          digitalWrite(pwmPin, LOW);
-          rgbLed.clear();
-        }
-      }
-      irrigationState = IrrigationState::IDLE;
-    } break;
-    case IrrigationState::ERROR: {
+    }
+  }
+}
+
+void PumpControl::handleStop() {
+  IrrigationQueueElement actualElement = irrigationQueue.pop();
+  if(actualElement.repeatNum > 0U) {
+    actualElement.repeatNum--;
+    checkSafetyIrrigations();
+    createIrrigation(actualElement);
+  }
+  if(irrigationQueue.isEmpty()) {
+    digitalWrite(pwmPin, LOW);
+    rgbLed.clear();
+  } else {
+    if(actualElement.channel != irrigationQueue.peek().channel) {
       digitalWrite(pwmPin, LOW);
       rgbLed.clear();
-      if(!irrigationQueue.isEmpty()) {
-        irrigationQueue.pop();
-      }
-      irrigationState = IrrigationState::IDLE;
-    } break;
-    case IrrigationState::CALIBRATION: {
-      if(Time::hasElapsed(actualTime, eventTimer, Time::secToMs(5U))) {
-        const int16_t calValue = static_cast<int16_t>(511 - static_cast<int16_t>(analogValue));
-        if(static_cast<uint16_t>(abs(calValue)) < 20U) {
-          calibrationValue = calValue;
-        }
-        irrigationState = IrrigationState::IDLE;
-      }
-    } break;
-  };
-  return true;
+    }
+  }
+  irrigationState = IrrigationState::IDLE;
+}
+
+void PumpControl::handleError() {
+  digitalWrite(pwmPin, LOW);
+  rgbLed.clear();
+  if(!irrigationQueue.isEmpty()) {
+    irrigationQueue.pop();
+  }
+  irrigationState = IrrigationState::IDLE;
+}
+
+void PumpControl::handleCalibration(uint32_t actualTime) {
+  if(Time::hasElapsed(actualTime, eventTimer, Time::secToMs(5U))) {
+    const int16_t calValue = static_cast<int16_t>(511 - static_cast<int16_t>(analogValue));
+    if(static_cast<uint16_t>(abs(calValue)) < 20U) {
+      calibrationValue = calValue;
+    }
+    irrigationState = IrrigationState::IDLE;
+  }
 }
 
 void PumpControl::createIrrigation(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) {

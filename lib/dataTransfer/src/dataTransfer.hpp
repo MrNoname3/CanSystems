@@ -85,6 +85,8 @@ public:
   DataTransfer& operator=(DataTransfer&&) = delete;                 // Define move assignment operator.
 
 private:
+  bool finalizeTransfer();                                          // Finalizes the transfer after all pieces are received.
+
   void (*checkOkCallback)(bool isValid);                            // Callback function invoked on transfer completion.
   uint32_t fileSizeLocal;                                           // Expected size of the file being transferred (in bytes).
   char fileMd5Local[fileMd5Size];                                   // Expected MD5 checksum of the file as a hex string.

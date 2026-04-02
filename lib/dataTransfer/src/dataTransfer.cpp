@@ -154,36 +154,41 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   nextFilePieceNumberLocal++;
   remainingFileSizeLocal -= decodedPostSize;
   if(remainingFileSizeLocal == 0U) {
-    if(isFwTransfer) {
-      const bool updateEndResult = Update.end();
-      Logger::get().printf_P(PSTR("[FT] Firmware update end -> %s\r\n"), Str::getStateStr(updateEndResult));
-      if(!updateEndResult) {
-        dataTransferErrState.setError(DataTransferError::FW_UPGRADE_END_FAILED);
-        transferState = TransferState::CLEANUP;
-        return false;
-      }
-      Logger::get().printf_P(PSTR("[FT] Firmware received and verified: %s\r\n"), fileNameLocal);
+    return finalizeTransfer();
+  }
+  return true;
+}
+
+bool DataTransfer::finalizeTransfer() {
+  if(isFwTransfer) {
+    const bool updateEndResult = Update.end();
+    Logger::get().printf_P(PSTR("[FT] Firmware update end -> %s\r\n"), Str::getStateStr(updateEndResult));
+    if(!updateEndResult) {
+      dataTransferErrState.setError(DataTransferError::FW_UPGRADE_END_FAILED);
       transferState = TransferState::CLEANUP;
-      if(checkOkCallback != nullptr) {
-        checkOkCallback(true);
-      }
-    } else {
-      receivedFile.close();
-      receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
-      if(!receivedFile) {
-        Logger::get().printf_P(PSTR("[FT] Opening file for read failed: %s\r\n"), FileName::getTempFileLocation());
-        dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
-        return false;
-      }
-      if(receivedFile.size() != fileSizeLocal) {
-        Logger::get().printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
-        dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
-        return false;
-      }
-      md5.begin();
-      transferState = TransferState::CHECK;
-      transferTimeoutTimer = millis();
+      return false;
     }
+    Logger::get().printf_P(PSTR("[FT] Firmware received and verified: %s\r\n"), fileNameLocal);
+    transferState = TransferState::CLEANUP;
+    if(checkOkCallback != nullptr) {
+      checkOkCallback(true);
+    }
+  } else {
+    receivedFile.close();
+    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "r");
+    if(!receivedFile) {
+      Logger::get().printf_P(PSTR("[FT] Opening file for read failed: %s\r\n"), FileName::getTempFileLocation());
+      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      return false;
+    }
+    if(receivedFile.size() != fileSizeLocal) {
+      Logger::get().printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
+      dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
+      return false;
+    }
+    md5.begin();
+    transferState = TransferState::CHECK;
+    transferTimeoutTimer = millis();
   }
   return true;
 }
