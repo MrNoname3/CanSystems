@@ -26,7 +26,7 @@ void DebugLedHandler::ledOn() {
 
 void DebugLedHandler::ledOff() {
   if(dbgLedPin != invalidPin) {
-    digitalWrite(dbgLedPin, !dbgLedOnState);
+    digitalWrite(dbgLedPin, static_cast<uint8_t>(!static_cast<bool>(dbgLedOnState)));
   }
 }
 

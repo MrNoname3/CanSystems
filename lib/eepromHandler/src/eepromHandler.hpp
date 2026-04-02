@@ -47,7 +47,7 @@ public:
 #endif
 
     // Verify the written data.
-    for(uint16_t i = 0U; i < sizeof(EEPROMData); ++i) {
+    for(uint16_t i = 0U; i < static_cast<uint16_t>(sizeof(EEPROMData)); ++i) {
       if(EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
         return false;  // Write operation failed.
       }

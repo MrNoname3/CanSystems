@@ -16,7 +16,6 @@ public:
   /// represents the new maximum loop time in milliseconds.
   Performance(uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
     maxLoopTime(initialLoopTimeLimit),
-    lastLoopTime(0U),
     maxLoopTimeCallback(maxLoopTimeCallback)
   {}
 
@@ -59,7 +58,7 @@ public:
 
 private:
   uint32_t maxLoopTime;                                 // The maximum loop time recorded in milliseconds.
-  uint32_t lastLoopTime;                                // The timestamp of the last loop iteration.
+  uint32_t lastLoopTime = 0U;                           // The timestamp of the last loop iteration.
   void (*maxLoopTimeCallback)(uint32_t maxLoopTime);    // The callback function for notifying maximum loop time.
 };
 #endif // PERFORMANCE_HPP
