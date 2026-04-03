@@ -181,7 +181,7 @@ const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(read
 }
 
 #ifdef ESP32
-void NetworkManager::WiFiEvent(WiFiEvent_t event) {
+void NetworkManager::WiFiEvent(WiFiEvent_t event) { // NOLINT(readability-convert-member-functions-to-static)
   switch(event) {
     case ARDUINO_EVENT_ETH_START: {} break;
     case ARDUINO_EVENT_ETH_CONNECTED: {} break;

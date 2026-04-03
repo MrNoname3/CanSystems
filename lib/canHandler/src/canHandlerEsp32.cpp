@@ -7,7 +7,7 @@
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
 
-CanHandlerEsp32::CanHandlerEsp32() :
+CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
   canDevicesList{},
   canDevicesListMutex(xSemaphoreCreateMutex())
@@ -78,7 +78,7 @@ bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
   return (xQueueSend(canTxQueue, &frameOut, canTxQueueTimeout) == pdTRUE);
 }
 
-void CanHandlerEsp32::rxInterrupt(int packetsNum) {
+void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-convert-member-functions-to-static)
   if(packetsNum <= 0) { return; }
   CanFrame rxCanData;
   rxCanData.extId = CAN.packetId();
@@ -130,7 +130,7 @@ bool CanHandlerEsp32::run() {
   return true;
 }
 
-bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) {
+bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(canBasePtr == nullptr) { return false; }
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     canDevicesList.push_back(canBasePtr);

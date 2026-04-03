@@ -85,14 +85,13 @@ public:
     wdt_reset();
   }
 #elif defined ESP32
-private:
+public:
   /// @brief Deleted constructor to prevent instantiation of `WdtHandler` on ESP32.
   WdtHandler() = delete;
 
   /// @brief Deleted destructor to prevent instantiation of `WdtHandler` on ESP32.
   ~WdtHandler() = delete;
 
-public:
   /// @brief Enables the watchdog timer on ESP32.
   /// @param wdtTimeSec Timeout interval in seconds for the watchdog timer (default is `10s`).
   /// @param handle The task handle to be monitored by the watchdog (default is `nullptr`, which monitors the current task).

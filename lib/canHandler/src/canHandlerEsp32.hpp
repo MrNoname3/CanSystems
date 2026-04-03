@@ -26,17 +26,17 @@ public:
   CanHandlerEsp32();
 
   /// @brief Default destructor.
-  ~CanHandlerEsp32() = default;
+  ~CanHandlerEsp32() override = default;
 
   /// @brief Initializes the CAN handler with the default baud rate.
   /// @return `true` if operations are successful, `false` otherwise.
-  virtual bool init() override {
+  bool init() override {
     return init(defaultCanBaudRate);
   }
 
   /// @brief Handles ongoing CAN communication in a non-blocking loop.
   /// @return `true` if operations are successful, `false` otherwise.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Sends a CAN frame.
   /// @param frameOut The CAN frame to send.
@@ -47,7 +47,7 @@ public:
   /// @param command 10-bit command value.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  virtual bool send(uint16_t command, const uint8_t (&data)[8]) const override;
+  bool send(uint16_t command, const uint8_t (&data)[8]) const override;
 
   /// @brief Registers a callback for a CAN device.
   /// @param canBasePtr Pointer to the CAN device.
@@ -82,11 +82,11 @@ class CanBase : public virtual Task {
 public:
   /// @brief Pure virtual function to initialize the CAN device.
   /// @return `true` if operations are successful, `false` otherwise.
-  [[nodiscard]] virtual bool init() = 0;
+  [[nodiscard]] bool init() override = 0;
 
   /// @brief Pure virtual function to handle ongoing operations for the CAN device.
   /// @return `true` if operations are successful, `false` otherwise.
-  [[nodiscard]] virtual bool run() = 0;
+  [[nodiscard]] bool run() override = 0;
 
   /// @brief Checks if a client CAN ID is valid.
   /// @param clientCanId The client CAN ID to validate.
@@ -173,7 +173,7 @@ protected:
   }
 
   /// @brief Virtual destructor of the object.
-  virtual ~CanBase() = default;
+  ~CanBase() override = default;
 
 private:
   CanHandler& canHandler;                                 // Reference to the CAN handler instance.
