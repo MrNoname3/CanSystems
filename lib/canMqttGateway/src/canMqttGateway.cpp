@@ -201,7 +201,7 @@ void CanMqttGateway::handlePing() {
   }
 }
 
-void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) {
+void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant fileJsonVar = payloadJson[F("File")];
   if(fileJsonVar.is<const char*>()) {
     const char* fileName = fileJsonVar.as<const char*>();

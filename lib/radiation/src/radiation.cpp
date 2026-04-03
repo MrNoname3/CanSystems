@@ -12,7 +12,7 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::init() {
+bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static)
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
@@ -26,7 +26,7 @@ void Radiation::end() {
   measureDone = false;
 }
 
-bool Radiation::run() {
+bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static)
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };

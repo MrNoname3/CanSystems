@@ -72,63 +72,68 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   return true;
 }
 
+bool CanHandlerAtmega328P::handleRxFrame() {
+  intCount--;
+  const uint8_t canDataDlc = static_cast<uint8_t>(CAN.parsePacket());
+  CanFrame canFrame;
+  canFrame.extId = CAN.packetId();
+  if(!CAN.packetRtr()) {
+    const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(canFrame.data, canDataDlc));
+    if(canDataDlc != bytesReaded) { return false; }
+  }
+  switch(static_cast<uint16_t>(canFrame.cmd)) {
+    case static_cast<uint16_t>(CanCmd::PING): { CanHandlerBase::send(CanCmd::PING); } break;
+    case static_cast<uint16_t>(CanCmd::RESTART): { ResetHandler::restartMCU(); } break;
+    case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
+    case static_cast<uint16_t>(CanCmd::OTA_START): {
+      const uint16_t otaFlashBegin =
+        static_cast<uint16_t>(canFrame.data[0]) << 0U |
+        static_cast<uint16_t>(canFrame.data[1]) << 8U;
+      const uint32_t fwSize =
+        static_cast<uint32_t>(canFrame.data[2]) << 0U |
+        static_cast<uint32_t>(canFrame.data[3]) << 8U |
+        static_cast<uint32_t>(canFrame.data[4]) << 16U |
+        static_cast<uint32_t>(canFrame.data[5]) << 24U;
+      const uint16_t fwCrc =
+        static_cast<uint16_t>(canFrame.data[6]) << 0U |
+        static_cast<uint16_t>(canFrame.data[7]) << 8U;
+      Logger::get().print(F("OTA start: "));
+      const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
+      Logger::get().println(Str::getStateStr(otaStartResult));
+      if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
+    } break;
+    case static_cast<uint16_t>(CanCmd::OTA_SEND): {
+      const uint8_t fwData[OTA::fwPieceSize] = {
+        canFrame.data[0],
+        canFrame.data[1],
+        canFrame.data[2],
+        canFrame.data[3]
+      };
+      const uint32_t dataAddress =
+        static_cast<uint32_t>(canFrame.data[4]) << 0U |
+        static_cast<uint32_t>(canFrame.data[5]) << 8U |
+        static_cast<uint32_t>(canFrame.data[6]) << 16U |
+        static_cast<uint32_t>(canFrame.data[7]) << 24U;
+      const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
+      if(!otaStoreResult) { Logger::get().println(F("OTA storing failed!")); }
+      CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
+    } break;
+    case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
+    default: {
+      if(canCallback != nullptr) {
+        canCallback(static_cast<uint16_t>(canFrame.cmd), canFrame.data);
+      }
+    } break;
+  }
+  return true;
+}
+
 bool CanHandlerAtmega328P::run() {
   const uint32_t actualTime = millis();
   if(intCount > 0U) {
-    intCount--;
     eventTimer = actualTime;
-    debugLed.ledOff();
-    const uint8_t canDataDlc = static_cast<uint8_t>(CAN.parsePacket());
-    CanFrame canFrame;
-    canFrame.extId = CAN.packetId();
-    if(!CAN.packetRtr()) {
-      const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(canFrame.data, canDataDlc));
-      if(canDataDlc != bytesReaded) { return false; }
-    }
-    switch(static_cast<uint16_t>(canFrame.cmd)) {
-      case static_cast<uint16_t>(CanCmd::PING): { CanHandlerBase::send(CanCmd::PING); } break;
-      case static_cast<uint16_t>(CanCmd::RESTART): { ResetHandler::restartMCU(); } break;
-      case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
-      case static_cast<uint16_t>(CanCmd::OTA_START): {
-        const uint16_t otaFlashBegin =
-          static_cast<uint16_t>(canFrame.data[0]) << 0U |
-          static_cast<uint16_t>(canFrame.data[1]) << 8U;
-        const uint32_t fwSize =
-          static_cast<uint32_t>(canFrame.data[2]) << 0U |
-          static_cast<uint32_t>(canFrame.data[3]) << 8U |
-          static_cast<uint32_t>(canFrame.data[4]) << 16U |
-          static_cast<uint32_t>(canFrame.data[5]) << 24U;
-        const uint16_t fwCrc =
-          static_cast<uint16_t>(canFrame.data[6]) << 0U |
-          static_cast<uint16_t>(canFrame.data[7]) << 8U;
-        Logger::get().print(F("OTA start: "));
-        const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
-        Logger::get().println(Str::getStateStr(otaStartResult));
-        if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
-      } break;
-      case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-        const uint8_t fwData[ota.fwPieceSize] = {
-          canFrame.data[0],
-          canFrame.data[1],
-          canFrame.data[2],
-          canFrame.data[3]
-        };
-        const uint32_t dataAddress =
-          static_cast<uint32_t>(canFrame.data[4]) << 0U |
-          static_cast<uint32_t>(canFrame.data[5]) << 8U |
-          static_cast<uint32_t>(canFrame.data[6]) << 16U |
-          static_cast<uint32_t>(canFrame.data[7]) << 24U;
-        const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
-        if(!otaStoreResult) { Logger::get().println(F("OTA storing failed!")); }
-        CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
-      } break;
-      case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
-      default: {
-        if(canCallback != nullptr) {
-          canCallback(static_cast<uint16_t>(canFrame.cmd), canFrame.data);
-        }
-      } break;
-    }
+    DebugLedHandler::ledOff();
+    if(!handleRxFrame()) { return false; }
   }
   const OTA::OtaState otaState = ota.run();
   if(lastOtaState == OTA::OtaState::START && otaState == OTA::OtaState::STORE) {
@@ -147,7 +152,7 @@ bool CanHandlerAtmega328P::run() {
   }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
-    debugLed.ledOn();
+    DebugLedHandler::ledOn();
   }
   return true;
 }
@@ -162,11 +167,10 @@ bool CanHandlerAtmega328P::send(uint16_t command, const uint8_t (&data)[8]) cons
   const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0U;
   if(!packetWriteResult) { return false; }
   const bool endPacketResult = CAN.endPacket() > 0;
-  if(!endPacketResult) { return false; }
-  return true;
+  return endPacketResult;
 }
 
-bool CanHandlerAtmega328P::sendFwVersion() const {
+bool CanHandlerAtmega328P::sendFwVersion() const { // NOLINT(readability-convert-member-functions-to-static)
   static constexpr uint8_t versionInfo[8] = {
     static_cast<uint8_t>((Build::getFwVersion() >> 0U) & 0xFF),
     static_cast<uint8_t>((Build::getFwVersion() >> 8U) & 0xFF),

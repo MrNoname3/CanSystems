@@ -6,7 +6,7 @@ CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
   tempOffset(tempOffset)
 {}
 
-void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) {
+void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

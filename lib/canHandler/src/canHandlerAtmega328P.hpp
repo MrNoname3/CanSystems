@@ -24,24 +24,24 @@ public:
   CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin);
 
   /// @brief Default destructor.
-  ~CanHandlerAtmega328P() = default;
+  ~CanHandlerAtmega328P() override = default;
 
   /// @brief Initializes the CAN handler.
   /// @details Sets the CAN bus speed to 500 Kb/s.
   /// @return `true`.
-  virtual bool init() override {
+  bool init() override {
     return init(500000U);
   }
 
   /// @brief Handles ongoing CAN communication in a non-blocking loop.
   /// @return `true` if successful, `false` otherwise.
-  virtual bool run() override;
+  bool run() override;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 10-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  virtual bool send(uint16_t command, const uint8_t (&data)[8]) const override;
+  bool send(uint16_t command, const uint8_t (&data)[8]) const override;
 
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
@@ -59,6 +59,10 @@ private:
   /// @param canBaud Baud rate for CAN communication.
   /// @return `true` if successful, `false` otherwise.
   [[nodiscard]] bool init(uint32_t canBaud);
+
+  /// @brief Parses and dispatches a single received CAN frame.
+  /// @return `true` if successful, `false` otherwise.
+  bool handleRxFrame();
 
   /// @brief Interrupt handler for tracking received CAN frames.
   static inline void rxInterrupt() { intCount++; }

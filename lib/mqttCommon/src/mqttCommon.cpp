@@ -9,7 +9,7 @@ dataTransfer(fileValidCb),
 isRestartRequired(false)
 {}
 
-bool MqttCommon::init() {
+bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-static)
   char versionString[dataOutBufSize] = {'\0'};
   const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), versionMessageFrame,
   Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
@@ -40,7 +40,7 @@ void MqttCommon::fileValidCb(bool isValid) {
   isFileValid = isValid;
 }
 
-bool MqttCommon::sendResponse(bool result) {
+bool MqttCommon::sendResponse(bool result) { // NOLINT(readability-convert-member-functions-to-static)
   const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U);
   if(!sendingResult) {
     Logger::get().printf_P(PSTR("[COMMON] Failed to send respons '%hu'\r\n"), static_cast<uint8_t>(result));

@@ -48,7 +48,7 @@ public:
 
   /// @brief Handles incoming MQTT messages. Not used in this implementation.
   /// @param payloadJson JSON document containing the received MQTT message.
-  void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override { // NOLINT(readability-convert-member-functions-to-static)
     (void)payloadJson;
   }
 

@@ -4,7 +4,7 @@
 
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
   const bool initFS = LittleFS.begin();
-  if(!initFS) { return false; }
+  if(!initFS) { return false; } // NOLINT(readability-simplify-boolean-expr)
 #ifdef ESP8266
   FSInfo fsInfo;
   LittleFS.info(fsInfo);

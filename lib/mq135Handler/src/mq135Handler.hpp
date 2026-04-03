@@ -21,7 +21,7 @@ public:
 
   bool run() override;
 
-  void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override { // NOLINT(readability-convert-member-functions-to-static)
     (void)payloadJson;
   }
 

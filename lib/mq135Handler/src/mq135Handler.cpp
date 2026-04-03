@@ -7,6 +7,7 @@
   channel(channel),
   mq135("", sensorVoltage, adcResolution, adcPin, ""),
   measureTime(measureTime),
+  measureTimer(0U),
   gasReadState(GasReadState::IDLE),
   readIndex(0),
   gasValues{0.0F}
@@ -62,7 +63,7 @@
     return true;
   }
 
-  bool Mq135Handler::startCalibration() {
+  bool Mq135Handler::startCalibration() { // NOLINT(readability-convert-member-functions-to-static)
     const uint16_t adcValue = getAnalogValue();
     mq135.setADC(adcValue);
     const float calcR0 = mq135.calibrate(ratioMQ135CleanAir);

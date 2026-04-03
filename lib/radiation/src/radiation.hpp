@@ -41,7 +41,7 @@ public:
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.
   /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
-  void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override { // NOLINT(readability-convert-member-functions-to-static)
     (void)payloadJson;
   }
 
