@@ -33,6 +33,7 @@ public:
   /// @return True if the operation was successful; false otherwise.
   static bool save(T* data) {
 #if defined(ESP8266) || defined(ESP32)
+    // cppcheck-suppress knownConditionTrueFalse
     if(!init()) { return false; }
 #endif
     if(data == nullptr) { return false; }
@@ -67,6 +68,7 @@ public:
   /// @return True if the operation was successful; false otherwise.
   static bool load(T* data) {
 #if defined(ESP8266) || defined(ESP32)
+    // cppcheck-suppress knownConditionTrueFalse
     if(!init()) { return false; }
 #endif
     if(data == nullptr) { return false; }
@@ -101,6 +103,7 @@ private:
   /// @return `true` if the EEPROM is successfully initialized or was already initialized; 
   ///         `false` if the initialization fails.
   static inline bool init() {
+    // cppcheck-suppress knownConditionTrueFalse
     if(eepromInitialised) { return true; }
     eepromInitialised = EEPROM.begin(sizeof(EEPROMData));
     return eepromInitialised;
