@@ -31,6 +31,7 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
   const uint8_t expectedDataSize = remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize;
 
   // Iterates trough the received FW bytes.
+  // cppcheck-suppress knownConditionTrueFalse
   for(uint8_t i = 0; i < expectedDataSize; i++) {
     // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
     if(flashPointer < sizeof(firstFwBytes)) {
