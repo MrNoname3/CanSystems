@@ -116,6 +116,7 @@ const MqttCommon::CmdEntry MqttCommon::cmdTable[] = {
 
 void MqttCommon::dispatchCommand(const char* cmd) {
   for(const auto& entry : cmdTable) {
+    // cppcheck-suppress useStlAlgorithm
     if(strncmp_P(cmd, entry.name, maxCmdLength) == 0) {
       (this->*entry.handler)();
       return;
