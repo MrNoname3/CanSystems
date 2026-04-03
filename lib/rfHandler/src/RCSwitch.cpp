@@ -774,6 +774,9 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
       sdelay = RCSwitch::timings[FirstTiming-2] / pro.PreambleFactor;
     }
     const unsigned int delay = sdelay;
+    if (delay == 0) {
+      return false;
+    }
     // nReceiveTolerance = 60
     // допустимое отклонение длительностей импульсов на 60 %
     const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
