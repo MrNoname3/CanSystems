@@ -176,7 +176,7 @@ void RCSwitch::setProtocol(Protocol protocol) {
 /**
   * Sets the protocol to send, from a list of predefined protocols
   */
-void RCSwitch::setProtocol(int nProtocol) {
+void RCSwitch::setProtocol(int nProtocol) { // NOLINT(readability-convert-member-functions-to-static)
   if (nProtocol < 1 || nProtocol > numProto) {
     nProtocol = 1;  // TODO: trigger an error, e.g. "bad protocol" ???
   }
@@ -846,7 +846,7 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-function
         unsigned long long thismask = 1;
         for(unsigned int i = 1; i <= numProto; i++) {
           if ((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
-            if (receiveProtocol(i, changeCount)) {
+            if (receiveProtocol(static_cast<int>(i), changeCount)) {
               // receive succeeded for protocol i
               break;
             }
