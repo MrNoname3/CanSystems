@@ -30,7 +30,7 @@ public:
 
   /// @brief Retrieves the current CRC32 checksum value.
   /// @return The current 32-bit CRC checksum, complemented for the final output.
-  uint32_t get() const;
+  [[nodiscard]] uint32_t get() const;
 
   /// @brief Resets the CRC32 calculation to the initial value specified in the constructor.
   void reset();

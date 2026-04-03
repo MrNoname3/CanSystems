@@ -67,7 +67,7 @@ public:
 
   /// @brief Checks if the firmware stored in Flash belongs to this device.
   /// @return `true` if the firmware is for this device, `false` otherwise.
-  bool isOwnFw() const;
+  [[nodiscard]] bool isOwnFw() const;
 
   OTA(const OTA&) = delete;                                         // Define copy constructor.
   OTA& operator=(const OTA&) = delete;                              // Define copy assignment operator.

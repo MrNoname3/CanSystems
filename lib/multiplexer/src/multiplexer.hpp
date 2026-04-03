@@ -33,16 +33,16 @@ public:
   /// @brief Reads the analog value from the specified channel with automatic enabling/disabling.
   /// @param channel Channel number to read (0-15). Only the lower 4 bits are used.
   /// @return 10-bit analog value from the specified channel.
-  uint16_t analogReadSimple(uint8_t channel) const;
+  [[nodiscard]] uint16_t analogReadSimple(uint8_t channel) const;
 
   /// @brief Reads the analog value from the specified channel without toggling the enable pin.
   /// @param channel Channel number to read (0-15). Only the lower 4 bits are used.
   /// @return 10-bit analog value from the specified channel.
-  uint16_t analogReadAdvanced(uint8_t channel) const;
+  [[nodiscard]] uint16_t analogReadAdvanced(uint8_t channel) const;
 
   /// @brief Reads the analog value from the currently selected channel without toggling the enable pin.
   /// @return 10-bit analog value from the currently selected channel.
-  uint16_t analogReadAdvanced() const;
+  [[nodiscard]] uint16_t analogReadAdvanced() const;
 
   Multiplexer(const Multiplexer&) = delete;               // Define copy constructor.
   Multiplexer& operator=(const Multiplexer&) = delete;    // Define copy assignment operator.

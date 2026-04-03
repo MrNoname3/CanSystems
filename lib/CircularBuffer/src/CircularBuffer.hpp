@@ -35,19 +35,19 @@ public:
 
   /// @brief Checks whether the buffer is empty.
   /// @return `true` if the buffer is empty, `false` otherwise.
-  bool isEmpty() const;
+  [[nodiscard]] bool isEmpty() const;
 
   /// @brief Checks whether the buffer is full.
   /// @return `true` if the buffer is full, `false` otherwise.
-  bool isFull() const;
+  [[nodiscard]] bool isFull() const;
 
   /// @brief Retrieves the buffer's total capacity.
   /// @return The maximum number of elements the buffer can hold.
-  uint16_t getCapacity() const;
+  [[nodiscard]] uint16_t getCapacity() const;
 
   /// @brief Retrieves the current number of elements stored in the buffer.
   /// @return The number of elements currently in the buffer.
-  uint16_t getSize() const;
+  [[nodiscard]] uint16_t getSize() const;
 
   CircularBuffer(const CircularBuffer&) = delete;               // Define copy constructor.
   CircularBuffer& operator=(const CircularBuffer&) = delete;    // Define copy assignment operator.

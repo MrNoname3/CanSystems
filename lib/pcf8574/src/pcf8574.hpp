@@ -39,7 +39,7 @@ public:
 
   /// @brief Retrieves the current value of the PCF8574 register.
   /// @return The last known value written to or read from the PCF8574 register.
-  uint8_t getRegisterValue() const;
+  [[nodiscard]] uint8_t getRegisterValue() const;
 
   /// @brief Configures a specific pin as an input.
   /// @param pin The pin number (0-7) to set as an input.
@@ -55,7 +55,7 @@ public:
   /// @brief Reads the state of a specific pin.
   /// @param pin The pin number (0-7) to read.
   /// @return The state of the pin: `1` for HIGH, `0` for LOW, or `-1` if the operation failed.
-  uint8_t digitalRead(uint8_t pin) const;
+  [[nodiscard]] uint8_t digitalRead(uint8_t pin) const;
 
   /// @brief Toggles the state of a specific pin.
   /// @param pin The pin number (0-7) to toggle.

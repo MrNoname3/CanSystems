@@ -30,7 +30,7 @@ public:
 
   /// @brief Retrieves the current CRC16 checksum value.
   /// @return The current 16-bit CRC checksum.
-  uint16_t get() const;
+  [[nodiscard]] uint16_t get() const;
 
   /// @brief Resets the CRC16 calculation to the initial value specified in the constructor.
   void reset();

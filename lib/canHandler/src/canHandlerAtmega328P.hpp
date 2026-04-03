@@ -41,7 +41,7 @@ public:
   /// @param command 10-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  bool send(uint16_t command, const uint8_t (&data)[8]) const override;
+  bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
@@ -69,7 +69,7 @@ private:
 
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.
-  bool sendFwVersion() const;
+  bool sendFwVersion() const; // NOLINT(modernize-use-nodiscard)
 
   static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
 

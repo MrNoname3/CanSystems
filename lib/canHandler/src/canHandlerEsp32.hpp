@@ -41,13 +41,13 @@ public:
   /// @brief Sends a CAN frame.
   /// @param frameOut The CAN frame to send.
   /// @return `true` if the frame was successfully sent, `false` otherwise.
-  bool send(const CanFrame& frameOut) const;
+  bool send(const CanFrame& frameOut) const; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 10-bit command value.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  bool send(uint16_t command, const uint8_t (&data)[8]) const override;
+  bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Registers a callback for a CAN device.
   /// @param canBasePtr Pointer to the CAN device.

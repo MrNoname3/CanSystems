@@ -52,11 +52,11 @@ public:
 
   /// @brief Calculates the consumed current of the pump.
   /// @return The current value in mA.
-  int16_t calculateCurrent() const;
+  [[nodiscard]] int16_t calculateCurrent() const;
 
   /// @brief Calculates only positive current and dont't care with negative ones.
   /// @return Returns the positive current value. In negative case it returns with 0.
-  uint16_t getPositiveCurrent() const;
+  [[nodiscard]] uint16_t getPositiveCurrent() const;
 
   /// @brief Adds a limit switch for a specific channel.
   /// @param channel The irrigation channel.
@@ -185,7 +185,7 @@ private:
   /// @brief Selects an irrigation channel for use.
   /// @param channel The channel to select.
   /// @return True if the channel was successfully selected, false otherwise.
-  bool selectChannel(uint8_t channel) const;
+  [[nodiscard]] bool selectChannel(uint8_t channel) const;
 
   /// @brief Schedules an irrigation task.
   /// @param irrigationElement The irrigation task details.

@@ -21,7 +21,7 @@ public:
 
   /// @brief Gets the current state of the sensor enable pin.
   /// @return True if the enable pin is HIGH, false otherwise.
-  bool getState() const;
+  [[nodiscard]] bool getState() const;
 
   ExternalSensor(const ExternalSensor&) = delete;               // Define copy constructor.
   ExternalSensor& operator=(const ExternalSensor&) = delete;    // Define copy assignment operator.

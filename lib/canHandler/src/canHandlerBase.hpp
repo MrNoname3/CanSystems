@@ -114,12 +114,12 @@ public:
   /// @param command 10-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  virtual bool send(uint16_t command, const uint8_t (&data)[8]) const = 0;
+  virtual bool send(uint16_t command, const uint8_t (&data)[8]) const = 0; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Sends a CAN frame with a specified command.
   /// @param command 10-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(uint16_t command) const {
+  inline bool send(uint16_t command) const { // NOLINT(modernize-use-nodiscard)
     const uint8_t data[8] = {0U};
     return send(command, data);
   }
@@ -128,14 +128,14 @@ public:
   /// @param command Enum value of `CanCmd`.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command, const uint8_t (&data)[8]) const {
+  inline bool send(CanCmd command, const uint8_t (&data)[8]) const { // NOLINT(modernize-use-nodiscard)
     return send(static_cast<uint16_t>(command), data);
   }
 
   /// @brief Sends a CAN frame using an enumeration command.
   /// @param command Enum value of `CanCmd`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command) const {
+  inline bool send(CanCmd command) const { // NOLINT(modernize-use-nodiscard)
     return send(static_cast<uint16_t>(command));
   }
 
@@ -143,7 +143,7 @@ public:
   /// @param command Enum value of `CanCmd`.
   /// @param response Enum value of `Response`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command, Response response) const {
+  inline bool send(CanCmd command, Response response) const { // NOLINT(modernize-use-nodiscard)
     const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
     return send(command, data);
   }
@@ -154,22 +154,22 @@ public:
 
   /// @brief Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
   /// @return Filtered local CAN ID.
-  inline uint32_t getCanFilteredId() const {
+  [[nodiscard]] inline uint32_t getCanFilteredId() const {
     const uint32_t filteredId = getLocalCanId() & canIdFilterMask;
     return filteredId;
   }
 
   /// @brief Retrieves the master CAN ID.
   /// @return Master CAN ID.
-  inline uint16_t getMasterCanId() const { return canId.master; }
+  [[nodiscard]] inline uint16_t getMasterCanId() const { return canId.master; }
 
   /// @brief Retrieves the local CAN ID.
   /// @return Local CAN ID.
-  inline uint16_t getLocalCanId() const { return canId.local; }
+  [[nodiscard]] inline uint16_t getLocalCanId() const { return canId.local; }
 
   /// @brief Checks if the device is the master node.
   /// @return `true` if the device is the master node, `false` otherwise.
-  inline bool isDeviceMaster() const { return (canId.master == canId.local); }
+  [[nodiscard]] inline bool isDeviceMaster() const { return (canId.master == canId.local); }
 
   CanHandlerBase(const CanHandlerBase&) = delete;                       // Define copy constructor.
   CanHandlerBase& operator=(const CanHandlerBase&) = delete;            // Define copy assignment operator.

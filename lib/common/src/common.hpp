@@ -300,7 +300,7 @@ public:
 
   /// @brief Checks if any error state is set.
   /// @return `true` if any error is set, otherwise `false`.
-  bool hasAnyError() const {
+  [[nodiscard]] bool hasAnyError() const {
     return errorState != 0U;
   }
 
