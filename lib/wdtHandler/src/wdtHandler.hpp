@@ -85,7 +85,6 @@ public:
     wdt_reset();
   }
 #elif defined ESP32
-public:
   /// @brief Deleted constructor to prevent instantiation of `WdtHandler` on ESP32.
   WdtHandler() = delete;
 
