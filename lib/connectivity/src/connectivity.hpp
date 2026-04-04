@@ -142,7 +142,7 @@ private:
 class MqttBase : public virtual Task {
 private:
   static constexpr uint8_t subtopicSize = 16U;                      // Maximum allowed size for MQTT subtopics.
-  static constexpr uint8_t responseBufferSize = 28U;                // Size of the buffer used for generating response messages.
+  static constexpr uint8_t responseBufferSize = 42U;                // Size of the buffer used for generating response messages.
 
 public:
   /// @brief Enumeration for MQTT response types.
@@ -192,12 +192,13 @@ public:
 
   /// @brief Sends a response message with the specified response type and command.
   /// @param response Response type to be sent (ACK or NACK).
-  /// @param command Command identifier associated with the response.
+  /// @param command Command identifier associated with the response (default: 0).
+  /// @param errCode Error code included in the response; 0 means no error (default: 0).
   /// @return `true` if the response was sent successfully; otherwise, `false`.
-  [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command) {
+  [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {
     char responseBuffer[responseBufferSize] = { '\0' };
     const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
-      PSTR(R"({"type":%hu,"cmd":%hu})"), static_cast<uint8_t>(response), command);
+      PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint8_t>(response), command, errCode);
     const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
       (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
     if(!responseBufferValid) { return false; }

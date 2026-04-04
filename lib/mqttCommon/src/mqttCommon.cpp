@@ -22,9 +22,10 @@ bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-stat
 bool MqttCommon::run() {
   if(isFileCheckDone) {
     isFileCheckDone = false;
-    sendResponse(isFileValid);
+    const uint32_t errCode = dataTransfer.getErrorCode();
+    sendResponse(isFileValid, errCode);
     if(!isFileValid) {
-      Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), dataTransfer.getErrorCode());
+      Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
     } else {
       if(isRestartRequired) {
         ResetHandler::restartMCU();
@@ -40,8 +41,8 @@ void MqttCommon::fileValidCb(bool isValid) {
   isFileValid = isValid;
 }
 
-bool MqttCommon::sendResponse(bool result) { // NOLINT(readability-convert-member-functions-to-static)
-  const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U);
+bool MqttCommon::sendResponse(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
+  const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U, errCode);
   if(!sendingResult) {
     Logger::get().printf_P(PSTR("[COMMON] Failed to send respons '%hu'\r\n"), static_cast<uint8_t>(result));
   }
@@ -87,9 +88,10 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
     const char* filePieceB64 = fileDataJsonVar.as<const char*>();
     const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
-    sendResponse(storingResult);
+    const uint32_t storingErrCode = dataTransfer.getErrorCode();
+    sendResponse(storingResult, storingErrCode);
     if(!storingResult) {
-      Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), dataTransfer.getErrorCode());
+      Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
       return;
     }
   } else {
@@ -101,9 +103,10 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
     const char* fileMd5 = fileMd5JsonVar.as<const char*>();
     const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileNamePtr);
-    sendResponse(transferBeginResult);
+    const uint32_t beginErrCode = dataTransfer.getErrorCode();
+    sendResponse(transferBeginResult, beginErrCode);
     if(!transferBeginResult) {
-      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, dataTransfer.getErrorCode());
+      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, beginErrCode);
       return;
     }
   }

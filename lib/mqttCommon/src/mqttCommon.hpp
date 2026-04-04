@@ -46,8 +46,9 @@ private:
 
   /// @brief Sends a response message over MQTT.
   /// @param result Outcome of the previous operation (`true` for success, `false` for failure).
+  /// @param errCode Optional error code included in the response on failure (0 = no error).
   /// @return `true` if the response is sent successfully, `false` otherwise.
-  bool sendResponse(bool result);
+  bool sendResponse(bool result, uint32_t errCode = 0U);
 
   /// @brief Dispatches an incoming command string to the appropriate handler.
   /// @param cmd Null-terminated command string received via MQTT.

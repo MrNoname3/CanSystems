@@ -687,7 +687,7 @@ class _BaseTransfer:
             self.state = TransferState.DONE
 
         else:
-            logging.error(f"Received negative acknowledgment or unexpected state. Message: {message}")
+            logging.error(f"Received NACK in state {self.state}, error code: {message.get('err', 0)}")
             self.state = TransferState.ERROR
 
     def _send_piece(self):
@@ -877,7 +877,7 @@ class CommandSender(_BaseTransfer):
             if message["type"] != 0:
                 self.state = TransferState.DONE
             else:
-                logging.error(f"Command rejected by device. Message: {message}")
+                logging.error(f"Command rejected by device, error code: {message.get('err', 0)}")
                 self.state = TransferState.ERROR
         self._pending_messages.clear()
 
