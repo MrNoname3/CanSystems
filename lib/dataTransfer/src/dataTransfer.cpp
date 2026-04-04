@@ -90,6 +90,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     }
   }
   Logger::get().printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  MD5: %s\r\n"), fileNameLocal, fileSizeLocal, fileMd5Local);
+  transferTimeoutTimer = millis();
   transferState = TransferState::STORING;
   return true;
 }

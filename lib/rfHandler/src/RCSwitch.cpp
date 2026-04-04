@@ -33,6 +33,9 @@
 
 #include "RCSwitch.h"
 
+#include <algorithm>
+#include <limits>
+
 /* Protocol description format
  *
  * {
@@ -130,8 +133,10 @@
   { 340,  0, { 0, 0 }, 1, {  14,  4 }, { 1,  2 }, { 2, 1 }, false,  0 },  // 33 (Dooya Control DC2708L)
   { 120,  0, { 0, 0 }, 1, {   1, 28 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 34 DIGOO SD10 - so as to use this protocol RCSWITCH_SEPARATION_LIMIT must be set to 2600
   { 20,   0, { 0, 0 }, 1, { 239, 78 }, {20, 35 }, {35, 20}, false, 10000},// 35 Dooya 5-Channel blinds remote DC1603
-  { 250,  0, { 0, 0 }, 1, {  18,  6 }, { 1,  3 }, { 3, 1 }, false,  0 },   // 36 Dooya remote DC2700AC for Dooya DT82TV curtains motor
-  { 200,  0, { 0, 0 }, 0, {   0,  0 }, { 1,  3 }, { 3, 1} , false, 20}	  // 37 DEWENWILS Power Strip
+  { 250,  0, { 0, 0 }, 1, {  18,  6 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 36 Dooya remote DC2700AC for Dooya DT82TV curtains motor
+  { 200,  0, { 0, 0 }, 0, {   0,  0 }, { 1,  3 }, { 3, 1 }, false, 20 },  // 37 DEWENWILS Power Strip
+  { 500,  0, { 0, 0 }, 1, {   7,  1 }, { 2,  1 }, { 4, 1 }, true,   0 },  // 38 temperature and humidity sensor, various brands, nexus protocol, 36 bits + start impulse
+  { 560,  0, { 0, 0 }, 1, {  15,  1 }, { 3,  1 }, { 7, 1 }, true,   0 }   // 39 Hyundai WS Senzor 77/77TH, 36 bits (requires disabled protocol 38: 'RfProtocol38 0')
 };
 
 enum {
@@ -145,7 +150,7 @@ enum {
   volatile unsigned int RCSwitch::nReceivedDelay = 0;
   volatile unsigned int RCSwitch::nReceivedProtocol = 0;
   int RCSwitch::nReceiveTolerance = 60;
-  const unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
+  unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
   unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
   unsigned int RCSwitch::buftimings[4];
 #endif
@@ -218,8 +223,48 @@ void RCSwitch::setReceiveTolerance(int nPercent) { // NOLINT(readability-convert
   RCSwitch::nReceiveTolerance = nPercent;
 }
 
-void RCSwitch::setReceiveProtocolMask(unsigned long long mask) { // NOLINT(readability-convert-member-functions-to-static)
+bool RCSwitch::setReceiveProtocolMask(unsigned long long mask) { // NOLINT(readability-convert-member-functions-to-static)
   RCSwitch::nReceiveProtocolMask = mask;
+  return updateSeparationLimit();
+}
+
+bool RCSwitch::updateSeparationLimit() { // NOLINT(readability-convert-member-functions-to-static)
+  unsigned int longestPulseTime = std::numeric_limits<unsigned int>::max();
+  unsigned int shortestPulseTime = 0;
+
+  unsigned long long thisMask = 1;
+  for (const RCSwitch::Protocol& p : proto) {
+    if ((RCSwitch::nReceiveProtocolMask & thisMask) != 0ULL) {
+      const unsigned int headerShortPulseCount = std::min(p.Header.high, p.Header.low);
+      const unsigned int headerLongPulseCount  = std::max(p.Header.high, p.Header.low);
+
+      // nSeparationLimit must be <= this to detect the beginning of a transmission.
+      const unsigned int headerLongPulseTime = p.pulseLength * headerLongPulseCount;
+
+      // nSeparationLimit must be > any data pulse to avoid detecting a new transmission mid-frame.
+      unsigned int longestDataPulseCount = headerShortPulseCount;
+      longestDataPulseCount = std::max<unsigned int>(longestDataPulseCount, p.zero.high);
+      longestDataPulseCount = std::max<unsigned int>(longestDataPulseCount, p.zero.low);
+      longestDataPulseCount = std::max<unsigned int>(longestDataPulseCount, p.one.high);
+      longestDataPulseCount = std::max<unsigned int>(longestDataPulseCount, p.one.low);
+
+      const unsigned int longestDataPulseTime = p.pulseLength * longestDataPulseCount;
+
+      longestPulseTime  = std::min(longestPulseTime,  headerLongPulseTime);
+      shortestPulseTime = std::max(shortestPulseTime, longestDataPulseTime);
+    }
+    thisMask <<= 1;
+  }
+
+  if (longestPulseTime <= shortestPulseTime) {
+    // incompatible protocols enabled, fall back to default value
+    nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
+    return false;
+  }
+
+  const unsigned int timeDiff = longestPulseTime - shortestPulseTime;
+  nSeparationLimit = longestPulseTime - (timeDiff / 2);
+  return true;
 }
 #endif
 
@@ -596,17 +641,6 @@ void RCSwitch::send(unsigned long long code, unsigned int length) {
         this->transmit(protocol.zero);
       }
     }
-    // for kilok, there should be a duration of 66, and 64 significant data codes are stored
-    // send two more bits for even count
-    if (length == 64) {
-      if (nRepeat == 0) {
-        this->transmit(protocol.zero);
-        this->transmit(protocol.zero);
-      } else {
-        this->transmit(protocol.one);
-        this->transmit(protocol.one);
-      }
-     }
     // Set the guard Time
     if (protocol.Guard > 0) {
       digitalWrite(this->nTransmitterPin, LOW);
@@ -740,6 +774,9 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
       sdelay = RCSwitch::timings[FirstTiming-2] / pro.PreambleFactor;
     }
     const unsigned int delay = sdelay;
+    if (delay == 0) {
+      return false;
+    }
     // nReceiveTolerance = 60
     // допустимое отклонение длительностей импульсов на 60 %
     const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
