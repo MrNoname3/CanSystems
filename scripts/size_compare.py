@@ -62,19 +62,6 @@ def _checkout(ref: str) -> bool:
     return result.returncode == 0
 
 
-def _build_and_parse(pio: str, envs: list[str]) -> dict[str, Sizes]:
-    cmd = [pio, "run"]
-    for env in envs:
-        cmd += ["-e", env]
-
-    result = subprocess.run(cmd, capture_output=False, text=True)
-    if result.returncode != 0:
-        print("  ❌ Build failed.", file=sys.stderr)
-        return {}
-
-    return _parse_output_live(pio, envs)
-
-
 def _build_and_capture(pio: str, envs: list[str]) -> dict[str, Sizes]:
     """Run pio and capture output while also printing it, then parse sizes."""
     cmd = [pio, "run"]
