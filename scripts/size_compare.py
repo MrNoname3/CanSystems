@@ -5,14 +5,20 @@ size_compare.py – Compare flash/RAM sizes between the current working tree and
 For each environment, runs 'pio run', parses the flash and RAM usage from PlatformIO's
 output, then prints the difference.
 
+The baseline commit is built first (in a temporary git worktree so the main working
+tree is never touched), then the current state is built — ensuring the latest firmware
+binary remains in the project's .pio directory after the script finishes.
+
 Usage:
   python scripts/size_compare.py --commit HASH [--env ENV [ENV ...]]
 """
 import argparse
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 
 
@@ -33,8 +39,8 @@ def _find_pio() -> str:
     pio = shutil.which("pio")
     if pio:
         return pio
-    fallback = shutil.os.path.expanduser("~/.platformio/penv/bin/pio")
-    if shutil.os.path.exists(fallback):
+    fallback = os.path.expanduser("~/.platformio/penv/bin/pio")
+    if os.path.exists(fallback):
         return fallback
     raise FileNotFoundError(
         "Could not find 'pio'. Activate the PlatformIO virtual environment "
@@ -42,31 +48,13 @@ def _find_pio() -> str:
     )
 
 
-def _get_current_ref() -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True,
-    )
-    ref = result.stdout.strip()
-    if ref == "HEAD":
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True,
-        )
-        ref = result.stdout.strip()
-    return ref
-
-
-def _checkout(ref: str) -> bool:
-    result = subprocess.run(["git", "checkout", ref], capture_output=True)
-    return result.returncode == 0
-
-
-def _build_and_capture(pio: str, envs: list[str]) -> dict[str, Sizes]:
-    """Run pio and capture output while also printing it, then parse sizes."""
+def _build_and_capture(pio: str, envs: list[str], cwd: str | None = None) -> dict[str, Sizes]:
+    """Run pio run (optionally in a different directory) and parse flash/RAM sizes."""
     cmd = [pio, "run"]
     for env in envs:
         cmd += ["-e", env]
+    if cwd:
+        cmd += ["-d", cwd]
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     lines: list[str] = []
@@ -81,6 +69,30 @@ def _build_and_capture(pio: str, envs: list[str]) -> dict[str, Sizes]:
         return {}
 
     return _parse_lines(lines)
+
+
+def _build_baseline_in_worktree(pio: str, envs: list[str], commit: str) -> dict[str, Sizes]:
+    """
+    Check out `commit` into a temporary git worktree, build there, then clean up.
+
+    The main working tree is never modified, so dirty state and stashing are not needed.
+    """
+    tmpdir = tempfile.mkdtemp(prefix="size-cmp-")
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "add", "--detach", tmpdir, commit],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"❌ git worktree add failed:\n{result.stderr}", file=sys.stderr)
+            return {}
+        return _build_and_capture(pio, envs, cwd=tmpdir)
+    finally:
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", tmpdir],
+            capture_output=True,
+        )
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _parse_lines(lines: list[str]) -> dict[str, Sizes]:
@@ -139,11 +151,7 @@ def _fmt_diff(diff: int) -> str:
     return f"{sign}{abs(diff):,} B".replace(",", " ")
 
 
-def _print_comparison(
-    env_name: str,
-    current: Sizes,
-    baseline: Sizes,
-) -> None:
+def _print_comparison(env_name: str, current: Sizes, baseline: Sizes) -> None:
     sep = "─" * 68
     flash_pct_cur = current.flash_used / current.flash_total * 100 if current.flash_total else 0
     ram_pct_cur = current.ram_used / current.ram_total * 100 if current.ram_total else 0
@@ -188,28 +196,16 @@ def main() -> None:
     pio = _find_pio()
     envs: list[str] = args.env or []
 
-    original_ref = _get_current_ref()
+    print(f"\n Building baseline ({args.commit}) in temporary worktree...")
+    print("═" * 68)
+    baseline_sizes = _build_baseline_in_worktree(pio, envs, args.commit)
+    if not baseline_sizes:
+        sys.exit(1)
 
-    print(f"\n Building current state ({original_ref})...")
+    print(f"\n Building current state...")
     print("═" * 68)
     current_sizes = _build_and_capture(pio, envs)
     if not current_sizes:
-        sys.exit(1)
-
-    print(f"\n Checking out baseline ({args.commit})...")
-    if not _checkout(args.commit):
-        print(f"❌ Could not checkout '{args.commit}'", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"\n Building baseline ({args.commit})...")
-    print("═" * 68)
-    baseline_sizes = _build_and_capture(pio, envs)
-
-    print(f"\n Returning to {original_ref}...")
-    _checkout(original_ref)
-
-    if not baseline_sizes:
-        print("❌ Baseline build failed; comparison aborted.", file=sys.stderr)
         sys.exit(1)
 
     all_envs = sorted(set(current_sizes) | set(baseline_sizes))
@@ -217,7 +213,7 @@ def main() -> None:
         print("No size data found in build output.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n Size comparison: {original_ref}  vs  {args.commit}\n")
+    print(f"\n Size comparison: current  vs  {args.commit}\n")
     for env in all_envs:
         if env not in current_sizes:
             print(f" {env}: no size data for current build")
