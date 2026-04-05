@@ -244,7 +244,7 @@ public:
 private:
 #if defined(ESP8266) || defined(ESP32)
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
-  static constexpr const char PROGMEM otaFwLocation[]          = "/espFirmware.bin";      // File location for the OTA firmware.
+  static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";            // File location for the OTA firmware.
   static constexpr const char PROGMEM extOtaFwLocation[]       = "/%sFirmware.bin";       // File location for external device OTA firmware.
 //  static constexpr const char PROGMEM wifiConfigLocation[]     = "/config/wifi.json";     // File location for the Wi-Fi configuration.
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.

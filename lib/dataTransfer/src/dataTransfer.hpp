@@ -19,26 +19,28 @@ private:
   enum class DataTransferError : DataTransferErrorType {
     NONE                      = 0U,                     // No error.
     FILE_SIZE_ZERO            = 1 << 0U,                // The provided file size is zero.
-    FILE_NAME_NULLPTR         = 1 << 1U,                // The file name pointer is null.
-    FILE_NAME_INVALID         = 1 << 2U,                // The file name is invalid (e.g., empty).
-    NOT_ENOUGH_STORAGE        = 1 << 3U,                // Not enough storage space to store the file.
-    BEGIN_NOT_CALLED          = 1 << 4U,                // The begin() method was not called prior to storing file pieces.
-    WRONG_FILE_PIECE_NUMBER   = 1 << 5U,                // The file piece number is not sequential.
-    FILE_ALREADY_STORED       = 1 << 6U,                // The file has already been fully stored.
-    FILE_DATA_NULLPTR         = 1 << 7U,                // The provided file data pointer is null.
-    B64_FILE_DATA_SIZE_ERROR  = 1 << 8U,                // Base64 file data size is not valid.
-    FILE_PIECE_SIZE_OVEFLOW   = 1 << 9U,                // The decoded file piece size exceeds the maximum allowed.
-    FILE_PIECE_SIZE_ERROR     = 1 << 10U,               // The file piece size is incorrect.
-    B64_DECODED_SIZE_ERROR    = 1 << 11U,               // Error in the size after base64 decoding.
-    TEMP_FILE_OPENING_ERROR   = 1 << 12U,               // Error opening the temporary file for writing.
-    TEMP_FILE_WRITING_ERROR   = 1 << 13U,               // Error writing to the temporary file.
-    RECEIVED_FILE_SIZE_ERROR  = 1 << 14U,               // The received file size does not match the expected size.
-    FILE_MD5_ERROR            = 1 << 15U,               // MD5 checksum validation failed.
-    TEMP_FILE_RENAMING_ERROR  = 1 << 16U,               // Error renaming the temporary file.
-    FW_UPGRADE_BEGIN_FAILED   = 1 << 17U,               // Firmware upgrade initialization failed.
-    FW_UPGRADE_SET_MD5_FAILED = 1 << 18U,               // Firmware upgrade MD5 configuration failed.
-    FW_UPGRADE_WRITE_FAILED   = 1 << 19U,               // Firmware upgrade chunk write failed.
-    FW_UPGRADE_END_FAILED     = 1 << 20U                // Firmware upgrade finalization failed.
+    FILE_MD5_NULLPTR          = 1 << 1U,                // The MD5 pointer is null.
+    FILE_MD5_INVALID          = 1 << 2U,                // The MD5 string is invalid (e.g., empty).
+    FILE_NAME_NULLPTR         = 1 << 3U,                // The file name pointer is null.
+    FILE_NAME_INVALID         = 1 << 4U,                // The file name is invalid (e.g., empty).
+    NOT_ENOUGH_STORAGE        = 1 << 5U,                // Not enough storage space to store the file.
+    BEGIN_NOT_CALLED          = 1 << 6U,                // The begin() method was not called prior to storing file pieces.
+    WRONG_FILE_PIECE_NUMBER   = 1 << 7U,                // The file piece number is not sequential.
+    FILE_ALREADY_STORED       = 1 << 8U,                // The file has already been fully stored.
+    FILE_DATA_NULLPTR         = 1 << 9U,                // The provided file data pointer is null.
+    B64_FILE_DATA_SIZE_ERROR  = 1 << 10U,               // Base64 file data size is not valid.
+    FILE_PIECE_SIZE_OVEFLOW   = 1 << 11U,               // The decoded file piece size exceeds the maximum allowed.
+    FILE_PIECE_SIZE_ERROR     = 1 << 12U,               // The file piece size is incorrect.
+    B64_DECODED_SIZE_ERROR    = 1 << 13U,               // Error in the size after base64 decoding.
+    TEMP_FILE_OPENING_ERROR   = 1 << 14U,               // Error opening the temporary file for writing.
+    TEMP_FILE_WRITING_ERROR   = 1 << 15U,               // Error writing to the temporary file.
+    RECEIVED_FILE_SIZE_ERROR  = 1 << 16U,               // The received file size does not match the expected size.
+    FILE_MD5_ERROR            = 1 << 17U,               // MD5 checksum validation failed.
+    TEMP_FILE_RENAMING_ERROR  = 1 << 18U,               // Error renaming the temporary file.
+    FW_UPGRADE_BEGIN_FAILED   = 1 << 19U,               // Firmware upgrade initialization failed.
+    FW_UPGRADE_SET_MD5_FAILED = 1 << 20U,               // Firmware upgrade MD5 configuration failed.
+    FW_UPGRADE_WRITE_FAILED   = 1 << 21U,               // Firmware upgrade chunk write failed.
+    FW_UPGRADE_END_FAILED     = 1 << 22U                // Firmware upgrade finalization failed.
   };
 
 public:

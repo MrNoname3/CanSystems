@@ -72,18 +72,19 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   const bool fileDataPresented = fileDataJsonVar.is<const char*>();
   
   const char* fileNamePtr = nullptr;
-  if(binIdPresented && fileSizePresented && fileMd5Presented) {
-    const char* binId = binIdJsonVar.as<const char*>();
-    if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-      Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
-      sendResponse(false);
-      return;
-    }
-    isRestartRequired = true;
-    fileNamePtr = FileName::getOtaFwLocation();
-  } else if(fileNamePresented && fileSizePresented && fileMd5Presented) {
-    isRestartRequired = false;
+  if(fileNamePresented && fileSizePresented && fileMd5Presented) {
     fileNamePtr = fileNameJsonVar.as<const char*>();
+    if(binIdPresented) {
+      const char* binId = binIdJsonVar.as<const char*>();
+      if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
+        Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
+        sendResponse(false);
+        return;
+      }
+      isRestartRequired = true;
+    } else {
+      isRestartRequired = false;
+    }
   } else if(filePiecePresented && fileDataPresented) {
     const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
     const char* filePieceB64 = fileDataJsonVar.as<const char*>();
