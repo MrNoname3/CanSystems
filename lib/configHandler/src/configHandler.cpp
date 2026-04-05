@@ -1,5 +1,4 @@
 #include "configHandler.hpp"
-#include <LittleFS.h>                                               /// Use FLASH filesystem.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
@@ -61,33 +60,6 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   }
 
   return wifiConfErrState.getRawErrorState();
-}
-
-ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) { // NOLINT(readability-convert-member-functions-to-static)
-  ErrorState<ServerCertError, ServerCertErrorType> serverCertErrState;
-  if(storeCert == nullptr) {
-    serverCertErrState.setError(ServerCertError::CALLBACK_NULLPTR);
-    return serverCertErrState.getRawErrorState();
-  }
-
-  const char* const certPath = FileName::getMqttServerCertLocation();
-  File certFile = LittleFS.open(FPSTR(certPath), "r");
-  if(!certFile) {
-    serverCertErrState.setError(ServerCertError::FILE_OPEN_FAILED);
-    return serverCertErrState.getRawErrorState();
-  }
-
-  if(certFile.size() > 0U) {
-    const bool certStoringOk = storeCert(certFile, certFile.size());
-    if(!certStoringOk) {
-      serverCertErrState.setError(ServerCertError::CERT_STORING_FAILED);
-    }
-  } else {
-    serverCertErrState.setError(ServerCertError::CERT_FILE_EMPTY);
-  }
-
-  certFile.close();
-  return serverCertErrState.getRawErrorState();
 }
 
 ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],

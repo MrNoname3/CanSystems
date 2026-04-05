@@ -3,7 +3,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
-#include <functional>                                               /// For callback functions.
+#include <LittleFS.h>                                               /// For File and Stream types used in getServerCert.
 
 /// @brief A utility class to manage configurations and error states.
 class ConfigHandler final {
@@ -40,10 +40,28 @@ public:
   [[nodiscard]] static WifiConfigErrorType getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]);
 
   /// @brief Retrieves the server certificate using a callback for storage.
-  /// @param storeCert A callback function to handle the storage of the certificate.
-  /// The callback receives a reference to a `Stream` and the certificate size in bytes.
+  /// @param storeCert A callable (e.g. lambda) invoked with a reference to the certificate `Stream` and its size.
   /// @return Error state, where `0` means success.
-  [[nodiscard]] static ServerCertErrorType getServerCert(std::function<bool(Stream&, size_t)> storeCert);
+  template<typename Callback>
+  [[nodiscard]] static ServerCertErrorType getServerCert(Callback storeCert) {
+    ErrorState<ServerCertError, ServerCertErrorType> serverCertErrState;
+    const char* const certPath = FileName::getMqttServerCertLocation();
+    File certFile = LittleFS.open(FPSTR(certPath), "r");
+    if(!certFile) {
+      serverCertErrState.setError(ServerCertError::FILE_OPEN_FAILED);
+      return serverCertErrState.getRawErrorState();
+    }
+    if(certFile.size() > 0U) {
+      const bool certStoringOk = storeCert(certFile, certFile.size());
+      if(!certStoringOk) {
+        serverCertErrState.setError(ServerCertError::CERT_STORING_FAILED);
+      }
+    } else {
+      serverCertErrState.setError(ServerCertError::CERT_FILE_EMPTY);
+    }
+    certFile.close();
+    return serverCertErrState.getRawErrorState();
+  }
 
   /// @brief Gets the maximum allowed size for the MQTT user name.
   /// @return Maximum size of the MQTT user name string.
@@ -90,8 +108,7 @@ private:
     NONE                  = 0U,                   // No error.
     FILE_OPEN_FAILED      = 1 << 0U,              // Unable to open the certificate file.
     CERT_FILE_EMPTY       = 1 << 1U,              // Server certificate file is empty.
-    CALLBACK_NULLPTR      = 1 << 2U,              // Callback function is nullptr.
-    CERT_STORING_FAILED   = 1 << 3U               // Unable to store the certificate.
+    CERT_STORING_FAILED   = 1 << 2U               // Unable to store the certificate.
   };
 
   /// @brief Enumeration representing possible error states for server credentials retrieval.
