@@ -21,13 +21,13 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
 
 ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
   ErrorState<WifiConfigError, WifiConfigErrorType> wifiConfErrState;
-  const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getWifiConfigLocation()));
+  const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()));
   if(!wifiFileExists) {
     wifiConfErrState.setError(WifiConfigError::NO_WIFI_CONFIG_FILE);
     return wifiConfErrState.getRawErrorState();
   }
 
-  File wifiFile = LittleFS.open(FPSTR(FileName::getWifiConfigLocation()), "r");
+  File wifiFile = LittleFS.open(FPSTR(FileName::getMqttServerCredentialsLocation()), "r");
   if(!wifiFile) {
     wifiConfErrState.setError(WifiConfigError::CANNOT_OPEN_FILE);
     return wifiConfErrState.getRawErrorState();

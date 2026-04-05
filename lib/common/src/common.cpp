@@ -5,6 +5,21 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #endif
 
+#if defined(ESP8266) || defined(ESP32)
+bool FileName::isValidFileName(const char* fileName) {
+  static constexpr const char* const allowedLocations[] = {
+    otaFwLocation,
+    mqttServerCertLocation,
+    mqttServerCredLocation,
+  };
+  for(const char* const location : allowedLocations) {
+    // cppcheck-suppress useStlAlgorithm
+    if(strcmp_P(fileName, location) == 0) { return true; }
+  }
+  return false;
+}
+#endif
+
 void Build::printBuildInfo() {
 #if defined(__AVR_ATmega328P__)
   Logger::get().print(F("CPP: "));

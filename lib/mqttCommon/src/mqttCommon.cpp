@@ -63,27 +63,35 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     dispatchCommand(cmdJsonVar.as<const char*>());
     return;
   }
-  
+
   const bool binIdPresented = binIdJsonVar.is<const char*>();
   const bool fileNamePresented = fileNameJsonVar.is<const char*>();
   const bool fileSizePresented = fileSizeJsonVar.is<uint32_t>();
   const bool fileMd5Presented = fileMd5JsonVar.is<const char*>();
   const bool filePiecePresented = filePieceJsonVar.is<uint32_t>();
   const bool fileDataPresented = fileDataJsonVar.is<const char*>();
-  
-  const char* fileNamePtr = nullptr;
-  if(binIdPresented && fileSizePresented && fileMd5Presented) {
-    const char* binId = binIdJsonVar.as<const char*>();
-    if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-      Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
-      sendResponse(false);
-      return;
+
+  if(fileNamePresented && fileSizePresented && fileMd5Presented) {
+    if(binIdPresented) {
+      const char* binId = binIdJsonVar.as<const char*>();
+      if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
+        Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
+        sendResponse(false);
+        return;
+      }
+      isRestartRequired = true;
+    } else {
+      isRestartRequired = false;
     }
-    isRestartRequired = true;
-    fileNamePtr = FileName::getOtaFwLocation();
-  } else if(fileNamePresented && fileSizePresented && fileMd5Presented) {
-    isRestartRequired = false;
-    fileNamePtr = fileNameJsonVar.as<const char*>();
+    const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
+    const char* fileMd5 = fileMd5JsonVar.as<const char*>();
+    const char* fileName = fileNameJsonVar.as<const char*>();
+    const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileName);
+    const uint32_t beginErrCode = dataTransfer.getErrorCode();
+    sendResponse(transferBeginResult, beginErrCode);
+    if(!transferBeginResult) {
+      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileName, beginErrCode);
+    }
   } else if(filePiecePresented && fileDataPresented) {
     const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
     const char* filePieceB64 = fileDataJsonVar.as<const char*>();
@@ -92,23 +100,9 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     sendResponse(storingResult, storingErrCode);
     if(!storingResult) {
       Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
-      return;
     }
   } else {
     Logger::get().printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));
-    return;
-  }
-  
-  if(fileNamePtr != nullptr) {
-    const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
-    const char* fileMd5 = fileMd5JsonVar.as<const char*>();
-    const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileNamePtr);
-    const uint32_t beginErrCode = dataTransfer.getErrorCode();
-    sendResponse(transferBeginResult, beginErrCode);
-    if(!transferBeginResult) {
-      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileNamePtr, beginErrCode);
-      return;
-    }
   }
 }
 

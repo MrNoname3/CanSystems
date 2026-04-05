@@ -794,6 +794,7 @@ class OTAUpdater(_BaseTransfer):
 
     def _build_start_message(self) -> dict:
         return {
+            "name":     "espFirmware",
             "fileSize": self.firmware_manager.size,
             "md5":      self.firmware_manager.md5,
             "binId":    self.firmware_manager.firmware_id,

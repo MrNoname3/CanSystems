@@ -31,24 +31,35 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     dataTransferErrState.setError(DataTransferError::FILE_SIZE_ZERO);
     return false;
   }
+  if(fileMd5 == nullptr) {
+    dataTransferErrState.setError(DataTransferError::FILE_MD5_NULLPTR);
+    return false;
+  }
+  if(strlen(fileMd5) == 0U) {
+    dataTransferErrState.setError(DataTransferError::FILE_MD5_INVALID);
+    return false;
+  }
+  if(fileName == nullptr) {
+    dataTransferErrState.setError(DataTransferError::FILE_NAME_NULLPTR);
+    return false;
+  }
+  if(strlen(fileName) == 0U) {
+    dataTransferErrState.setError(DataTransferError::FILE_NAME_INVALID);
+    return false;
+  }
+  if(!FileName::isValidFileName(fileName)) {
+    dataTransferErrState.setError(DataTransferError::FILE_NAME_NOT_ALLOWED);
+    return false;
+  }
   fileSizeLocal = fileSize;
   memset(fileMd5Local, '\0', sizeof(fileMd5Local));
   strncpy(fileMd5Local, fileMd5, sizeof(fileMd5Local) - 1U);
   fileMd5Local[sizeof(fileMd5Local) - 1U] = '\0';
   nextFilePieceNumberLocal = 0U;
   remainingFileSizeLocal = fileSize;
-  if(fileName == nullptr) {
-    dataTransferErrState.setError(DataTransferError::FILE_NAME_NULLPTR);
-    return false;
-  }
   memset(fileNameLocal, '\0', sizeof(fileNameLocal));
   strncpy_P(fileNameLocal, fileName, sizeof(fileNameLocal) - 1U);
   fileNameLocal[sizeof(fileNameLocal) - 1U] = '\0';
-  const uint32_t fileNameLength = strlen(fileNameLocal);
-  if(fileNameLength == 0U) {
-    dataTransferErrState.setError(DataTransferError::FILE_NAME_INVALID);
-    return false;
-  }
   if(receivedFile) {
     receivedFile.close();
   }
