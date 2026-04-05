@@ -77,39 +77,36 @@ private:
   /// @brief Enumeration representing possible error states for Wi-Fi configuration.
   enum class WifiConfigError : WifiConfigErrorType {
     NONE                  = 0U,                   // No error.
-    NO_WIFI_CONFIG_FILE   = 1 << 0U,              // Wi-Fi configuration file is missing.
-    CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the configuration file.
-    JSON_PARSING_ERROR    = 1 << 2U,              // JSON parsing failed.
-    MISSING_SSID_KEY      = 1 << 3U,              // SSID key is missing in the JSON.
-    MISSING_PWD_KEY       = 1 << 4U,              // Password key is missing in the JSON.
-    SSID_LENGTH_ERR       = 1 << 5U,              // SSID length is invalid.
-    PWD_LENGTH_ERR        = 1 << 6U               // Password length is invalid.
+    FILE_OPEN_FAILED      = 1 << 0U,              // Unable to open the configuration file.
+    JSON_PARSING_ERROR    = 1 << 1U,              // JSON parsing failed.
+    MISSING_SSID_KEY      = 1 << 2U,              // SSID key is missing in the JSON.
+    MISSING_PWD_KEY       = 1 << 3U,              // Password key is missing in the JSON.
+    SSID_LENGTH_ERR       = 1 << 4U,              // SSID length is invalid.
+    PWD_LENGTH_ERR        = 1 << 5U               // Password length is invalid.
   };
 
   /// @brief Enumeration representing possible error states for server certificate retrieval.
   enum class ServerCertError : ServerCertErrorType {
     NONE                  = 0U,                   // No error.
-    NO_SERVER_CERT_FILE   = 1 << 0U,              // Server certification file is missing.
-    CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the configuration file.
-    CERT_FILE_EMPTY       = 1 << 2U,              // Server certificate file is empty.
-    CALLBACK_NULLPTR      = 1 << 3U,              // Callback function is nullptr.
-    CERT_STORING_FAILED   = 1 << 4U               // Unable to store the certificate.
+    FILE_OPEN_FAILED      = 1 << 0U,              // Unable to open the certificate file.
+    CERT_FILE_EMPTY       = 1 << 1U,              // Server certificate file is empty.
+    CALLBACK_NULLPTR      = 1 << 2U,              // Callback function is nullptr.
+    CERT_STORING_FAILED   = 1 << 3U               // Unable to store the certificate.
   };
 
   /// @brief Enumeration representing possible error states for server credentials retrieval.
   enum class ServerCredError : ServerCredErrorType {
     NONE                  = 0U,                   // No error.
-    NO_SERVER_CRED_FILE   = 1 << 0U,              // Server credentials file is missing.
-    CANNOT_OPEN_FILE      = 1 << 1U,              // Unable to open the credentials file.
-    JSON_PARSING_ERROR    = 1 << 2U,              // JSON parsing failed.
-    MISSING_MQTT_USER     = 1 << 3U,              // MQTT user name is missing.
-    MISSING_MQTT_PASS     = 1 << 4U,              // MQTT password is missing.
-    MISSING_MQTT_URL      = 1 << 5U,              // MQTT server URL is missing.
-    MISSING_MQTT_PORT     = 1 << 6U,              // MQTT server port number is missing.
-    MQTT_USER_LENGTH_ERR  = 1 << 7U,              // MQTT user name length is invalid.
-    MQTT_PASS_LENGTH_ERR  = 1 << 8U,              // MQTT password length is invalid.
-    MQTT_URL_LENGTH_ERR   = 1 << 9U,              // MQTT server URL length is invalid.
-    MQTT_PORT_NUM_ERR     = 1 << 10U              // MQTT server port number is invalid.
+    FILE_OPEN_FAILED      = 1 << 0U,              // Unable to open the credentials file.
+    JSON_PARSING_ERROR    = 1 << 1U,              // JSON parsing failed.
+    MISSING_MQTT_USER     = 1 << 2U,              // MQTT user name is missing.
+    MISSING_MQTT_PASS     = 1 << 3U,              // MQTT password is missing.
+    MISSING_MQTT_URL      = 1 << 4U,              // MQTT server URL is missing.
+    MISSING_MQTT_PORT     = 1 << 5U,              // MQTT server port number is missing.
+    MQTT_USER_LENGTH_ERR  = 1 << 6U,              // MQTT user name length is invalid.
+    MQTT_PASS_LENGTH_ERR  = 1 << 7U,              // MQTT password length is invalid.
+    MQTT_URL_LENGTH_ERR   = 1 << 8U,              // MQTT server URL length is invalid.
+    MQTT_PORT_NUM_ERR     = 1 << 9U               // MQTT server port number is invalid.
   };
 };
 #endif // CONFIG_HANDLER_HPP

@@ -21,72 +21,66 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
 
 ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {
   ErrorState<WifiConfigError, WifiConfigErrorType> wifiConfErrState;
-  const bool wifiFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()));
-  if(!wifiFileExists) {
-    wifiConfErrState.setError(WifiConfigError::NO_WIFI_CONFIG_FILE);
-    return wifiConfErrState.getRawErrorState();
-  }
+  const char* const credPath = FileName::getMqttServerCredentialsLocation();
 
-  File wifiFile = LittleFS.open(FPSTR(FileName::getMqttServerCredentialsLocation()), "r");
+  File wifiFile = LittleFS.open(FPSTR(credPath), "r");
   if(!wifiFile) {
-    wifiConfErrState.setError(WifiConfigError::CANNOT_OPEN_FILE);
+    wifiConfErrState.setError(WifiConfigError::FILE_OPEN_FAILED);
     return wifiConfErrState.getRawErrorState();
   }
 
   JsonDocument wifiJson;
   DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
-  const bool isDeserializationSuccessful  = (deserializationError == DeserializationError::Code::Ok);
-  if(isDeserializationSuccessful ) {
+  wifiFile.close();
+
+  const bool isDeserializationSuccessful = (deserializationError == DeserializationError::Code::Ok);
+  if(isDeserializationSuccessful) {
     JsonVariant ssidJsonVar = wifiJson[F("ssid")];
     JsonVariant passwordJsonVar = wifiJson[F("password")];
     const bool ssidKeyOk = ssidJsonVar.is<const char*>();
     const bool passwordKeyOk = passwordJsonVar.is<const char*>();
     if(!ssidKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_SSID_KEY); }
     if(!passwordKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_PWD_KEY); }
-    if(ssidKeyOk && passwordKeyOk) {
-      const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
-      const char* passJsonPtr = passwordJsonVar.as<const char*>();
-      const uint8_t ssidLength = strnlen(ssidJsonPtr, maxWifiSsidSize);
-      const uint8_t passLength = strnlen(passJsonPtr, maxWifiPasswordSize);
-      const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
-      const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
-      if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
-      if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
-      if(ssidLengthValid && passLengthValid) {
-        strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
-        strlcpy(password, passJsonPtr, maxWifiPasswordSize);
-      }
+    if(!ssidKeyOk || !passwordKeyOk) {
+      return wifiConfErrState.getRawErrorState();
+    }
+    const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
+    const char* passJsonPtr = passwordJsonVar.as<const char*>();
+    const uint8_t ssidLength = strnlen(ssidJsonPtr, maxWifiSsidSize);
+    const uint8_t passLength = strnlen(passJsonPtr, maxWifiPasswordSize);
+    const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
+    const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
+    if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
+    if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
+    if(ssidLengthValid && passLengthValid) {
+      strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
+      strlcpy(password, passJsonPtr, maxWifiPasswordSize);
     }
   } else {
     wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR);
   }
 
-  wifiFile.close();
   return wifiConfErrState.getRawErrorState();
 }
 
 ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bool(Stream&, size_t)> storeCert) { // NOLINT(readability-convert-member-functions-to-static)
   ErrorState<ServerCertError, ServerCertErrorType> serverCertErrState;
-  const bool certFileExists = LittleFS.exists(FPSTR(FileName::getMqttServerCertLocation()));
-  if(!certFileExists) {
-    serverCertErrState.setError(ServerCertError::NO_SERVER_CERT_FILE);
+  if(storeCert == nullptr) {
+    serverCertErrState.setError(ServerCertError::CALLBACK_NULLPTR);
     return serverCertErrState.getRawErrorState();
   }
 
-  File certFile = LittleFS.open(FPSTR(FileName::getMqttServerCertLocation()), "r");
+  const char* const certPath = FileName::getMqttServerCertLocation();
+  File certFile = LittleFS.open(FPSTR(certPath), "r");
   if(!certFile) {
-    serverCertErrState.setError(ServerCertError::CANNOT_OPEN_FILE);
+    serverCertErrState.setError(ServerCertError::FILE_OPEN_FAILED);
     return serverCertErrState.getRawErrorState();
   }
 
   if(certFile.size() > 0U) {
-    if(storeCert != nullptr) {
-      const bool certStoringOk = storeCert(certFile, certFile.size());
-      if(!certStoringOk) {
+    const bool certStoringOk = storeCert(certFile, certFile.size());
+    if(!certStoringOk) {
       serverCertErrState.setError(ServerCertError::CERT_STORING_FAILED);
-      }
-    } else {
-      serverCertErrState.setError(ServerCertError::CALLBACK_NULLPTR);
     }
   } else {
     serverCertErrState.setError(ServerCertError::CERT_FILE_EMPTY);
@@ -99,14 +93,11 @@ ConfigHandler::ServerCertErrorType ConfigHandler::getServerCert(std::function<bo
 ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],
   char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
   ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
-  if(!LittleFS.exists(FPSTR(FileName::getMqttServerCredentialsLocation()))) {
-    serverCredErrState.setError(ServerCredError::NO_SERVER_CRED_FILE);
-    return serverCredErrState.getRawErrorState();
-  }
+  const char* const credPath = FileName::getMqttServerCredentialsLocation();
 
-  File credFile = LittleFS.open(FPSTR(FileName::getMqttServerCredentialsLocation()), "r");
+  File credFile = LittleFS.open(FPSTR(credPath), "r");
   if(!credFile) {
-    serverCredErrState.setError(ServerCredError::CANNOT_OPEN_FILE);
+    serverCredErrState.setError(ServerCredError::FILE_OPEN_FAILED);
     return serverCredErrState.getRawErrorState();
   }
 
