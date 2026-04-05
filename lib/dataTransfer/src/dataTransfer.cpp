@@ -47,6 +47,10 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     dataTransferErrState.setError(DataTransferError::FILE_NAME_INVALID);
     return false;
   }
+  if(!FileName::isValidFileName(fileName)) {
+    dataTransferErrState.setError(DataTransferError::FILE_NAME_NOT_ALLOWED);
+    return false;
+  }
   fileSizeLocal = fileSize;
   memset(fileMd5Local, '\0', sizeof(fileMd5Local));
   strncpy(fileMd5Local, fileMd5, sizeof(fileMd5Local) - 1U);

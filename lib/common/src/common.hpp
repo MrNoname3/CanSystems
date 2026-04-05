@@ -228,6 +228,11 @@ public:
   /// @brief Retrieces the MQTT server credentials file location.
   /// @return Constant string representing the path to the MQTT server credentials file.
   static constexpr const char* getMqttServerCredentialsLocation() { return mqttServerCredLocation; }
+
+  /// @brief Checks if a given file name is accepted by this device.
+  /// @param fileName The file name to validate (must not be nullptr).
+  /// @return True if the file name is in the list of accepted locations, false otherwise.
+  static bool isValidFileName(const char* fileName);
 #endif
 
   FileName() = delete;                                   // Delete constructor.
