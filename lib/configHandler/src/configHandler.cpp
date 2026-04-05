@@ -9,12 +9,11 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
   LittleFS.info(fsInfo);
   totalBytes = fsInfo.totalBytes;
   usedBytes = fsInfo.usedBytes;
-  freeBytes = totalBytes - usedBytes;
 #elif defined ESP32
   totalBytes = LittleFS.totalBytes();
   usedBytes = LittleFS.usedBytes();
-  freeBytes = totalBytes - usedBytes;
 #endif
+  freeBytes = totalBytes - usedBytes;
   return true;
 }
 
@@ -45,8 +44,8 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
     }
     const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
     const char* passJsonPtr = passwordJsonVar.as<const char*>();
-    const uint8_t ssidLength = strnlen(ssidJsonPtr, maxWifiSsidSize);
-    const uint8_t passLength = strnlen(passJsonPtr, maxWifiPasswordSize);
+    const uint8_t ssidLength = static_cast<uint8_t>(strnlen(ssidJsonPtr, maxWifiSsidSize));
+    const uint8_t passLength = static_cast<uint8_t>(strnlen(passJsonPtr, maxWifiPasswordSize));
     const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
     const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
     if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
@@ -102,9 +101,9 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
   const char* mqttPasswordPtr = mqttPasswordVar.as<const char*>();
   const char* mqttServerUrlPtr = mqttServerUrlVar.as<const char*>();
   const uint16_t mqttServerPortNum = mqttServerPortVar.as<uint16_t>();
-  const uint8_t mqttUserNameLength = strnlen(mqttUserNamePtr, maxMqttUserNameSize);
-  const uint8_t mqttPasswordLength = strnlen(mqttPasswordPtr, maxMqttPasswordSize);
-  const uint8_t mqttServerUrlLength = strnlen(mqttServerUrlPtr, maxMqttServerUrlSize);
+  const uint8_t mqttUserNameLength = static_cast<uint8_t>(strnlen(mqttUserNamePtr, maxMqttUserNameSize));
+  const uint8_t mqttPasswordLength = static_cast<uint8_t>(strnlen(mqttPasswordPtr, maxMqttPasswordSize));
+  const uint8_t mqttServerUrlLength = static_cast<uint8_t>(strnlen(mqttServerUrlPtr, maxMqttServerUrlSize));
   const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize);
   const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize);
   const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize);
