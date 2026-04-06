@@ -4,9 +4,9 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #if defined(__AVR_ATmega328P__)
 #include <avr/wdt.h>                                                /// Watchdog timer library for AVR.
-#elif defined ESP8266
+#elif defined(ESP8266)
 #include <Esp.h>                                                    /// ESP8266 watchdog timer functions.
-#elif defined ESP32
+#elif defined(ESP32)
 #include <esp_task_wdt.h>                                           /// ESP32 task watchdog timer functions.
 #include <esp_err.h>                                                /// ESP32 error codes.
 #include <freertos/task.h>                                          /// FreeRTOS task-related functions.
@@ -57,7 +57,7 @@ public:
   static inline void resetWatchdog() {
     wdt_reset();
   }
-#elif defined ESP8266
+#elif defined(ESP8266)
   /// @brief Constructs a `WdtHandler` object and enables the watchdog timer.
   WdtHandler() {
     enableWatchdog();
@@ -74,7 +74,7 @@ public:
     wdt_disable();
   }
 
-   /// @brief Disables the hardware watchdog timer on ESP8266.
+  /// @brief Disables the hardware watchdog timer on ESP8266.
   static inline void disableWatchdog() {
     wdt_enable(0U);
   }
@@ -84,7 +84,7 @@ public:
   static inline void resetWatchdog() {
     wdt_reset();
   }
-#elif defined ESP32
+#elif defined(ESP32)
   /// @brief Deleted constructor to prevent instantiation of `WdtHandler` on ESP32.
   WdtHandler() = delete;
 
@@ -95,7 +95,7 @@ public:
   /// @param wdtTimeSec Timeout interval in seconds for the watchdog timer (default is `10s`).
   /// @param handle The task handle to be monitored by the watchdog (default is `nullptr`, which monitors the current task).
   /// @return `true` if the watchdog timer is successfully enabled, otherwise `false`.
-  static inline bool enableWatchdog(uint32_t wdtTimeSec = 10U, TaskHandle_t handle = nullptr) {
+  [[nodiscard]] static inline bool enableWatchdog(uint32_t wdtTimeSec = 10U, TaskHandle_t handle = nullptr) {
     const esp_err_t wdtInit = esp_task_wdt_init(wdtTimeSec, true);    // Enable panic too, so ESP32 restarts.
     const esp_err_t wdtAdded = esp_task_wdt_add(handle);
     return ((wdtInit == ESP_OK) && (wdtAdded == ESP_OK));
@@ -104,7 +104,7 @@ public:
   /// @brief Disables the watchdog timer on ESP32.
   /// @param handle The task handle to be removed from watchdog monitoring (default is `nullptr`, which removes the current task).
   /// @return `true` if the watchdog timer is successfully disabled, otherwise `false`.
-  static inline bool disableWatchdog(TaskHandle_t handle = nullptr) {
+  [[nodiscard]] static inline bool disableWatchdog(TaskHandle_t handle = nullptr) {
     const esp_err_t wdtDeleted = esp_task_wdt_delete(handle);
     const esp_err_t wdtDeinit = esp_task_wdt_deinit();
     return ((wdtDeinit == ESP_OK) && (wdtDeleted == ESP_OK));
@@ -112,7 +112,7 @@ public:
 
   /// @brief Resets the watchdog timer to prevent a system reset.
   /// @return `true` if the watchdog timer is successfully reset, otherwise `false`.
-  static inline bool resetWatchdog() {
+  [[nodiscard]] static inline bool resetWatchdog() {
     return (esp_task_wdt_reset() == ESP_OK);
   }
 #endif

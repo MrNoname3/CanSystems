@@ -28,7 +28,7 @@ Connectivity iotConn(
     state ? debugLed.stopTicker() : debugLed.startTicker(250U);
   },
   []() -> void {
-    WdtHandler::resetWatchdog();
+    (void)WdtHandler::resetWatchdog();
   }
 );
 
@@ -45,12 +45,16 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 void setup() {
   const uint32_t initTime = millis();
-  WdtHandler::enableWatchdog();
+  const bool wdtEnabled = WdtHandler::enableWatchdog();
   Serial.begin(MONITOR_BAUD);
   debugLed.startTicker(500U);
   delay(1U);
   Logger::get().printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   Build::printBuildInfo();
+  if(!wdtEnabled) {
+    Logger::get().printf_P(PSTR("WDT enable failed!\r\n"));
+    ResetHandler::restartMCU();
+  }
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
@@ -68,7 +72,7 @@ void setup() {
 }
 
 void loop() {
-  WdtHandler::resetWatchdog();
+  if(!WdtHandler::resetWatchdog()) { Logger::get().printf_P(PSTR("WDT reset failed!\r\n")); }
   (void)taskHandler.runTasks();
   taskYIELD();
 }
