@@ -10,7 +10,7 @@ bool FileName::isValidFileName(const char* fileName) {
   static constexpr const char* const allowedLocations[] = {
     otaFwLocation,
     mqttServerCertLocation,
-    mqttServerCredLocation,
+    mqttServerCredLocation
   };
   for(const char* const location : allowedLocations) {
     // cppcheck-suppress useStlAlgorithm
@@ -23,13 +23,13 @@ bool FileName::isValidFileName(const char* fileName) {
 void Build::printBuildInfo() {
 #if defined(__AVR_ATmega328P__)
   Logger::get().print(F("CPP: "));
-  Logger::get().println(Build::getCppVersion());
+  Logger::get().println(getCppVersion());
   Logger::get().print(F("FW: "));
-  Logger::get().println(Build::getFwVersion());
+  Logger::get().println(getFwVersion());
   Logger::get().print(F("GIT: "));
-  Logger::get().println(Build::getGitHash(), HEX);
+  Logger::get().println(getGitHash(), HEX);
   Logger::get().print(F("Dirty: "));
-  Logger::get().println(Build::getGitDirty());
+  Logger::get().println(getGitDirty());
   Logger::get().print(F("Fuses: "));
   Logger::get().print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
   Logger::get().print(Str::getSpacerStr());
@@ -40,10 +40,10 @@ void Build::printBuildInfo() {
   Logger::get().println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
 #elif defined(ESP8266) || defined(ESP32)
   Logger::get().printf_P(PSTR("Build info:\r\n"));
-  Logger::get().printf_P(PSTR("  CPP: %u\r\n"), Build::getCppVersion());
-  Logger::get().printf_P(PSTR("  FW: %hu\r\n"), Build::getFwVersion());
-  Logger::get().printf_P(PSTR("  GIT: %x\r\n"), Build::getGitHash());
-  Logger::get().printf_P(PSTR("  Dirty: %hu\r\n"), Build::getGitDirty());
+  Logger::get().printf_P(PSTR("  CPP: %u\r\n"), getCppVersion());
+  Logger::get().printf_P(PSTR("  FW: %hu\r\n"), getFwVersion());
+  Logger::get().printf_P(PSTR("  GIT: %x\r\n"), getGitHash());
+  Logger::get().printf_P(PSTR("  Dirty: %hu\r\n"), getGitDirty());
   Logger::get().printf_P(PSTR("Reset reason: %hu\r\n"), ResetHandler::getResetReason());
 #endif
 }

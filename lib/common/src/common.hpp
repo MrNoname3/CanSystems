@@ -277,7 +277,7 @@ public:
   /// @brief Checks if a specific error state is set.
   /// @param error The error to check.
   /// @return `true` if the error is set, otherwise `false`.
-  bool hasError(Enum error) const {
+  [[nodiscard]] bool hasError(Enum error) const {
     return (errorState & static_cast<StorageType>(error)) != 0U;
   }
 
@@ -294,7 +294,7 @@ public:
 
   /// @brief Retrieves the raw bitmask representing all error states.
   /// @return The raw error state as a value of type `StorageType`.
-  StorageType getRawErrorState() const {
+  [[nodiscard]] StorageType getRawErrorState() const {
     return errorState;
   }
 
