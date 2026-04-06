@@ -42,7 +42,7 @@ public:
   /// @param polynomial Polynomial to use for the calculation. Default is 0x1021.
   /// @return The computed CRC16 checksum.
   /// @note If the pointer is `nullptr` or `length` is 0, the function returns the initial value.
-  static uint16_t calculate(const uint8_t *data, uint32_t length,
+  [[nodiscard]] static uint16_t calculate(const uint8_t* data, uint32_t length,
     uint16_t initValue = defaultInitValue, uint16_t polynomial = defaultPolynomial);
 
   /// @brief Verifies that a data array matches an expected CRC16 checksum.
@@ -52,7 +52,7 @@ public:
   /// @param initValue Initial CRC value to start the calculation. Default is 0.
   /// @param polynomial Polynomial to use for the calculation. Default is 0x1021.
   /// @return `true` if the computed CRC matches the expected value; otherwise, `false`.
-  static bool verify(const uint8_t* data, uint32_t length, uint16_t expected,
+  [[nodiscard]] static bool verify(const uint8_t* data, uint32_t length, uint16_t expected,
     uint16_t initValue = defaultInitValue, uint16_t polynomial = defaultPolynomial);
 
   Crc16(const Crc16&) = delete;                       // Define copy constructor.
