@@ -11,7 +11,7 @@ OTA::OTA(SPIFlash& flash) :
 {}
 
 bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
-  if(fwSize == 0) { return false; }                               // No firmware to write, return early.
+  if(fwSize == 0U) { return false; }                               // No firmware to write, return early.
   if(fwSize > programMemorySize) { return false; }                // Check fw size.
   flash.chipErase();                                              // Attempt to erase the FLASH block.
   this->fwSize = fwSize;                                          // Save FW size.
@@ -28,16 +28,15 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
 
   // Calculate valid data size, this only matters if less bytes remains than fwPieceSize.
   const uint32_t remainingBytes = fwSize - flashPointer;
-  const uint8_t expectedDataSize = remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize;
+  const uint8_t expectedDataSize = static_cast<uint8_t>(remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize);
 
   // Iterates trough the received FW bytes.
   // cppcheck-suppress knownConditionTrueFalse
-  for(uint8_t i = 0; i < expectedDataSize; i++) {
+  for(uint8_t i = 0U; i < expectedDataSize; i++) {
     // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
     if(flashPointer < sizeof(firstFwBytes)) {
       firstFwBytes[i] = fwData[i];
-    }
-    else {
+    } else {
       // Save the other bytes to the FLASH.
       flash.writeByte(flashBlockBeginAddress + flashPointer, fwData[i]);
     }
@@ -64,12 +63,11 @@ OTA::OtaState OTA::run() {
     } break;
     case OtaState::CHECK: {
       if(flashPointer < fwSize) {
-        uint8_t readedByte = 0;
+        uint8_t readedByte = 0U;
         // Read the first bytes from the memory.
         if(flashPointer < sizeof(firstFwBytes)) {
           readedByte = firstFwBytes[flashPointer];
-        }
-        else { // Read the other bytes from FLASH.
+        } else { // Read the other bytes from FLASH.
           readedByte = flash.readByte(flashBlockBeginAddress + flashPointer);
         }
         crc16.next(readedByte);

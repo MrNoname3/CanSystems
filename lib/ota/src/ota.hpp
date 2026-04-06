@@ -46,20 +46,20 @@ public:
   OTA(SPIFlash& flash);
 
   /// @brief Default destructor.
-  virtual ~OTA() = default;
+  ~OTA() = default;
 
   /// @brief Initializes the OTA process.
   /// @param flashBlockNumber Flash block number to store the firmware.
   /// @param fwSize Size of the firmware in bytes.
   /// @param fwCrc Expected CRC16 checksum of the firmware.
   /// @return `true` if the OTA process starts successfully, `false` otherwise.
-  bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
+  [[nodiscard]] bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
 
   /// @brief Stores the next firmware chunk.
   /// @param dataAddress Expected address of the firmware chunk.
   /// @param fwData Firmware chunk data array.
   /// @return `true` if the data is stored successfully, `false` otherwise.
-  bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
+  [[nodiscard]] bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
 
   /// @brief Runs the OTA state machine to handle firmware updates.
   /// @return The current state of the OTA process.
