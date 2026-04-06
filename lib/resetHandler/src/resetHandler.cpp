@@ -4,7 +4,7 @@
 #elif defined(ESP8266)
 #include <Esp.h>                                                    /// Restart and reset-related functions for ESP8266.
 #include <user_interface.h>                                         /// Provides the definition for struct rst_info.
-#elif ESP32
+#elif defined(ESP32)
 #include <Esp.h>                                                    /// Restart and reset-related functions for ESP32.
 #include <esp_task_wdt.h>                                           /// Watchdog timer functions specific to ESP32.
 #endif
@@ -20,7 +20,7 @@ void ResetHandler::restartMCU() {
   Logger::get().flush();
   ESP.restart();
 #endif
-  while(true) {};
+  while(true) {}
 }
 
 #if defined(ESP8266) || defined(ESP32)

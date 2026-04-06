@@ -12,7 +12,7 @@ public:
 #if defined(ESP8266) || defined(ESP32)
   /// @brief Retrieves the reason for the last system reset.
   /// @return A `uint8_t` value representing the reset reason, where each value corresponds to a specific reset cause.
-  static uint8_t getResetReason();
+  [[nodiscard]] static uint8_t getResetReason();
 #endif
 
   ResetHandler() = delete;                                           // Delete constructor.
