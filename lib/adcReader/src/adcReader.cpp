@@ -24,7 +24,7 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* subTopic, uint16_t 
 }
 
 bool AdcReader::init() {
-  const bool initAdc =  ADS.begin();
+  const bool initAdc = ADS.begin();
   if(initAdc) {
     // Set ALERT/RDY pin.
     ADS.setComparatorThresholdHigh(0x8000);
@@ -96,17 +96,16 @@ bool AdcReader::run() {
   return (ADS.getError() == ADS1X15_OK);
 }
 
-int16_t AdcReader::analogRead(Channel channel) {
-  return adcValues[static_cast<uint8_t>(channel) & maxChannelNumber];
+int16_t AdcReader::analogRead(Channel requestedChannel) {
+  return adcValues[static_cast<uint8_t>(requestedChannel) & maxChannelNumber];
 }
 
- float AdcReader::voltageRead(Channel channel) {
-  return ADS.toVoltage(adcValues[static_cast<uint8_t>(channel) & maxChannelNumber]);
- }
+float AdcReader::voltageRead(Channel requestedChannel) {
+  return ADS.toVoltage(adcValues[static_cast<uint8_t>(requestedChannel) & maxChannelNumber]);
+}
 
 void AdcReader::enableMqttSending(uint32_t interval) {
-  const uint32_t minAllowedInterval = measureTime * analogChannels;
-  mqttSendTime = interval > minAllowedInterval ? interval : minAllowedInterval;
+  mqttSendTime = interval > adsReadWdTime ? interval : adsReadWdTime;
   enableSending = true;
 }
 
