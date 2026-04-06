@@ -19,11 +19,11 @@ public:
   explicit EEPROMHandler(T* data) : data(data) {}
 
   /// @brief Default destructor.
-  virtual ~EEPROMHandler() = default;
+  ~EEPROMHandler() = default;
 
   /// @brief Saves the data pointed to by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
-  bool save() {
+  [[nodiscard]] bool save() {
     if(data == nullptr) { return false; }
     return save(data);
   }
@@ -31,7 +31,7 @@ public:
   /// @brief Saves the data pointed to by the specified pointer.
   /// @param data Pointer to the data to be stored.
   /// @return True if the operation was successful; false otherwise.
-  static bool save(T* data) {
+  [[nodiscard]] static bool save(T* data) {
 #if defined(ESP8266) || defined(ESP32)
     // cppcheck-suppress knownConditionTrueFalse
     if(!init()) { return false; }
@@ -58,7 +58,7 @@ public:
 
   /// @brief Loads data into the memory address stored by the pointer set in the constructor.
   /// @return True if the operation was successful; false otherwise.
-  bool load() {
+  [[nodiscard]] bool load() {
     if(data == nullptr) { return false; }
     return load(data);
   }
@@ -66,7 +66,7 @@ public:
   /// @brief Loads data into the memory address stored by the specified pointer.
   /// @param data Pointer to the memory where the data will be loaded.
   /// @return True if the operation was successful; false otherwise.
-  static bool load(T* data) {
+  [[nodiscard]] static bool load(T* data) {
 #if defined(ESP8266) || defined(ESP32)
     // cppcheck-suppress knownConditionTrueFalse
     if(!init()) { return false; }
@@ -90,7 +90,7 @@ public:
 
   /// @brief Retrieves the size of the data frame stored in EEPROM.
   /// @return Size of the data frame in bytes.
-  static constexpr uint16_t getDataSize() { return sizeof(EEPROMData); }
+  [[nodiscard]] static constexpr uint16_t getDataSize() { return sizeof(EEPROMData); }
 
   EEPROMHandler(const EEPROMHandler&) = delete;               // Define copy constructor.
   EEPROMHandler& operator=(const EEPROMHandler&) = delete;    // Define copy assignment operator.
@@ -118,7 +118,7 @@ private:
     EEPROMData() = default;                         // Default constructor initializes members to zero.
   };
 #if defined(ESP8266) || defined(ESP32)
-  static inline bool eepromInitialised = false;     //Tracks whether the EEPROM has been initialized.
+  static inline bool eepromInitialised = false;     // Tracks whether the EEPROM has been initialized.
 #endif
 
   T* data;                                          // Pointer to the user-defined data type.
