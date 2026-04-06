@@ -90,7 +90,7 @@ public:
     /// @param from The sender address (10 bits).
     /// @param canData The 8-byte array containing the payload.
     CanFrame(uint16_t to, uint16_t cmd, uint16_t from, const uint8_t (&canData)[8]) :
-      extId(((static_cast<uint32_t>(to) & 0x3FF) << 0U) | ((static_cast<uint32_t>(cmd) & 0x1FF) << 10U) | ((static_cast<uint32_t>(from) & 0x3FF) << 19U))
+      extId((static_cast<uint32_t>(to) & 0x3FF) | ((static_cast<uint32_t>(cmd) & 0x1FF) << 10U) | ((static_cast<uint32_t>(from) & 0x3FF) << 19U))
     {
       memcpy(data, canData, sizeof(data));
     }
@@ -155,8 +155,7 @@ public:
   /// @brief Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
   /// @return Filtered local CAN ID.
   [[nodiscard]] inline uint32_t getCanFilteredId() const {
-    const uint32_t filteredId = getLocalCanId() & canIdFilterMask;
-    return filteredId;
+    return getLocalCanId() & canIdFilterMask;
   }
 
   /// @brief Retrieves the master CAN ID.

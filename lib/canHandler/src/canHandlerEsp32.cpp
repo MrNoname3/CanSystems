@@ -105,7 +105,6 @@ bool CanHandlerEsp32::run() {
           if(currentcanDevice == nullptr) { continue; }
           if(currentcanDevice->getClientCanId() == nodeCanId) {
             currentcanDevice->canFrameArrivedCallback(frameIn);
-            xSemaphoreGive(canDevicesListMutex);
             break;
           }
         }
@@ -123,8 +122,6 @@ bool CanHandlerEsp32::run() {
       const bool endPacketResult = CAN.endPacket() > 0;
       if(!endPacketResult) { return false; }
       // Logger::get().printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
-    } else {
-      return false;
     }
   }
   return true;
