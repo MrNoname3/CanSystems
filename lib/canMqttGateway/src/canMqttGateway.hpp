@@ -30,9 +30,8 @@ private:
     SUBTOPIC_NULLPTR      = 1 << 2U,              // Null pointer for the subtopic.
     FILE_NAME_STR_INVALID = 1 << 3U,              // Invalid file name string.
     FILE_NAME_STR_EMPTY   = 1 << 4U,              // Empty file name string.
-    FILE_NOT_EXISTS       = 1 << 5U,              // File does not exist.
-    CANNOT_OPEN_FILE      = 1 << 6U,              // Unable to open the file.
-    FILE_EMPTY            = 1 << 7U               // File is empty.
+    FILE_OPEN_FAILED      = 1 << 5U,              // Unable to open the file.
+    FILE_EMPTY            = 1 << 6U               // File is empty.
   };
 
 public:

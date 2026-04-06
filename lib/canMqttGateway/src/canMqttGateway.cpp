@@ -44,16 +44,12 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
     otaStartErrState.setError(OtaStartError::FILE_NAME_STR_EMPTY);
     return otaStartErrState.getRawErrorState();
   }
-  if(!LittleFS.exists(fileNameLocal)) {
-    otaStartErrState.setError(OtaStartError::FILE_NOT_EXISTS);
-    return otaStartErrState.getRawErrorState();
-  }
   if(receivedFile) {
     receivedFile.close();
   }
   receivedFile = LittleFS.open(fileNameLocal, FILE_READ);
   if(!receivedFile) {
-    otaStartErrState.setError(OtaStartError::CANNOT_OPEN_FILE);
+    otaStartErrState.setError(OtaStartError::FILE_OPEN_FAILED);
     return otaStartErrState.getRawErrorState();
   }
   fileSize = receivedFile.size();
@@ -72,13 +68,13 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
 }
 
 void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLINT(readability-convert-member-functions-to-static)
-  const uint16_t command = static_cast<uint16_t>(canFrame.cmd);
+  const uint16_t cmd = static_cast<uint16_t>(canFrame.cmd);
   const CanHandler::Response response = static_cast<CanHandler::Response>(canFrame.data[0]);
-  if((command == static_cast<uint16_t>(CanCmd::OTA_START)) || (command == static_cast<uint16_t>(CanCmd::OTA_SEND))) {
+  if((cmd == static_cast<uint16_t>(CanCmd::OTA_START)) || (cmd == static_cast<uint16_t>(CanCmd::OTA_SEND))) {
     transferState = (response == CanHandler::Response::ACK) ? TransferState::STORE : TransferState::INVALID;
     return;
   }
-  if(command == static_cast<uint16_t>(CanCmd::OTA_END)) {
+  if(cmd == static_cast<uint16_t>(CanCmd::OTA_END)) {
     transferState = (response == CanHandler::Response::ACK) ? TransferState::VALID : TransferState::INVALID;
     return;
   }
@@ -106,14 +102,14 @@ void CanOta::runOta() {
         receivedFile.seek(0U, SeekSet);
         const uint16_t fileCrc = crc16.get();
         const uint8_t canData[8] = {
-          static_cast<uint8_t>((storageNumber >> 0U) & 0xFF),
+          static_cast<uint8_t>(storageNumber & 0xFF),
           static_cast<uint8_t>((storageNumber >> 8U) & 0xFF),
-          static_cast<uint8_t>((fileSize >> 0U) & 0xFF),
+          static_cast<uint8_t>(fileSize & 0xFF),
           static_cast<uint8_t>((fileSize >> 8U) & 0xFF),
           static_cast<uint8_t>((fileSize >> 16U) & 0xFF),
           static_cast<uint8_t>((fileSize >> 24U) & 0xFF),
-          static_cast<uint8_t>((fileCrc >> 0U) & 0xFF), 
-          static_cast<uint8_t>((fileCrc >> 8U) & 0xFF),
+          static_cast<uint8_t>(fileCrc & 0xFF),
+          static_cast<uint8_t>((fileCrc >> 8U) & 0xFF)
         };
         transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_START, canData) ?
           TransferState::WAIT_FOR_ACK : TransferState::INVALID;
@@ -129,7 +125,7 @@ void CanOta::runOta() {
       const uint8_t bytesNumber = (remainingFileSize >= filePieceSize) ? filePieceSize : remainingFileSize;
       uint8_t canData[8] = {0U};
       receivedFile.read(canData, bytesNumber);
-      canData[4] = static_cast<uint8_t>((frameNumber >> 0U) & 0xFF);
+      canData[4] = static_cast<uint8_t>(frameNumber & 0xFF);
       canData[5] = static_cast<uint8_t>((frameNumber >> 8U) & 0xFF);
       canData[6] = static_cast<uint8_t>((frameNumber >> 16U) & 0xFF);
       canData[7] = static_cast<uint8_t>((frameNumber >> 24U) & 0xFF);
@@ -186,7 +182,7 @@ void CanMqttGateway::handlePing() {
   const uint32_t actualTime = millis();
   if(Time::hasElapsed(actualTime, clientPingTimer, clientPingTime)) {
     (void)sendCanFrame(CanCmd::PING);
-    clientPingTimer = millis();
+    clientPingTimer = actualTime;
   }
   const bool clientOnlineActual = !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
@@ -235,8 +231,7 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLI
 
 void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) {
   clientPingTimer = clientOfflineTimer = millis();
-  const uint16_t command = static_cast<uint16_t>(canFrame.cmd);
-  switch(command) {
+  switch(static_cast<uint16_t>(canFrame.cmd)) {
     case static_cast<uint16_t>(CanCmd::PING): {} break;
     case static_cast<uint16_t>(CanCmd::RESTART): {
       char dataOut[statusFrameBufSize] = {'\0'};
@@ -247,10 +242,10 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
       const uint16_t fwVersion =
-        (static_cast<uint16_t>(canFrame.data[0]) << 0U) |
+        static_cast<uint16_t>(canFrame.data[0]) |
         (static_cast<uint16_t>(canFrame.data[1]) << 8U);
-      const uint32_t gitHash = 
-        (static_cast<uint32_t>(canFrame.data[2]) << 0U) |
+      const uint32_t gitHash =
+        static_cast<uint32_t>(canFrame.data[2]) |
         (static_cast<uint32_t>(canFrame.data[3]) << 8U) |
         (static_cast<uint32_t>(canFrame.data[4]) << 16U) |
         (static_cast<uint32_t>(canFrame.data[5]) << 24U);
