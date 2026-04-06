@@ -117,7 +117,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       Logger::get().printf_P(PSTR("[INVALID]\r\n"));
       networkErrState.setError(NetworkError::INVALID_INTERFACE);
       return networkErrState.getRawErrorState();
-    } break;
+    }
   }
   Logger::get().printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   const bool macValid = (memcmp(mac, "\0\0\0\0\0\0", sizeof(mac)) != 0);
@@ -149,7 +149,7 @@ bool NetworkManager::isNetworkAvailable() {
 #endif
     default: {
       return false;
-    } break;
+    }
   }
   if(interfaceStatus != actualInterfaceStatus) {
     Logger::get().printf_P(PSTR("[NETWORK] Status changed: %s -> %s\r\n"), getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
@@ -165,18 +165,18 @@ bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
 
 const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(readability-convert-member-functions-to-static)
   switch(status) {
-    case WL_NO_SHIELD: { return wlNoShieldStr; } break;
-    case WL_IDLE_STATUS: { return wlIdleStatusStr; } break;
-    case WL_NO_SSID_AVAIL: { return wlNoSsidAvailableStr; } break;
-    case WL_SCAN_COMPLETED: { return wlScanCompletedStr; } break;
-    case WL_CONNECTED: { return wlConnectedStr; } break;
-    case WL_CONNECT_FAILED: { return wlConnectFailedStr; } break;
-    case WL_CONNECTION_LOST: { return wlConnectionLostStr; } break;
+    case WL_NO_SHIELD:       { return wlNoShieldStr; }
+    case WL_IDLE_STATUS:     { return wlIdleStatusStr; }
+    case WL_NO_SSID_AVAIL:   { return wlNoSsidAvailableStr; }
+    case WL_SCAN_COMPLETED:  { return wlScanCompletedStr; }
+    case WL_CONNECTED:       { return wlConnectedStr; }
+    case WL_CONNECT_FAILED:  { return wlConnectFailedStr; }
+    case WL_CONNECTION_LOST: { return wlConnectionLostStr; }
 #ifdef ESP8266
-    case WL_WRONG_PASSWORD: { return wlWrongPasswordStr; } break;
+    case WL_WRONG_PASSWORD:  { return wlWrongPasswordStr; }
 #endif
-    case WL_DISCONNECTED: { return wlDisconnectedStr; } break;
-    default: { return wlUnknownStatusStr; } break;
+    case WL_DISCONNECTED:    { return wlDisconnectedStr; }
+    default:                 { return wlUnknownStatusStr; }
   }
 }
 

@@ -18,7 +18,7 @@ private:
   static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
   static constexpr uint8_t invalidPin = 0xFF;                       // Invalid pin value.
 #ifdef ESP32
-  static constexpr uint8_t ethPhyAddress = 1;                       // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
+  static constexpr uint8_t ethPhyAddress = 1U;                      // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
   static constexpr int32_t ethPhyPower = 17;                        // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
   static constexpr int32_t ethPhyMdcPin = 23;                       // Pin# of the I²C clock signal for the Ethernet PHY
   static constexpr int32_t ethPhyMdioPin = 18;                      // Pin# of the I²C IO signal for the Ethernet PHY
