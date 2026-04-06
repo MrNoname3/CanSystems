@@ -36,7 +36,7 @@ private:
   // Gas sensor calibration values:
   static constexpr float sensorVoltage = 5.0F;
   static constexpr uint8_t adcResolution = 12U;
-  static constexpr uint8_t adcPin = -1;
+  static constexpr uint8_t adcPin = 255U;
   static constexpr float ratioMQ135CleanAir =  3.6F;      // RS/R0 = 3.6 ppm.
   static constexpr float rlValue = 1.0F;
   static constexpr float r0Value = 22.47F;
