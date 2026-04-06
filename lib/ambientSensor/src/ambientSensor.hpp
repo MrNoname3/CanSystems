@@ -43,8 +43,6 @@ private:
     SENSOR_ERROR                      // Handle sensor errors.
   };
 
-  static constexpr uint32_t clockSpeed = 100000U;                           // Default I2C clock speed in Hz.
-
   SI7021 si7021;                                                            // I2C humidity and temperature sensor driver.
   CanHandler& canHandler;                                                   // Reference to a CAN handler object.
   const uint8_t lightPin;                                                   // Analog pin for light intensity readings.

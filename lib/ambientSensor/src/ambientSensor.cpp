@@ -31,7 +31,7 @@ bool AmbientSensor::run() {
       if(Time::hasElapsed(actualTime, eventTimer, measurePeriod)) {
         eventTimer = actualTime;
         event = Event::READ_TEMPERATURE;
-      };
+      }
     } break;
     case Event::READ_TEMPERATURE: {
       event = si7021.getCelsiusHundredths(temperature) ? Event::READ_HUMIDITY : Event::SENSOR_ERROR;
@@ -41,11 +41,11 @@ bool AmbientSensor::run() {
     } break;
     case Event::SEND_VALUES: {
       canHandler.send(CanCmd::READ_HUM_TEMP_LDR, (const uint8_t[8]){
-        static_cast<uint8_t>((temperature >> 0U) & 0xFF),
+        static_cast<uint8_t>(temperature & 0xFF),
         static_cast<uint8_t>((temperature >> 8U) & 0xFF),
-        static_cast<uint8_t>((humidity >> 0U) & 0xFF),
+        static_cast<uint8_t>(humidity & 0xFF),
         static_cast<uint8_t>((humidity >> 8U) & 0xFF),
-        static_cast<uint8_t>((lightValue >> 0U) & 0xFF),
+        static_cast<uint8_t>(lightValue & 0xFF),
         static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
         0U,
         0U
@@ -56,6 +56,6 @@ bool AmbientSensor::run() {
       canHandler.send(CanCmd::HUM_TEMP_SENSOR_ERROR);
       event = Event::IDLE;
     } break;
-  };
+  }
   return true;
 }

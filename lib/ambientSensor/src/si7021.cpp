@@ -19,9 +19,9 @@ bool SI7021::init() { // NOLINT(readability-make-member-function-const)
 bool SI7021::getCelsiusHundredths(int16_t &temperature) {
   if(!deviceExists) { return false; }
   uint8_t tempBytes[2];
-  const uint8_t command = static_cast<const uint8_t>(SI7021Commands::TEMP_READ);
+  const uint8_t command = static_cast<uint8_t>(SI7021Commands::TEMP_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(tempBytes, sizeof(tempBytes))) { return false; }
-  int32_t tempRaw = (int32_t)tempBytes[0] << 8U | tempBytes[1];
+  int32_t tempRaw = static_cast<int32_t>(tempBytes[0]) << 8U | tempBytes[1];
   temperature = static_cast<int16_t>((((17572 * tempRaw) >> 16U) - 4685));
   return true;
 }
@@ -29,9 +29,9 @@ bool SI7021::getCelsiusHundredths(int16_t &temperature) {
 bool SI7021::getHumidityPercent(uint16_t &humidity) {
   if(!deviceExists) { return false; }
   uint8_t humBytes[2];
-  const uint8_t command = static_cast<const uint8_t>(SI7021Commands::RH_READ);
+  const uint8_t command = static_cast<uint8_t>(SI7021Commands::RH_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(humBytes, sizeof(humBytes))) { return false; }
-  int32_t humRaw = (int32_t)humBytes[0] << 8U | humBytes[1];
+  int32_t humRaw = static_cast<int32_t>(humBytes[0]) << 8U | humBytes[1];
   humidity = ((125 * humRaw) >> 16U) - 6;
   return true;
 }
@@ -59,19 +59,19 @@ bool SI7021::readReg(uint8_t *reg, uint8_t regLen) { // NOLINT(readability-non-c
 bool SI7021::setPrecision(Precision precision) {
   if(!deviceExists) { return false; }
   uint8_t reg = 0U;
-  const uint8_t command = static_cast<const uint8_t>(SI7021Commands::USER1_READ);
+  const uint8_t command = static_cast<uint8_t>(SI7021Commands::USER1_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(&reg, sizeof(reg))) { return false; }
   reg = (reg & 0x7E) | (static_cast<uint8_t>(precision) & 0x81);
-  const uint8_t userWrite[2] = {static_cast<const uint8_t>(SI7021Commands::USER1_WRITE), reg};
+  const uint8_t userWrite[2] = {static_cast<uint8_t>(SI7021Commands::USER1_WRITE), reg};
   return writeReg(userWrite, sizeof(userWrite));
 }
 
 bool SI7021::setHeater(bool on) {
   if(!deviceExists) { return false; }
   uint8_t reg = 0U;
-  const uint8_t command = static_cast<const uint8_t>(SI7021Commands::USER1_READ);
+  const uint8_t command = static_cast<uint8_t>(SI7021Commands::USER1_READ);
   if (!writeReg(&command, sizeof(command)) || !readReg(&reg, sizeof(reg))) { return false; }
   reg = (reg & ~0x04) | (on ? 0x04 : 0x00);
-  const uint8_t userWrite[2] = {static_cast<const uint8_t>(SI7021Commands::USER1_WRITE), reg};
+  const uint8_t userWrite[2] = {static_cast<uint8_t>(SI7021Commands::USER1_WRITE), reg};
   return writeReg(userWrite, sizeof(userWrite));
 }
