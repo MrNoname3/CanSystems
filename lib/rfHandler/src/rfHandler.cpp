@@ -9,22 +9,20 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t r
   dataCheckTimer(0U)
 {
   pinMode(this->rfRxPin, INPUT_PULLUP);
-  rfTransciever.enableReceive(digitalPinToInterrupt(this->rfRxPin));
-  rfTransciever.enableTransmit(this->rfTxPin);
+  rfTransceiver.enableReceive(digitalPinToInterrupt(this->rfRxPin));
+  rfTransceiver.enableTransmit(this->rfTxPin);
 }
 
 bool RfHandler::run() {
   const uint32_t actualTime = millis();
-  if(rfTransciever.available()) {
-    RfData actualRfData(rfTransciever.getReceivedValue(), rfTransciever.getReceivedBitlength(),
-      rfTransciever.getReceivedProtocol(), rfTransciever.getReceivedDelay());
-    rfTransciever.resetAvailable();
+  if(rfTransceiver.available()) {
+    RfData actualRfData(rfTransceiver.getReceivedValue(), rfTransceiver.getReceivedBitlength(),
+      rfTransceiver.getReceivedProtocol(), rfTransceiver.getReceivedDelay());
+    rfTransceiver.resetAvailable();
 
     // If timer is expired, clear old data to pass the next filter.
     if(Time::hasElapsed(actualTime, dataCheckTimer, dataCheckTime)) {
-      lastRfData.data = 0U;
-      lastRfData.bitLength = 0U;
-      lastRfData.protocol = 0U;
+      lastRfData = RfData();
     }
 
     // Filter repeated data.
@@ -53,13 +51,13 @@ void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();
     const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
     if(rfOutProtocol > 0U) {
-      rfTransciever.setProtocol(static_cast<int>(rfOutProtocol));
+      rfTransceiver.setProtocol(static_cast<int>(rfOutProtocol));
     }
     if(rfOutPulseLength > 0U) {
-      rfTransciever.setPulseLength(static_cast<int>(rfOutPulseLength));
+      rfTransceiver.setPulseLength(static_cast<int>(rfOutPulseLength));
     }
     if(rfOutData > 0U && rfOutBitLength > 0U) {
-      rfTransciever.send(rfOutData, rfOutBitLength);
+      rfTransceiver.send(rfOutData, rfOutBitLength);
     }
   }
 }

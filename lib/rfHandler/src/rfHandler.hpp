@@ -74,7 +74,7 @@ private:
     {}
   };
 
-  RCSwitch rfTransciever;                                     // RF driver object for sending and receiving RF signals.
+  RCSwitch rfTransceiver;                                     // RF driver object for sending and receiving RF signals.
   const uint8_t rfRxPin;                                      // GPIO pin connected to the RF receiver.
   const uint8_t rfTxPin;                                      // GPIO pin connected to the RF transmitter.
   RfData lastRfData;                                          // Last received RF data for duplicate filtering.
