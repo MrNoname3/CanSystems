@@ -4,9 +4,9 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
-MqttBase(connectivity, subtopic),
-dataTransfer(fileValidCb),
-isRestartRequired(false)
+  MqttBase(connectivity, subtopic),
+  dataTransfer(fileValidCb),
+  isRestartRequired(false)
 {}
 
 bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-static)
@@ -15,8 +15,7 @@ bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-stat
   Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
   const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
   if(!versionStringValid) { return false; }
-  if(!MqttBase::sendMessage(versionString)) { return false; }
-  return true;
+  return MqttBase::sendMessage(versionString);
 }
 
 bool MqttCommon::run() {
@@ -44,7 +43,7 @@ void MqttCommon::fileValidCb(bool isValid) {
 bool MqttCommon::sendResponse(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
   const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U, errCode);
   if(!sendingResult) {
-    Logger::get().printf_P(PSTR("[COMMON] Failed to send respons '%hu'\r\n"), static_cast<uint8_t>(result));
+    Logger::get().printf_P(PSTR("[COMMON] Failed to send response '%hu'\r\n"), static_cast<uint8_t>(result));
   }
   return sendingResult;
 }
