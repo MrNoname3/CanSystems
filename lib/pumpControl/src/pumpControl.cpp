@@ -178,7 +178,7 @@ int16_t PumpControl::calculateCurrent() const {
   static constexpr uint16_t sensorSensitivity = 185U;     // 185mV / 1A for ACS712-5A.
 
   // Calculate the sensor output voltage in millivolts from the analog value.
-  const int32_t sensorVoltageMV = (int32_t(analogValue) * voltageReference) / adcResolution;
+  const int32_t sensorVoltageMV = (static_cast<int32_t>(analogValue) * voltageReference) / adcResolution;
   // Calculate the current in milliamps (mA). (sensorVoltageMV - zeroCurrentOffset) gives the voltage deviation from 0A.
   const int32_t currentMA = ((sensorVoltageMV - zeroCurrentOffset) * 1000) / sensorSensitivity;
   return static_cast<int16_t>(currentMA);

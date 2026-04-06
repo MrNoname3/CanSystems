@@ -108,8 +108,8 @@ private:
     /// @param irrigationInfo Encoded byte with irrigation information.
     /// @param pwmValue PWM value for pump speed control.
     /// @param repeatNum Number of times to repeat the irrigation.
-    IrrigationQueueElement(uint8_t irrigatinInfo, uint8_t pwmValue, uint8_t repeatNum) :
-      irrigationInfo(irrigatinInfo),
+    IrrigationQueueElement(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) :
+      irrigationInfo(irrigationInfo),
       pwmValue(pwmValue),
       repeatNum(repeatNum)
     {}
@@ -122,7 +122,7 @@ private:
     /// @param pwmValue PWM value for pump speed control.
     /// @param repeatNum Number of times to repeat the irrigation.
     IrrigationQueueElement(uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) :
-      channel(channel &= channelSafetyMask),
+      channel(channel & channelSafetyMask),
       duration(duration & 7U),
       checkFlow(static_cast<uint8_t>(checkFlow)),
       checkCurrent(static_cast<uint8_t>(checkCurrent)),
@@ -145,7 +145,7 @@ private:
     /// @param time Scheduled safety irrigation time in minutes.
     /// @param timer Timer value for countdown.
     /// @param irrigation Irrigation task details.
-    SafetyIrrigationElement(uint32_t time, uint32_t timer, IrrigationQueueElement irrigation) :
+    SafetyIrrigationElement(uint16_t time, uint32_t timer, IrrigationQueueElement irrigation) :
       time(time),
       timer(timer),
       irrigation(irrigation)
