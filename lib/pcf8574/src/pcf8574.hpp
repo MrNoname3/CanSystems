@@ -11,7 +11,7 @@
 class PCF8574 final : public Task {
 public:
   /// @brief Constructs a PCF8574 instance with the specified I2C address and bus.
-  /// @param timeoutMs Timeout in microseconds for I2C communication.
+  /// @param timeoutUs Timeout in microseconds for I2C communication.
   /// @param address The I2C address of the PCF8574 device.
   /// @param wire The `TwoWire` instance representing the I2C bus (defaults to `Wire`).
   PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire = Wire);
@@ -30,12 +30,12 @@ public:
   /// @brief Writes a byte to the PCF8574 register.
   /// @param reg The byte to write to the PCF8574.
   /// @return `true` if the write operation was successful, `false` otherwise.
-  bool write(uint8_t reg);
+  [[nodiscard]] bool write(uint8_t reg);
 
   /// @brief Reads a byte from the PCF8574 register.
   /// @param value Reference to a byte variable to store the read value.
   /// @return `true` if the read operation was successful, `false` otherwise.
-  bool read(uint8_t &value) const;
+  [[nodiscard]] bool read(uint8_t &value) const;
 
   /// @brief Retrieves the current value of the PCF8574 register.
   /// @return The last known value written to or read from the PCF8574 register.
@@ -44,23 +44,23 @@ public:
   /// @brief Configures a specific pin as an input.
   /// @param pin The pin number (0-7) to set as an input.
   /// @return `true` if the operation was successful, `false` otherwise.
-  bool setAsInput(uint8_t pin);
+  [[nodiscard]] bool setAsInput(uint8_t pin);
 
   /// @brief Sets the state of a specific pin.
   /// @param pin The pin number (0-7) to configure.
   /// @param pinState The desired state of the pin: `1` for HIGH, `0` for LOW.
   /// @return `true` if the operation was successful, `false` otherwise.
-  bool digitalWrite(uint8_t pin, uint8_t pinState);
+  [[nodiscard]] bool digitalWrite(uint8_t pin, uint8_t pinState);
 
   /// @brief Reads the state of a specific pin.
   /// @param pin The pin number (0-7) to read.
-  /// @return The state of the pin: `1` for HIGH, `0` for LOW, or `-1` if the operation failed.
+  /// @return The state of the pin: `1` for HIGH, `0` for LOW, or `255` if the operation failed.
   [[nodiscard]] uint8_t digitalRead(uint8_t pin) const;
 
   /// @brief Toggles the state of a specific pin.
   /// @param pin The pin number (0-7) to toggle.
   /// @return `true` if the operation was successful, `false` otherwise.
-  bool toggleState(uint8_t pin);
+  [[nodiscard]] bool toggleState(uint8_t pin);
 
   PCF8574(const PCF8574&) = delete;               // Copy constructor deleted
   PCF8574& operator=(const PCF8574&) = delete;    // Copy assignment operator deleted

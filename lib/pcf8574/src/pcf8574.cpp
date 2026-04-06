@@ -34,7 +34,7 @@ bool PCF8574::read(uint8_t &value) const {
 }
 
 uint8_t PCF8574::getRegisterValue() const {
-  return static_cast<const uint8_t>(registerValue);
+  return registerValue;
 }
 
 bool PCF8574::setAsInput(uint8_t pin) {
@@ -44,7 +44,7 @@ bool PCF8574::setAsInput(uint8_t pin) {
 bool PCF8574::digitalWrite(uint8_t pin, uint8_t pinState) {
   if(pin > 7U) { return false; }                          // Validate pin range (0-7).
   const uint8_t mask = 1U << pin;                         // Bit mask directly using pin (0-7).
-  if (pinState > 0U) {
+  if(pinState > 0U) {
     registerValue |= mask;                                // Set pin high.
   } else {
     registerValue &= ~mask;                               // Set pin low.
@@ -54,8 +54,8 @@ bool PCF8574::digitalWrite(uint8_t pin, uint8_t pinState) {
 
 uint8_t PCF8574::digitalRead(uint8_t pin) const {
   uint8_t value = 0U;
-  if(!read(value) || pin > 7U) { return -1; }
-  return (value & (1U << static_cast<uint8_t>(pin))) > 0U ? 1U : 0U;
+  if(!read(value) || pin > 7U) { return 255U; }
+  return (value & (1U << pin)) != 0U ? 1U : 0U;
 }
 
 bool PCF8574::toggleState(uint8_t pin) {
