@@ -57,7 +57,7 @@ public:
 
   /// @brief Initializes the DFPlayer (currently unused).
   /// @return `true`.
-  bool init() override { return true; };
+  bool init() override { return true; }
 
   /// @brief Manages the state machine for track playback.
   /// Should be called periodically in the main loop.
