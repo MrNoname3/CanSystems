@@ -36,7 +36,7 @@ public:
   /// @return `true`.
   bool run() override {
     const uint32_t actualTime = millis();
-    uint32_t actualLoopTime = actualTime - lastLoopTime;
+    const uint32_t actualLoopTime = actualTime - lastLoopTime;
     lastLoopTime = actualTime;
     if(actualLoopTime > maxLoopTime) {
       maxLoopTime = actualLoopTime;
