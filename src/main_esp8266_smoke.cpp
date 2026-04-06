@@ -53,8 +53,6 @@ void setup() {
   Logger::get().printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   Build::printBuildInfo();
 
-  //adcReader.enableMqttSending(10000U);
-
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Logger::get().printf_P(PSTR("Init: %s\r\n"), Str::getStateStr(initSuccess));

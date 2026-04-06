@@ -153,7 +153,7 @@ void maxLoopTimeCallback(uint32_t maxLoopTime) {
   Logger::get().print(F("Max loop time: "));
   Logger::get().println(maxLoopTime);
   canHandler.send(CanCmd::LOOP_TIME_MAX, {
-    static_cast<uint8_t>((maxLoopTime >> 0U) & 0xFF),
+    static_cast<uint8_t>(maxLoopTime & 0xFF),
     static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
     static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
     static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),

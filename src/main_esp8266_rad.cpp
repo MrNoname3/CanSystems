@@ -16,8 +16,8 @@
 static constexpr uint8_t LED_PIN                    = D8;           // Pin of the LED.
 static constexpr uint8_t SPI_CS                     = D0;           // Ethernet shield SPI CS.
 static constexpr uint8_t RAD                        = D2;           // Radiation meter.
-static constexpr uint8_t RF_RX                      = D1;           // RF transmit pin.
-static constexpr uint8_t RF_TX                      = D3;           // RF receive pin.
+static constexpr uint8_t RF_RX                      = D1;           // RF receive pin.
+static constexpr uint8_t RF_TX                      = D3;           // RF transmit pin.
 
 //--- Functions ---//
 void maxLoopTimeCallback(uint32_t maxLoopTime);
