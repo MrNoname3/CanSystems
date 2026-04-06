@@ -1,7 +1,7 @@
 #ifndef MOISTURE_READER_HPP
 #define MOISTURE_READER_HPP
 
-#include "stdint.h"                                                 /// Standard fixed-width integer types.
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -63,7 +63,7 @@ private:
   RgbLedWrapper& rgbLed;                                                    // Reference to the RGB LED wrapper object.
   const uint8_t (&channels)[channelNum];                                    // Array of channels to read from.
   const uint32_t readTime;                                                  // Interval between consecutive reads in milliseconds.
-  uint32_t eventTimer = 0UL;                                                // Class wide variable for universal timings.
+  uint32_t eventTimer = 0U;                                                 // Class wide variable for universal timings.
   void (*dataSender)(const uint8_t (&data)[8]);                             // Function pointer for sending data.
   ReadState readState;                                                      // Current state of the moisture reader.
   uint8_t readIndex = 0U;                                                   // Current index of the channel being read.
@@ -104,16 +104,16 @@ bool MoistureReader<N>::run() {
       }
     } break;
     case ReadState::SETUP: {
-        multiplexer.selectChannel(channels[readIndex]);
-        eventTimer = actualTime;
-        moistureValue = 0U;
-        readState = ReadState::READING;
+      multiplexer.selectChannel(channels[readIndex]);
+      eventTimer = actualTime;
+      moistureValue = 0U;
+      readState = ReadState::READING;
     } break;
     case ReadState::READING: {
       moistureValue = Analog::complementaryFilter10(multiplexer.analogReadAdvanced(), moistureValue);
       if(Time::hasElapsed(actualTime, eventTimer, filteringTime)) {
         if(dataSender != nullptr) {
-          const uint8_t moistureH = static_cast<uint8_t>((moistureValue >> 0U) & 0xFF);
+          const uint8_t moistureH = static_cast<uint8_t>(moistureValue & 0xFF);
           const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8U) & 0xFF);
           dataSender({channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U});
         }
@@ -129,7 +129,7 @@ bool MoistureReader<N>::run() {
         }
       }
     } break;
-  };
+  }
   return true;
 }
 
