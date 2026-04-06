@@ -57,7 +57,7 @@ TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  WdtHandler::resetWatchdog();
+  WdtHandler::resetWatchdog(); // cppcheck-suppress ignoredReturnValue
   Serial.begin(MONITOR_BAUD);
   DebugLedHandler::ledOn();
   canHandler.addCanCallback(canMessageArrived);
@@ -85,7 +85,7 @@ void setup() {
 }
 
 void loop() {
-  WdtHandler::resetWatchdog();
+  WdtHandler::resetWatchdog(); // cppcheck-suppress ignoredReturnValue
   (void)taskHandler.runTasks();
 }
 

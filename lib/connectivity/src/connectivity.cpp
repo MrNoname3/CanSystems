@@ -229,7 +229,7 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(mqttBasePtr == nullptr) { return false; }
+  if(mqttBasePtr == nullptr) { return false; } // NOLINT(readability-simplify-boolean-expr)
   messageHandlerList.push_back(mqttBasePtr);
   return true;
 }

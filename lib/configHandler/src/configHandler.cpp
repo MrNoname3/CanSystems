@@ -12,6 +12,9 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
 #elif defined(ESP32)
   totalBytes = LittleFS.totalBytes();
   usedBytes = LittleFS.usedBytes();
+#else
+  totalBytes = 0U;
+  usedBytes = 0U;
 #endif
   freeBytes = totalBytes - usedBytes;
   return true;
