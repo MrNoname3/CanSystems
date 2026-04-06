@@ -13,7 +13,7 @@ public:
   /// @brief Constructor to initialize CRC32 with a custom initial value and polynomial.
   /// @param initValue Initial value for the CRC computation. Default is 0xFFFFFFFF.
   /// @param polynomial Polynomial used in the CRC computation. Default is 0xEDB88320.
-  explicit Crc32(uint32_t initValue = defaultInitValue, uint32_t polynomial = 0xEDB88320);
+  explicit Crc32(uint32_t initValue = defaultInitValue, uint32_t polynomial = defaultPolynomial);
 
   /// @brief Default destructor.
   ~Crc32() = default;
@@ -42,7 +42,7 @@ public:
   /// @param polynomial Polynomial to use for the calculation. Default is 0xEDB88320.
   /// @return The computed CRC32 checksum.
   /// @note If the pointer is `nullptr` or `length` is 0, the function returns the initial value.
-  static uint32_t calculate(const uint8_t *data, uint32_t length,
+  [[nodiscard]] static uint32_t calculate(const uint8_t* data, uint32_t length,
     uint32_t initValue = defaultInitValue, uint32_t polynomial = defaultPolynomial);
 
   /// @brief Verifies that a data array matches an expected CRC32 checksum.
@@ -52,7 +52,7 @@ public:
   /// @param initValue Initial CRC value to start the calculation. Default is 0xFFFFFFFF.
   /// @param polynomial Polynomial to use for the calculation. Default is 0xEDB88320.
   /// @return `true` if the computed CRC matches the expected value; otherwise, `false`.
-  static bool verify(const uint8_t* data, uint32_t length, uint32_t expected,
+  [[nodiscard]] static bool verify(const uint8_t* data, uint32_t length, uint32_t expected,
     uint32_t initValue = defaultInitValue, uint32_t polynomial = defaultPolynomial);
 
   Crc32(const Crc32&) = delete;                       // Define copy constructor.
