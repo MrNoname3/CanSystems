@@ -35,7 +35,7 @@ public:
   /// @brief Initializes the handler.
   /// @details This function is intentionally left empty in this implementation but can be overridden if needed.
   /// @return `true`.
-  bool init() override { return true; };
+  bool init() override { return true; }
 
   /// @brief Processes button events and sends them via CAN or callback.
   /// @details Checks for button press events, sends them to the CAN handler, and invokes a user-defined callback if set.

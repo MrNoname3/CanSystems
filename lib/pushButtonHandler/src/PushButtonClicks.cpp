@@ -6,7 +6,7 @@ PushButton::PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounc
   debounceTime(debounceTime),
   buttonPolarity(buttonPolarity),
   lastCheckedTime(0U),
-  pressedDuratoin(0U),
+  pressedDuration(0U),
   lastEventTime(0U),
   longPressflag(false),
   shortPressedCnt(2U)
@@ -15,28 +15,27 @@ PushButton::PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounc
 uint8_t PushButton::buttonCheck(const uint32_t currentMillis, bool currentPinStatus) {
   uint8_t output = 0U;
   if(currentPinStatus == buttonPolarity) {
-    pressedDuratoin += currentMillis - lastCheckedTime;
-    if(pressedDuratoin > longPressTime && !longPressflag) {
+    pressedDuration += currentMillis - lastCheckedTime;
+    if(pressedDuration > longPressTime && !longPressflag) {
       output = 1U;        // Long Event without release.
       longPressflag = true;
     }
-  }
-  else {
-    if(pressedDuratoin > longPressTime) {
+  } else {
+    if(pressedDuration > longPressTime) {
       output = 2U;        // Long Event with release.
       lastEventTime = currentMillis;
       shortPressedCnt = 2U;
     }
-    if(pressedDuratoin > debounceTime && pressedDuratoin <= longPressTime) {
+    if(pressedDuration > debounceTime && pressedDuration <= longPressTime) {
       shortPressedCnt++;
       lastEventTime = currentMillis;
     }
-    if(currentMillis > lastEventTime + deadTime && shortPressedCnt > 2U) {
+    if((currentMillis - lastEventTime) > deadTime && shortPressedCnt > 2U) {
       output = shortPressedCnt;
       shortPressedCnt = 2U;
     }
     longPressflag = false;
-    pressedDuratoin = 0U;
+    pressedDuration = 0U;
   }
   lastCheckedTime = currentMillis;
   return output;
