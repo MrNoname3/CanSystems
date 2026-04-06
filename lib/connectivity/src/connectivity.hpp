@@ -175,7 +175,7 @@ public:
 
   /// @brief Gets the maximum allowed size for MQTT subtopics.
   /// @return The maximum subtopic size.
-  [[nodiscard]] static constexpr uint8_t getSubtopicSize () { return subtopicSize; }
+  [[nodiscard]] static constexpr uint8_t getSubtopicSize() { return subtopicSize; }
 
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.

@@ -81,7 +81,7 @@ bool Connectivity::init() {
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
     Logger::get().printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
     Logger::get().printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
-    Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid? mqttCredentials.receiverTopic : Str::getErrStr());
+    Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid ? mqttCredentials.receiverTopic : Str::getErrStr());
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
     subtopicOffset = senderTopicSize - 2U;
   }
@@ -109,7 +109,7 @@ bool Connectivity::init() {
   // Setup MQTT client.
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
-    if((topic == nullptr) || (payload == nullptr) || (length ==  0U)) { return; }
+    if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = topic + subtopicOffset;
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
     for(const auto &currentMessageHandler : messageHandlerList) {
@@ -169,11 +169,11 @@ bool Connectivity::run() {
   }
 
   if(mqttClient.loop()) {
-    reconnectTimer = millis();
+    reconnectTimer = actualTime;
   } else {
     if((mqttState != MQTT_CONNECTED) && networkState) {
       if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
-        reconnectTimer = millis();
+        reconnectTimer = actualTime;
         connectToMqttServer();
       }
     }
@@ -197,7 +197,7 @@ bool Connectivity::run() {
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
-  if(subTopic == nullptr || payload == nullptr ) { return false; }
+  if(subTopic == nullptr || payload == nullptr) { return false; }
   char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
   const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
@@ -229,22 +229,23 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(mqttBasePtr != nullptr) { messageHandlerList.push_back(mqttBasePtr); }
-  return mqttBasePtr != nullptr;
+  if(mqttBasePtr == nullptr) { return false; }
+  messageHandlerList.push_back(mqttBasePtr);
+  return true;
 }
 
 const char* Connectivity::getMqttStatusStr(int8_t status) {
   switch(status) {
-    case MQTT_CONNECTION_TIMEOUT: { return mqttConnectionTimeoutStr; } break;
-    case MQTT_CONNECTION_LOST: { return mqttConnectionLostStr; } break;
-    case MQTT_CONNECT_FAILED: { return mqttConnectFailedStr; } break;
-    case MQTT_DISCONNECTED: { return mqttDisconnectedStr; } break;
-    case MQTT_CONNECTED: { return mqttConnectedStr; } break;
-    case MQTT_CONNECT_BAD_PROTOCOL: { return mqttConnectBadProtocolStr; } break;
-    case MQTT_CONNECT_BAD_CLIENT_ID: { return mqttConnectBadClientIdStr; } break;
-    case MQTT_CONNECT_UNAVAILABLE: { return mqttConnectUnavailableStr; } break;
-    case MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; } break;
-    case MQTT_CONNECT_UNAUTHORIZED: { return mqttConnectUnauthorizedStr; } break;
-    default: { return mqttUnknownStatusStr; } break;
+    case MQTT_CONNECTION_TIMEOUT:    { return mqttConnectionTimeoutStr; }
+    case MQTT_CONNECTION_LOST:       { return mqttConnectionLostStr; }
+    case MQTT_CONNECT_FAILED:        { return mqttConnectFailedStr; }
+    case MQTT_DISCONNECTED:          { return mqttDisconnectedStr; }
+    case MQTT_CONNECTED:             { return mqttConnectedStr; }
+    case MQTT_CONNECT_BAD_PROTOCOL:  { return mqttConnectBadProtocolStr; }
+    case MQTT_CONNECT_BAD_CLIENT_ID: { return mqttConnectBadClientIdStr; }
+    case MQTT_CONNECT_UNAVAILABLE:   { return mqttConnectUnavailableStr; }
+    case MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; }
+    case MQTT_CONNECT_UNAUTHORIZED:  { return mqttConnectUnauthorizedStr; }
+    default:                         { return mqttUnknownStatusStr; }
   }
 }
