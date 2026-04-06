@@ -1,6 +1,8 @@
 #ifndef TASK_HANDLER_HPP
 #define TASK_HANDLER_HPP
 
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+
 /// @brief Abstract base class for tasks that require periodic execution.
 /// @details Derive from this class to create objects that can be initialized and executed periodically.
 /// Classes inheriting from `Task` must implement the `init()` and `run()` methods.
@@ -20,14 +22,6 @@ public:
   /// @brief Executes the task logic.
   /// @return `true` if the task executed successfully, `false` otherwise.
   [[nodiscard]] virtual bool run() = 0;
-
-  /// @brief Gets the error code from the `init()` method.
-  /// @return An error code specific to the task, or `0` if no error occurred.
-  //[[nodiscard]] virtual uint32_t getInitErrorCode() { return 0U; };
-
-  /// @brief Gets the error code from the `run()` method.
-  /// @return An error code specific to the task, or `0` if no error occurred.
-  //[[nodiscard]] virtual uint32_t getRunErrorCode() { return 0U; };
 
   Task(const Task&) = delete;                       // Define copy constructor.
   Task& operator=(const Task&) = delete;            // Define copy assignment operator.
@@ -50,7 +44,6 @@ private:
   static_assert(taskNum <= 32U, "TaskHandler maximum task handling limit exceeded!");
 
 public:
-
   /// @brief Constructor for TaskHandler.
   /// @param taskListRef Reference to an array of pointers to `Task` objects.
   TaskHandler(Task *(&taskListRef)[taskNum]) :
