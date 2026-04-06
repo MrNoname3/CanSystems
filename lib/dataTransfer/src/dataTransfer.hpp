@@ -66,17 +66,17 @@ public:
   /// @param fileMd5 The MD5 checksum of the file as a hex string.
   /// @param fileName The name of the file to be transferred.
   /// @return True if the transfer is successfully initiated, false otherwise.
-  bool begin(uint32_t fileSize, const char* fileMd5, const char* fileName);
+  [[nodiscard]] bool begin(uint32_t fileSize, const char* fileMd5, const char* fileName);
 
   /// @brief Stores a piece of the file, provided in base64 format.
   /// @param filePieceNumber The sequential piece number of the file being transferred.
   /// @param fileData The base64-encoded data to store.
   /// @return True if the file piece is successfully stored, false otherwise.
-  bool storeBase64(uint32_t filePieceNumber, const char* fileData);
+  [[nodiscard]] bool storeBase64(uint32_t filePieceNumber, const char* fileData);
 
   /// @brief Retrieves the error code for the last file transfer operation.
   /// @return A DataTransferErrorType value representing the error code.
-  DataTransferErrorType getErrorCode();
+  [[nodiscard]] DataTransferErrorType getErrorCode();
 
   /// @brief Executes periodic validation tasks for non-firmware file transfers.
   /// Checks the file size and MD5 checksum to ensure the file was transferred correctly.

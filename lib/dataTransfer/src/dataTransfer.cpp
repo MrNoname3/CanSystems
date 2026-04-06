@@ -128,7 +128,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::B64_FILE_DATA_SIZE_ERROR);
     return false;
   }
-  const uint16_t filePieceSize = filePieceB64Size * 3U / 4U + 1U;
+  const uint16_t filePieceSize = static_cast<uint16_t>(filePieceB64Size * 3U / 4U + 1U);
   if(filePieceSize > maxFilePieceLength) {
     dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_OVEFLOW);
     return false;
@@ -219,7 +219,7 @@ void DataTransfer::runValidityCheck() {
       const uint32_t remainingBytes = receivedFile.available();
       if(remainingBytes > 0U) {
         uint8_t readBuffer[readBufferSize] = {0U};
-        const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
+        const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : static_cast<uint8_t>(remainingBytes);
         receivedFile.read(readBuffer, readLength);
         md5.add(readBuffer, readLength);
       } else {
