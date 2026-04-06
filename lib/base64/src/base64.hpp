@@ -69,7 +69,7 @@ private:
   /// @brief Looks up the Base64 index corresponding to a given character.
   /// @param c The Base64 character to convert.
   /// @return The Base64 index (0-63) corresponding to the input character.
-  /// @note Returns -1 for invalid characters.
+  /// @note Returns 255 for invalid characters.
   static uint8_t lookupTable(char c);
 
   static bool processFullBlock(uint8_t (&A4)[4], uint8_t output[], uint32_t &decodedLength);

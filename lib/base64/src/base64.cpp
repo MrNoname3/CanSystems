@@ -6,7 +6,7 @@ uint32_t Base64::encodedLength(uint32_t plainLength) {
 
 uint32_t Base64::decodedLength(const uint8_t input[], uint32_t inputLength) {
   uint32_t numEq = 0;
-  for(int32_t i = static_cast<int32_t>(inputLength) - 1; input[i] == '=' && i >= 0; i--) {
+  for(int32_t i = static_cast<int32_t>(inputLength) - 1; i >= 0 && input[i] == '='; i--) {
     numEq++;
   }
   return ((6 * inputLength) / 8) - numEq;
@@ -123,10 +123,10 @@ uint8_t Base64::lookupTable(char c) {
     return c - 'A';
   }
   if(c >= 'a' && c <= 'z') {
-    return c - 71;
+    return static_cast<uint8_t>(c - 'a' + 26);
   }
   if(c >= '0' && c <= '9') {
-    return c + 4;
+    return static_cast<uint8_t>(c - '0' + 52);
   }
   if(c == '+') {
     return 62;
