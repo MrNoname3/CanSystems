@@ -132,7 +132,7 @@ void PumpControl::handleError() {
   digitalWrite(pwmPin, LOW);
   rgbLed.clear();
   if(!irrigationQueue.isEmpty()) {
-    irrigationQueue.pop();
+    (void)irrigationQueue.pop();
   }
   irrigationState = IrrigationState::IDLE;
 }

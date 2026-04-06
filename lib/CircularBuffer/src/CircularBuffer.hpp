@@ -13,7 +13,7 @@ public:
   CircularBuffer();
 
   /// @brief Destructor for the circular buffer.
-  virtual ~CircularBuffer() = default;
+  ~CircularBuffer() = default;
 
   /// @brief Adds an element to the buffer.
   /// @param item The element to add to the buffer.
@@ -23,12 +23,12 @@ public:
   /// @brief Removes and retrieves the oldest element in the buffer.
   /// @return The oldest element in the buffer.
   /// @note If the buffer is empty, this function may return a default-constructed element.
-  T pop();
+  [[nodiscard]] T pop();
 
   /// @brief Retrieves the oldest element in the buffer without removing it.
   /// @return The oldest element in the buffer.
   /// @note Returns a default-constructed element if the buffer is empty.
-  T peek() const;
+  [[nodiscard]] T peek() const;
 
   /// @brief Clears the buffer, resetting it to an empty state.
   void clear();
@@ -74,7 +74,7 @@ void CircularBuffer<T, buffSize>::put(T item) {
 
 template<class T, uint16_t buffSize>
 T CircularBuffer<T, buffSize>::pop() {
-  auto result = buffer[tail];
+  T result = buffer[tail];
   tail = (tail + 1U) % buffSize;
   full = false;
   return result;
