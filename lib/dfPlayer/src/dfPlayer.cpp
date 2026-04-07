@@ -3,7 +3,7 @@
 
 volatile bool DFPlayer::enablePlay = false;                         // Set value for static variable.
 
-DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t enPin, uint8_t intPin, uint32_t timeout) :
+DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t enPin, uint8_t intPin, uint16_t timeout) :
   rgbLed(rgbLed),
   swSerial(rxPin, txPin),
   rxPin(rxPin),

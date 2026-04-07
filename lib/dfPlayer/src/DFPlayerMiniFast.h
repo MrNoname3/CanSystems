@@ -109,7 +109,7 @@ public:
   /// @param debug Set to `true` to enable debug prints to the serial monitor.
   /// @param threshold Number of ms allowed for the MP3 player to respond (timeout) to a query.
   /// @return `true`.
-  bool begin(Stream& stream, bool debug = false, uint32_t threshold = 10UL);
+  bool begin(Stream& stream, bool debug = false, uint16_t threshold = 10U);
 
   /// @brief Play the next song in chronological order.
   void playNext();
@@ -142,8 +142,8 @@ public:
   void decVolume();
 
   /// @brief Set the volume to a specific value out of 30.
-  /// @param volume The volume level (0–30).
-  void volume(uint8_t volume);
+  /// @param level The volume level (0–30).
+  void volume(uint8_t level);
 
   /// @brief Set the EQ mode.
   /// @param setting The desired EQ ID.
@@ -273,13 +273,13 @@ public:
 
   /// @brief Set the timeout value for MP3 player query responses.
   /// @param threshold Number of ms allowed for the MP3 player to respond.
-  void setTimeout(uint32_t threshold);
+  void setTimeout(uint16_t threshold);
 
   /// @brief Print the error description if an error packet has been received.
   void printError();
 
-  ~DFPlayerMiniFast() = default;
   DFPlayerMiniFast() = default;
+  ~DFPlayerMiniFast() = default;
   DFPlayerMiniFast(const DFPlayerMiniFast&) = delete;
   DFPlayerMiniFast& operator=(const DFPlayerMiniFast&) = delete;
   DFPlayerMiniFast(DFPlayerMiniFast&&) = delete;
@@ -343,7 +343,7 @@ private:
   Stream* serial = nullptr;                                         // Serial port connected to the MP3 player.
   bool debug = false;                                               // Enable debug prints when true.
   uint32_t timeoutTimer = 0UL;                                      // Timestamp of the last query send.
-  uint32_t timeoutTime = 10UL;                                      // Max ms to wait for a query response.
+  uint16_t timeoutTime = 10U;                                       // Max ms to wait for a query response.
   Fsm state = Fsm::find_start_byte;                                 // Current state of the response parser.
   Stack sendStack = {};                                             // Outgoing packet buffer.
   Stack recStack  = {};                                             // Incoming packet buffer.

@@ -42,7 +42,7 @@ public:
   /// @param enPin Device power control pin.
   /// @param intPin Device interrupt pin (LOW when playing).
   /// @param timeout Response timeout for commands (ms).
-  DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t enPin, uint8_t intPin, uint32_t timeout = 10UL);
+  DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t enPin, uint8_t intPin, uint16_t timeout = 10U);
 
   /// @brief Default destructor.
   ~DFPlayer() override = default;

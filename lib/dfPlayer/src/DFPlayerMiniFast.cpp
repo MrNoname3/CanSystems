@@ -1,6 +1,6 @@
 #include "DFPlayerMiniFast.h"
 
-bool DFPlayerMiniFast::begin(Stream& stream, bool debug, uint32_t threshold) {
+bool DFPlayerMiniFast::begin(Stream& stream, bool debug, uint16_t threshold) {
   timeoutTime = threshold;
   serial = &stream;
   this->debug = debug;
@@ -8,10 +8,6 @@ bool DFPlayerMiniFast::begin(Stream& stream, bool debug, uint32_t threshold) {
   sendStack.version    = static_cast<uint8_t>(PacketValues::VER);
   sendStack.length     = static_cast<uint8_t>(PacketValues::LEN);
   sendStack.end_byte   = static_cast<uint8_t>(PacketValues::EB);
-  recStack.start_byte  = static_cast<uint8_t>(PacketValues::SB);
-  recStack.version     = static_cast<uint8_t>(PacketValues::VER);
-  recStack.length      = static_cast<uint8_t>(PacketValues::LEN);
-  recStack.end_byte    = static_cast<uint8_t>(PacketValues::EB);
   return true;
 }
 
@@ -96,12 +92,12 @@ void DFPlayerMiniFast::decVolume() {
   sendData();
 }
 
-void DFPlayerMiniFast::volume(uint8_t volume) {
-  if(volume <= 30U) {
+void DFPlayerMiniFast::volume(uint8_t level) {
+  if(level <= 30U) {
     sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::VOLUME);
     sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
     sendStack.paramMSB = 0U;
-    sendStack.paramLSB = volume;
+    sendStack.paramLSB = level;
     findChecksum(sendStack);
     sendData();
   }
@@ -350,7 +346,7 @@ int16_t DFPlayerMiniFast::numFolders() {
   return query(static_cast<uint8_t>(QueryCommandValues::GET_FOLDERS));
 }
 
-void DFPlayerMiniFast::setTimeout(uint32_t threshold) {
+void DFPlayerMiniFast::setTimeout(uint16_t threshold) {
   timeoutTime = threshold;
 }
 
@@ -408,7 +404,7 @@ void DFPlayerMiniFast::printError() {
 
 void DFPlayerMiniFast::findChecksum(Stack& _stack) {
   // Two's complement negation of the sum of bytes: version, length, cmd, feedback, MSB param, LSB param.
-  const uint16_t checksum = static_cast<uint16_t>(~(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB)) + 1U;
+  const uint16_t checksum = static_cast<uint16_t>(~(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB) + 1);
   _stack.checksumMSB = static_cast<uint8_t>(checksum >> 8U);
   _stack.checksumLSB = static_cast<uint8_t>(checksum & 0xFFU);
 }
