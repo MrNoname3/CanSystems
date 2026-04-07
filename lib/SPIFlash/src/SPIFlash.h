@@ -11,10 +11,8 @@
 /// @note The WP (write-protect) pin must be pulled HIGH to enable write/erase operations.
 ///       The WEL (Write Enable Latch) bit is set automatically before each write/erase command
 ///       and resets automatically on power-up, reset, or after any write/erase completes.
-class SPIFlash {
+class SPIFlash final {
 public:
-  static uint8_t uniqueId[8];                                       // 64-bit unique device identifier (populated by readUniqueId()).
-
   /// @brief Constructs a SPIFlash object.
   /// @param slaveSelectPin SPI chip-select pin.
   /// @param jedecID Expected JEDEC manufacturer/device ID; pass `0` to skip verification.
@@ -76,10 +74,10 @@ public:
   /// @return 16-bit JEDEC ID.
   [[nodiscard]] uint16_t readDeviceId();
 
-  /// @brief Reads the 64-bit unique device ID into `uniqueId`.
+  /// @brief Reads the 64-bit unique device ID into a caller-provided buffer.
   /// @note Only needs to be called once after initialize().
-  /// @return Pointer to the `uniqueId` array.
-  [[nodiscard]] uint8_t* readUniqueId();
+  /// @param buf 8-byte buffer to store the unique ID.
+  void readUniqueId(uint8_t (&buf)[8]);
 
   /// @brief Puts the chip into deep power-down mode.
   void sleep();

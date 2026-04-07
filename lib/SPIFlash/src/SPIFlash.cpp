@@ -1,7 +1,5 @@
 #include "SPIFlash.h"
 
-uint8_t SPIFlash::uniqueId[8];
-
 SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
   jedecID(jedecID),
@@ -75,17 +73,16 @@ uint16_t SPIFlash::readDeviceId() {
   return jedecid;
 }
 
-uint8_t* SPIFlash::readUniqueId() {
+void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
   command(CMD_READ_MAC);
   SPI.transfer(0U);
   SPI.transfer(0U);
   SPI.transfer(0U);
   SPI.transfer(0U);
   for(uint8_t i = 0U; i < 8U; i++) {
-    uniqueId[i] = SPI.transfer(0U);
+    buf[i] = SPI.transfer(0U);
   }
   unselect();
-  return uniqueId;
 }
 
 uint8_t SPIFlash::readByte(uint32_t addr) {
