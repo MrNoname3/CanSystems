@@ -2,7 +2,7 @@
 #define OTA_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <SPIFlash.h>                                               /// SPI FLASH module driver.
+#include "SPIFlash.h"                                               /// SPI FLASH module driver.
 #include "crc16.hpp"                                                /// CRC16 calculator class.
 
 #ifndef FW_PIECE_SIZE

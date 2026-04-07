@@ -2,7 +2,7 @@
 #ifdef ARDUINO_ARCH_AVR
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <SPIFlash.h>                                               /// SPI FLASH module driver.
+#include "SPIFlash.h"                                               /// SPI FLASH module driver.
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
