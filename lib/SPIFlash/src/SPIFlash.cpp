@@ -9,7 +9,7 @@ SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   spsr(0U)
 {}
 
-void SPIFlash::select() {
+void SPIFlash::select() { // NOLINT(readability-convert-member-functions-to-static)
   // Save current SPI settings.
 #ifndef SPI_HAS_TRANSACTION
   noInterrupts();
@@ -28,7 +28,7 @@ void SPIFlash::select() {
   digitalWrite(slaveSelectPin, LOW);
 }
 
-void SPIFlash::unselect() {
+void SPIFlash::unselect() { // NOLINT(readability-convert-member-functions-to-static)
   digitalWrite(slaveSelectPin, HIGH);
   // Restore SPI settings to what they were before talking to the FLASH chip.
 #ifdef SPI_HAS_TRANSACTION
