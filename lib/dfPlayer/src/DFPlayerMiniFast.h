@@ -5,9 +5,12 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 /// @brief Driver for the YX5200-24SS MP3 player (DFPlayerMini) over UART.
+/// @tparam Debug Set to `true` to enable serial debug output; all debug code is
+///               compiled out when `false` (default), with zero runtime overhead.
 /// @note Communicates via a 10-byte packet protocol: start byte, version, length,
 ///       command, feedback flag, MSB param, LSB param, checksum MSB, checksum LSB, end byte.
 /// @note The checksum is the two's complement negation of the sum of bytes 2–7 (version through LSB param).
+template<bool Debug = false>
 class DFPlayerMiniFast {
 
 public:
@@ -106,10 +109,9 @@ public:
 
   /// @brief Configure the class.
   /// @param stream A reference to the Serial instance (hardware or software) used to communicate with the MP3 player.
-  /// @param debug Set to `true` to enable debug prints to the serial monitor.
   /// @param threshold Number of ms allowed for the MP3 player to respond (timeout) to a query.
   /// @return `true`.
-  bool begin(Stream& stream, bool debug = false, uint16_t threshold = 10U);
+  bool begin(Stream& stream, uint16_t threshold = 10U);
 
   /// @brief Play the next song in chronological order.
   void playNext();
@@ -348,16 +350,15 @@ private:
   /// @return `true` if checksum matches, `false` otherwise.
   [[nodiscard]] bool verifyChecksum();
 
-  /// @brief Print a flash-stored message to Serial if debug mode is enabled.
+  /// @brief Print a flash-stored message to Serial. Compiled out entirely when Debug is `false`.
   /// @param msg Message stored in program memory.
-  void debugLog(const __FlashStringHelper* msg) const;
+  void debugLog([[maybe_unused]] const __FlashStringHelper* msg) const;
 
   /// @brief Wait for and parse the MP3 player's serial response.
   /// @return `true` on successful packet reception, `false` on error or timeout.
   [[nodiscard]] bool parseFeedback();
 
   Stream* serial = nullptr;                                         // Serial port connected to the MP3 player.
-  bool debug = false;                                               // Enable debug prints when true.
   uint32_t timeoutTimer = 0UL;                                      // Timestamp of the last query send.
   uint16_t timeoutTime = 10U;                                       // Max ms to wait for a query response.
   Fsm state = Fsm::find_start_byte;                                 // Current state of the response parser.

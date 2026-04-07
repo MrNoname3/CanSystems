@@ -20,7 +20,7 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t 
   digitalWrite(this->enPin, LOW);                                 // Set pin states.
   digitalWrite(this->txPin, LOW);
   digitalWrite(this->rxPin, LOW);
-  DFPlayerMiniFast::begin(swSerial, false, timeout);
+  DFPlayerMiniFast<false>::begin(swSerial, timeout);
 }
 
 void DFPlayer::play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) { // NOLINT(readability-convert-member-functions-to-static)

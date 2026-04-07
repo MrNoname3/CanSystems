@@ -11,7 +11,7 @@
 
 /// @brief Handles interaction with a DFPlayerMini MP3 player.
 /// Includes a track-playing queue and external power control via a PFET.
-class DFPlayer final : private DFPlayerMiniFast, public Task {
+class DFPlayer final : private DFPlayerMiniFast<false>, public Task {
 private:
   /// @brief Represents a single item in the play queue.
   struct __attribute__((packed))
