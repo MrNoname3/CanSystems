@@ -87,9 +87,9 @@ void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
 
 uint8_t SPIFlash::readByte(uint32_t addr) {
   command(CMD_ARRAY_READ_LF);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   const uint8_t result = SPI.transfer(0U);
   unselect();
   return result;
@@ -97,12 +97,13 @@ uint8_t SPIFlash::readByte(uint32_t addr) {
 
 void SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
   command(CMD_ARRAY_READ);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   SPI.transfer(0U); // Dummy byte required by fast-read command.
+  uint8_t* dest = static_cast<uint8_t*>(buf);
   for(uint16_t i = 0U; i < len; ++i) {
-    static_cast<uint8_t*>(buf)[i] = SPI.transfer(0U);
+    dest[i] = SPI.transfer(0U);
   }
   unselect();
 }
@@ -138,28 +139,28 @@ uint8_t SPIFlash::readStatus() {
 
 void SPIFlash::writeByte(uint32_t addr, uint8_t byt) {
   command(CMD_BYTE_PROGRAM, true);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   SPI.transfer(byt);
   unselect();
 }
 
 void SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
   uint16_t maxBytes = static_cast<uint16_t>(256U - (addr % 256U)); // Keep the first write within the first page.
-  uint16_t offset = 0U;
+  const uint8_t* ptr = static_cast<const uint8_t*>(buf);
   while(len > 0U) {
     const uint16_t n = (len <= maxBytes) ? len : maxBytes;
     command(CMD_BYTE_PROGRAM, true);
-    SPI.transfer(addr >> 16U);
-    SPI.transfer(addr >> 8U);
-    SPI.transfer(addr);
+    SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+    SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+    SPI.transfer(static_cast<uint8_t>(addr));
     for(uint16_t i = 0U; i < n; i++) {
-      SPI.transfer(static_cast<const uint8_t*>(buf)[offset + i]);
+      SPI.transfer(ptr[i]);
     }
     unselect();
-    addr += n;   // Advance address and offset by the number of bytes just written.
-    offset += n;
+    addr += n;  // Advance address and pointer by the number of bytes just written.
+    ptr += n;
     len -= n;
     maxBytes = 256U; // Subsequent iterations can use a full page.
   }
@@ -172,25 +173,25 @@ void SPIFlash::chipErase() {
 
 void SPIFlash::blockErase4K(uint32_t addr) {
   command(CMD_ERASE_4K, true);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
 }
 
 void SPIFlash::blockErase32K(uint32_t addr) {
   command(CMD_ERASE_32K, true);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
 }
 
 void SPIFlash::blockErase64K(uint32_t addr) {
   command(CMD_ERASE_64K, true);
-  SPI.transfer(addr >> 16U);
-  SPI.transfer(addr >> 8U);
-  SPI.transfer(addr);
+  SPI.transfer(static_cast<uint8_t>(addr >> 16U));
+  SPI.transfer(static_cast<uint8_t>(addr >> 8U));
+  SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
 }
 
