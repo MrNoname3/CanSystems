@@ -276,7 +276,7 @@ public:
   void setTimeout(uint16_t threshold);
 
   /// @brief Print the error description if an error packet has been received.
-  void printError();
+  void printError() const;
 
   DFPlayerMiniFast() = default;
   ~DFPlayerMiniFast() = default;
@@ -286,6 +286,9 @@ public:
   DFPlayerMiniFast& operator=(DFPlayerMiniFast&&) = delete;
 
 private:
+
+  /// @brief Result returned by processState() for each received byte.
+  enum class ParseResult : uint8_t { CONTINUE, SUCCESS, FAILURE };
 
   /// @brief MP3 response packet parsing states.
   enum class Fsm : uint8_t {
@@ -317,7 +320,7 @@ private:
 
   /// @brief Calculate the two's-complement checksum and write it into the packet struct.
   /// @param _stack Reference to the packet to checksum.
-  void findChecksum(Stack& _stack);
+  static void findChecksum(Stack& _stack);
 
   /// @brief Send the current sendStack packet over serial.
   void sendData();
@@ -336,7 +339,12 @@ private:
   /// @param _stack The packet to print.
   void printStack(Stack _stack);
 
-  /// @brief Parse the MP3 player's serial response using a byte-by-byte state machine.
+  /// @brief Advance the FSM by one received byte.
+  /// @param recChar The byte received from the MP3 player.
+  /// @return `ParseResult::SUCCESS` on complete packet, `FAILURE` on protocol error, `CONTINUE` otherwise.
+  [[nodiscard]] ParseResult processState(uint8_t recChar);
+
+  /// @brief Wait for and parse the MP3 player's serial response.
   /// @return `true` on successful packet reception, `false` on error or timeout.
   [[nodiscard]] bool parseFeedback();
 
