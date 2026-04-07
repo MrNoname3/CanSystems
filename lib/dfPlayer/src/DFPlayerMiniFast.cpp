@@ -466,6 +466,30 @@ void DFPlayerMiniFast::printStack(Stack _stack) {
   Serial.println(_stack.end_byte, HEX);
 }
 
+void DFPlayerMiniFast::debugLog(const __FlashStringHelper* msg) const {
+  if(debug) { Serial.println(msg); }
+}
+
+bool DFPlayerMiniFast::verifyChecksum() {
+  const uint16_t recChecksum  = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
+  findChecksum(recStack);
+  const uint16_t calcChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
+
+  if(recChecksum != calcChecksum) {
+    if(debug) {
+      Serial.println(F("checksum error"));
+      Serial.print(F("recChecksum: 0x"));
+      Serial.println(recChecksum, HEX);
+      Serial.print(F("calcChecksum: 0x"));
+      Serial.println(calcChecksum, HEX);
+      Serial.println();
+    }
+    state = Fsm::find_start_byte;
+    return false;
+  }
+  return true;
+}
+
 DFPlayerMiniFast::ParseResult DFPlayerMiniFast::processState(uint8_t recChar) {
   if(debug) {
     Serial.print(F("Rec: "));
@@ -476,7 +500,7 @@ DFPlayerMiniFast::ParseResult DFPlayerMiniFast::processState(uint8_t recChar) {
   switch(state) {
 
     case Fsm::find_start_byte: {
-      if(debug) { Serial.println(F("find_start_byte")); }
+      debugLog(F("find_start_byte"));
       if(recChar == static_cast<uint8_t>(PacketValues::SB)) {
         recStack.start_byte = recChar;
         state = Fsm::find_ver_byte;
@@ -484,9 +508,9 @@ DFPlayerMiniFast::ParseResult DFPlayerMiniFast::processState(uint8_t recChar) {
     } break;
 
     case Fsm::find_ver_byte: {
-      if(debug) { Serial.println(F("find_ver_byte")); }
+      debugLog(F("find_ver_byte"));
       if(recChar != static_cast<uint8_t>(PacketValues::VER)) {
-        if(debug) { Serial.println(F("ver error")); }
+        debugLog(F("ver error"));
         state = Fsm::find_start_byte;
         return ParseResult::FAILURE;
       }
@@ -495,9 +519,9 @@ DFPlayerMiniFast::ParseResult DFPlayerMiniFast::processState(uint8_t recChar) {
     } break;
 
     case Fsm::find_len_byte: {
-      if(debug) { Serial.println(F("find_len_byte")); }
+      debugLog(F("find_len_byte"));
       if(recChar != static_cast<uint8_t>(PacketValues::LEN)) {
-        if(debug) { Serial.println(F("len error")); }
+        debugLog(F("len error"));
         state = Fsm::find_start_byte;
         return ParseResult::FAILURE;
       }
@@ -506,62 +530,46 @@ DFPlayerMiniFast::ParseResult DFPlayerMiniFast::processState(uint8_t recChar) {
     } break;
 
     case Fsm::find_command_byte: {
-      if(debug) { Serial.println(F("find_command_byte")); }
+      debugLog(F("find_command_byte"));
       recStack.commandValue = recChar;
       state = Fsm::find_feedback_byte;
     } break;
 
     case Fsm::find_feedback_byte: {
-      if(debug) { Serial.println(F("find_feedback_byte")); }
+      debugLog(F("find_feedback_byte"));
       recStack.feedbackValue = recChar;
       state = Fsm::find_param_MSB;
     } break;
 
     case Fsm::find_param_MSB: {
-      if(debug) { Serial.println(F("find_param_MSB")); }
+      debugLog(F("find_param_MSB"));
       recStack.paramMSB = recChar;
       state = Fsm::find_param_LSB;
     } break;
 
     case Fsm::find_param_LSB: {
-      if(debug) { Serial.println(F("find_param_LSB")); }
+      debugLog(F("find_param_LSB"));
       recStack.paramLSB = recChar;
       state = Fsm::find_checksum_MSB;
     } break;
 
     case Fsm::find_checksum_MSB: {
-      if(debug) { Serial.println(F("find_checksum_MSB")); }
+      debugLog(F("find_checksum_MSB"));
       recStack.checksumMSB = recChar;
       state = Fsm::find_checksum_LSB;
     } break;
 
     case Fsm::find_checksum_LSB: {
-      if(debug) { Serial.println(F("find_checksum_LSB")); }
+      debugLog(F("find_checksum_LSB"));
       recStack.checksumLSB = recChar;
-
-      const uint16_t recChecksum  = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
-      findChecksum(recStack);
-      const uint16_t calcChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
-
-      if(recChecksum != calcChecksum) {
-        if(debug) {
-          Serial.println(F("checksum error"));
-          Serial.print(F("recChecksum: 0x"));
-          Serial.println(recChecksum, HEX);
-          Serial.print(F("calcChecksum: 0x"));
-          Serial.println(calcChecksum, HEX);
-          Serial.println();
-        }
-        state = Fsm::find_start_byte;
-        return ParseResult::FAILURE;
-      }
+      if(!verifyChecksum()) { return ParseResult::FAILURE; }
       state = Fsm::find_end_byte;
     } break;
 
     case Fsm::find_end_byte: {
-      if(debug) { Serial.println(F("find_end_byte")); }
+      debugLog(F("find_end_byte"));
       if(recChar != static_cast<uint8_t>(PacketValues::EB)) {
-        if(debug) { Serial.println(F("eb error")); }
+        debugLog(F("eb error"));
         state = Fsm::find_start_byte;
         return ParseResult::FAILURE;
       }

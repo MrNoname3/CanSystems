@@ -344,6 +344,14 @@ private:
   /// @return `ParseResult::SUCCESS` on complete packet, `FAILURE` on protocol error, `CONTINUE` otherwise.
   [[nodiscard]] ParseResult processState(uint8_t recChar);
 
+  /// @brief Verify the received checksum against the calculated one; resets state on mismatch.
+  /// @return `true` if checksum matches, `false` otherwise.
+  [[nodiscard]] bool verifyChecksum();
+
+  /// @brief Print a flash-stored message to Serial if debug mode is enabled.
+  /// @param msg Message stored in program memory.
+  void debugLog(const __FlashStringHelper* msg) const;
+
   /// @brief Wait for and parse the MP3 player's serial response.
   /// @return `true` on successful packet reception, `false` on error or timeout.
   [[nodiscard]] bool parseFeedback();
