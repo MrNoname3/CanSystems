@@ -1,48 +1,40 @@
-// Copyright (c) Sandeep Mistry. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
-
-#ifdef ARDUINO_ARCH_ESP32
-
-#ifndef ESP32_SJA1000_H
-#define ESP32_SJA1000_H
+#if defined(ARDUINO_ARCH_ESP32)
+#pragma once
 
 #include "CANController.h"
 
-#define DEFAULT_CAN_RX_PIN GPIO_NUM_4
-#define DEFAULT_CAN_TX_PIN GPIO_NUM_5
-
-class ESP32SJA1000Class : public CANControllerClass {
-
+class ESP32SJA1000 final : public CANController {
 public:
-  ESP32SJA1000Class();
-  virtual ~ESP32SJA1000Class();
+  ESP32SJA1000() = default;
+  ~ESP32SJA1000() override = default;
 
-  virtual int begin(long baudRate);
-  virtual void end();
+  [[nodiscard]] uint8_t begin(uint32_t baudRate) override;
+  void end() override;
 
-  virtual int endPacket();
+  [[nodiscard]] uint8_t endPacket() override;
+  [[nodiscard]] uint8_t parsePacket() override;
 
-  virtual int parsePacket();
+  void onReceive(void(*callback)(int)) override;
 
-  virtual void onReceive(void(*callback)(int));
+  using CANController::filter;
+  [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask) override;
+  using CANController::filterExtended;
+  [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask) override;
 
-  using CANControllerClass::filter;
-  virtual int filter(int id, int mask);
-  using CANControllerClass::filterExtended;
-  virtual int filterExtended(long id, long mask);
-
-  virtual int observe();
-  virtual int loopback();
-  virtual int sleep();
-  virtual int wakeup();
+  [[nodiscard]] uint8_t observe() override;
+  [[nodiscard]] uint8_t loopback() override;
+  [[nodiscard]] uint8_t sleep() override;
+  [[nodiscard]] uint8_t wakeup() override;
 
   void setPins(int rx, int tx);
 
   void dumpRegisters(Stream& out);
 
 private:
-  void reset();
+  static constexpr gpio_num_t defaultRxPin = GPIO_NUM_4;
+  static constexpr gpio_num_t defaultTxPin = GPIO_NUM_5;
 
+  void reset();
   void handleInterrupt();
 
   uint8_t readRegister(uint8_t address);
@@ -51,15 +43,12 @@ private:
 
   static void onInterrupt(void* arg);
 
-private:
-  gpio_num_t _rxPin;
-  gpio_num_t _txPin;
-  bool _loopback;
-  intr_handle_t _intrHandle;
+  gpio_num_t rxPin       = defaultRxPin;
+  gpio_num_t txPin       = defaultTxPin;
+  bool loopbackEnabled   = false;
+  intr_handle_t intrHandle = nullptr;
 };
 
-extern ESP32SJA1000Class CAN;
+extern ESP32SJA1000 CAN;
 
-#endif
-
-#endif
+#endif // ARDUINO_ARCH_ESP32

@@ -1,495 +1,410 @@
-// Copyright (c) Sandeep Mistry. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
-
-#ifndef ARDUINO_ARCH_ESP32
+#if !defined(ARDUINO_ARCH_ESP32)
 
 #include "MCP2515.h"
 
-#define REG_BFPCTRL                0x0c
-#define REG_TXRTSCTRL              0x0d
+namespace {
+  constexpr uint8_t regBfpCtrl   = 0x0CU;
+  constexpr uint8_t regTxRtsCtrl = 0x0DU;
+  constexpr uint8_t regCanCtrl   = 0x0FU;
+  constexpr uint8_t regCnf3      = 0x28U;
+  constexpr uint8_t regCnf2      = 0x29U;
+  constexpr uint8_t regCnf1      = 0x2AU;
+  constexpr uint8_t regCanInte   = 0x2BU;
+  constexpr uint8_t regCanIntf   = 0x2CU;
 
-#define REG_CANCTRL                0x0f
+  constexpr uint8_t flagIde   = 0x08U;
+  constexpr uint8_t flagSrr   = 0x10U;
+  constexpr uint8_t flagRtr   = 0x40U;
+  constexpr uint8_t flagExide = 0x08U;
+  constexpr uint8_t flagRxm0  = 0x20U;
+  constexpr uint8_t flagRxm1  = 0x40U;
 
-#define REG_CNF3                   0x28
-#define REG_CNF2                   0x29
-#define REG_CNF1                   0x2a
+  constexpr uint8_t flagRxnIe(uint8_t n) { return static_cast<uint8_t>(0x01U << n); }
+  constexpr uint8_t flagRxnIf(uint8_t n) { return static_cast<uint8_t>(0x01U << n); }
+  constexpr uint8_t flagTxnIf(uint8_t n) { return static_cast<uint8_t>(0x04U << n); }
 
-#define REG_CANINTE                0x2b
-#define REG_CANINTF                0x2c
+  constexpr uint8_t regRxFnSidh(uint8_t n) { return static_cast<uint8_t>(0x00U + n * 4U); }
+  constexpr uint8_t regRxFnSidl(uint8_t n) { return static_cast<uint8_t>(0x01U + n * 4U); }
+  constexpr uint8_t regRxFnEid8(uint8_t n) { return static_cast<uint8_t>(0x02U + n * 4U); }
+  constexpr uint8_t regRxFnEid0(uint8_t n) { return static_cast<uint8_t>(0x03U + n * 4U); }
 
-#define FLAG_RXnIE(n)              (0x01 << n)
-#define FLAG_RXnIF(n)              (0x01 << n)
-#define FLAG_TXnIF(n)              (0x04 << n)
+  constexpr uint8_t regRxMnSidh(uint8_t n) { return static_cast<uint8_t>(0x20U + n * 0x04U); }
+  constexpr uint8_t regRxMnSidl(uint8_t n) { return static_cast<uint8_t>(0x21U + n * 0x04U); }
+  constexpr uint8_t regRxMnEid8(uint8_t n) { return static_cast<uint8_t>(0x22U + n * 0x04U); }
+  constexpr uint8_t regRxMnEid0(uint8_t n) { return static_cast<uint8_t>(0x23U + n * 0x04U); }
 
-#define REG_RXFnSIDH(n)            (0x00 + (n * 4))
-#define REG_RXFnSIDL(n)            (0x01 + (n * 4))
-#define REG_RXFnEID8(n)            (0x02 + (n * 4))
-#define REG_RXFnEID0(n)            (0x03 + (n * 4))
+  constexpr uint8_t regTxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x30U + n * 0x10U); }
+  constexpr uint8_t regTxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x31U + n * 0x10U); }
+  constexpr uint8_t regTxBnSidl(uint8_t n) { return static_cast<uint8_t>(0x32U + n * 0x10U); }
+  constexpr uint8_t regTxBnEid8(uint8_t n) { return static_cast<uint8_t>(0x33U + n * 0x10U); }
+  constexpr uint8_t regTxBnEid0(uint8_t n) { return static_cast<uint8_t>(0x34U + n * 0x10U); }
+  constexpr uint8_t regTxBnDlc(uint8_t n)  { return static_cast<uint8_t>(0x35U + n * 0x10U); }
+  constexpr uint8_t regTxBnD0(uint8_t n)   { return static_cast<uint8_t>(0x36U + n * 0x10U); }
 
-#define REG_RXMnSIDH(n)            (0x20 + (n * 0x04))
-#define REG_RXMnSIDL(n)            (0x21 + (n * 0x04))
-#define REG_RXMnEID8(n)            (0x22 + (n * 0x04))
-#define REG_RXMnEID0(n)            (0x23 + (n * 0x04))
-
-#define REG_TXBnCTRL(n)            (0x30 + (n * 0x10))
-#define REG_TXBnSIDH(n)            (0x31 + (n * 0x10))
-#define REG_TXBnSIDL(n)            (0x32 + (n * 0x10))
-#define REG_TXBnEID8(n)            (0x33 + (n * 0x10))
-#define REG_TXBnEID0(n)            (0x34 + (n * 0x10))
-#define REG_TXBnDLC(n)             (0x35 + (n * 0x10))
-#define REG_TXBnD0(n)              (0x36 + (n * 0x10))
-
-#define REG_RXBnCTRL(n)            (0x60 + (n * 0x10))
-#define REG_RXBnSIDH(n)            (0x61 + (n * 0x10))
-#define REG_RXBnSIDL(n)            (0x62 + (n * 0x10))
-#define REG_RXBnEID8(n)            (0x63 + (n * 0x10))
-#define REG_RXBnEID0(n)            (0x64 + (n * 0x10))
-#define REG_RXBnDLC(n)             (0x65 + (n * 0x10))
-#define REG_RXBnD0(n)              (0x66 + (n * 0x10))
-
-#define FLAG_IDE                   0x08
-#define FLAG_SRR                   0x10
-#define FLAG_RTR                   0x40
-#define FLAG_EXIDE                 0x08
-
-#define FLAG_RXM0                  0x20
-#define FLAG_RXM1                  0x40
+  constexpr uint8_t regRxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x60U + n * 0x10U); }
+  constexpr uint8_t regRxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x61U + n * 0x10U); }
+  constexpr uint8_t regRxBnSidl(uint8_t n) { return static_cast<uint8_t>(0x62U + n * 0x10U); }
+  constexpr uint8_t regRxBnEid8(uint8_t n) { return static_cast<uint8_t>(0x63U + n * 0x10U); }
+  constexpr uint8_t regRxBnEid0(uint8_t n) { return static_cast<uint8_t>(0x64U + n * 0x10U); }
+  constexpr uint8_t regRxBnDlc(uint8_t n)  { return static_cast<uint8_t>(0x65U + n * 0x10U); }
+  constexpr uint8_t regRxBnD0(uint8_t n)   { return static_cast<uint8_t>(0x66U + n * 0x10U); }
+} // namespace
 
 
-MCP2515Class::MCP2515Class() :
-  CANControllerClass(),
-  _spiSettings(10E6, MSBFIRST, SPI_MODE0),
-  _csPin(MCP2515_DEFAULT_CS_PIN),
-  _intPin(MCP2515_DEFAULT_INT_PIN),
-  _clockFrequency(MCP2515_DEFAULT_CLOCK_FREQUENCY)
-{
-}
+uint8_t MCP2515::begin(uint32_t baudRate) {
+  if(CANController::begin(baudRate) != 1) { return 0U; }
 
-MCP2515Class::~MCP2515Class()
-{
-}
+  pinMode(csPin, OUTPUT);
 
-int MCP2515Class::begin(long baudRate)
-{
-  CANControllerClass::begin(baudRate);
-
-  pinMode(_csPin, OUTPUT);
-
-  // start SPI
   SPI.begin();
 
   reset();
 
-  writeRegister(REG_CANCTRL, 0x80);
-  if (readRegister(REG_CANCTRL) != 0x80) {
-    return 0;
-  }
+  writeRegister(regCanCtrl, 0x80U);
+  if(readRegister(regCanCtrl) != 0x80U) { return 0U; }
 
-  const struct {
-    long clockFrequency;
-    long baudRate;
+  struct CnfEntry {
+    uint32_t clockFrequency;
+    uint32_t baudRate;
     uint8_t cnf[3];
-  } CNF_MAPPER[] = {
-    {  (long)8E6, (long)1000E3, { 0x00, 0x80, 0x00 } },
-    {  (long)8E6,  (long)500E3, { 0x00, 0x90, 0x02 } },
-    {  (long)8E6,  (long)250E3, { 0x00, 0xb1, 0x05 } },
-    {  (long)8E6,  (long)200E3, { 0x00, 0xb4, 0x06 } },
-    {  (long)8E6,  (long)125E3, { 0x01, 0xb1, 0x05 } },
-    {  (long)8E6,  (long)100E3, { 0x01, 0xb4, 0x06 } },
-    {  (long)8E6,   (long)80E3, { 0x01, 0xbf, 0x07 } },
-    {  (long)8E6,   (long)50E3, { 0x03, 0xb4, 0x06 } },
-    {  (long)8E6,   (long)40E3, { 0x03, 0xbf, 0x07 } },
-    {  (long)8E6,   (long)20E3, { 0x07, 0xbf, 0x07 } },
-    {  (long)8E6,   (long)10E3, { 0x0f, 0xbf, 0x07 } },
-    {  (long)8E6,    (long)5E3, { 0x1f, 0xbf, 0x07 } },
-
-    { (long)16E6, (long)1000E3, { 0x00, 0xd0, 0x82 } },
-    { (long)16E6,  (long)500E3, { 0x00, 0xf0, 0x86 } },
-    { (long)16E6,  (long)250E3, { 0x41, 0xf1, 0x85 } },
-    { (long)16E6,  (long)200E3, { 0x01, 0xfa, 0x87 } },
-    { (long)16E6,  (long)125E3, { 0x03, 0xf0, 0x86 } },
-    { (long)16E6,  (long)100E3, { 0x03, 0xfa, 0x87 } },
-    { (long)16E6,   (long)80E3, { 0x03, 0xff, 0x87 } },
-    { (long)16E6,   (long)50E3, { 0x07, 0xfa, 0x87 } },
-    { (long)16E6,   (long)40E3, { 0x07, 0xff, 0x87 } },
-    { (long)16E6,   (long)20E3, { 0x0f, 0xff, 0x87 } },
-    { (long)16E6,   (long)10E3, { 0x1f, 0xff, 0x87 } },
-    { (long)16E6,    (long)5E3, { 0x3f, 0xff, 0x87 } },
   };
 
-  const uint8_t* cnf = NULL;
+  constexpr CnfEntry cnfMapper[] = {
+    {  8'000'000U, 1'000'000U, { 0x00U, 0x80U, 0x00U } },
+    {  8'000'000U,   500'000U, { 0x00U, 0x90U, 0x02U } },
+    {  8'000'000U,   250'000U, { 0x00U, 0xB1U, 0x05U } },
+    {  8'000'000U,   200'000U, { 0x00U, 0xB4U, 0x06U } },
+    {  8'000'000U,   125'000U, { 0x01U, 0xB1U, 0x05U } },
+    {  8'000'000U,   100'000U, { 0x01U, 0xB4U, 0x06U } },
+    {  8'000'000U,    80'000U, { 0x01U, 0xBFU, 0x07U } },
+    {  8'000'000U,    50'000U, { 0x03U, 0xB4U, 0x06U } },
+    {  8'000'000U,    40'000U, { 0x03U, 0xBFU, 0x07U } },
+    {  8'000'000U,    20'000U, { 0x07U, 0xBFU, 0x07U } },
+    {  8'000'000U,    10'000U, { 0x0FU, 0xBFU, 0x07U } },
+    {  8'000'000U,     5'000U, { 0x1FU, 0xBFU, 0x07U } },
 
-  for (unsigned int i = 0; i < (sizeof(CNF_MAPPER) / sizeof(CNF_MAPPER[0])); i++) {
-    if (CNF_MAPPER[i].clockFrequency == _clockFrequency && CNF_MAPPER[i].baudRate == baudRate) {
-      cnf = CNF_MAPPER[i].cnf;
+    { 16'000'000U, 1'000'000U, { 0x00U, 0xD0U, 0x82U } },
+    { 16'000'000U,   500'000U, { 0x00U, 0xF0U, 0x86U } },
+    { 16'000'000U,   250'000U, { 0x41U, 0xF1U, 0x85U } },
+    { 16'000'000U,   200'000U, { 0x01U, 0xFAU, 0x87U } },
+    { 16'000'000U,   125'000U, { 0x03U, 0xF0U, 0x86U } },
+    { 16'000'000U,   100'000U, { 0x03U, 0xFAU, 0x87U } },
+    { 16'000'000U,    80'000U, { 0x03U, 0xFFU, 0x87U } },
+    { 16'000'000U,    50'000U, { 0x07U, 0xFAU, 0x87U } },
+    { 16'000'000U,    40'000U, { 0x07U, 0xFFU, 0x87U } },
+    { 16'000'000U,    20'000U, { 0x0FU, 0xFFU, 0x87U } },
+    { 16'000'000U,    10'000U, { 0x1FU, 0xFFU, 0x87U } },
+    { 16'000'000U,     5'000U, { 0x3FU, 0xFFU, 0x87U } },
+  };
+
+  const uint8_t* cnf = nullptr;
+
+  for(uint8_t i = 0U; i < (sizeof(cnfMapper) / sizeof(cnfMapper[0])); i++) {
+    if(cnfMapper[i].clockFrequency == clockFrequency && cnfMapper[i].baudRate == baudRate) {
+      cnf = cnfMapper[i].cnf;
       break;
     }
   }
 
-  if (cnf == NULL) {
-    return 0;
-  }
+  if(cnf == nullptr) { return 0U; }
 
-  writeRegister(REG_CNF1, cnf[0]);
-  writeRegister(REG_CNF2, cnf[1]);
-  writeRegister(REG_CNF3, cnf[2]);
+  writeRegister(regCnf1, cnf[0]);
+  writeRegister(regCnf2, cnf[1]);
+  writeRegister(regCnf3, cnf[2]);
 
-  writeRegister(REG_CANINTE, FLAG_RXnIE(1) | FLAG_RXnIE(0));
-  writeRegister(REG_BFPCTRL, 0x00);
-  writeRegister(REG_TXRTSCTRL, 0x00);
-  writeRegister(REG_RXBnCTRL(0), FLAG_RXM1 | FLAG_RXM0);
-  writeRegister(REG_RXBnCTRL(1), FLAG_RXM1 | FLAG_RXM0);
+  writeRegister(regCanInte, static_cast<uint8_t>(flagRxnIe(1U) | flagRxnIe(0U)));
+  writeRegister(regBfpCtrl, 0x00U);
+  writeRegister(regTxRtsCtrl, 0x00U);
+  writeRegister(regRxBnCtrl(0U), static_cast<uint8_t>(flagRxm1 | flagRxm0));
+  writeRegister(regRxBnCtrl(1U), static_cast<uint8_t>(flagRxm1 | flagRxm0));
 
-  writeRegister(REG_CANCTRL, 0x00);
-  if (readRegister(REG_CANCTRL) != 0x00) {
-    return 0;
-  }
+  writeRegister(regCanCtrl, 0x00U);
+  if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
 
-  return 1;
+  return 1U;
 }
 
-void MCP2515Class::end()
-{
+void MCP2515::end() {
   SPI.end();
-
-  CANControllerClass::end();
+  CANController::end();
 }
 
-int MCP2515Class::endPacket()
-{
-  if (!CANControllerClass::endPacket()) {
-    return 0;
+uint8_t MCP2515::endPacket() {
+  if(!CANController::endPacket()) { return 0U; }
+
+  const uint8_t n = 0U;
+
+  if(txExtended) {
+    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(txId >> 21));
+    writeRegister(regTxBnSidl(n), static_cast<uint8_t>((((txId >> 18) & 0x07) << 5) | flagExide | ((txId >> 16) & 0x03)));
+    writeRegister(regTxBnEid8(n), static_cast<uint8_t>((txId >> 8) & 0xFF));
+    writeRegister(regTxBnEid0(n), static_cast<uint8_t>(txId & 0xFF));
+  } else {
+    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(txId >> 3));
+    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(txId << 5));
+    writeRegister(regTxBnEid8(n), 0x00U);
+    writeRegister(regTxBnEid0(n), 0x00U);
   }
 
-  int n = 0;
-
-  if (_txExtended) {
-    writeRegister(REG_TXBnSIDH(n), _txId >> 21);
-    writeRegister(REG_TXBnSIDL(n), (((_txId >> 18) & 0x07) << 5) | FLAG_EXIDE | ((_txId >> 16) & 0x03));
-    writeRegister(REG_TXBnEID8(n), (_txId >> 8) & 0xff);
-    writeRegister(REG_TXBnEID0(n), _txId & 0xff);
+  if(txRtr) {
+    writeRegister(regTxBnDlc(n), static_cast<uint8_t>(0x40U | txLength));
   } else {
-    writeRegister(REG_TXBnSIDH(n), _txId >> 3);
-    writeRegister(REG_TXBnSIDL(n), _txId << 5);
-    writeRegister(REG_TXBnEID8(n), 0x00);
-    writeRegister(REG_TXBnEID0(n), 0x00);
-  }
+    writeRegister(regTxBnDlc(n), txLength);
 
-  if (_txRtr) {
-    writeRegister(REG_TXBnDLC(n), 0x40 | _txLength);
-  } else {
-    writeRegister(REG_TXBnDLC(n), _txLength);
-
-    for (int i = 0; i < _txLength; i++) {
-      writeRegister(REG_TXBnD0(n) + i, _txData[i]);
+    for(uint8_t i = 0U; i < txLength; i++) {
+      writeRegister(static_cast<uint8_t>(regTxBnD0(n) + i), txData[i]);
     }
   }
 
-  writeRegister(REG_TXBnCTRL(n), 0x08);
+  writeRegister(regTxBnCtrl(n), 0x08U);
 
   bool aborted = false;
 
-  while (readRegister(REG_TXBnCTRL(n)) & 0x08) {
-    if (readRegister(REG_TXBnCTRL(n)) & 0x10) {
-      // abort
+  while(readRegister(regTxBnCtrl(n)) & 0x08U) {
+    if(readRegister(regTxBnCtrl(n)) & 0x10U) {
       aborted = true;
-
-      modifyRegister(REG_CANCTRL, 0x10, 0x10);
+      modifyRegister(regCanCtrl, 0x10U, 0x10U);
     }
-
     yield();
   }
 
-  if (aborted) {
-    // clear abort command
-    modifyRegister(REG_CANCTRL, 0x10, 0x00);
+  if(aborted) {
+    modifyRegister(regCanCtrl, 0x10U, 0x00U);
   }
 
-  modifyRegister(REG_CANINTF, FLAG_TXnIF(n), 0x00);
+  modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
 
-  return (readRegister(REG_TXBnCTRL(n)) & 0x70) ? 0 : 1;
+  return (readRegister(regTxBnCtrl(n)) & 0x70U) ? 0 : 1;
 }
 
-int MCP2515Class::parsePacket()
-{
-  int n;
+uint8_t MCP2515::parsePacket() {
+  const uint8_t intf = readRegister(regCanIntf);
 
-  uint8_t intf = readRegister(REG_CANINTF);
-
-  if (intf & FLAG_RXnIF(0)) {
-    n = 0;
-  } else if (intf & FLAG_RXnIF(1)) {
-    n = 1;
+  uint8_t n = 0U;
+  if(intf & flagRxnIf(0U)) {
+    n = 0U;
+  } else if(intf & flagRxnIf(1U)) {
+    n = 1U;
   } else {
-    _rxId = -1;
-    _rxExtended = false;
-    _rxRtr = false;
-    _rxLength = 0;
-    return 0;
+    rxId = -1;
+    rxExtended = false;
+    rxRtr = false;
+    rxLength = 0U;
+    return 0U;
   }
 
-  _rxExtended = (readRegister(REG_RXBnSIDL(n)) & FLAG_IDE) ? true : false;
+  rxExtended = (readRegister(regRxBnSidl(n)) & flagIde) != 0U;
 
-  uint32_t idA = ((readRegister(REG_RXBnSIDH(n)) << 3) & 0x07f8) | ((readRegister(REG_RXBnSIDL(n)) >> 5) & 0x07);
-  if (_rxExtended) {
-    uint32_t idB = (((uint32_t)(readRegister(REG_RXBnSIDL(n)) & 0x03) << 16) & 0x30000) | ((readRegister(REG_RXBnEID8(n)) << 8) & 0xff00) | readRegister(REG_RXBnEID0(n));
+  const uint32_t idA = static_cast<uint32_t>(((readRegister(regRxBnSidh(n)) << 3) & 0x07F8) | ((readRegister(regRxBnSidl(n)) >> 5) & 0x07));
+  if(rxExtended) {
+    const uint32_t idB =
+      (static_cast<uint32_t>(readRegister(regRxBnSidl(n)) & 0x03U) << 16U) |
+      (static_cast<uint32_t>(readRegister(regRxBnEid8(n))) << 8U) |
+      static_cast<uint32_t>(readRegister(regRxBnEid0(n)));
 
-    _rxId = (idA << 18) | idB;
-    _rxRtr = (readRegister(REG_RXBnDLC(n)) & FLAG_RTR) ? true : false;
+    rxId = static_cast<int32_t>((idA << 18U) | idB);
+    rxRtr = (readRegister(regRxBnDlc(n)) & flagRtr) != 0U;
   } else {
-    _rxId = idA;
-    _rxRtr = (readRegister(REG_RXBnSIDL(n)) & FLAG_SRR) ? true : false;
+    rxId = static_cast<int32_t>(idA);
+    rxRtr = (readRegister(regRxBnSidl(n)) & flagSrr) != 0U;
   }
-  _rxDlc = readRegister(REG_RXBnDLC(n)) & 0x0f;
-  _rxIndex = 0;
+  rxDlc = readRegister(regRxBnDlc(n)) & 0x0FU;
+  rxIndex = 0U;
 
-  if (_rxRtr) {
-    _rxLength = 0;
+  if(rxRtr) {
+    rxLength = 0U;
   } else {
-    _rxLength = _rxDlc;
+    rxLength = rxDlc;
 
-    for (int i = 0; i < _rxLength; i++) {
-      _rxData[i] = readRegister(REG_RXBnD0(n) + i);
+    for(uint8_t i = 0U; i < rxLength; i++) {
+      rxData[i] = readRegister(static_cast<uint8_t>(regRxBnD0(n) + i));
     }
   }
 
-  modifyRegister(REG_CANINTF, FLAG_RXnIF(n), 0x00);
+  modifyRegister(regCanIntf, flagRxnIf(n), 0x00U);
 
-  return _rxDlc;
+  return rxDlc;
 }
 
-void MCP2515Class::onReceive(void(*callback)(int))
-{
-  CANControllerClass::onReceive(callback);
+void MCP2515::onReceive(void(*callback)(int)) {
+  CANController::onReceive(callback);
 
-  pinMode(_intPin, INPUT);
+  pinMode(intPin, INPUT);
 
-  if (callback) {
-    SPI.usingInterrupt(digitalPinToInterrupt(_intPin));
-    attachInterrupt(digitalPinToInterrupt(_intPin), MCP2515Class::onInterrupt, LOW);
+  if(callback != nullptr) {
+    SPI.usingInterrupt(digitalPinToInterrupt(intPin));
+    attachInterrupt(digitalPinToInterrupt(intPin), MCP2515::onInterrupt, LOW);
   } else {
-    detachInterrupt(digitalPinToInterrupt(_intPin));
-#ifdef SPI_HAS_NOTUSINGINTERRUPT
-    SPI.notUsingInterrupt(digitalPinToInterrupt(_intPin));
+    detachInterrupt(digitalPinToInterrupt(intPin));
+#if defined(SPI_HAS_NOTUSINGINTERRUPT)
+    SPI.notUsingInterrupt(digitalPinToInterrupt(intPin));
 #endif
   }
 }
 
-int MCP2515Class::filter(int id, int mask)
-{
-  id &= 0x7ff;
-  mask &= 0x7ff;
+uint8_t MCP2515::filter(uint16_t id, uint16_t mask) {
+  id &= 0x7FFU;
+  mask &= 0x7FFU;
 
-  // config mode
-  writeRegister(REG_CANCTRL, 0x80);
-  if (readRegister(REG_CANCTRL) != 0x80) {
-    return 0;
+  writeRegister(regCanCtrl, 0x80U);
+  if(readRegister(regCanCtrl) != 0x80U) { return 0U; }
+
+  for(uint8_t n = 0U; n < 2U; n++) {
+    writeRegister(regRxBnCtrl(n), flagRxm0);
+
+    writeRegister(regRxMnSidh(n), static_cast<uint8_t>(mask >> 3));
+    writeRegister(regRxMnSidl(n), static_cast<uint8_t>(mask << 5));
+    writeRegister(regRxMnEid8(n), 0x00U);
+    writeRegister(regRxMnEid0(n), 0x00U);
   }
 
-  for (int n = 0; n < 2; n++) {
-    // standard only
-    writeRegister(REG_RXBnCTRL(n), FLAG_RXM0);
-    writeRegister(REG_RXBnCTRL(n), FLAG_RXM0);
-
-    writeRegister(REG_RXMnSIDH(n), mask >> 3);
-    writeRegister(REG_RXMnSIDL(n), mask << 5);
-    writeRegister(REG_RXMnEID8(n), 0);
-    writeRegister(REG_RXMnEID0(n), 0);
+  for(uint8_t n = 0U; n < 6U; n++) {
+    writeRegister(regRxFnSidh(n), static_cast<uint8_t>(id >> 3));
+    writeRegister(regRxFnSidl(n), static_cast<uint8_t>(id << 5));
+    writeRegister(regRxFnEid8(n), 0x00U);
+    writeRegister(regRxFnEid0(n), 0x00U);
   }
 
-  for (int n = 0; n < 6; n++) {
-    writeRegister(REG_RXFnSIDH(n), id >> 3);
-    writeRegister(REG_RXFnSIDL(n), id << 5);
-    writeRegister(REG_RXFnEID8(n), 0);
-    writeRegister(REG_RXFnEID0(n), 0);
-  }
+  writeRegister(regCanCtrl, 0x00U);
+  if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
 
-  // normal mode
-  writeRegister(REG_CANCTRL, 0x00);
-  if (readRegister(REG_CANCTRL) != 0x00) {
-    return 0;
-  }
-
-  return 1;
+  return 1U;
 }
 
-int MCP2515Class::filterExtended(long id, long mask)
-{
-  id &= 0x1FFFFFFF;
-  mask &= 0x1FFFFFFF;
+uint8_t MCP2515::filterExtended(uint32_t id, uint32_t mask) {
+  id &= 0x1FFFFFFFU;
+  mask &= 0x1FFFFFFFU;
 
-  // config mode
-  writeRegister(REG_CANCTRL, 0x80);
-  if (readRegister(REG_CANCTRL) != 0x80) {
-    return 0;
+  writeRegister(regCanCtrl, 0x80U);
+  if(readRegister(regCanCtrl) != 0x80U) { return 0U; }
+
+  for(uint8_t n = 0U; n < 2U; n++) {
+    writeRegister(regRxBnCtrl(n), flagRxm1);
+
+    writeRegister(regRxMnSidh(n), static_cast<uint8_t>(mask >> 21));
+    writeRegister(regRxMnSidl(n), static_cast<uint8_t>((((mask >> 18) & 0x03U) << 5) | flagExide | ((mask >> 16) & 0x03U)));
+    writeRegister(regRxMnEid8(n), static_cast<uint8_t>((mask >> 8) & 0xFFU));
+    writeRegister(regRxMnEid0(n), static_cast<uint8_t>(mask & 0xFFU));
   }
 
-  for (int n = 0; n < 2; n++) {
-    // extended only
-    writeRegister(REG_RXBnCTRL(n), FLAG_RXM1);
-    writeRegister(REG_RXBnCTRL(n), FLAG_RXM1);
-
-    writeRegister(REG_RXMnSIDH(n), mask >> 21);
-    writeRegister(REG_RXMnSIDL(n), (((mask >> 18) & 0x03) << 5) | FLAG_EXIDE | ((mask >> 16) & 0x03));
-    writeRegister(REG_RXMnEID8(n), (mask >> 8) & 0xff);
-    writeRegister(REG_RXMnEID0(n), mask & 0xff);
+  for(uint8_t n = 0U; n < 6U; n++) {
+    writeRegister(regRxFnSidh(n), static_cast<uint8_t>(id >> 21));
+    writeRegister(regRxFnSidl(n), static_cast<uint8_t>((((id >> 18) & 0x03U) << 5) | flagExide | ((id >> 16) & 0x03U)));
+    writeRegister(regRxFnEid8(n), static_cast<uint8_t>((id >> 8) & 0xFFU));
+    writeRegister(regRxFnEid0(n), static_cast<uint8_t>(id & 0xFFU));
   }
 
-  for (int n = 0; n < 6; n++) {
-    writeRegister(REG_RXFnSIDH(n), id >> 21);
-    writeRegister(REG_RXFnSIDL(n), (((id >> 18) & 0x03) << 5) | FLAG_EXIDE | ((id >> 16) & 0x03));
-    writeRegister(REG_RXFnEID8(n), (id >> 8) & 0xff);
-    writeRegister(REG_RXFnEID0(n), id & 0xff);
-  }
+  writeRegister(regCanCtrl, 0x00U);
+  if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
 
-  // normal mode
-  writeRegister(REG_CANCTRL, 0x00);
-  if (readRegister(REG_CANCTRL) != 0x00) {
-    return 0;
-  }
-
-  return 1;
+  return 1U;
 }
 
-int MCP2515Class::observe()
-{
-  writeRegister(REG_CANCTRL, 0x60);
-  if (readRegister(REG_CANCTRL) != 0x60) {
-    return 0;
-  }
-
-  return 1;
+uint8_t MCP2515::observe() {
+  writeRegister(regCanCtrl, 0x60U);
+  if(readRegister(regCanCtrl) != 0x60U) { return 0U; }
+  return 1U;
 }
 
-int MCP2515Class::loopback()
-{
-  writeRegister(REG_CANCTRL, 0x40);
-  if (readRegister(REG_CANCTRL) != 0x40) {
-    return 0;
-  }
-
-  return 1;
+uint8_t MCP2515::loopback() {
+  writeRegister(regCanCtrl, 0x40U);
+  if(readRegister(regCanCtrl) != 0x40U) { return 0U; }
+  return 1U;
 }
 
-int MCP2515Class::sleep()
-{
-  writeRegister(REG_CANCTRL, 0x01);
-  if (readRegister(REG_CANCTRL) != 0x01) {
-    return 0;
-  }
-
-  return 1;
+uint8_t MCP2515::sleep() {
+  writeRegister(regCanCtrl, 0x01U);
+  if(readRegister(regCanCtrl) != 0x01U) { return 0U; }
+  return 1U;
 }
 
-int MCP2515Class::wakeup()
-{
-  writeRegister(REG_CANCTRL, 0x00);
-  if (readRegister(REG_CANCTRL) != 0x00) {
-    return 0;
-  }
-
-  return 1;
+uint8_t MCP2515::wakeup() {
+  writeRegister(regCanCtrl, 0x00U);
+  if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
+  return 1U;
 }
 
-void MCP2515Class::setPins(int cs, int irq)
-{
-  _csPin = cs;
-  _intPin = irq;
+void MCP2515::setPins(int cs, int irq) {
+  csPin = static_cast<uint8_t>(cs);
+  intPin = static_cast<uint8_t>(irq); // -1 becomes 0xFF = "no pin"
 }
 
-void MCP2515Class::setSPIFrequency(uint32_t frequency)
-{
-  _spiSettings = SPISettings(frequency, MSBFIRST, SPI_MODE0);
+void MCP2515::setSPIFrequency(uint32_t frequency) {
+  spiSettings = SPISettings(frequency, MSBFIRST, SPI_MODE0);
 }
 
-void MCP2515Class::setClockFrequency(long clockFrequency)
-{
-  _clockFrequency = clockFrequency;
+void MCP2515::setClockFrequency(uint32_t freq) {
+  clockFrequency = freq;
 }
 
-void MCP2515Class::dumpRegisters(Stream& out)
-{
-  for (int i = 0; i < 128; i++) {
-    byte b = readRegister(i);
+void MCP2515::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-functions-to-static)
+  for(uint8_t i = 0U; i < 128U; i++) {
+    const uint8_t b = readRegister(i);
 
     out.print("0x");
-    if (i < 16) {
-      out.print('0');
-    }
+    if(i < 16U) { out.print('0'); }
     out.print(i, HEX);
     out.print(": 0x");
-    if (b < 16) {
-      out.print('0');
-    }
+    if(b < 16U) { out.print('0'); }
     out.println(b, HEX);
   }
 }
 
-void MCP2515Class::reset()
-{
-  SPI.beginTransaction(_spiSettings);
-  digitalWrite(_csPin, LOW);
-  SPI.transfer(0xc0);
-  digitalWrite(_csPin, HIGH);
+void MCP2515::reset() { // NOLINT(readability-convert-member-functions-to-static)
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0xC0U);
+  digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 
   delayMicroseconds(10);
 }
 
-void MCP2515Class::handleInterrupt()
-{
-  if (readRegister(REG_CANINTF) == 0) {
-    return;
-  }
+void MCP2515::handleInterrupt() {
+  if(readRegister(regCanIntf) == 0U) { return; }
 
-  while (parsePacket() || _rxId != -1) {
-    _onReceive(available());
+  while(parsePacket() != 0 || rxId != -1) {
+    onReceiveCb(available());
   }
 }
 
-uint8_t MCP2515Class::readRegister(uint8_t address)
-{
-  uint8_t value;
-
-  SPI.beginTransaction(_spiSettings);
-  digitalWrite(_csPin, LOW);
-  SPI.transfer(0x03);
+uint8_t MCP2515::readRegister(uint8_t address) {
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0x03U);
   SPI.transfer(address);
-  value = SPI.transfer(0x00);
-  digitalWrite(_csPin, HIGH);
+  const uint8_t value = SPI.transfer(0x00U);
+  digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 
   return value;
 }
 
-void MCP2515Class::modifyRegister(uint8_t address, uint8_t mask, uint8_t value)
-{
-  SPI.beginTransaction(_spiSettings);
-  digitalWrite(_csPin, LOW);
-  SPI.transfer(0x05);
+void MCP2515::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0x05U);
   SPI.transfer(address);
   SPI.transfer(mask);
   SPI.transfer(value);
-  digitalWrite(_csPin, HIGH);
+  digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 }
 
-void MCP2515Class::writeRegister(uint8_t address, uint8_t value)
-{
-  SPI.beginTransaction(_spiSettings);
-  digitalWrite(_csPin, LOW);
-  SPI.transfer(0x02);
+void MCP2515::writeRegister(uint8_t address, uint8_t value) {
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0x02U);
   SPI.transfer(address);
   SPI.transfer(value);
-  digitalWrite(_csPin, HIGH);
+  digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 }
 
-void MCP2515Class::onInterrupt()
-{
+void MCP2515::onInterrupt() {
   CAN.handleInterrupt();
 }
 
-MCP2515Class CAN;
+MCP2515 CAN;
 
-#endif
+#endif // !ARDUINO_ARCH_ESP32

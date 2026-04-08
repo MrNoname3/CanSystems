@@ -1,7 +1,4 @@
-// Copyright (c) Sandeep Mistry. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
-
-#ifdef ARDUINO_ARCH_ESP32
+#if defined(ARDUINO_ARCH_ESP32)
 
 #include "esp_intr_alloc.h"
 #include "soc/dport_reg.h"
@@ -9,407 +6,356 @@
 
 #include "ESP32SJA1000.h"
 
-#define REG_BASE                   0x3ff6b000
+namespace {
+  static constexpr uint32_t regBase = 0x3FF6B000U;
 
-#define REG_MOD                    0x00
-#define REG_CMR                    0x01
-#define REG_SR                     0x02
-#define REG_IR                     0x03
-#define REG_IER                    0x04
+  static constexpr uint8_t regMod   = 0x00U;
+  static constexpr uint8_t regCmr   = 0x01U;
+  static constexpr uint8_t regSr    = 0x02U;
+  static constexpr uint8_t regIr    = 0x03U;
+  static constexpr uint8_t regIer   = 0x04U;
+  static constexpr uint8_t regBtr0  = 0x06U;
+  static constexpr uint8_t regBtr1  = 0x07U;
+  static constexpr uint8_t regOcr   = 0x08U;
+  static constexpr uint8_t regEcc   = 0x0CU;
+  static constexpr uint8_t regRxErr = 0x0EU;
+  static constexpr uint8_t regTxErr = 0x0FU;
+  static constexpr uint8_t regSff   = 0x10U;
+  static constexpr uint8_t regEff   = 0x10U;
+  static constexpr uint8_t regCdr   = 0x1FU;
 
-#define REG_BTR0                   0x06
-#define REG_BTR1                   0x07
-#define REG_OCR                    0x08
+  constexpr uint8_t regAcrN(uint8_t n) { return static_cast<uint8_t>(0x10U + n); }
+  constexpr uint8_t regAmrN(uint8_t n) { return static_cast<uint8_t>(0x14U + n); }
+} // namespace
 
-#define REG_ALC                    0x0b
-#define REG_ECC                    0x0c
-#define REG_EWLR                   0x0d
-#define REG_RXERR                  0x0e
-#define REG_TXERR                  0x0f
-#define REG_SFF                    0x10
-#define REG_EFF                    0x10
-#define REG_ACRn(n)                (0x10 + n)
-#define REG_AMRn(n)                (0x14 + n)
+uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
+  if(CANController::begin(baudRate) != 1) { return 0U; }
 
-#define REG_CDR                    0x1F
-
-
-ESP32SJA1000Class::ESP32SJA1000Class() :
-  CANControllerClass(),
-  _rxPin(DEFAULT_CAN_RX_PIN),
-  _txPin(DEFAULT_CAN_TX_PIN),
-  _loopback(false),
-  _intrHandle(NULL)
-{
-}
-
-ESP32SJA1000Class::~ESP32SJA1000Class()
-{
-}
-
-int ESP32SJA1000Class::begin(long baudRate)
-{
-  CANControllerClass::begin(baudRate);
-
-  _loopback = false;
+  loopbackEnabled = false;
 
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
 
   // RX pin
-  gpio_set_direction(_rxPin, GPIO_MODE_INPUT);
-  gpio_matrix_in(_rxPin, CAN_RX_IDX, 0);
-  gpio_pad_select_gpio(_rxPin);
+  gpio_set_direction(rxPin, GPIO_MODE_INPUT);
+  gpio_matrix_in(rxPin, CAN_RX_IDX, 0);
+  gpio_pad_select_gpio(rxPin);
 
   // TX pin
-  gpio_set_direction(_txPin, GPIO_MODE_OUTPUT);
-  gpio_matrix_out(_txPin, CAN_TX_IDX, 0, 0);
-  gpio_pad_select_gpio(_txPin);
+  gpio_set_direction(txPin, GPIO_MODE_OUTPUT);
+  gpio_matrix_out(txPin, CAN_TX_IDX, 0, 0);
+  gpio_pad_select_gpio(txPin);
 
-  modifyRegister(REG_CDR, 0x80, 0x80); // pelican mode
-  modifyRegister(REG_BTR0, 0xc0, 0x40); // SJW = 1
-  modifyRegister(REG_BTR1, 0x70, 0x10); // TSEG2 = 1
+  modifyRegister(regCdr,  0x80U, 0x80U); // pelican mode
+  modifyRegister(regBtr0, 0xC0U, 0x40U); // SJW = 1
+  modifyRegister(regBtr1, 0x70U, 0x10U); // TSEG2 = 1
 
-  switch (baudRate) {
-    case (long)1000E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x04);
-      modifyRegister(REG_BTR0, 0x3f, 4);
+  switch(baudRate) {
+    case 1'000'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x04U);
+      modifyRegister(regBtr0, 0x3FU, 4U);
       break;
 
-    case (long)500E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 4);
+    case 500'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 4U);
       break;
 
-    case (long)250E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 9);
+    case 250'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 9U);
       break;
 
-    case (long)200E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 12);
+    case 200'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 12U);
       break;
 
-    case (long)125E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 19);
+    case 125'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 19U);
       break;
 
-    case (long)100E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 24);
+    case 100'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 24U);
       break;
 
-    case (long)80E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 30);
+    case 80'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 30U);
       break;
 
-    case (long)50E3:
-      modifyRegister(REG_BTR1, 0x0f, 0x0c);
-      modifyRegister(REG_BTR0, 0x3f, 49);
+    case 50'000U:
+      modifyRegister(regBtr1, 0x0FU, 0x0CU);
+      modifyRegister(regBtr0, 0x3FU, 49U);
       break;
 
-/*
-   Due to limitations in ESP32 hardware and/or RTOS software, baudrate can't be lower than 50kbps.
-   See https://esp32.com/viewtopic.php?t=2142
-*/
+    /*
+     * Due to limitations in ESP32 hardware and/or RTOS software, baudrate
+     * can't be lower than 50kbps.
+     * See https://esp32.com/viewtopic.php?t=2142
+     */
     default:
-      return 0;
-      break;
+      return 0U;
   }
 
-  modifyRegister(REG_BTR1, 0x80, 0x80); // SAM = 1
-  writeRegister(REG_IER, 0xff); // enable all interrupts
+  modifyRegister(regBtr1, 0x80U, 0x80U); // SAM = 1
+  writeRegister(regIer, 0xFFU);          // enable all interrupts
 
   // set filter to allow anything
-  writeRegister(REG_ACRn(0), 0x00);
-  writeRegister(REG_ACRn(1), 0x00);
-  writeRegister(REG_ACRn(2), 0x00);
-  writeRegister(REG_ACRn(3), 0x00);
-  writeRegister(REG_AMRn(0), 0xff);
-  writeRegister(REG_AMRn(1), 0xff);
-  writeRegister(REG_AMRn(2), 0xff);
-  writeRegister(REG_AMRn(3), 0xff);
+  writeRegister(regAcrN(0U), 0x00U);
+  writeRegister(regAcrN(1U), 0x00U);
+  writeRegister(regAcrN(2U), 0x00U);
+  writeRegister(regAcrN(3U), 0x00U);
+  writeRegister(regAmrN(0U), 0xFFU);
+  writeRegister(regAmrN(1U), 0xFFU);
+  writeRegister(regAmrN(2U), 0xFFU);
+  writeRegister(regAmrN(3U), 0xFFU);
 
-  modifyRegister(REG_OCR, 0x03, 0x02); // normal output mode
+  modifyRegister(regOcr, 0x03U, 0x02U); // normal output mode
   // reset error counters
-  writeRegister(REG_TXERR, 0x00);
-  writeRegister(REG_RXERR, 0x00);
+  writeRegister(regTxErr, 0x00U);
+  writeRegister(regRxErr, 0x00U);
 
   // clear errors and interrupts
-  readRegister(REG_ECC);
-  readRegister(REG_IR);
+  readRegister(regEcc);
+  readRegister(regIr);
 
   // normal mode
-  modifyRegister(REG_MOD, 0x08, 0x08);
-  modifyRegister(REG_MOD, 0x17, 0x00);
+  modifyRegister(regMod, 0x08U, 0x08U);
+  modifyRegister(regMod, 0x17U, 0x00U);
 
-  return 1;
+  return 1U;
 }
 
-void ESP32SJA1000Class::end()
-{
-  if (_intrHandle) {
-    esp_intr_free(_intrHandle);
-    _intrHandle = NULL;
+void ESP32SJA1000::end() {
+  if(intrHandle != nullptr) {
+    esp_intr_free(intrHandle);
+    intrHandle = nullptr;
   }
 
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
 
-  CANControllerClass::end();
+  CANController::end();
 }
 
-int ESP32SJA1000Class::endPacket()
-{
-  if (!CANControllerClass::endPacket()) {
-    return 0;
-  }
+uint8_t ESP32SJA1000::endPacket() {
+  if(!CANController::endPacket()) { return 0U; }
 
   // wait for TX buffer to free
-  while ((readRegister(REG_SR) & 0x04) != 0x04) {
+  while((readRegister(regSr) & 0x04U) != 0x04U) {
     yield();
   }
 
-  int dataReg;
+  uint8_t dataReg;
 
-  if (_txExtended) {
-    writeRegister(REG_EFF, 0x80 | (_txRtr ? 0x40 : 0x00) | (0x0f & _txLength));
-    writeRegister(REG_EFF + 1, _txId >> 21);
-    writeRegister(REG_EFF + 2, _txId >> 13);
-    writeRegister(REG_EFF + 3, _txId >> 5);
-    writeRegister(REG_EFF + 4, _txId << 3);
+  if(txExtended) {
+    writeRegister(regEff, static_cast<uint8_t>(0x80U | (txRtr ? 0x40U : 0x00U) | (0x0FU & static_cast<uint8_t>(txLength))));
+    writeRegister(static_cast<uint8_t>(regEff + 1U), static_cast<uint8_t>(txId >> 21));
+    writeRegister(static_cast<uint8_t>(regEff + 2U), static_cast<uint8_t>(txId >> 13));
+    writeRegister(static_cast<uint8_t>(regEff + 3U), static_cast<uint8_t>(txId >> 5));
+    writeRegister(static_cast<uint8_t>(regEff + 4U), static_cast<uint8_t>(txId << 3));
 
-    dataReg = REG_EFF + 5;
+    dataReg = static_cast<uint8_t>(regEff + 5U);
   } else {
-    writeRegister(REG_SFF, (_txRtr ? 0x40 : 0x00) | (0x0f & _txLength));
-    writeRegister(REG_SFF + 1, _txId >> 3);
-    writeRegister(REG_SFF + 2, _txId << 5);
+    writeRegister(regSff, static_cast<uint8_t>((txRtr ? 0x40U : 0x00U) | (0x0FU & static_cast<uint8_t>(txLength))));
+    writeRegister(static_cast<uint8_t>(regSff + 1U), static_cast<uint8_t>(txId >> 3));
+    writeRegister(static_cast<uint8_t>(regSff + 2U), static_cast<uint8_t>(txId << 5));
 
-    dataReg = REG_SFF + 3;
+    dataReg = static_cast<uint8_t>(regSff + 3U);
   }
 
-  for (int i = 0; i < _txLength; i++) {
-    writeRegister(dataReg + i, _txData[i]);
+  for(uint8_t i = 0U; i < txLength; i++) {
+    writeRegister(static_cast<uint8_t>(dataReg + i), txData[i]);
   }
 
-  if ( _loopback) {
-    // self reception request
-    modifyRegister(REG_CMR, 0x1f, 0x10);
+  if(loopbackEnabled) {
+    modifyRegister(regCmr, 0x1FU, 0x10U); // self reception request
   } else {
-    // transmit request
-    modifyRegister(REG_CMR, 0x1f, 0x01);
+    modifyRegister(regCmr, 0x1FU, 0x01U); // transmit request
   }
 
   // wait for TX complete
-  while ((readRegister(REG_SR) & 0x08) != 0x08) {
-    if (readRegister(REG_ECC) == 0xd9) {
-      modifyRegister(REG_CMR, 0x1f, 0x02); // error, abort
-      return 0;
+  while((readRegister(regSr) & 0x08U) != 0x08U) {
+    if(readRegister(regEcc) == 0xD9U) {
+      modifyRegister(regCmr, 0x1FU, 0x02U); // error, abort
+      return 0U;
     }
     yield();
   }
 
-  return 1;
+  return 1U;
 }
 
-int ESP32SJA1000Class::parsePacket()
-{
-  if ((readRegister(REG_SR) & 0x01) != 0x01) {
-    // no packet
-    return 0;
+uint8_t ESP32SJA1000::parsePacket() {
+  if((readRegister(regSr) & 0x01U) != 0x01U) { return 0U; }
+
+  rxExtended = (readRegister(regSff) & 0x80U) != 0U;
+  rxRtr      = (readRegister(regSff) & 0x40U) != 0U;
+  rxDlc      = readRegister(regSff) & 0x0FU;
+  rxIndex    = 0U;
+
+  uint8_t dataReg;
+
+  if(rxExtended) {
+    rxId = static_cast<int32_t>(
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 1U))) << 21U) |
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 2U))) << 13U) |
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 3U))) << 5U)  |
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 4U))) >> 3U));
+
+    dataReg = static_cast<uint8_t>(regEff + 5U);
+  } else {
+    rxId = static_cast<int32_t>(
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regSff + 1U))) << 3U) |
+      ((static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regSff + 2U))) >> 5U) & 0x07U));
+
+    dataReg = static_cast<uint8_t>(regSff + 3U);
   }
 
-  _rxExtended = (readRegister(REG_SFF) & 0x80) ? true : false;
-  _rxRtr = (readRegister(REG_SFF) & 0x40) ? true : false;
-  _rxDlc = (readRegister(REG_SFF) & 0x0f);
-  _rxIndex = 0;
-
-  int dataReg;
-
-  if (_rxExtended) {
-    _rxId = (readRegister(REG_EFF + 1) << 21) |
-            (readRegister(REG_EFF + 2) << 13) |
-            (readRegister(REG_EFF + 3) << 5) |
-            (readRegister(REG_EFF + 4) >> 3);
-
-    dataReg = REG_EFF + 5;
+  if(rxRtr) {
+    rxLength = 0U;
   } else {
-    _rxId = (readRegister(REG_SFF + 1) << 3) | ((readRegister(REG_SFF + 2) >> 5) & 0x07);
+    rxLength = rxDlc;
 
-    dataReg = REG_SFF + 3;
-  }
-
-  if (_rxRtr) {
-    _rxLength = 0;
-  } else {
-    _rxLength = _rxDlc;
-
-    for (int i = 0; i < _rxLength; i++) {
-      _rxData[i] = readRegister(dataReg + i);
+    for(uint8_t i = 0U; i < rxLength; i++) {
+      rxData[i] = readRegister(static_cast<uint8_t>(dataReg + i));
     }
   }
 
-  // release RX buffer
-  modifyRegister(REG_CMR, 0x04, 0x04);
+  modifyRegister(regCmr, 0x04U, 0x04U); // release RX buffer
 
-  return _rxDlc;
+  return rxDlc;
 }
 
-void ESP32SJA1000Class::onReceive(void(*callback)(int))
-{
-  CANControllerClass::onReceive(callback);
+void ESP32SJA1000::onReceive(void(*callback)(int)) {
+  CANController::onReceive(callback);
 
-  if (_intrHandle) {
-    esp_intr_free(_intrHandle);
-    _intrHandle = NULL;
+  if(intrHandle != nullptr) {
+    esp_intr_free(intrHandle);
+    intrHandle = nullptr;
   }
 
-  if (callback) {
-    esp_intr_alloc(ETS_CAN_INTR_SOURCE, 0, ESP32SJA1000Class::onInterrupt, this, &_intrHandle);
+  if(callback != nullptr) {
+    esp_intr_alloc(ETS_CAN_INTR_SOURCE, 0, ESP32SJA1000::onInterrupt, this, &intrHandle);
   }
 }
 
-int ESP32SJA1000Class::filter(int id, int mask)
-{
-  id &= 0x7ff;
-  mask = ~(mask & 0x7ff);
+uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
+  id &= 0x7FFU;
+  const uint16_t amr = static_cast<uint16_t>(~(mask & 0x7FFU));
 
-  modifyRegister(REG_MOD, 0x17, 0x01); // reset
+  modifyRegister(regMod, 0x17U, 0x01U); // reset
 
-  writeRegister(REG_ACRn(0), id >> 3);
-  writeRegister(REG_ACRn(1), id << 5);
-  writeRegister(REG_ACRn(2), 0x00);
-  writeRegister(REG_ACRn(3), 0x00);
+  writeRegister(regAcrN(0U), static_cast<uint8_t>(id >> 3));
+  writeRegister(regAcrN(1U), static_cast<uint8_t>(id << 5));
+  writeRegister(regAcrN(2U), 0x00U);
+  writeRegister(regAcrN(3U), 0x00U);
 
-  writeRegister(REG_AMRn(0), mask >> 3);
-  writeRegister(REG_AMRn(1), (mask << 5) | 0x1f);
-  writeRegister(REG_AMRn(2), 0xff);
-  writeRegister(REG_AMRn(3), 0xff);
+  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 3));
+  writeRegister(regAmrN(1U), static_cast<uint8_t>((amr << 5) | 0x1FU));
+  writeRegister(regAmrN(2U), 0xFFU);
+  writeRegister(regAmrN(3U), 0xFFU);
 
-  modifyRegister(REG_MOD, 0x17, 0x00); // normal
+  modifyRegister(regMod, 0x17U, 0x00U); // normal
 
-  return 1;
+  return 1U;
 }
 
-int ESP32SJA1000Class::filterExtended(long id, long mask)
-{
-  id &= 0x1FFFFFFF;
-  mask = ~(mask & 0x1FFFFFFF);
+uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) {
+  id &= 0x1FFFFFFFU;
+  const uint32_t amr = ~(mask & 0x1FFFFFFFU);
 
-  modifyRegister(REG_MOD, 0x17, 0x01); // reset
+  modifyRegister(regMod, 0x17U, 0x01U); // reset
 
-  writeRegister(REG_ACRn(0), id >> 21);
-  writeRegister(REG_ACRn(1), id >> 13);
-  writeRegister(REG_ACRn(2), id >> 5);
-  writeRegister(REG_ACRn(3), id << 3);
+  writeRegister(regAcrN(0U), static_cast<uint8_t>(id >> 21));
+  writeRegister(regAcrN(1U), static_cast<uint8_t>(id >> 13));
+  writeRegister(regAcrN(2U), static_cast<uint8_t>(id >> 5));
+  writeRegister(regAcrN(3U), static_cast<uint8_t>(id << 3));
 
-  writeRegister(REG_AMRn(0), mask >> 21);
-  writeRegister(REG_AMRn(1), mask >> 13);
-  writeRegister(REG_AMRn(2), mask >> 5);
-  writeRegister(REG_AMRn(3), (mask << 3) | 0x7f);
+  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 21));
+  writeRegister(regAmrN(1U), static_cast<uint8_t>(amr >> 13));
+  writeRegister(regAmrN(2U), static_cast<uint8_t>(amr >> 5));
+  writeRegister(regAmrN(3U), static_cast<uint8_t>((amr << 3) | 0x7FU));
 
-  modifyRegister(REG_MOD, 0x17, 0x00); // normal
+  modifyRegister(regMod, 0x17U, 0x00U); // normal
 
-  return 1;
+  return 1U;
 }
 
-int ESP32SJA1000Class::observe()
-{
-  modifyRegister(REG_MOD, 0x17, 0x01); // reset
-  modifyRegister(REG_MOD, 0x17, 0x02); // observe
-
-  return 1;
+uint8_t ESP32SJA1000::observe() {
+  modifyRegister(regMod, 0x17U, 0x01U); // reset
+  modifyRegister(regMod, 0x17U, 0x02U); // observe
+  return 1U;
 }
 
-int ESP32SJA1000Class::loopback()
-{
-  _loopback = true;
+uint8_t ESP32SJA1000::loopback() {
+  loopbackEnabled = true;
 
-  modifyRegister(REG_MOD, 0x17, 0x01); // reset
-  modifyRegister(REG_MOD, 0x17, 0x04); // self test mode
+  modifyRegister(regMod, 0x17U, 0x01U); // reset
+  modifyRegister(regMod, 0x17U, 0x04U); // self test mode
 
-  return 1;
+  return 1U;
 }
 
-int ESP32SJA1000Class::sleep()
-{
-  modifyRegister(REG_MOD, 0x1f, 0x10);
-
-  return 1;
+uint8_t ESP32SJA1000::sleep() {
+  modifyRegister(regMod, 0x1FU, 0x10U);
+  return 1U;
 }
 
-int ESP32SJA1000Class::wakeup()
-{
-  modifyRegister(REG_MOD, 0x1f, 0x00);
-
-  return 1;
+uint8_t ESP32SJA1000::wakeup() {
+  modifyRegister(regMod, 0x1FU, 0x00U);
+  return 1U;
 }
 
-void ESP32SJA1000Class::setPins(int rx, int tx)
-{
-  _rxPin = (gpio_num_t)rx;
-  _txPin = (gpio_num_t)tx;
+void ESP32SJA1000::setPins(int rx, int tx) {
+  rxPin = static_cast<gpio_num_t>(rx);
+  txPin = static_cast<gpio_num_t>(tx);
 }
 
-void ESP32SJA1000Class::dumpRegisters(Stream& out)
-{
-  for (int i = 0; i < 32; i++) {
-    byte b = readRegister(i);
+void ESP32SJA1000::dumpRegisters(Stream& out) {
+  for(uint8_t i = 0U; i < 32U; i++) {
+    const uint8_t b = readRegister(i);
 
     out.print("0x");
-    if (i < 16) {
-      out.print('0');
-    }
+    if(i < 16U) { out.print('0'); }
     out.print(i, HEX);
     out.print(": 0x");
-    if (b < 16) {
-      out.print('0');
-    }
+    if(b < 16U) { out.print('0'); }
     out.println(b, HEX);
   }
 }
 
-void ESP32SJA1000Class::handleInterrupt()
-{
-  uint8_t ir = readRegister(REG_IR);
+void ESP32SJA1000::handleInterrupt() {
+  const uint8_t ir = readRegister(regIr);
 
-  if (ir & 0x01) {
-    // received packet, parse and call callback
-    parsePacket();
-
-    _onReceive(available());
+  if(ir & 0x01U) {
+    if(parsePacket() == 0) { return; }
+    onReceiveCb(available());
   }
 }
 
-uint8_t ESP32SJA1000Class::readRegister(uint8_t address)
-{
-  volatile uint32_t* reg = (volatile uint32_t*)(REG_BASE + address * 4);
-
-  return *reg;
+uint8_t ESP32SJA1000::readRegister(uint8_t address) {
+  volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uint32_t>(address) * 4U);
+  return static_cast<uint8_t>(*reg);
 }
 
-void ESP32SJA1000Class::modifyRegister(uint8_t address, uint8_t mask, uint8_t value)
-{
-  volatile uint32_t* reg = (volatile uint32_t*)(REG_BASE + address * 4);
-
-  *reg = (*reg & ~mask) | value;
+void ESP32SJA1000::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
+  volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uint32_t>(address) * 4U);
+  *reg = (*reg & ~static_cast<uint32_t>(mask)) | value;
 }
 
-void ESP32SJA1000Class::writeRegister(uint8_t address, uint8_t value)
-{
-  volatile uint32_t* reg = (volatile uint32_t*)(REG_BASE + address * 4);
-
+void ESP32SJA1000::writeRegister(uint8_t address, uint8_t value) {
+  volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uint32_t>(address) * 4U);
   *reg = value;
 }
 
-void ESP32SJA1000Class::onInterrupt(void* arg)
-{
-  ((ESP32SJA1000Class*)arg)->handleInterrupt();
+void ESP32SJA1000::onInterrupt(void* arg) {
+  static_cast<ESP32SJA1000*>(arg)->handleInterrupt();
 }
 
-ESP32SJA1000Class CAN;
+ESP32SJA1000 CAN;
 
-#endif
+#endif // ARDUINO_ARCH_ESP32
