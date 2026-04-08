@@ -1,6 +1,6 @@
 #ifdef ESP32
 #include "canHandlerEsp32.hpp"
-#include <CAN.h>                                                    /// CAN controller library.
+#include "CAN.h"                                                    /// CAN controller library.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include <cstdlib>                                                  /// Standard library for memory and utilities.
 #include "common.hpp"                                               /// Common definitions and functions.

@@ -1,6 +1,6 @@
 #include "canHandlerAtmega328P.hpp"
 #ifdef ARDUINO_ARCH_AVR
-#include <CAN.h>                                                    /// CAN controller library.
+#include "CAN.h"                                                    /// CAN controller library.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 
