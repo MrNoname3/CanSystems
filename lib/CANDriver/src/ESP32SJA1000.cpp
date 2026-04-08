@@ -7,22 +7,22 @@
 #include "ESP32SJA1000.h"
 
 namespace {
-  static constexpr uint32_t regBase = 0x3FF6B000U;
+  constexpr uint32_t regBase = 0x3FF6B000U;
 
-  static constexpr uint8_t regMod   = 0x00U;
-  static constexpr uint8_t regCmr   = 0x01U;
-  static constexpr uint8_t regSr    = 0x02U;
-  static constexpr uint8_t regIr    = 0x03U;
-  static constexpr uint8_t regIer   = 0x04U;
-  static constexpr uint8_t regBtr0  = 0x06U;
-  static constexpr uint8_t regBtr1  = 0x07U;
-  static constexpr uint8_t regOcr   = 0x08U;
-  static constexpr uint8_t regEcc   = 0x0CU;
-  static constexpr uint8_t regRxErr = 0x0EU;
-  static constexpr uint8_t regTxErr = 0x0FU;
-  static constexpr uint8_t regSff   = 0x10U;
-  static constexpr uint8_t regEff   = 0x10U;
-  static constexpr uint8_t regCdr   = 0x1FU;
+  constexpr uint8_t regMod   = 0x00U;
+  constexpr uint8_t regCmr   = 0x01U;
+  constexpr uint8_t regSr    = 0x02U;
+  constexpr uint8_t regIr    = 0x03U;
+  constexpr uint8_t regIer   = 0x04U;
+  constexpr uint8_t regBtr0  = 0x06U;
+  constexpr uint8_t regBtr1  = 0x07U;
+  constexpr uint8_t regOcr   = 0x08U;
+  constexpr uint8_t regEcc   = 0x0CU;
+  constexpr uint8_t regRxErr = 0x0EU;
+  constexpr uint8_t regTxErr = 0x0FU;
+  constexpr uint8_t regSff   = 0x10U;
+  constexpr uint8_t regEff   = 0x10U;
+  constexpr uint8_t regCdr   = 0x1FU;
 
   constexpr uint8_t regAcrN(uint8_t n) { return static_cast<uint8_t>(0x10U + n); }
   constexpr uint8_t regAmrN(uint8_t n) { return static_cast<uint8_t>(0x14U + n); }
@@ -315,7 +315,7 @@ void ESP32SJA1000::setPins(int rx, int tx) {
   txPin = static_cast<gpio_num_t>(tx);
 }
 
-void ESP32SJA1000::dumpRegisters(Stream& out) {
+void ESP32SJA1000::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-functions-to-static)
   for(uint8_t i = 0U; i < 32U; i++) {
     const uint8_t b = readRegister(i);
 
@@ -342,12 +342,12 @@ uint8_t ESP32SJA1000::readRegister(uint8_t address) {
   return static_cast<uint8_t>(*reg);
 }
 
-void ESP32SJA1000::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
+void ESP32SJA1000::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) { // NOLINT(readability-convert-member-functions-to-static)
   volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uint32_t>(address) * 4U);
   *reg = (*reg & ~static_cast<uint32_t>(mask)) | value;
 }
 
-void ESP32SJA1000::writeRegister(uint8_t address, uint8_t value) {
+void ESP32SJA1000::writeRegister(uint8_t address, uint8_t value) { // NOLINT(readability-convert-member-functions-to-static)
   volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uint32_t>(address) * 4U);
   *reg = value;
 }

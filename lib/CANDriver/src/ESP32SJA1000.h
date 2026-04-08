@@ -28,7 +28,7 @@ public:
 
   void setPins(int rx, int tx);
 
-  void dumpRegisters(Stream& out);
+  static void dumpRegisters(Stream& out);
 
 private:
   static constexpr gpio_num_t defaultRxPin = GPIO_NUM_4;
@@ -37,9 +37,9 @@ private:
   void reset();
   void handleInterrupt();
 
-  uint8_t readRegister(uint8_t address);
-  void modifyRegister(uint8_t address, uint8_t mask, uint8_t value);
-  void writeRegister(uint8_t address, uint8_t value);
+  static uint8_t readRegister(uint8_t address);
+  static void modifyRegister(uint8_t address, uint8_t mask, uint8_t value);
+  static void writeRegister(uint8_t address, uint8_t value);
 
   static void onInterrupt(void* arg);
 
