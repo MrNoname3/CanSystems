@@ -160,12 +160,14 @@ uint8_t MCP2515::endPacket() {
 
   bool aborted = false;
 
-  while(readRegister(regTxBnCtrl(n)) & 0x08U) {
-    if(readRegister(regTxBnCtrl(n)) & 0x10U) {
+  uint8_t ctrl = readRegister(regTxBnCtrl(n));
+  while(ctrl & 0x08U) {
+    if(ctrl & 0x10U) {
       aborted = true;
       modifyRegister(regCanCtrl, 0x10U, 0x10U);
     }
     yield();
+    ctrl = readRegister(regTxBnCtrl(n));
   }
 
   if(aborted) {
@@ -174,7 +176,7 @@ uint8_t MCP2515::endPacket() {
 
   modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
 
-  return (readRegister(regTxBnCtrl(n)) & 0x70U) ? 0 : 1;
+  return (readRegister(regTxBnCtrl(n)) & 0x70U) ? 0U : 1U;
 }
 
 uint8_t MCP2515::parsePacket() {
@@ -193,22 +195,25 @@ uint8_t MCP2515::parsePacket() {
     return 0U;
   }
 
-  rxExtended = (readRegister(regRxBnSidl(n)) & flagIde) != 0U;
+  const uint8_t sidl = readRegister(regRxBnSidl(n));
+  const uint8_t dlc  = readRegister(regRxBnDlc(n));
 
-  const uint32_t idA = static_cast<uint32_t>(((readRegister(regRxBnSidh(n)) << 3) & 0x07F8) | ((readRegister(regRxBnSidl(n)) >> 5) & 0x07));
+  rxExtended = (sidl & flagIde) != 0U;
+
+  const uint32_t idA = static_cast<uint32_t>(((readRegister(regRxBnSidh(n)) << 3) & 0x07F8) | ((sidl >> 5) & 0x07));
   if(rxExtended) {
     const uint32_t idB =
-      (static_cast<uint32_t>(readRegister(regRxBnSidl(n)) & 0x03U) << 16U) |
+      (static_cast<uint32_t>(sidl & 0x03U) << 16U) |
       (static_cast<uint32_t>(readRegister(regRxBnEid8(n))) << 8U) |
       static_cast<uint32_t>(readRegister(regRxBnEid0(n)));
 
     rxId = static_cast<int32_t>((idA << 18U) | idB);
-    rxRtr = (readRegister(regRxBnDlc(n)) & flagRtr) != 0U;
+    rxRtr = (dlc & flagRtr) != 0U;
   } else {
     rxId = static_cast<int32_t>(idA);
-    rxRtr = (readRegister(regRxBnSidl(n)) & flagSrr) != 0U;
+    rxRtr = (sidl & flagSrr) != 0U;
   }
-  rxDlc = readRegister(regRxBnDlc(n)) & 0x0FU;
+  rxDlc = dlc & 0x0FU;
   rxIndex = 0U;
 
   if(rxRtr) {
@@ -362,6 +367,7 @@ void MCP2515::reset() { // NOLINT(readability-convert-member-functions-to-static
 
 void MCP2515::handleInterrupt() {
   if(readRegister(regCanIntf) == 0U) { return; }
+  if(onReceiveCb == nullptr) { return; }
 
   while(parsePacket() != 0 || rxId != -1) {
     onReceiveCb(available());

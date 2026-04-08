@@ -29,7 +29,7 @@ public:
   [[nodiscard]] virtual uint8_t parsePacket();
 
   /// @brief Return the ID of the last received packet.
-  [[nodiscard]] int32_t packetId();
+  [[nodiscard]] int32_t packetId() const;
 
   /// @brief Return whether the last received packet was extended (29-bit).
   [[nodiscard]] bool packetExtended() const;
@@ -38,7 +38,7 @@ public:
   [[nodiscard]] bool packetRtr() const;
 
   /// @brief Return the DLC of the last received packet.
-  [[nodiscard]] uint8_t packetDlc();
+  [[nodiscard]] uint8_t packetDlc() const;
 
   // from Print
   virtual size_t write(uint8_t b);

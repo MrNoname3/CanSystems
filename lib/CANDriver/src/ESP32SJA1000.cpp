@@ -192,9 +192,10 @@ uint8_t ESP32SJA1000::endPacket() {
 uint8_t ESP32SJA1000::parsePacket() {
   if((readRegister(regSr) & 0x01U) != 0x01U) { return 0U; }
 
-  rxExtended = (readRegister(regSff) & 0x80U) != 0U;
-  rxRtr      = (readRegister(regSff) & 0x40U) != 0U;
-  rxDlc      = readRegister(regSff) & 0x0FU;
+  const uint8_t sff = readRegister(regSff);
+  rxExtended = (sff & 0x80U) != 0U;
+  rxRtr      = (sff & 0x40U) != 0U;
+  rxDlc      = sff & 0x0FU;
   rxIndex    = 0U;
 
   uint8_t dataReg;
@@ -331,8 +332,9 @@ void ESP32SJA1000::dumpRegisters(Stream& out) { // NOLINT(readability-convert-me
 void ESP32SJA1000::handleInterrupt() {
   const uint8_t ir = readRegister(regIr);
 
-  if(ir & 0x01U) {
-    if(parsePacket() == 0) { return; }
+  if((ir & 0x01U) != 0U) {
+    if(parsePacket() == 0U) { return; }
+    if(onReceiveCb == nullptr) { return; }
     onReceiveCb(available());
   }
 }

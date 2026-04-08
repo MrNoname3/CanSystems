@@ -83,10 +83,10 @@ uint8_t CANController::endPacket() {
 
 uint8_t CANController::parsePacket() { return 0U; }
 
-int32_t CANController::packetId() { return rxId; }
+int32_t CANController::packetId() const { return rxId; }
 bool CANController::packetExtended() const { return rxExtended; }
 bool CANController::packetRtr() const { return rxRtr; }
-uint8_t CANController::packetDlc() { return rxDlc; }
+uint8_t CANController::packetDlc() const { return rxDlc; }
 
 size_t CANController::write(uint8_t b) {
   return write(&b, sizeof(b));
