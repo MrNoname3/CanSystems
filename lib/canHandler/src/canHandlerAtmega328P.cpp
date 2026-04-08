@@ -14,7 +14,7 @@ CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t ca
   eventTimer(0U),
   lastOtaState(OTA::OtaState::IDLE)
 {
-  CAN.setPins(canCsPin, -1);
+  CAN.setPins(canCsPin, 0xFFU);
   pinMode(canIntPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(canIntPin), rxInterrupt, FALLING);
 }

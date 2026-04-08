@@ -151,18 +151,19 @@ uint8_t ESP32SJA1000::endPacket() {
 
   uint8_t dataReg;
 
+  const uint32_t id = static_cast<uint32_t>(txId);
   if(txExtended) {
-    writeRegister(regEff, static_cast<uint8_t>(0x80U | (txRtr ? 0x40U : 0x00U) | (0x0FU & static_cast<uint8_t>(txLength))));
-    writeRegister(static_cast<uint8_t>(regEff + 1U), static_cast<uint8_t>(txId >> 21));
-    writeRegister(static_cast<uint8_t>(regEff + 2U), static_cast<uint8_t>(txId >> 13));
-    writeRegister(static_cast<uint8_t>(regEff + 3U), static_cast<uint8_t>(txId >> 5));
-    writeRegister(static_cast<uint8_t>(regEff + 4U), static_cast<uint8_t>(txId << 3));
+    writeRegister(regEff, static_cast<uint8_t>(0x80U | (txRtr ? 0x40U : 0x00U) | (0x0FU & txLength)));
+    writeRegister(static_cast<uint8_t>(regEff + 1U), static_cast<uint8_t>(id >> 21));
+    writeRegister(static_cast<uint8_t>(regEff + 2U), static_cast<uint8_t>(id >> 13));
+    writeRegister(static_cast<uint8_t>(regEff + 3U), static_cast<uint8_t>(id >> 5));
+    writeRegister(static_cast<uint8_t>(regEff + 4U), static_cast<uint8_t>(id << 3));
 
     dataReg = static_cast<uint8_t>(regEff + 5U);
   } else {
-    writeRegister(regSff, static_cast<uint8_t>((txRtr ? 0x40U : 0x00U) | (0x0FU & static_cast<uint8_t>(txLength))));
-    writeRegister(static_cast<uint8_t>(regSff + 1U), static_cast<uint8_t>(txId >> 3));
-    writeRegister(static_cast<uint8_t>(regSff + 2U), static_cast<uint8_t>(txId << 5));
+    writeRegister(regSff, static_cast<uint8_t>((txRtr ? 0x40U : 0x00U) | (0x0FU & txLength)));
+    writeRegister(static_cast<uint8_t>(regSff + 1U), static_cast<uint8_t>(id >> 3));
+    writeRegister(static_cast<uint8_t>(regSff + 2U), static_cast<uint8_t>(id << 5));
 
     dataReg = static_cast<uint8_t>(regSff + 3U);
   }
@@ -311,7 +312,7 @@ uint8_t ESP32SJA1000::wakeup() {
   return 1U;
 }
 
-void ESP32SJA1000::setPins(int rx, int tx) {
+void ESP32SJA1000::setPins(uint8_t rx, uint8_t tx) {
   rxPin = static_cast<gpio_num_t>(rx);
   txPin = static_cast<gpio_num_t>(tx);
 }

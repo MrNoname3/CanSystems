@@ -26,7 +26,7 @@ public:
   [[nodiscard]] uint8_t sleep() override;
   [[nodiscard]] uint8_t wakeup() override;
 
-  void setPins(int rx, int tx);
+  void setPins(uint8_t rx = static_cast<uint8_t>(defaultRxPin), uint8_t tx = static_cast<uint8_t>(defaultTxPin));
 
   static void dumpRegisters(Stream& out);
 

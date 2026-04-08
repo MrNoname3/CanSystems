@@ -14,11 +14,11 @@ public:
 
   /// @brief Begin a standard 11-bit CAN packet.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] uint8_t beginPacket(uint16_t id, int dlc = -1, bool rtr = false);
+  [[nodiscard]] uint8_t beginPacket(uint16_t id, int8_t dlc = -1, bool rtr = false);
 
   /// @brief Begin an extended 29-bit CAN packet.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] uint8_t beginExtendedPacket(uint32_t id, int dlc = -1, bool rtr = false);
+  [[nodiscard]] uint8_t beginExtendedPacket(uint32_t id, int8_t dlc = -1, bool rtr = false);
 
   /// @brief Finalize and transmit the current CAN packet.
   /// @return 1 on success, 0 on failure.
@@ -73,7 +73,7 @@ protected:
   int32_t txId;
   bool txExtended;
   bool txRtr;
-  int txDlc;      ///< Uses -1 as sentinel (auto-length), keep as int.
+  int8_t txDlc;   ///< Uses -1 as sentinel (auto-length); range -1..8 fits in int8_t.
   uint8_t txLength;
   uint8_t txData[8];
 

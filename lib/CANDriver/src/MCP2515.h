@@ -35,7 +35,7 @@ public:
   static constexpr uint8_t defaultIntPin = 2U;
 #endif
 
-  void setPins(int cs = defaultCsPin, int irq = defaultIntPin); ///< Use -1 for irq to disable interrupt pin.
+  void setPins(uint8_t cs = defaultCsPin, uint8_t irq = defaultIntPin);
   void setSPIFrequency(uint32_t frequency);
   void setClockFrequency(uint32_t freq);
 

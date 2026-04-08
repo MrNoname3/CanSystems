@@ -69,7 +69,7 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
     uint8_t cnf[3];
   };
 
-  constexpr CnfEntry cnfMapper[] = {
+  static constexpr CnfEntry cnfMapper[] = {
     {  8'000'000U, 1'000'000U, { 0x00U, 0x80U, 0x00U } },
     {  8'000'000U,   500'000U, { 0x00U, 0x90U, 0x02U } },
     {  8'000'000U,   250'000U, { 0x00U, 0xB1U, 0x05U } },
@@ -134,14 +134,15 @@ uint8_t MCP2515::endPacket() {
 
   const uint8_t n = 0U;
 
+  const uint32_t id = static_cast<uint32_t>(txId);
   if(txExtended) {
-    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(txId >> 21));
-    writeRegister(regTxBnSidl(n), static_cast<uint8_t>((((txId >> 18) & 0x07) << 5) | flagExide | ((txId >> 16) & 0x03)));
-    writeRegister(regTxBnEid8(n), static_cast<uint8_t>((txId >> 8) & 0xFF));
-    writeRegister(regTxBnEid0(n), static_cast<uint8_t>(txId & 0xFF));
+    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(id >> 21));
+    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(((id >> 18 & 0x07U) << 5) | flagExide | (id >> 16 & 0x03U)));
+    writeRegister(regTxBnEid8(n), static_cast<uint8_t>(id >> 8));
+    writeRegister(regTxBnEid0(n), static_cast<uint8_t>(id));
   } else {
-    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(txId >> 3));
-    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(txId << 5));
+    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(id >> 3));
+    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(id << 5));
     writeRegister(regTxBnEid8(n), 0x00U);
     writeRegister(regTxBnEid0(n), 0x00U);
   }
@@ -329,9 +330,9 @@ uint8_t MCP2515::wakeup() {
   return 1U;
 }
 
-void MCP2515::setPins(int cs, int irq) {
-  csPin = static_cast<uint8_t>(cs);
-  intPin = static_cast<uint8_t>(irq); // -1 becomes 0xFF = "no pin"
+void MCP2515::setPins(uint8_t cs, uint8_t irq) {
+  csPin = cs;
+  intPin = irq;
 }
 
 void MCP2515::setSPIFrequency(uint32_t frequency) {
