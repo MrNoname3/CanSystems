@@ -48,8 +48,10 @@ private:
   void handleInterrupt();
 
   uint8_t readRegister(uint8_t address);
+  void readBurst(uint8_t address, uint8_t* data, uint8_t length); // NOLINT(readability-convert-member-functions-to-static)
   void modifyRegister(uint8_t address, uint8_t mask, uint8_t value);
   void writeRegister(uint8_t address, uint8_t value);
+  void writeBurst(uint8_t address, const uint8_t* data, uint8_t length); // NOLINT(readability-convert-member-functions-to-static)
 
   static void onInterrupt();
 

@@ -35,18 +35,9 @@ namespace {
 
   constexpr uint8_t regTxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x30U + n * 0x10U); }
   constexpr uint8_t regTxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x31U + n * 0x10U); }
-  constexpr uint8_t regTxBnSidl(uint8_t n) { return static_cast<uint8_t>(0x32U + n * 0x10U); }
-  constexpr uint8_t regTxBnEid8(uint8_t n) { return static_cast<uint8_t>(0x33U + n * 0x10U); }
-  constexpr uint8_t regTxBnEid0(uint8_t n) { return static_cast<uint8_t>(0x34U + n * 0x10U); }
-  constexpr uint8_t regTxBnDlc(uint8_t n)  { return static_cast<uint8_t>(0x35U + n * 0x10U); }
-  constexpr uint8_t regTxBnD0(uint8_t n)   { return static_cast<uint8_t>(0x36U + n * 0x10U); }
 
   constexpr uint8_t regRxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x60U + n * 0x10U); }
   constexpr uint8_t regRxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x61U + n * 0x10U); }
-  constexpr uint8_t regRxBnSidl(uint8_t n) { return static_cast<uint8_t>(0x62U + n * 0x10U); }
-  constexpr uint8_t regRxBnEid8(uint8_t n) { return static_cast<uint8_t>(0x63U + n * 0x10U); }
-  constexpr uint8_t regRxBnEid0(uint8_t n) { return static_cast<uint8_t>(0x64U + n * 0x10U); }
-  constexpr uint8_t regRxBnDlc(uint8_t n)  { return static_cast<uint8_t>(0x65U + n * 0x10U); }
   constexpr uint8_t regRxBnD0(uint8_t n)   { return static_cast<uint8_t>(0x66U + n * 0x10U); }
 } // namespace
 
@@ -134,28 +125,32 @@ uint8_t MCP2515::endPacket() {
 
   const uint8_t n = 0U;
 
+  // Build frame header + data into a contiguous buffer and send in one SPI burst.
+  // TX buffer registers are consecutive: SIDH, SIDL, EID8, EID0, DLC, D0..D7
+  uint8_t frame[13];
   const uint32_t id = txId;
   if(txExtended) {
-    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(id >> 21));
-    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(((id >> 18 & 0x07U) << 5) | flagExide | (id >> 16 & 0x03U)));
-    writeRegister(regTxBnEid8(n), static_cast<uint8_t>(id >> 8));
-    writeRegister(regTxBnEid0(n), static_cast<uint8_t>(id));
+    frame[0] = static_cast<uint8_t>(id >> 21);
+    frame[1] = static_cast<uint8_t>(((id >> 18 & 0x07U) << 5) | flagExide | (id >> 16 & 0x03U));
+    frame[2] = static_cast<uint8_t>(id >> 8);
+    frame[3] = static_cast<uint8_t>(id);
   } else {
-    writeRegister(regTxBnSidh(n), static_cast<uint8_t>(id >> 3));
-    writeRegister(regTxBnSidl(n), static_cast<uint8_t>(id << 5));
-    writeRegister(regTxBnEid8(n), 0x00U);
-    writeRegister(regTxBnEid0(n), 0x00U);
+    frame[0] = static_cast<uint8_t>(id >> 3);
+    frame[1] = static_cast<uint8_t>(id << 5);
+    frame[2] = 0x00U;
+    frame[3] = 0x00U;
   }
 
+  uint8_t frameLen = 5U;
   if(txRtr) {
-    writeRegister(regTxBnDlc(n), static_cast<uint8_t>(0x40U | txLength));
+    frame[4] = static_cast<uint8_t>(0x40U | txLength);
   } else {
-    writeRegister(regTxBnDlc(n), txLength);
-
-    for(uint8_t i = 0U; i < txLength; i++) {
-      writeRegister(static_cast<uint8_t>(regTxBnD0(n) + i), txData[i]);
-    }
+    frame[4] = txLength;
+    memcpy(&frame[5], txData, txLength);
+    frameLen = static_cast<uint8_t>(5U + txLength);
   }
+
+  writeBurst(regTxBnSidh(n), frame, frameLen);
 
   writeRegister(regTxBnCtrl(n), 0x08U);
 
@@ -177,7 +172,8 @@ uint8_t MCP2515::endPacket() {
 
   modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
 
-  return (readRegister(regTxBnCtrl(n)) & 0x70U) ? 0U : 1U;
+  // Use the cached ctrl value from the loop — avoids a redundant SPI read.
+  return (ctrl & 0x70U) ? 0U : 1U;
 }
 
 uint8_t MCP2515::parsePacket() {
@@ -196,17 +192,24 @@ uint8_t MCP2515::parsePacket() {
     return 0U;
   }
 
-  const uint8_t sidl = readRegister(regRxBnSidl(n));
-  const uint8_t dlc  = readRegister(regRxBnDlc(n));
+  // Read SIDH, SIDL, EID8, EID0, DLC in one burst (registers are consecutive).
+  uint8_t header[5];
+  readBurst(regRxBnSidh(n), header, 5U);
+
+  const uint8_t sidh = header[0];
+  const uint8_t sidl = header[1];
+  const uint8_t eid8 = header[2];
+  const uint8_t eid0 = header[3];
+  const uint8_t dlc  = header[4];
 
   rxExtended = (sidl & flagIde) != 0U;
 
-  const uint32_t idA = static_cast<uint32_t>(((readRegister(regRxBnSidh(n)) << 3) & 0x07F8) | ((sidl >> 5) & 0x07));
+  const uint32_t idA = static_cast<uint32_t>(((sidh << 3) & 0x07F8U) | ((sidl >> 5) & 0x07U));
   if(rxExtended) {
     const uint32_t idB =
       (static_cast<uint32_t>(sidl & 0x03U) << 16U) |
-      (static_cast<uint32_t>(readRegister(regRxBnEid8(n))) << 8U) |
-      static_cast<uint32_t>(readRegister(regRxBnEid0(n)));
+      (static_cast<uint32_t>(eid8) << 8U) |
+      static_cast<uint32_t>(eid0);
 
     rxId = (idA << 18U) | idB;
     rxRtr = (dlc & flagRtr) != 0U;
@@ -221,9 +224,8 @@ uint8_t MCP2515::parsePacket() {
     rxLength = 0U;
   } else {
     rxLength = rxDlc;
-
-    for(uint8_t i = 0U; i < rxLength; i++) {
-      rxData[i] = readRegister(static_cast<uint8_t>(regRxBnD0(n) + i));
+    if(rxLength > 0U) {
+      readBurst(regRxBnD0(n), rxData, rxLength);
     }
   }
 
@@ -370,7 +372,9 @@ void MCP2515::handleInterrupt() {
   if(readRegister(regCanIntf) == 0U) { return; }
   if(onReceiveCb == nullptr) { return; }
 
-  while(parsePacket() != 0 || rxId != noId) {
+  // DLC=0 packets (RTR or zero-byte data frames) cause parsePacket() to return 0
+  // even though a valid packet was received; rxId != noId handles that case.
+  while(parsePacket() != 0U || rxId != noId) {
     onReceiveCb(available());
   }
 }
@@ -385,6 +389,18 @@ uint8_t MCP2515::readRegister(uint8_t address) {
   SPI.endTransaction();
 
   return value;
+}
+
+void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) { // NOLINT(readability-convert-member-functions-to-static)
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0x03U);
+  SPI.transfer(address);
+  for(uint8_t i = 0U; i < length; i++) {
+    data[i] = SPI.transfer(0x00U);
+  }
+  digitalWrite(csPin, HIGH);
+  SPI.endTransaction();
 }
 
 void MCP2515::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
@@ -404,6 +420,18 @@ void MCP2515::writeRegister(uint8_t address, uint8_t value) {
   SPI.transfer(0x02U);
   SPI.transfer(address);
   SPI.transfer(value);
+  digitalWrite(csPin, HIGH);
+  SPI.endTransaction();
+}
+
+void MCP2515::writeBurst(uint8_t address, const uint8_t* data, uint8_t length) { // NOLINT(readability-convert-member-functions-to-static)
+  SPI.beginTransaction(spiSettings);
+  digitalWrite(csPin, LOW);
+  SPI.transfer(0x02U);
+  SPI.transfer(address);
+  for(uint8_t i = 0U; i < length; i++) {
+    SPI.transfer(data[i]);
+  }
   digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 }

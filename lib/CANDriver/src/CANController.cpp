@@ -23,11 +23,13 @@ CANController::CANController() :
 uint8_t CANController::begin(uint32_t /*baudRate*/) {
   packetBegun = false;
   txId = noId;
+  txExtended = false;
   txRtr = false;
   txDlc = 0U;
   txLength = 0U;
 
   rxId = noId;
+  rxExtended = false;
   rxRtr = false;
   rxDlc = 0U;
   rxLength = 0U;
