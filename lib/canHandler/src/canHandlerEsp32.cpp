@@ -43,14 +43,14 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   if(!canIdLoadingResult) { return false; }
   }
   { // Initialise CAN peripheral.
-    const bool canBeginResult = CAN.begin(canBaud) == 1;
+    const bool canBeginResult = CAN.begin(canBaud) == 1U;
     Logger::get().printf_P(PSTR("[CAN] Init:%s\r\n"), Str::getStateStr(canBeginResult));
     CAN.onReceive(rxInterrupt);
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
     const bool setFilterResult = CAN.filterExtended(
-      CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1;
+      CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
     Logger::get().printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
@@ -83,7 +83,7 @@ void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-conver
   CanFrame rxCanData;
   rxCanData.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
-    const uint8_t canDataDlc = static_cast<uint8_t>(CAN.packetDlc());
+    const uint8_t canDataDlc = CAN.packetDlc();
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(rxCanData.data, canDataDlc));
     if(canDataDlc != bytesReaded) { return; }
   }
@@ -115,11 +115,11 @@ bool CanHandlerEsp32::run() {
   { // Handle CAN frame sending.
     CanFrame frameOut;
     if(xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) > 0;
+      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
       if(!beginPacketResult) { return false; }
-      const bool packetWriteResult = CAN.write(frameOut.data, sizeof(frameOut.data)) > 0U;
+      const bool packetWriteResult = CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U;
       if(!packetWriteResult) { return false; }
-      const bool endPacketResult = CAN.endPacket() > 0;
+      const bool endPacketResult = CAN.endPacket() != 0U;
       if(!endPacketResult) { return false; }
       // Logger::get().printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
     }

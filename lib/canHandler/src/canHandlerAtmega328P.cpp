@@ -46,7 +46,7 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   { // Initialise SPI CAN shield.
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
-    const bool canBeginResult = CAN.begin(canBaud) == 1;
+    const bool canBeginResult = CAN.begin(canBaud) == 1U;
     Logger::get().print(F("CAN: "));
     Logger::get().println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
@@ -54,7 +54,7 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   { // Set up the CAN filtering.
     Logger::get().print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(
-      CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1;
+      CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
     Logger::get().println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
@@ -74,7 +74,7 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
 
 bool CanHandlerAtmega328P::handleRxFrame() {
   intCount--;
-  const uint8_t canDataDlc = static_cast<uint8_t>(CAN.parsePacket());
+  const uint8_t canDataDlc = CAN.parsePacket();
   CanFrame canFrame;
   canFrame.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
@@ -162,11 +162,11 @@ bool CanHandlerAtmega328P::send(uint16_t command, const uint8_t (&data)[8]) cons
     (static_cast<uint32_t>(getMasterCanId()) & 0x3FF) |
     ((static_cast<uint32_t>(command) & 0x1FF) << 10U) |
     ((static_cast<uint32_t>(getLocalCanId()) & 0x3FF) << 19U);
-  const bool beginPacketResult = CAN.beginExtendedPacket(extId, sizeof(data)) > 0;
+  const bool beginPacketResult = CAN.beginExtendedPacket(extId, sizeof(data)) != 0U;
   if(!beginPacketResult) { return false; }
-  const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0U;
+  const bool packetWriteResult = CAN.write(data, sizeof(data)) != 0U;
   if(!packetWriteResult) { return false; }
-  const bool endPacketResult = CAN.endPacket() > 0;
+  const bool endPacketResult = CAN.endPacket() != 0U;
   return endPacketResult;
 }
 
