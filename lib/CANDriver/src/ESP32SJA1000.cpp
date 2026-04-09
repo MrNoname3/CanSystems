@@ -151,7 +151,7 @@ uint8_t ESP32SJA1000::endPacket() {
 
   uint8_t dataReg;
 
-  const uint32_t id = static_cast<uint32_t>(txId);
+  const uint32_t id = txId;
   if(txExtended) {
     writeRegister(regEff, static_cast<uint8_t>(0x80U | (txRtr ? 0x40U : 0x00U) | (0x0FU & txLength)));
     writeRegister(static_cast<uint8_t>(regEff + 1U), static_cast<uint8_t>(id >> 21));
@@ -202,17 +202,17 @@ uint8_t ESP32SJA1000::parsePacket() {
   uint8_t dataReg;
 
   if(rxExtended) {
-    rxId = static_cast<int32_t>(
+    rxId =
       (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 1U))) << 21U) |
       (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 2U))) << 13U) |
       (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 3U))) << 5U)  |
-      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 4U))) >> 3U));
+      (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regEff + 4U))) >> 3U);
 
     dataReg = static_cast<uint8_t>(regEff + 5U);
   } else {
-    rxId = static_cast<int32_t>(
+    rxId =
       (static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regSff + 1U))) << 3U) |
-      ((static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regSff + 2U))) >> 5U) & 0x07U));
+      ((static_cast<uint32_t>(readRegister(static_cast<uint8_t>(regSff + 2U))) >> 5U) & 0x07U);
 
     dataReg = static_cast<uint8_t>(regSff + 3U);
   }

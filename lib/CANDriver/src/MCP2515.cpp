@@ -134,7 +134,7 @@ uint8_t MCP2515::endPacket() {
 
   const uint8_t n = 0U;
 
-  const uint32_t id = static_cast<uint32_t>(txId);
+  const uint32_t id = txId;
   if(txExtended) {
     writeRegister(regTxBnSidh(n), static_cast<uint8_t>(id >> 21));
     writeRegister(regTxBnSidl(n), static_cast<uint8_t>(((id >> 18 & 0x07U) << 5) | flagExide | (id >> 16 & 0x03U)));
@@ -189,7 +189,7 @@ uint8_t MCP2515::parsePacket() {
   } else if(intf & flagRxnIf(1U)) {
     n = 1U;
   } else {
-    rxId = -1;
+    rxId = noId;
     rxExtended = false;
     rxRtr = false;
     rxLength = 0U;
@@ -208,10 +208,10 @@ uint8_t MCP2515::parsePacket() {
       (static_cast<uint32_t>(readRegister(regRxBnEid8(n))) << 8U) |
       static_cast<uint32_t>(readRegister(regRxBnEid0(n)));
 
-    rxId = static_cast<int32_t>((idA << 18U) | idB);
+    rxId = (idA << 18U) | idB;
     rxRtr = (dlc & flagRtr) != 0U;
   } else {
-    rxId = static_cast<int32_t>(idA);
+    rxId = idA;
     rxRtr = (sidl & flagSrr) != 0U;
   }
   rxDlc = dlc & 0x0FU;
@@ -370,7 +370,7 @@ void MCP2515::handleInterrupt() {
   if(readRegister(regCanIntf) == 0U) { return; }
   if(onReceiveCb == nullptr) { return; }
 
-  while(parsePacket() != 0 || rxId != -1) {
+  while(parsePacket() != 0 || rxId != noId) {
     onReceiveCb(available());
   }
 }

@@ -29,7 +29,7 @@ public:
   [[nodiscard]] virtual uint8_t parsePacket();
 
   /// @brief Return the ID of the last received packet.
-  [[nodiscard]] int32_t packetId() const;
+  [[nodiscard]] uint32_t packetId() const;
 
   /// @brief Return whether the last received packet was extended (29-bit).
   [[nodiscard]] bool packetExtended() const;
@@ -70,14 +70,16 @@ protected:
   void (*onReceiveCb)(int);
 
   bool packetBegun;
-  int32_t txId;
+  static constexpr uint32_t noId = UINT32_MAX;
+
+  uint32_t txId;
   bool txExtended;
   bool txRtr;
   int8_t txDlc;   ///< Uses -1 as sentinel (auto-length); range -1..8 fits in int8_t.
   uint8_t txLength;
   uint8_t txData[8];
 
-  int32_t rxId;   ///< Uses -1 as sentinel (no packet), keep as int32_t.
+  uint32_t rxId;
   bool rxExtended;
   bool rxRtr;
   uint8_t rxDlc;
