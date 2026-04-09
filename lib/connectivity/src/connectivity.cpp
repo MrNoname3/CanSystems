@@ -17,7 +17,8 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 #ifdef ESP8266
   serverCert{},
 #endif
-  handlerListHead(nullptr)
+  handlerListHead(nullptr),
+  handlerListTail(nullptr)
 {}
 
 bool Connectivity::init() {
@@ -226,8 +227,12 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(mqttBasePtr == nullptr) { return false; } // NOLINT(readability-simplify-boolean-expr)
-  mqttBasePtr->setNextHandler(handlerListHead);
-  handlerListHead = mqttBasePtr;
+  if(handlerListTail != nullptr) {
+    handlerListTail->setNextHandler(mqttBasePtr);
+  } else {
+    handlerListHead = mqttBasePtr;
+  }
+  handlerListTail = mqttBasePtr;
   return true;
 }
 

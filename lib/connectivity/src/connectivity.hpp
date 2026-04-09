@@ -135,6 +135,7 @@ private:
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
   MqttBase* handlerListHead = nullptr;                              // Head of the intrusive linked list of registered MQTT message handlers.
+  MqttBase* handlerListTail = nullptr;                              // Tail of the intrusive linked list, kept for O(1) append.
 };
 
 /// @brief Base class for handling MQTT communication tasks.
