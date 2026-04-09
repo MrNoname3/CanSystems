@@ -162,7 +162,7 @@ bool CanHandlerAtmega328P::send(uint16_t command, const uint8_t (&data)[8]) cons
     (static_cast<uint32_t>(getMasterCanId()) & 0x3FF) |
     ((static_cast<uint32_t>(command) & 0x1FF) << 10U) |
     ((static_cast<uint32_t>(getLocalCanId()) & 0x3FF) << 19U);
-  const bool beginPacketResult = CAN.beginExtendedPacket(extId) > 0;
+  const bool beginPacketResult = CAN.beginExtendedPacket(extId, sizeof(data)) > 0;
   if(!beginPacketResult) { return false; }
   const bool packetWriteResult = CAN.write(data, sizeof(data)) > 0U;
   if(!packetWriteResult) { return false; }

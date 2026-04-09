@@ -115,7 +115,7 @@ bool CanHandlerEsp32::run() {
   { // Handle CAN frame sending.
     CanFrame frameOut;
     if(xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId) > 0;
+      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) > 0;
       if(!beginPacketResult) { return false; }
       const bool packetWriteResult = CAN.write(frameOut.data, sizeof(frameOut.data)) > 0U;
       if(!packetWriteResult) { return false; }

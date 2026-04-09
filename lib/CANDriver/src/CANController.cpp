@@ -6,7 +6,7 @@ CANController::CANController() :
   txId(noId),
   txExtended(false),
   txRtr(false),
-  txDlc(0),
+  txDlc(0U),
   txLength(0U),
   txData{},
   rxId(noId),
@@ -24,7 +24,7 @@ uint8_t CANController::begin(uint32_t /*baudRate*/) {
   packetBegun = false;
   txId = noId;
   txRtr = false;
-  txDlc = 0;
+  txDlc = 0U;
   txLength = 0U;
 
   rxId = noId;
@@ -38,7 +38,7 @@ uint8_t CANController::begin(uint32_t /*baudRate*/) {
 
 void CANController::end() {}
 
-uint8_t CANController::beginPacket(uint16_t id, int8_t dlc, bool rtr) {
+uint8_t CANController::beginPacket(uint16_t id, uint8_t dlc, bool rtr) {
   if(id > 0x7FFU) { return 0U; }
   if(dlc > 8) { return 0U; }
 
@@ -54,7 +54,7 @@ uint8_t CANController::beginPacket(uint16_t id, int8_t dlc, bool rtr) {
   return 1U;
 }
 
-uint8_t CANController::beginExtendedPacket(uint32_t id, int8_t dlc, bool rtr) {
+uint8_t CANController::beginExtendedPacket(uint32_t id, uint8_t dlc, bool rtr) {
   if(id > 0x1FFFFFFFU) { return 0U; }
   if(dlc > 8) { return 0U; }
 
@@ -74,9 +74,7 @@ uint8_t CANController::endPacket() {
   if(!packetBegun) { return 0U; }
   packetBegun = false;
 
-  if(txDlc >= 0) {
-    txLength = static_cast<uint8_t>(txDlc); // txDlc is 0..8 here
-  }
+  txLength = txDlc;
 
   return 1U;
 }
