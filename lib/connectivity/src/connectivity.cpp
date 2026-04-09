@@ -17,7 +17,7 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 #ifdef ESP8266
   serverCert{},
 #endif
-  messageHandlerList{}
+  handlerListHead(nullptr)
 {}
 
 bool Connectivity::init() {
@@ -112,8 +112,7 @@ bool Connectivity::init() {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = topic + subtopicOffset;
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
-    for(const auto &currentMessageHandler : messageHandlerList) {
-      if(currentMessageHandler == nullptr) { continue; }
+    for(MqttBase* currentMessageHandler = handlerListHead; currentMessageHandler != nullptr; currentMessageHandler = currentMessageHandler->getNextHandler()) {
       if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
         JsonDocument payloadJson;
         DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
@@ -130,12 +129,9 @@ bool Connectivity::init() {
   });
   // List message handlers.
   Logger::get().printf_P(PSTR("[MQTT] Message handlers:\r\n"));
-  for(std::size_t i = 0U; i < messageHandlerList.size(); ++i) {
-    if(messageHandlerList[i] != nullptr) {
-      Logger::get().printf_P(PSTR("  %zu. %s\r\n"), i, messageHandlerList[i]->getSubtopic());
-    } else {
-      Logger::get().printf_P(PSTR("  %zu. No object here!\r\n"), i);
-    }
+  uint8_t handlerIndex = 0U;
+  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+    Logger::get().printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
 
   return connectToMqttServer();
@@ -230,7 +226,8 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(mqttBasePtr == nullptr) { return false; } // NOLINT(readability-simplify-boolean-expr)
-  messageHandlerList.push_back(mqttBasePtr);
+  mqttBasePtr->setNextHandler(handlerListHead);
+  handlerListHead = mqttBasePtr;
   return true;
 }
 

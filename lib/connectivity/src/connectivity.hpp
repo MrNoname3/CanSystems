@@ -17,7 +17,6 @@ static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer siz
 #endif
 #include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
-#include <vector>                                                   /// STL vector for dynamic arrays.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
@@ -135,7 +134,7 @@ private:
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
-  std::vector<MqttBase*> messageHandlerList;                        // List of registered MQTT message handlers.
+  MqttBase* handlerListHead = nullptr;                              // Head of the intrusive linked list of registered MQTT message handlers.
 };
 
 /// @brief Base class for handling MQTT communication tasks.
@@ -205,6 +204,12 @@ public:
     return sendMessage(responseBuffer);
   }
 
+  /// @brief Returns the next handler in the intrusive linked list managed by Connectivity.
+  [[nodiscard]] MqttBase* getNextHandler() const { return nextHandler; }
+
+  /// @brief Sets the next handler pointer. Used internally by Connectivity to build the handler list.
+  void setNextHandler(MqttBase* next) { nextHandler = next; }
+
   MqttBase(const MqttBase&) = delete;                       // Delete copy constructor.
   MqttBase& operator=(const MqttBase&) = delete;            // Delete copy assignment operator.
   MqttBase(MqttBase&&) = delete;                            // Delete move constructor.
@@ -229,5 +234,6 @@ protected:
 private:
   Connectivity& connectivity;       // Reference to the connectivity object used for MQTT communication.
   char subtopic[subtopicSize]{};    // Buffer storing the subtopic associated with the MQTT base instance.
+  MqttBase* nextHandler = nullptr;  // Intrusive linked list pointer, managed by Connectivity.
 };
 #endif
