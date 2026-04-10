@@ -27,21 +27,14 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
     otaStartErrState.setError(OtaStartError::FILE_LOCATION_INVALID);
     return otaStartErrState.getRawErrorState();
   }
-  const char* subtopic = canMqttGateway.getSubtopic();
-  if(subtopic == nullptr) {
-    otaStartErrState.setError(OtaStartError::SUBTOPIC_NULLPTR);
+  memset(fileNameLocal, '\0', sizeof(fileNameLocal));
+  if(strlen(fileName) == 0U) {
+    otaStartErrState.setError(OtaStartError::FILE_NAME_STR_EMPTY);
     return otaStartErrState.getRawErrorState();
   }
-  memset(fileNameLocal, '\0', sizeof(fileNameLocal));
-  const int32_t fileNameStrSize = snprintf_P(fileNameLocal, sizeof(fileNameLocal), fileName, subtopic);
-  const bool fileNameStrValid = (fileNameStrSize >= 0 && fileNameStrSize < static_cast<int32_t>(sizeof(fileNameLocal)));
-  if(!fileNameStrValid) {
+  if(strlcpy(fileNameLocal, fileName, sizeof(fileNameLocal)) >= sizeof(fileNameLocal)) {
     otaStartErrState.setError(OtaStartError::FILE_NAME_STR_INVALID);
     transferState = TransferState::INVALID;
-    return otaStartErrState.getRawErrorState();
-  }
-  if(strlen(fileNameLocal) == 0U) {
-    otaStartErrState.setError(OtaStartError::FILE_NAME_STR_EMPTY);
     return otaStartErrState.getRawErrorState();
   }
   if(receivedFile) {
@@ -201,7 +194,7 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLI
   JsonVariant fileJsonVar = payloadJson[F("File")];
   if(fileJsonVar.is<const char*>()) {
     const char* fileName = fileJsonVar.as<const char*>();
-    const uint8_t otaStartResultCode = (strlen(fileName) == 0U) ? canOta.startOta() : canOta.startOta(fileName);
+    const uint8_t otaStartResultCode = canOta.startOta(fileName);
     const bool fileTransferStartResult = (otaStartResultCode == 0U);
     Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
       MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));

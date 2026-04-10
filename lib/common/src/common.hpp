@@ -219,7 +219,7 @@ public:
 
   /// @brief Retrieves the external device OTA firmware file location.
   /// @return Constant string representing the path to the external device OTA firmware file.
-  static constexpr const char* getExtOtaFwLocation() { return extOtaFwLocation; }
+  static constexpr const char* getCanAlertFwLocation() { return canAlertFwLocation; }
 
   /// @brief Retrieves the MQTT server certificate file location.
   /// @return Constant string representing the path to the MQTT server certificate file.
@@ -245,8 +245,8 @@ public:
 private:
 #if defined(ESP8266) || defined(ESP32)
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
-  static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";            // File location for the OTA firmware.
-  static constexpr const char PROGMEM extOtaFwLocation[]       = "/%sFirmware.bin";       // File location for external device OTA firmware.
+  static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";           // File location for the OTA firmware.
+  static constexpr const char PROGMEM canAlertFwLocation[]     = "/canAlertFw.bin";       // File location for CAN alert device OTA firmware.
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.
   static constexpr const char PROGMEM mqttServerCredLocation[] = "/config/server.json";   // File location for the MQTT server credentials.
 #endif

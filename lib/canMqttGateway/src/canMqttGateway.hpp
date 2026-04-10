@@ -27,11 +27,10 @@ private:
     NONE                  = 0U,                   // No error.
     FILE_NAME_NULLPTR     = 1 << 0U,              // Null pointer for the file name.
     FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location.
-    SUBTOPIC_NULLPTR      = 1 << 2U,              // Null pointer for the subtopic.
-    FILE_NAME_STR_INVALID = 1 << 3U,              // Invalid file name string.
-    FILE_NAME_STR_EMPTY   = 1 << 4U,              // Empty file name string.
-    FILE_OPEN_FAILED      = 1 << 5U,              // Unable to open the file.
-    FILE_EMPTY            = 1 << 6U               // File is empty.
+    FILE_NAME_STR_INVALID = 1 << 2U,              // File name string too long (truncated).
+    FILE_NAME_STR_EMPTY   = 1 << 3U,              // Empty file name string.
+    FILE_OPEN_FAILED      = 1 << 4U,              // Unable to open the file.
+    FILE_EMPTY            = 1 << 5U               // File is empty.
   };
 
 public:
@@ -46,7 +45,7 @@ public:
   /// @param fileName The name of the firmware file.
   /// @param storageNumber The storage location number.
   /// @return A bitmask of OtaStartError indicating any errors encountered.
-  OtaStartErrorType startOta(const char* fileName = FileName::getExtOtaFwLocation(), uint16_t storageNumber = 0U);
+  OtaStartErrorType startOta(const char* fileName, uint16_t storageNumber = 0U);
 
   /// @brief Checks if an OTA process is currently in progress.
   /// @return True if OTA is in progress, false otherwise.

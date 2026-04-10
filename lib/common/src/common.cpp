@@ -10,7 +10,8 @@ bool FileName::isValidFileName(const char* fileName) {
   static constexpr const char* const allowedLocations[] = {
     otaFwLocation,
     mqttServerCertLocation,
-    mqttServerCredLocation
+    mqttServerCredLocation,
+    canAlertFwLocation
   };
   for(const char* const location : allowedLocations) {
     // cppcheck-suppress useStlAlgorithm
