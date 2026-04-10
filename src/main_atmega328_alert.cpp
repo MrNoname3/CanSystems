@@ -51,7 +51,7 @@ const ExternalSensor extSensor(EXT_SENSOR_EN);
 Performance performance(3U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
-Task *task[5] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
+Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
