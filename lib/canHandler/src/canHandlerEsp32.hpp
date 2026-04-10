@@ -2,7 +2,6 @@
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include <vector>                                                   /// STL vector for dynamic arrays.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "freertos/queue.h"                                         /// FreeRTOS API for queue management.
@@ -72,7 +71,8 @@ private:
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
 
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
-  std::vector<CanBase*> canDevicesList;                                   // List of registered CAN devices.
+  CanBase* deviceListHead = nullptr;                                      // Head of the intrusive linked list of registered CAN devices.
+  CanBase* deviceListTail = nullptr;                                      // Tail of the intrusive linked list, kept for O(1) append.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
@@ -154,6 +154,12 @@ public:
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 
+  /// @brief Returns the next device in the intrusive linked list managed by CanHandlerEsp32.
+  [[nodiscard]] CanBase* getNextDevice() const { return nextDevice; }
+
+  /// @brief Sets the next device pointer. Used internally by CanHandlerEsp32 to build the device list.
+  void setNextDevice(CanBase* next) { nextDevice = next; }
+
   CanBase(const CanBase&) = delete;                       // Define copy constructor.
   CanBase& operator=(const CanBase&) = delete;            // Define copy assignment operator.
   CanBase(CanBase&&) = delete;                            // Define move constructor.
@@ -178,5 +184,6 @@ protected:
 private:
   CanHandler& canHandler;                                 // Reference to the CAN handler instance.
   const uint16_t clientCanId;                             // Client CAN ID for this device.
+  CanBase* nextDevice = nullptr;                          // Intrusive linked list pointer, managed by CanHandlerEsp32.
 };
 #endif // ESP32

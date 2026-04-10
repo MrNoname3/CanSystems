@@ -9,7 +9,8 @@ QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(
 
 CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
-  canDevicesList{},
+  deviceListHead(nullptr),
+  deviceListTail(nullptr),
   canDevicesListMutex(xSemaphoreCreateMutex())
 {}
 
@@ -57,12 +58,9 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   // List CAN devices.
   Logger::get().printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    for(std::size_t i = 0U; i < canDevicesList.size(); ++i) {
-      if(canDevicesList[i] != nullptr) {
-        Logger::get().printf_P(PSTR("  %zu. %hu\r\n"), i, canDevicesList[i]->getClientCanId());
-      } else {
-        Logger::get().printf_P(PSTR("  %zu. No object here!\r\n"), i);
-      }
+    uint8_t deviceIndex = 0U;
+    for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
+      Logger::get().printf_P(PSTR("  %hhu. %hu\r\n"), deviceIndex++, d->getClientCanId());
     }
     xSemaphoreGive(canDevicesListMutex);
   }
@@ -101,10 +99,9 @@ bool CanHandlerEsp32::run() {
       const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
       if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
       // Logger::get().printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
-        for(const auto &currentcanDevice : canDevicesList) {
-          if(currentcanDevice == nullptr) { continue; }
-          if(currentcanDevice->getClientCanId() == nodeCanId) {
-            currentcanDevice->canFrameArrivedCallback(frameIn);
+        for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
+          if(d->getClientCanId() == nodeCanId) {
+            d->canFrameArrivedCallback(frameIn);
             break;
           }
         }
@@ -130,7 +127,12 @@ bool CanHandlerEsp32::run() {
 bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(canBasePtr == nullptr) { return false; }
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    canDevicesList.push_back(canBasePtr);
+    if(deviceListTail != nullptr) {
+      deviceListTail->setNextDevice(canBasePtr);
+    } else {
+      deviceListHead = canBasePtr;
+    }
+    deviceListTail = canBasePtr;
     xSemaphoreGive(canDevicesListMutex);
     return true;
   }
