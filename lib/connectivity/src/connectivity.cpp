@@ -13,12 +13,10 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
   subtopicOffset(0U),
-  reconnectTimer(0U),
+  reconnectTimer(0U)
 #ifdef ESP8266
-  serverCert{},
+  ,serverCert{}
 #endif
-  handlerListHead(nullptr),
-  handlerListTail(nullptr)
 {}
 
 bool Connectivity::init() {

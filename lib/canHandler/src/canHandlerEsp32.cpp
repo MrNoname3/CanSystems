@@ -9,8 +9,6 @@ QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(
 
 CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
-  deviceListHead(nullptr),
-  deviceListTail(nullptr),
   canDevicesListMutex(xSemaphoreCreateMutex())
 {}
 
