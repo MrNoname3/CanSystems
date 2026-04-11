@@ -143,14 +143,19 @@ void CanOta::runOta() {
   }
 }
 
-CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic) :
+CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, const char* fwFileName) :
   CanBase(canHandler, clientCanId),
   MqttBase(connectivity, subTopic),
   canOta(*this),
   clientPingTimer(0U),
   clientOfflineTimer(0U),
-  clientOnline(true)
-{}
+  clientOnline(true),
+  fwFileNamePtr(fwFileName)
+{
+  if(fwFileNamePtr != nullptr) {
+    OtaRegistry::add(*this);
+  }
+}
 
 bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-convert-member-functions-to-static)
   const uint8_t otaStartResultCode = canOta.startOta(fileName);

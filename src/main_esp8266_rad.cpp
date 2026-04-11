@@ -35,7 +35,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
-MqttCommon<> mqttCommon (iotConn, "common");
+MqttCommon mqttCommon (iotConn, "common");
 Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 

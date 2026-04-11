@@ -2,7 +2,7 @@
 
 CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
   Connectivity& connectivity, const char* subTopic, float tempOffset) :
-  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic),
+  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
   tempOffset(tempOffset)
 {}
 
