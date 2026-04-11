@@ -121,6 +121,8 @@ void CanOta::runOta() {
     case TransferState::INVALID: {
       {
         const bool otaStatus = (transferState == TransferState::VALID);
+        Logger::get().printf_P(PSTR("[CAN] File transfer to \"%s\": %s\r\n"),
+          canMqttGateway.getSubtopic(), Str::getStateStr(otaStatus));
         char dataOut[otaFrameBufSize] = {'\0'};
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), otaFrame, Str::getStateStr(otaStatus));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
