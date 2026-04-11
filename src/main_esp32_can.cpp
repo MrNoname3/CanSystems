@@ -56,6 +56,11 @@ void setup() {
     ResetHandler::restartMCU();
   }
 
+  mqttCommon.registerCommand("canAlertOta", []() {
+    (void)canAlert1.startOta(FileName::getCanAlertFwLocation());
+    (void)canAlert2.startOta(FileName::getCanAlertFwLocation());
+  });
+
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Logger::get().printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));

@@ -12,8 +12,7 @@ class CanMqttGateway;                                                   // Forwa
 /// @brief Manages the Over-The-Air (OTA) firmware updates for CAN devices.
 class CanOta final {
 private:
-  static constexpr uint32_t otaTimeoutTime = Time::minToMs(2U);         // Timeout for OTA operations in milliseconds.
-  static constexpr uint8_t fileNameSize = 32U;                          // Maximum length of the firmware file name.
+  static constexpr uint32_t otaTimeoutTime = Time::minToMs(5U);         // Timeout for OTA operations in milliseconds.
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
   static constexpr uint8_t filePieceSize = 4U;                          // Size of file pieces sent over CAN.
   static constexpr const uint8_t otaFrameBufSize = 16U;                 // Buffer size for OTA status messages.
@@ -26,11 +25,9 @@ private:
   enum class OtaStartError : OtaStartErrorType {
     NONE                  = 0U,                   // No error.
     FILE_NAME_NULLPTR     = 1 << 0U,              // Null pointer for the file name.
-    FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location.
-    FILE_NAME_STR_INVALID = 1 << 2U,              // File name string too long (truncated).
-    FILE_NAME_STR_EMPTY   = 1 << 3U,              // Empty file name string.
-    FILE_OPEN_FAILED      = 1 << 4U,              // Unable to open the file.
-    FILE_EMPTY            = 1 << 5U               // File is empty.
+    FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location (must start with '/').
+    FILE_OPEN_FAILED      = 1 << 2U,              // Unable to open the file.
+    FILE_EMPTY            = 1 << 3U               // File is empty.
   };
 
 public:
@@ -49,7 +46,7 @@ public:
 
   /// @brief Checks if an OTA process is currently in progress.
   /// @return True if OTA is in progress, false otherwise.
-  inline bool isOtaInProgress() { return transferState != TransferState::IDLE; }
+  [[nodiscard]] inline bool isOtaInProgress() const { return transferState != TransferState::IDLE; }
 
   /// @brief Handles incoming CAN frames related to the OTA process.
   /// @param canFrame The received CAN frame.
@@ -82,14 +79,14 @@ private:
   TransferState transferState;                          // Current state of the OTA process.
   Crc16 crc16;                                          // CRC16 calculator for validating file integrity.
   uint32_t otaTimeoutTimer;                             // Timer for OTA process timeout.
-  char fileNameLocal[fileNameSize];                     // Local copy of the firmware file name.
+  const char* fileNamePtr;                              // Pointer to the firmware file name (must outlive the OTA process).
 };
 
 /// @brief Combines CAN and MQTT functionalities for managing device communications.
 class CanMqttGateway : public CanBase, public MqttBase {
 private:
   static constexpr uint32_t clientPingTime = Time::secToMs(1U);         // Time interval for sending client pings.
-  static constexpr uint32_t clientOfflineTime = Time::secToMs(2U);      // Timeout to detect client offline status.
+  static constexpr uint32_t clientOfflineTime = Time::secToMs(5U);      // Timeout to detect client offline status.
   static constexpr uint8_t statusFrameBufSize = 24U;                    // Buffer size for status messages.
   static constexpr uint8_t buttonFrameBufSize = 16U;                    // Buffer size for button messages.
   static constexpr uint8_t buildInfoFrameBufSize = 60U;                 // Buffer size for build info messages.
@@ -115,6 +112,15 @@ public:
   /// @brief Processes a CAN frame received for this client.
   /// @param canFrame The received CAN frame.
   virtual void processCanFrameArrived(const CanHandler::CanFrame& canFrame) = 0;
+
+  /// @brief Starts the OTA firmware update process for this device.
+  /// @param fileName The name of the firmware file on LittleFS.
+  /// @return True if the OTA process started successfully.
+  [[nodiscard]] bool startOta(const char* fileName);
+
+  /// @brief Checks if an OTA process is currently in progress on this device.
+  /// @return True if OTA is in progress, false otherwise.
+  [[nodiscard]] bool isOtaInProgress() const;
 
   CanMqttGateway(const CanMqttGateway&) = delete;                       // Define copy constructor.
   CanMqttGateway& operator=(const CanMqttGateway&) = delete;            // Define copy assignment operator.

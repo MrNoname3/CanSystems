@@ -34,6 +34,11 @@ public:
   /// @param payloadJson JSON document containing the received MQTT message.
   void messageArrivedCallback(JsonDocument& payloadJson) override;
 
+  /// @brief Registers a dynamic command with a handler function.
+  /// @param name The command name string (stored in PROGMEM or RAM).
+  /// @param handler Function pointer invoked when the command is received.
+  void registerCommand(const char* name, void (*handler)());
+
   MqttCommon(const MqttCommon&) = delete;                       // Define copy constructor.
   MqttCommon& operator=(const MqttCommon&) = delete;            // Define copy assignment operator.
   MqttCommon(MqttCommon&&) = delete;                            // Define move constructor.
@@ -70,6 +75,16 @@ private:
   };
 
   static const CmdEntry cmdTable[];                             // Lookup table mapping command strings to handlers.
+
+  /// @brief Entry in the dynamic command lookup table.
+  struct DynCmdEntry {
+    char name[maxCmdLength + 1U];                              // Command name string.
+    void (*handler)();                                         // Function pointer to the command handler.
+  };
+
+  static constexpr uint8_t maxDynCmds = 4U;                    // Maximum number of dynamically registered commands.
+  DynCmdEntry dynCmdTable[maxDynCmds]{};                       // Dynamic command lookup table.
+  uint8_t dynCmdCount = 0U;                                    // Number of registered dynamic commands.
 
   static inline bool isFileCheckDone = false;       // Flag indicating that a file validity check is completed.
   static inline bool isFileValid = false;           // Flag indicating the result of the file validity check.

@@ -8,7 +8,7 @@ CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   fileSize(0U),
   transferState(TransferState::IDLE),
   otaTimeoutTimer(0U),
-  fileNameLocal{'\0'}
+  fileNamePtr(nullptr)
 {}
 
 CanOta::~CanOta() {
@@ -27,20 +27,11 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
     otaStartErrState.setError(OtaStartError::FILE_LOCATION_INVALID);
     return otaStartErrState.getRawErrorState();
   }
-  memset(fileNameLocal, '\0', sizeof(fileNameLocal));
-  if(strlen(fileName) == 0U) {
-    otaStartErrState.setError(OtaStartError::FILE_NAME_STR_EMPTY);
-    return otaStartErrState.getRawErrorState();
-  }
-  if(strlcpy(fileNameLocal, fileName, sizeof(fileNameLocal)) >= sizeof(fileNameLocal)) {
-    otaStartErrState.setError(OtaStartError::FILE_NAME_STR_INVALID);
-    transferState = TransferState::INVALID;
-    return otaStartErrState.getRawErrorState();
-  }
+  fileNamePtr = fileName;
   if(receivedFile) {
     receivedFile.close();
   }
-  receivedFile = LittleFS.open(fileNameLocal, FILE_READ);
+  receivedFile = LittleFS.open(fileNamePtr, FILE_READ);
   if(!receivedFile) {
     otaStartErrState.setError(OtaStartError::FILE_OPEN_FAILED);
     return otaStartErrState.getRawErrorState();
@@ -145,7 +136,7 @@ void CanOta::runOta() {
       fileSize = 0U;
       transferState = TransferState::IDLE;
       crc16.reset();
-      memset(fileNameLocal, '\0', sizeof(fileNameLocal));
+      fileNamePtr = nullptr;
     } break;
   }
 }
@@ -158,6 +149,22 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   clientOfflineTimer(0U),
   clientOnline(true)
 {}
+
+bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-convert-member-functions-to-static)
+  const uint8_t otaStartResultCode = canOta.startOta(fileName);
+  const bool fileTransferStartResult = (otaStartResultCode == 0U);
+  Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
+    MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
+  if(!fileTransferStartResult) {
+    Logger::get().printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
+    return false;
+  }
+  return true;
+}
+
+bool CanMqttGateway::isOtaInProgress() const {
+  return canOta.isOtaInProgress();
+}
 
 bool CanMqttGateway::init() {
   (void)sendCanFrame(CanCmd::PING);
@@ -191,19 +198,6 @@ void CanMqttGateway::handlePing() {
 }
 
 void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
-  JsonVariant fileJsonVar = payloadJson[F("File")];
-  if(fileJsonVar.is<const char*>()) {
-    const char* fileName = fileJsonVar.as<const char*>();
-    const uint8_t otaStartResultCode = canOta.startOta(fileName);
-    const bool fileTransferStartResult = (otaStartResultCode == 0U);
-    Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
-      MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
-    if(!fileTransferStartResult) {
-      Logger::get().printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
-    }
-    return;
-  }
-
   JsonVariant commandJsonVar = payloadJson[F("Command")];
   JsonVariant dataJsonVar = payloadJson[F("Data")];
   if(commandJsonVar.is<uint16_t>() && dataJsonVar.is<const char*>()) {

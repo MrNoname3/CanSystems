@@ -118,8 +118,24 @@ void MqttCommon::dispatchCommand(const char* cmd) {
       return;
     }
   }
+  for(uint8_t i = 0U; i < dynCmdCount; ++i) {
+    // cppcheck-suppress useStlAlgorithm
+    if(strncmp(cmd, dynCmdTable[i].name, maxCmdLength) == 0) {
+      dynCmdTable[i].handler();
+      sendResponse(true);
+      return;
+    }
+  }
   Logger::get().printf_P(PSTR("[COMMON] Unknown cmd: '%s'\r\n"), cmd);
   sendResponse(false);
+}
+
+void MqttCommon::registerCommand(const char* name, void (*handler)()) {
+  if(name == nullptr || handler == nullptr || dynCmdCount >= maxDynCmds) { return; }
+  strncpy(dynCmdTable[dynCmdCount].name, name, maxCmdLength);
+  dynCmdTable[dynCmdCount].name[maxCmdLength] = '\0';
+  dynCmdTable[dynCmdCount].handler = handler;
+  ++dynCmdCount;
 }
 
 void MqttCommon::handleReboot() {
