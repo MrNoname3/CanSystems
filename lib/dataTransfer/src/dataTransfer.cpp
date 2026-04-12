@@ -79,7 +79,6 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
       return false;
     }
   } else {
-    LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
 #ifdef ESP8266
     FSInfo fsInfo;
     LittleFS.info(fsInfo);
@@ -93,7 +92,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
       dataTransferErrState.setError(DataTransferError::NOT_ENOUGH_STORAGE);
       return false;
     }
-    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "a");
+    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "w");
     if(!receivedFile) {
       Logger::get().printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
       dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
@@ -191,11 +190,13 @@ bool DataTransfer::finalizeTransfer() {
     if(!receivedFile) {
       Logger::get().printf_P(PSTR("[FT] Opening file for read failed: %s\r\n"), FileName::getTempFileLocation());
       dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      transferState = TransferState::CLEANUP;
       return false;
     }
     if(receivedFile.size() != fileSizeLocal) {
       Logger::get().printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
       dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
+      transferState = TransferState::CLEANUP;
       return false;
     }
     md5.begin();
