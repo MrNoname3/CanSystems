@@ -53,6 +53,7 @@ private:
   static constexpr uint8_t invalidPin = 0xFF;                             // Sentinel value indicating no pin is assigned.
   static uint8_t dbgLedPin;                                               // The GPIO pin connected to the LED.
   static uint8_t dbgLedOnState;                                           // The logic level to turn the LED on.
+  static uint8_t ledState;                                                // Cached pin output level, avoids digitalRead() in ISR.
 #if defined(ESP8266) || defined(ESP32)
   Ticker ledTicker;                                                       // Timer for managing periodic LED toggling.
 #endif
