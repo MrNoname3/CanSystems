@@ -40,7 +40,7 @@ AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
 
 //--- Handling tasks ---//
-Task *task[] = {&iotConn, &performance, &mqttCommon, &adcReader, &mq135};
+Task *task[] = {&iotConn, &performance, &mqttCommon/*, &adcReader, &mq135*/};
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
