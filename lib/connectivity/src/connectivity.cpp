@@ -194,7 +194,7 @@ bool Connectivity::run() {
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
   char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
-  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
+  const int32_t actualTopicSize = snprintf(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return false; }
   return mqttClient.publish(actualTopic, payload);
