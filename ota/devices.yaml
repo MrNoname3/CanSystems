@@ -55,10 +55,6 @@ projects:
 
   - name: "CAN gateway"
     pio_project: project_esp32_can
-    commands:
-      - name: CAN alert firmware update
-        description: Updates firmwares of the CAN alert devices
-        cmd: "canAlertOta"
     devices:
       - mac: fcf5c401bd83
         friendly_name: "Home BP living room"
