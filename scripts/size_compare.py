@@ -58,7 +58,8 @@ def _build_and_capture(pio: str, envs: list[str], cwd: str | None = None) -> dic
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     lines: list[str] = []
-    assert proc.stdout is not None
+    if proc.stdout is None:
+        raise RuntimeError("subprocess stdout is None — Popen(..., stdout=PIPE) failed unexpectedly")
     for line in proc.stdout:
         print(line, end="")
         lines.append(line)

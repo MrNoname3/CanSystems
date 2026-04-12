@@ -16,7 +16,7 @@ def get_git_commit_count():
         git_commit_count = 0
     return git_commit_count
 
-def get_git_uncommited_changes():
+def get_git_uncommitted_changes():
     # Check for uncommitted changes
     try:
         subprocess.check_call(["git", "diff", "--quiet"])
@@ -34,10 +34,10 @@ def get_git_untracked_files():
         )
         git_untracked_files = bool(result.stdout.strip())
         return git_untracked_files
-    except:
+    except Exception:
         return False
 
 def get_git_dirty():
     # Mark the build as "dirty" if there are uncommitted or untracked changes
-    git_dirty = 1 if get_git_uncommited_changes() or get_git_untracked_files() else 0
+    git_dirty = 1 if get_git_uncommitted_changes() or get_git_untracked_files() else 0
     return git_dirty

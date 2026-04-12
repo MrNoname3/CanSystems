@@ -1,5 +1,5 @@
-from git_utils import get_git_hash, get_git_commit_count, get_git_dirty
 Import("env")
+from git_utils import get_git_hash, get_git_commit_count, get_git_dirty
 
 def get_git_info():
     git_hash = get_git_hash()
