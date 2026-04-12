@@ -33,7 +33,7 @@ Connectivity iotConn(
 );
 
 //--- MQTT handler objects ---//
-MqttCommon<2U> mqttCommon (iotConn, "common");
+MqttCommon mqttCommon (iotConn, "common");
 CanHandler canHandler;
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
@@ -55,11 +55,6 @@ void setup() {
     Logger::get().printf_P(PSTR("WDT enable failed!\r\n"));
     ResetHandler::restartMCU();
   }
-
-  mqttCommon.registerCommand("canAlertOta", []() {
-    (void)canAlert1.startOta(FileName::getCanAlertFwLocation());
-    (void)canAlert2.startOta(FileName::getCanAlertFwLocation());
-  });
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);

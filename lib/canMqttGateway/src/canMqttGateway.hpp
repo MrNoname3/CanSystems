@@ -6,6 +6,7 @@
 #include "crc16.hpp"                                                /// CRC16 calculator class.
 #include <LittleFS.h>                                               /// Use FLASH file system.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "otaRegistry.hpp"                                          /// OTA target registry interface.
 
 class CanMqttGateway;                                                   // Forward declaration.
 
@@ -83,7 +84,7 @@ private:
 };
 
 /// @brief Combines CAN and MQTT functionalities for managing device communications.
-class CanMqttGateway : public CanBase, public MqttBase {
+class CanMqttGateway : public CanBase, public MqttBase, public OtaTarget {
 private:
   static constexpr uint32_t clientPingTime = Time::secToMs(1U);         // Time interval for sending client pings.
   static constexpr uint32_t clientOfflineTime = Time::secToMs(5U);      // Timeout to detect client offline status.
@@ -122,6 +123,12 @@ public:
   /// @return True if OTA is in progress, false otherwise.
   [[nodiscard]] bool isOtaInProgress() const;
 
+  /// @brief Returns the firmware file name configured for this device (PROGMEM pointer).
+  [[nodiscard]] const char* getFwFileName() const override { return fwFileNamePtr; }
+
+  /// @brief Triggers OTA using the configured firmware file name.
+  void triggerOta() override { (void)startOta(fwFileNamePtr); }
+
   CanMqttGateway(const CanMqttGateway&) = delete;                       // Define copy constructor.
   CanMqttGateway& operator=(const CanMqttGateway&) = delete;            // Define copy assignment operator.
   CanMqttGateway(CanMqttGateway&&) = delete;                            // Define move constructor.
@@ -133,8 +140,9 @@ protected:
   /// @param clientCanId CAN ID for the client.
   /// @param connectivity Reference to the MQTT connectivity handler.
   /// @param subTopic Subtopic for MQTT communication.
+  /// @param fwFileName PROGMEM pointer to the firmware file name for OTA triggering (nullptr = no auto OTA).
   CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId,
-    Connectivity& connectivity, const char* subTopic);
+    Connectivity& connectivity, const char* subTopic, const char* fwFileName = nullptr);
 
   /// @brief Virtual destructor of the object.
   ~CanMqttGateway() override = default;
@@ -171,4 +179,5 @@ private:
   uint32_t clientPingTimer;       // Timer for tracking the interval of client pings.
   uint32_t clientOfflineTimer;    // Timer for tracking the time since the last client ping to detect offline status.
   bool clientOnline;              // Flag indicating the current online status of the client. True if online, false if offline.
+  const char* fwFileNamePtr;      // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
 };

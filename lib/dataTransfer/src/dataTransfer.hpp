@@ -74,6 +74,10 @@ public:
   /// @return True if the file piece is successfully stored, false otherwise.
   [[nodiscard]] bool storeBase64(uint32_t filePieceNumber, const char* fileData);
 
+  /// @brief Returns the name of the file currently being (or last) transferred.
+  /// @return Pointer to the file name buffer.
+  [[nodiscard]] const char* getFileName() const { return fileNameLocal; }
+
   /// @brief Retrieves the error code for the last file transfer operation.
   /// @return A DataTransferErrorType value representing the error code.
   [[nodiscard]] DataTransferErrorType getErrorCode();
