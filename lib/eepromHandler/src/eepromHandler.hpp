@@ -3,6 +3,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <EEPROM.h>                                                 /// EEPROM access library.
+#include <string.h>                                                 /// memcmp for write verification.
 #include "crc16.hpp"                                                /// CRC16 calculation utility.
 
 /// @brief Wrapper class for EEPROM read/write operations with CRC validation.
@@ -48,12 +49,9 @@ public:
 #endif
 
     // Verify the written data.
-    for(uint16_t i = 0U; i < static_cast<uint16_t>(sizeof(EEPROMData)); ++i) {
-      if(EEPROM.read(eepromAddress + i) != reinterpret_cast<uint8_t*>(&eepromData)[i]) {
-        return false;  // Write operation failed.
-      }
-    }
-    return true;  // Write operation succeeded.
+    EEPROMData readBack;
+    EEPROM.get(eepromAddress, readBack);
+    return memcmp(&eepromData, &readBack, sizeof(EEPROMData)) == 0;
   }
 
   /// @brief Loads data into the memory address stored by the pointer set in the constructor.
