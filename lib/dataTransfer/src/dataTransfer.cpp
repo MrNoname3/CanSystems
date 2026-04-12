@@ -235,7 +235,6 @@ void DataTransfer::runValidityCheck() {
         if(receivedFile) {
           receivedFile.close();
         }
-        LittleFS.remove(FPSTR(fileNameLocal));
         if(!LittleFS.rename(FPSTR(FileName::getTempFileLocation()), fileNameLocal)) {
           Logger::get().printf_P(PSTR("[FT] Renaming failed: %s -> %s\r\n"), FileName::getTempFileLocation(), fileNameLocal);
           dataTransferErrState.setError(DataTransferError::TEMP_FILE_RENAMING_ERROR);
