@@ -42,10 +42,10 @@
 //#define MQTT_MAX_TRANSFER_SIZE 80
 
 // Possible values for client.state()
-#define MQTT_CONNECTION_TIMEOUT     -4
-#define MQTT_CONNECTION_LOST        -3
-#define MQTT_CONNECT_FAILED         -2
-#define MQTT_DISCONNECTED           -1
+#define MQTT_CONNECTION_TIMEOUT     (-4)
+#define MQTT_CONNECTION_LOST        (-3)
+#define MQTT_CONNECT_FAILED         (-2)
+#define MQTT_DISCONNECTED           (-1)
 #define MQTT_CONNECTED               0
 #define MQTT_CONNECT_BAD_PROTOCOL    1
 #define MQTT_CONNECT_BAD_CLIENT_ID   2
@@ -83,7 +83,7 @@
 #define MQTT_CALLBACK_SIGNATURE void (*callback)(char*, uint8_t*, unsigned int)
 #endif
 
-#define CHECK_STRING_LENGTH(l,s) if (l+2+strnlen(s, this->bufferSize) > this->bufferSize) {_client->stop();return false;}
+#define CHECK_STRING_LENGTH(l,s) if ((l)+2+strnlen((s), this->bufferSize) > this->bufferSize) {_client->stop();return false;}
 
 class PubSubClient : public Print {
 private:
@@ -98,10 +98,10 @@ private:
    bool pingOutstanding;
    MQTT_CALLBACK_SIGNATURE;
    uint32_t readPacket(uint8_t*);
-   boolean readByte(uint8_t * result);
-   boolean readByte(uint8_t * result, uint16_t * index);
-   boolean write(uint8_t header, uint8_t* buf, uint16_t length);
-   uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
+   bool readByte(uint8_t * result);
+   bool readByte(uint8_t * result, uint16_t * index);
+   bool write(uint8_t header, uint8_t* buf, uint16_t length);
+   static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
    // Build up the header ready to send
    // Returns the size of the header
    // Note: the header is built at the end of the first MQTT_MAX_HEADER_SIZE bytes, so will start
@@ -131,7 +131,7 @@ public:
    ~PubSubClient();
 
    PubSubClient& setServer(IPAddress ip, uint16_t port);
-   PubSubClient& setServer(uint8_t * ip, uint16_t port);
+   PubSubClient& setServer(const uint8_t * ip, uint16_t port);
    PubSubClient& setServer(const char * domain, uint16_t port);
    PubSubClient& setCallback(MQTT_CALLBACK_SIGNATURE);
    PubSubClient& setClient(Client& client);
@@ -139,21 +139,21 @@ public:
    PubSubClient& setKeepAlive(uint16_t keepAlive);
    PubSubClient& setSocketTimeout(uint16_t timeout);
 
-   boolean setBufferSize(uint16_t size);
-   uint16_t getBufferSize();
+   bool setBufferSize(uint16_t size);
+   uint16_t getBufferSize() const;
 
-   boolean connect(const char* id);
-   boolean connect(const char* id, const char* user, const char* pass);
-   boolean connect(const char* id, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
-   boolean connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
-   boolean connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage, boolean cleanSession);
+   bool connect(const char* id);
+   bool connect(const char* id, const char* user, const char* pass);
+   bool connect(const char* id, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage);
+   bool connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage);
+   bool connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession);
    void disconnect();
-   boolean publish(const char* topic, const char* payload);
-   boolean publish(const char* topic, const char* payload, boolean retained);
-   boolean publish(const char* topic, const uint8_t * payload, unsigned int plength);
-   boolean publish(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
-   boolean publish_P(const char* topic, const char* payload, boolean retained);
-   boolean publish_P(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
+   bool publish(const char* topic, const char* payload);
+   bool publish(const char* topic, const char* payload, bool retained);
+   bool publish(const char* topic, const uint8_t * payload, unsigned int plength);
+   bool publish(const char* topic, const uint8_t * payload, unsigned int plength, bool retained);
+   bool publish_P(const char* topic, const char* payload, bool retained);
+   bool publish_P(const char* topic, const uint8_t * payload, unsigned int plength, bool retained);
    // Start to publish a message.
    // This API:
    //   beginPublish(...)
@@ -162,21 +162,21 @@ public:
    // Allows for arbitrarily large payloads to be sent without them having to be copied into
    // a new buffer and held in memory at one time
    // Returns 1 if the message was started successfully, 0 if there was an error
-   boolean beginPublish(const char* topic, unsigned int plength, boolean retained);
+   bool beginPublish(const char* topic, unsigned int plength, bool retained);
    // Finish off this publish message (started with beginPublish)
    // Returns 1 if the packet was sent successfully, 0 if there was an error
-   int endPublish();
+   bool endPublish();
    // Write a single byte of payload (only to be used with beginPublish/endPublish)
-   virtual size_t write(uint8_t);
+   size_t write(uint8_t) override;
    // Write size bytes from buffer into the payload (only to be used with beginPublish/endPublish)
    // Returns the number of bytes written
-   virtual size_t write(const uint8_t *buffer, size_t size);
-   boolean subscribe(const char* topic);
-   boolean subscribe(const char* topic, uint8_t qos);
-   boolean unsubscribe(const char* topic);
-   boolean loop();
-   boolean connected();
-   int state();
+   size_t write(const uint8_t *buffer, size_t size) override;
+   bool subscribe(const char* topic);
+   bool subscribe(const char* topic, uint8_t qos);
+   bool unsubscribe(const char* topic);
+   bool loop();
+   bool connected();
+   int state() const;
 
 };
 
