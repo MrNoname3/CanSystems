@@ -6,7 +6,7 @@
 
 extern "C" {
     uint32_t millis(void) {
-       return time(0)*1000;
+        return static_cast<uint32_t>(time(nullptr)) * 1000U;
     }
 }
 
@@ -56,7 +56,7 @@ int ShimClient::connect(const char *host, uint16_t port)  {
 }
 size_t ShimClient::write(uint8_t b)  {
     this->_received += 1;
-    TRACE(std::hex << (unsigned int)b);
+    TRACE(std::hex << static_cast<unsigned int>(b));
     if (!this->expectAnything) {
         if (this->expectBuffer->available()) {
             uint8_t expected = this->expectBuffer->next();
@@ -73,20 +73,19 @@ size_t ShimClient::write(uint8_t b)  {
 }
 size_t ShimClient::write(const uint8_t *buf, size_t size)  {
     this->_received += size;
-    TRACE( "[" << std::dec << (unsigned int)(size) << "] ");
-    uint16_t i=0;
-    for (;i<size;i++) {
-        if (i>0) {
+    TRACE( "[" << std::dec << static_cast<unsigned int>(size) << "] ");
+    for (size_t i = 0; i < size; i++) {
+        if (i > 0) {
             TRACE(":");
         }
-        TRACE(std::hex << (unsigned int)(buf[i]));
+        TRACE(std::hex << static_cast<unsigned int>(buf[i]));
 
         if (!this->expectAnything) {
             if (this->expectBuffer->available()) {
                 uint8_t expected = this->expectBuffer->next();
                 if (expected != buf[i]) {
                     this->_error = true;
-                    TRACE("!=" << (unsigned int)expected);
+                    TRACE("!=" << static_cast<unsigned int>(expected));
                 }
             } else {
                 this->_error = true;
@@ -101,11 +100,10 @@ int ShimClient::available()  {
 }
 int ShimClient::read()  { return this->responseBuffer->next(); }
 int ShimClient::read(uint8_t *buf, size_t size) {
-    uint16_t i = 0;
-    for (;i<size;i++) {
-        buf[i] = this->read();
+    for (size_t i = 0; i < size; i++) {
+        buf[i] = static_cast<uint8_t>(this->read());
     }
-    return size;
+    return static_cast<int>(size);
 }
 int ShimClient::peek()  { return 0; }
 void ShimClient::flush() {}

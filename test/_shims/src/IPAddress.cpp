@@ -33,7 +33,7 @@ IPAddress& IPAddress::operator=(const uint8_t *address)
 
 IPAddress& IPAddress::operator=(uint32_t address)
 {
-    memcpy(_address, (const uint8_t *)&address, sizeof(_address));
+    memcpy(_address, reinterpret_cast<const uint8_t*>(&address), sizeof(_address));
     return *this;
 }
 

@@ -11,12 +11,12 @@ Stream::Stream() {
 
 size_t Stream::write(uint8_t b)  {
     this->_written++;
-    TRACE(std::hex << (unsigned int)b);
+    TRACE(std::hex << static_cast<unsigned int>(b));
     if (this->expectBuffer->available()) {
         uint8_t expected = this->expectBuffer->next();
         if (expected != b) {
             this->_error = true;
-            TRACE("!=" << (unsigned int)expected);
+            TRACE("!=" << static_cast<unsigned int>(expected));
         }
     } else {
         this->_error = true;

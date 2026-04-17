@@ -2,7 +2,7 @@
 #define bddtest_h
 
 void bddtest_suite(const char* name);
-int bddtest_test(const char*, int, const char*, int);
+bool bddtest_test(const char*, int, const char*, int);
 void bddtest_start(const char*);
 void bddtest_end();
 int bddtest_summary();

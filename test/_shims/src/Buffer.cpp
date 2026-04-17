@@ -27,8 +27,7 @@ void Buffer::reset() {
 }
 
 void Buffer::add(uint8_t* buf, size_t size) {
-    uint16_t i = 0;
-    for (;i<size;i++) {
+    for (size_t i = 0; i < size; i++) {
         this->buffer[this->length++] = buf[i];
     }
 }

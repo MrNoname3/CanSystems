@@ -7,7 +7,7 @@
 
 int testCount = 0;
 int testPasses = 0;
-const char* testDescription;
+const char* testDescription = nullptr;
 
 std::list<std::string> failureList;
 
@@ -15,30 +15,30 @@ void bddtest_suite(const char* name) {
     LOG(name << "\n");
 }
 
-int bddtest_test(const char* file, int line, const char* assertion, int result) {
+bool bddtest_test(const char* file, int line, const char* assertion, int result) {
     if (!result) {
         LOG("✗\n");
         std::ostringstream os;
         os << "   ! "<<testDescription<<"\n      " <<file << ":" <<line<<" : "<<assertion<<" ["<<result<<"]";
         failureList.push_back(os.str());
     }
-    return result;
+    return result != 0;
 }
 
 void bddtest_start(const char* description) {
     LOG(" - "<<description<<" ");
     testDescription = description;
-    testCount ++;
+    testCount++;
 }
 void bddtest_end() {
     LOG("✓\n");
-    testPasses ++;
+    testPasses++;
 }
 
 int bddtest_summary() {
-    for (std::list<std::string>::iterator it = failureList.begin(); it != failureList.end(); it++) {
+    for (const std::string& failure : failureList) {
         LOG("\n");
-        LOG(*it);
+        LOG(failure);
         LOG("\n");
     }
 
