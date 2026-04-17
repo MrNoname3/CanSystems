@@ -19,7 +19,7 @@ bool test_connect_fails_no_network() {
     PubSubClient client(server, 1883, callback, shimClient);
     bool rc = client.connect("client_test1");
     IS_FALSE(rc);
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_CONNECT_FAILED);
     END_IT
 }
@@ -31,7 +31,7 @@ bool test_connect_fails_on_no_response() {
     PubSubClient client(server, 1883, callback, shimClient);
     bool rc = client.connect("client_test1");
     IS_FALSE(rc);
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_CONNECTION_TIMEOUT);
     END_IT
 }
@@ -50,7 +50,7 @@ bool test_connect_properly_formatted() {
     shimClient.respond(connack,4);
 
     PubSubClient client(server, 1883, callback, shimClient);
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_DISCONNECTED);
 
     bool rc = client.connect("client_test1");
@@ -92,7 +92,7 @@ bool test_connect_fails_on_bad_rc() {
     bool rc = client.connect("client_test1");
     IS_FALSE(rc);
 
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == 0x01);
 
     END_IT
@@ -112,7 +112,7 @@ bool test_connect_non_clean_session() {
     shimClient.respond(connack,4);
 
     PubSubClient client(server, 1883, callback, shimClient);
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_DISCONNECTED);
 
     bool rc = client.connect("client_test1",0,0,0,0,0,0,0);
@@ -247,7 +247,7 @@ bool test_connect_disconnect_connect() {
 
     PubSubClient client(server, 1883, callback, shimClient);
 
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_DISCONNECTED);
 
     bool rc = client.connect("client_test1");
@@ -296,7 +296,7 @@ bool test_connect_custom_keepalive() {
     shimClient.respond(connack,4);
 
     PubSubClient client(server, 1883, callback, shimClient);
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_DISCONNECTED);
 
     client.setKeepAlive(300);

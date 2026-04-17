@@ -103,7 +103,7 @@ bool test_receive_max_sized_message() {
     shimClient.respond(connack,4);
 
     PubSubClient client(server, 1883, callback, shimClient);
-    int length = 80; // If this is changed to > 128 then the publish packet below
+    uint8_t length = 80U; // If this is changed to > 128 then the publish packet below
                      // is no longer valid as it assumes the remaining length
                      // is a single-uint8_t. Don't make that mistake like I just
                      // did and lose a whole evening tracking down the issue.
@@ -143,7 +143,7 @@ bool test_receive_oversized_message() {
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
 
-    int length = 80; // See comment in test_receive_max_sized_message before changing this value
+    uint8_t length = 80U; // See comment in test_receive_max_sized_message before changing this value
 
     PubSubClient client(server, 1883, callback, shimClient);
     client.setBufferSize(length-1);
@@ -206,7 +206,7 @@ bool test_resize_buffer() {
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
 
-    int length = 80; // See comment in test_receive_max_sized_message before changing this value
+    uint8_t length = 80U; // See comment in test_receive_max_sized_message before changing this value
 
     PubSubClient client(server, 1883, callback, shimClient);
     client.setBufferSize(length-1);
@@ -258,7 +258,7 @@ bool test_receive_oversized_stream_message() {
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
 
-    int length = 80; // See comment in test_receive_max_sized_message before changing this value
+    uint8_t length = 80U; // See comment in test_receive_max_sized_message before changing this value
 
     PubSubClient client(server, 1883, callback, shimClient, stream);
     client.setBufferSize(length-1);

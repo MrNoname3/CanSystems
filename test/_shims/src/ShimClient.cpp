@@ -21,7 +21,7 @@ ShimClient::ShimClient() {
     this->_expectedPort = 0;
 }
 
-int ShimClient::connect(IPAddress ip, uint16_t port) {
+bool ShimClient::connect(IPAddress ip, uint16_t port) {
     if (this->_allowConnect) {
         this->_connected = true;
     }
@@ -37,7 +37,7 @@ int ShimClient::connect(IPAddress ip, uint16_t port) {
     }
     return this->_connected;
 }
-int ShimClient::connect(const char *host, uint16_t port)  {
+bool ShimClient::connect(const char *host, uint16_t port)  {
     if (this->_allowConnect) {
         this->_connected = true;
     }
@@ -95,17 +95,17 @@ size_t ShimClient::write(const uint8_t *buf, size_t size)  {
     TRACE("\n"<<std::dec);
     return size;
 }
-int ShimClient::available()  {
-    return this->responseBuffer->available();
+int16_t ShimClient::available()  {
+    return static_cast<int16_t>(this->responseBuffer->available());
 }
-int ShimClient::read()  { return this->responseBuffer->next(); }
-int ShimClient::read(uint8_t *buf, size_t size) {
+int16_t ShimClient::read()  { return static_cast<int16_t>(this->responseBuffer->next()); }
+int16_t ShimClient::read(uint8_t *buf, size_t size) {
     for (size_t i = 0; i < size; i++) {
         buf[i] = static_cast<uint8_t>(this->read());
     }
-    return static_cast<int>(size);
+    return static_cast<int16_t>(size);
 }
-int ShimClient::peek()  { return 0; }
+int16_t ShimClient::peek()  { return 0; }
 void ShimClient::flush() {}
 void ShimClient::stop() {
     this->setConnected(false);

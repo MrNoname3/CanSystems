@@ -30,7 +30,7 @@ bool test_keepalive_pings_idle() {
     uint8_t pingresp[] = { 0xD0,0x0 };
     shimClient.respond(pingresp,2);
 
-    for (int i = 0; i < 50; i++) {
+    for (uint8_t i = 0; i < 50U; i++) {
         sleep(1);
         if ( i == 15 || i == 31 || i == 47) {
             shimClient.expect(pingreq,2);
@@ -60,7 +60,7 @@ bool test_keepalive_pings_with_outbound_qos0() {
 
     uint8_t publish[] = {0x30,0xe,0x0,0x5,0x74,0x6f,0x70,0x69,0x63,0x70,0x61,0x79,0x6c,0x6f,0x61,0x64};
 
-    for (int i = 0; i < 50; i++) {
+    for (uint8_t i = 0; i < 50U; i++) {
         TRACE(i<<":");
         shimClient.expect(publish,16);
         rc = client.publish("topic","payload");
@@ -96,7 +96,7 @@ bool test_keepalive_pings_with_inbound_qos0() {
 
     uint8_t publish[] = {0x30,0xe,0x0,0x5,0x74,0x6f,0x70,0x69,0x63,0x70,0x61,0x79,0x6c,0x6f,0x61,0x64};
 
-    for (int i = 0; i < 50; i++) {
+    for (uint8_t i = 0; i < 50U; i++) {
         TRACE(i<<":");
         sleep(1);
         if ( i == 15 || i == 31 || i == 47) {
@@ -130,7 +130,7 @@ bool test_keepalive_no_pings_inbound_qos1() {
     uint8_t publish[] = {0x32,0x10,0x0,0x5,0x74,0x6f,0x70,0x69,0x63,0x12,0x34,0x70,0x61,0x79,0x6c,0x6f,0x61,0x64};
     uint8_t puback[] = {0x40,0x2,0x12,0x34};
 
-    for (int i = 0; i < 50; i++) {
+    for (uint8_t i = 0; i < 50U; i++) {
         shimClient.respond(publish,18);
         shimClient.expect(puback,4);
         sleep(1);
@@ -158,13 +158,13 @@ bool test_keepalive_disconnects_hung() {
     uint8_t pingreq[] = { 0xC0,0x0 };
     shimClient.expect(pingreq,2);
 
-    for (int i = 0; i < 32; i++) {
+    for (uint8_t i = 0; i < 32U; i++) {
         sleep(1);
         rc = client.loop();
     }
     IS_FALSE(rc);
 
-    int state = client.state();
+    int8_t state = static_cast<int8_t>(client.state());
     IS_TRUE(state == MQTT_CONNECTION_TIMEOUT);
 
     IS_FALSE(shimClient.error());

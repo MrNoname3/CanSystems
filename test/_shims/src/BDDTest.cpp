@@ -1,12 +1,13 @@
 #include "BDDTest.h"
 #include "trace.h"
+#include <cstdint>
 #include <sstream>
 #include <iostream>
 #include <string>
 #include <list>
 
-int testCount = 0;
-int testPasses = 0;
+uint16_t testCount = 0;
+uint16_t testPasses = 0;
 const char* testDescription = nullptr;
 
 std::list<std::string> failureList;
@@ -15,14 +16,14 @@ void bddtest_suite(const char* name) {
     LOG(name << "\n");
 }
 
-bool bddtest_test(const char* file, int line, const char* assertion, int result) {
+bool bddtest_test(const char* file, uint32_t line, const char* assertion, bool result) {
     if (!result) {
         LOG("✗\n");
         std::ostringstream os;
-        os << "   ! "<<testDescription<<"\n      " <<file << ":" <<line<<" : "<<assertion<<" ["<<result<<"]";
+        os << "   ! "<<testDescription<<"\n      " <<file << ":" <<line<<" : "<<assertion<<" ["<<static_cast<int>(result)<<"]";
         failureList.push_back(os.str());
     }
-    return result != 0;
+    return result;
 }
 
 void bddtest_start(const char* description) {

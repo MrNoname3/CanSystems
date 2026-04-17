@@ -41,7 +41,7 @@ bool test_publish_bytes() {
     shimClient.setAllowConnect(true);
 
     uint8_t payload[] = { 0x01,0x02,0x03,0x0,0x05 };
-    int length = 5;
+    uint8_t length = 5U;
 
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
@@ -68,7 +68,7 @@ bool test_publish_retained() {
     shimClient.setAllowConnect(true);
 
     uint8_t payload[] = { 0x01,0x02,0x03,0x0,0x05 };
-    int length = 5;
+    uint8_t length = 5U;
 
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
@@ -153,7 +153,7 @@ bool test_publish_P() {
     shimClient.setAllowConnect(true);
 
     uint8_t payload[] = { 0x01,0x02,0x03,0x0,0x05 };
-    int length = 5;
+    uint8_t length = 5U;
 
     uint8_t connack[] = { 0x20, 0x02, 0x00, 0x00 };
     shimClient.respond(connack,4);
