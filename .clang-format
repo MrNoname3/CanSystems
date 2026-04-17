@@ -1,0 +1,7 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 0
+SortIncludes: Never
+AllowShortFunctionsOnASingleLine: Empty
+AccessModifierOffset: -2
