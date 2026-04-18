@@ -108,9 +108,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 #elif MQTT_VERSION == MQTT_VERSION_3_1_1
       const uint8_t d[7] = {0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION};
 #endif
-      for (const uint8_t byte : d) {
-        this->buffer[length++] = byte;
-      }
+      memcpy(this->buffer + length, d, sizeof(d));
+      length += sizeof(d);
 
       uint8_t v;
       if (willTopic != nullptr) {
@@ -219,10 +218,8 @@ bool PubSubClient::readByte(uint8_t* result) {  // NOLINT(readability-convert-me
 
 // reads a byte into result[*index] and increments index
 bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(readability-convert-member-functions-to-static)
-  uint16_t current_index = *index;
-  uint8_t* write_address = &(result[current_index]);
-  if (readByte(write_address)) {
-    *index = current_index + 1U;
+  if (readByte(&result[*index])) {
+    (*index)++;
     return true;
   }
   return false;
@@ -490,9 +487,7 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
   } while (len > 0U);
 
   buf[MQTT_MAX_HEADER_SIZE - 1U - llen] = header;
-  for (size_t i = 0U; i < llen; i++) {
-    buf[MQTT_MAX_HEADER_SIZE - llen + i] = lenBuf[i];
-  }
+  memcpy(buf + MQTT_MAX_HEADER_SIZE - llen, lenBuf, llen);
   return llen + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
 }
 
@@ -594,22 +589,18 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
 }
 
 bool PubSubClient::connected() {  // NOLINT(readability-convert-member-functions-to-static)
-  bool rc;
   if (tcpClient == nullptr) {
-    rc = false;
-  } else {
-    rc = static_cast<bool>(tcpClient->connected());
-    if (!rc) {
-      if (this->connectionState == State::CONNECTED) {
-        this->connectionState = State::CONNECTION_LOST;
-        tcpClient->flush();
-        tcpClient->stop();
-      }
-    } else {
-      return this->connectionState == State::CONNECTED;
-    }
+    return false;
   }
-  return rc;
+  if (!static_cast<bool>(tcpClient->connected())) {
+    if (this->connectionState == State::CONNECTED) {
+      this->connectionState = State::CONNECTION_LOST;
+      tcpClient->flush();
+      tcpClient->stop();
+    }
+    return false;
+  }
+  return this->connectionState == State::CONNECTED;
 }
 
 PubSubClient& PubSubClient::setServer(const uint8_t* ip, uint16_t port) {  // NOLINT(readability-convert-member-functions-to-static)
