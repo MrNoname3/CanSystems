@@ -567,7 +567,7 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
     return llen+1; // Full header size is variable length bit plus the 1-byte fixed header
 }
 
-bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
+bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) { // NOLINT(readability-convert-member-functions-to-static)
     uint16_t rc;
     uint8_t hlen = buildHeader(header, buf, length);
 

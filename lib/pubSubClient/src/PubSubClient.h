@@ -5,8 +5,8 @@
 #include "Client.h"
 #include "Stream.h"
 
-#define MQTT_VERSION_3_1      3
-#define MQTT_VERSION_3_1_1    4
+#define MQTT_VERSION_3_1      3   // NOLINT(modernize-macro-to-enum)
+#define MQTT_VERSION_3_1_1    4   // NOLINT(modernize-macro-to-enum)
 
 // MQTT_VERSION : Pick the version
 //#define MQTT_VERSION MQTT_VERSION_3_1
