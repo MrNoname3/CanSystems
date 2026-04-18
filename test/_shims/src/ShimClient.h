@@ -1,5 +1,4 @@
-#ifndef shimclient_h
-#define shimclient_h
+#pragma once
 
 #include "Arduino.h"
 #include "Client.h"
@@ -21,30 +20,28 @@ private:
 
 public:
   ShimClient();
-  virtual bool connect(IPAddress ip, uint16_t port);
-  virtual bool connect(const char* host, uint16_t port);
-  virtual size_t write(uint8_t);
-  virtual size_t write(const uint8_t* buf, size_t size);
-  virtual int16_t available();
-  virtual int16_t read();
-  virtual int16_t read(uint8_t* buf, size_t size);
-  virtual int16_t peek();
-  virtual void flush();
-  virtual void stop();
-  virtual uint8_t connected();
-  virtual operator bool();
+  bool connect(IPAddress ip, uint16_t port) override;
+  bool connect(const char* host, uint16_t port) override;
+  size_t write(uint8_t) override;
+  size_t write(const uint8_t* buf, size_t size) override;
+  int16_t available() override;
+  int16_t read() override;
+  int16_t read(uint8_t* buf, size_t size) override;
+  int16_t peek() override;
+  void flush() override;
+  void stop() override;
+  uint8_t connected() override;
+  operator bool() override;
 
-  virtual ShimClient* respond(uint8_t* buf, size_t size);
-  virtual ShimClient* expect(uint8_t* buf, size_t size);
+  ShimClient* respond(uint8_t* buf, size_t size);
+  ShimClient* expect(uint8_t* buf, size_t size);
 
-  virtual void expectConnect(IPAddress ip, uint16_t port);
-  virtual void expectConnect(const char* host, uint16_t port);
+  void expectConnect(IPAddress ip, uint16_t port);
+  void expectConnect(const char* host, uint16_t port);
 
-  virtual uint16_t received();
-  virtual bool error();
+  uint16_t received();
+  bool error();
 
-  virtual void setAllowConnect(bool b);
-  virtual void setConnected(bool b);
+  void setAllowConnect(bool b);
+  void setConnected(bool b);
 };
-
-#endif

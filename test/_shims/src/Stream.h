@@ -1,5 +1,4 @@
-#ifndef Stream_h
-#define Stream_h
+#pragma once
 
 #include "Arduino.h"
 #include "Buffer.h"
@@ -12,11 +11,9 @@ private:
 
 public:
   Stream();
-  virtual size_t write(uint8_t);
+  size_t write(uint8_t);
 
-  virtual bool error();
-  virtual void expect(uint8_t* buf, size_t size);
-  virtual uint16_t length();
+  bool error();
+  void expect(uint8_t* buf, size_t size);
+  uint16_t length();
 };
-
-#endif

@@ -17,7 +17,7 @@ bool test_connect_fails_no_network() {
   PubSubClient client(server, 1883, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_CONNECT_FAILED);
   END_IT
 }
@@ -29,7 +29,7 @@ bool test_connect_fails_on_no_response() {
   PubSubClient client(server, 1883, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_CONNECTION_TIMEOUT);
   END_IT
 }
@@ -48,7 +48,7 @@ bool test_connect_properly_formatted() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_DISCONNECTED);
 
   bool rc = client.connect("client_test1");
@@ -89,7 +89,7 @@ bool test_connect_fails_on_bad_rc() {
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
 
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == 0x01);
 
   END_IT
@@ -109,10 +109,10 @@ bool test_connect_non_clean_session() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_DISCONNECTED);
 
-  bool rc = client.connect("client_test1", 0, 0, 0, 0, 0, 0, 0);
+  bool rc = client.connect("client_test1", nullptr, nullptr, nullptr, 0U, false, nullptr, false);
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -151,7 +151,7 @@ bool test_connect_accepts_username_no_password() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  bool rc = client.connect("client_test1", "user", 0);
+  bool rc = client.connect("client_test1", "user", nullptr);
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -186,7 +186,7 @@ bool test_connect_ignores_password_no_username() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  bool rc = client.connect("client_test1", 0, "pass");
+  bool rc = client.connect("client_test1", nullptr, "pass");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -204,7 +204,7 @@ bool test_connect_with_will() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  bool rc = client.connect("client_test1", "willTopic", 1, 0, "willMessage");
+  bool rc = client.connect("client_test1", "willTopic", 1U, false, "willMessage");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -222,7 +222,7 @@ bool test_connect_with_will_username_password() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  bool rc = client.connect("client_test1", "user", "password", "willTopic", 1, 0, "willMessage");
+  bool rc = client.connect("client_test1", "user", "password", "willTopic", 1U, false, "willMessage");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -244,7 +244,7 @@ bool test_connect_disconnect_connect() {
 
   PubSubClient client(server, 1883, callback, shimClient);
 
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_DISCONNECTED);
 
   bool rc = client.connect("client_test1");
@@ -293,7 +293,7 @@ bool test_connect_custom_keepalive() {
   shimClient.respond(connack, 4);
 
   PubSubClient client(server, 1883, callback, shimClient);
-  int8_t state = static_cast<int8_t>(client.state());
+  int8_t state = client.state();
   IS_TRUE(state == MQTT_DISCONNECTED);
 
   client.setKeepAlive(300);

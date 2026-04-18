@@ -253,8 +253,8 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, c
             lastInActivity = lastOutActivity = millis();
 
             while (_client->available() == 0) {
-                unsigned long t = millis();
-                if (t-lastInActivity >= (static_cast<uint32_t>(this->socketTimeout)*1000UL)) {
+                uint32_t t = millis();
+                if (t-lastInActivity >= (static_cast<uint32_t>(this->socketTimeout)*1000U)) {
                     _state = MQTT_CONNECTION_TIMEOUT;
                     _client->stop();
                     return false;
@@ -270,7 +270,7 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, c
                     _state = MQTT_CONNECTED;
                     return true;
                 }
-                _state = buffer[3];
+                _state = static_cast<int8_t>(buffer[3]);
             }
             _client->stop();
         } else {
@@ -368,8 +368,8 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) { // NOLINT(readability
 
 bool PubSubClient::loop() { // NOLINT(readability-function-cognitive-complexity)
     if (connected()) {
-        unsigned long t = millis();
-        if ((t - lastInActivity > this->keepAlive*1000UL) || (t - lastOutActivity > this->keepAlive*1000UL)) {
+        uint32_t t = millis();
+        if ((t - lastInActivity > static_cast<uint32_t>(this->keepAlive)*1000U) || (t - lastOutActivity > static_cast<uint32_t>(this->keepAlive)*1000U)) {
             if (pingOutstanding) {
                 this->_state = MQTT_CONNECTION_TIMEOUT;
                 _client->stop();
@@ -437,11 +437,11 @@ bool PubSubClient::publish(const char* topic, const char* payload, bool retained
     return publish(topic,reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U,retained);
 }
 
-bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength) { // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t plength) { // NOLINT(readability-convert-member-functions-to-static)
     return publish(topic, payload, plength, false);
 }
 
-bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength, bool retained) {
+bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
     if (connected()) {
         if (this->bufferSize < MQTT_MAX_HEADER_SIZE + 2+strnlen(topic, this->bufferSize) + plength) {
             // Too long
@@ -452,7 +452,7 @@ bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned i
         length = writeString(topic,this->buffer,length);
 
         // Add payload
-        for (unsigned int i=0;i<plength;i++) {
+        for (uint16_t i=0;i<plength;i++) {
             this->buffer[length++] = payload[i];
         }
 
@@ -470,51 +470,51 @@ bool PubSubClient::publish_P(const char* topic, const char* payload, bool retain
     return publish_P(topic, reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U, retained);
 }
 
-bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, unsigned int plength, bool retained) {
+bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
     uint8_t llen = 0;
-    unsigned int rc = 0;
+    uint16_t rc = 0U;
     uint16_t tlen;
-    unsigned int pos = 0;
-    unsigned int expectedLength;
+    uint16_t pos = 0U;
+    uint16_t expectedLength;
 
     if (!connected()) {
         return false;
     }
 
-    tlen = strnlen(topic, this->bufferSize);
+    tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
 
     uint8_t header = MQTTPUBLISH;
     if (retained) {
-        header |= 1;
+        header |= 1U;
     }
     this->buffer[pos++] = header;
-    unsigned int len = plength + 2 + tlen;
+    uint16_t len = static_cast<uint16_t>(plength + 2U + tlen);
     do {
-        uint8_t digit = len  & 127; //digit = len %128
-        len >>= 7; //len = len / 128
-        if (len > 0) {
-            digit |= 0x80;
+        uint8_t digit = static_cast<uint8_t>(len & 127U); //digit = len %128
+        len >>= 7U; //len = len / 128
+        if (len > 0U) {
+            digit |= 0x80U;
         }
         this->buffer[pos++] = digit;
         llen++;
-    } while(len>0);
+    } while(len>0U);
 
     pos = writeString(topic,this->buffer,pos);
 
-    rc += _client->write(this->buffer,pos);
+    rc += static_cast<uint16_t>(_client->write(this->buffer,pos));
 
-    for (unsigned int i=0;i<plength;i++) {
-        rc += _client->write((char)pgm_read_byte_near(payload + i));
+    for (uint16_t i=0U;i<plength;i++) {
+        rc += static_cast<uint16_t>(_client->write(pgm_read_byte_near(payload + i)));
     }
 
     lastOutActivity = millis();
 
-    expectedLength = 1 + llen + 2 + tlen + plength;
+    expectedLength = static_cast<uint16_t>(1U + llen + 2U + tlen + plength);
 
     return (rc == expectedLength);
 }
 
-bool PubSubClient::beginPublish(const char* topic, unsigned int plength, bool retained) {
+bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {
     if (connected()) {
         // Send the header and variable length field
         uint16_t length = MQTT_MAX_HEADER_SIZE;
@@ -722,7 +722,7 @@ PubSubClient& PubSubClient::setStream(Stream& stream){
     return *this;
 }
 
-int PubSubClient::state() const {
+int8_t PubSubClient::state() const {
     return this->_state;
 }
 

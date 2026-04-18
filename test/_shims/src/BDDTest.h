@@ -1,5 +1,4 @@
-#ifndef bddtest_h
-#define bddtest_h
+#pragma once
 
 #include <cstdint>
 
@@ -24,4 +23,3 @@ int bddtest_summary();
 #define IS_NOT_EQUAL(x,y) TEST(x!=y)
 // clang-format on
 
-#endif

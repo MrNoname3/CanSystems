@@ -23,8 +23,7 @@
  * adrianm@mcqn.com 1/1/2011
  */
 
-#ifndef IPAddress_h
-#define IPAddress_h
+#pragma once
 
 // A class to make it easier to handle and pass around IP addresses
 
@@ -76,4 +75,3 @@ public:
   friend class DNSClient;
 };
 
-#endif

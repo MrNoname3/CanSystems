@@ -1,11 +1,4 @@
-/*
- PubSubClient.h - A simple client for MQTT.
-  Nick O'Leary
-  http://knolleary.net
-*/
-
-#ifndef PubSubClient_h
-#define PubSubClient_h
+#pragma once
 
 #include <Arduino.h>
 #include "IPAddress.h"
@@ -42,39 +35,39 @@
 //#define MQTT_MAX_TRANSFER_SIZE 80
 
 // Possible values for client.state()
-#define MQTT_CONNECTION_TIMEOUT     (-4)
-#define MQTT_CONNECTION_LOST        (-3)
-#define MQTT_CONNECT_FAILED         (-2)
-#define MQTT_DISCONNECTED           (-1)
-#define MQTT_CONNECTED               0
-#define MQTT_CONNECT_BAD_PROTOCOL    1
-#define MQTT_CONNECT_BAD_CLIENT_ID   2
-#define MQTT_CONNECT_UNAVAILABLE     3
-#define MQTT_CONNECT_BAD_CREDENTIALS 4
-#define MQTT_CONNECT_UNAUTHORIZED    5
+inline constexpr int8_t MQTT_CONNECTION_TIMEOUT     = -4;
+inline constexpr int8_t MQTT_CONNECTION_LOST        = -3;
+inline constexpr int8_t MQTT_CONNECT_FAILED         = -2;
+inline constexpr int8_t MQTT_DISCONNECTED           = -1;
+inline constexpr int8_t MQTT_CONNECTED               = 0;
+inline constexpr int8_t MQTT_CONNECT_BAD_PROTOCOL    = 1;
+inline constexpr int8_t MQTT_CONNECT_BAD_CLIENT_ID   = 2;
+inline constexpr int8_t MQTT_CONNECT_UNAVAILABLE     = 3;
+inline constexpr int8_t MQTT_CONNECT_BAD_CREDENTIALS = 4;
+inline constexpr int8_t MQTT_CONNECT_UNAUTHORIZED    = 5;
 
-#define MQTTCONNECT     1 << 4  // Client request to connect to Server
-#define MQTTCONNACK     2 << 4  // Connect Acknowledgment
-#define MQTTPUBLISH     3 << 4  // Publish message
-#define MQTTPUBACK      4 << 4  // Publish Acknowledgment
-#define MQTTPUBREC      5 << 4  // Publish Received (assured delivery part 1)
-#define MQTTPUBREL      6 << 4  // Publish Release (assured delivery part 2)
-#define MQTTPUBCOMP     7 << 4  // Publish Complete (assured delivery part 3)
-#define MQTTSUBSCRIBE   8 << 4  // Client Subscribe request
-#define MQTTSUBACK      9 << 4  // Subscribe Acknowledgment
-#define MQTTUNSUBSCRIBE 10 << 4 // Client Unsubscribe request
-#define MQTTUNSUBACK    11 << 4 // Unsubscribe Acknowledgment
-#define MQTTPINGREQ     12 << 4 // PING Request
-#define MQTTPINGRESP    13 << 4 // PING Response
-#define MQTTDISCONNECT  14 << 4 // Client is Disconnecting
-#define MQTTReserved    15 << 4 // Reserved
+inline constexpr uint8_t MQTTCONNECT     = 1U << 4U;  // Client request to connect to Server
+inline constexpr uint8_t MQTTCONNACK     = 2U << 4U;  // Connect Acknowledgment
+inline constexpr uint8_t MQTTPUBLISH     = 3U << 4U;  // Publish message
+inline constexpr uint8_t MQTTPUBACK      = 4U << 4U;  // Publish Acknowledgment
+inline constexpr uint8_t MQTTPUBREC      = 5U << 4U;  // Publish Received (assured delivery part 1)
+inline constexpr uint8_t MQTTPUBREL      = 6U << 4U;  // Publish Release (assured delivery part 2)
+inline constexpr uint8_t MQTTPUBCOMP     = 7U << 4U;  // Publish Complete (assured delivery part 3)
+inline constexpr uint8_t MQTTSUBSCRIBE   = 8U << 4U;  // Client Subscribe request
+inline constexpr uint8_t MQTTSUBACK      = 9U << 4U;  // Subscribe Acknowledgment
+inline constexpr uint8_t MQTTUNSUBSCRIBE = 10U << 4U; // Client Unsubscribe request
+inline constexpr uint8_t MQTTUNSUBACK    = 11U << 4U; // Unsubscribe Acknowledgment
+inline constexpr uint8_t MQTTPINGREQ     = 12U << 4U; // PING Request
+inline constexpr uint8_t MQTTPINGRESP    = 13U << 4U; // PING Response
+inline constexpr uint8_t MQTTDISCONNECT  = 14U << 4U; // Client is Disconnecting
+inline constexpr uint8_t MQTTReserved    = 15U << 4U; // Reserved
 
-#define MQTTQOS0        (0 << 1)
-#define MQTTQOS1        (1 << 1)
-#define MQTTQOS2        (2 << 1)
+inline constexpr uint8_t MQTTQOS0 = (0U << 1U);
+inline constexpr uint8_t MQTTQOS1 = (1U << 1U);
+inline constexpr uint8_t MQTTQOS2 = (2U << 1U);
 
 // Maximum size of fixed header and variable length size header
-#define MQTT_MAX_HEADER_SIZE 5
+inline constexpr uint8_t MQTT_MAX_HEADER_SIZE = 5U;
 
 #if defined(ESP8266) || defined(ESP32)
 #include <functional>
@@ -93,8 +86,8 @@ private:
    uint16_t keepAlive;
    uint16_t socketTimeout;
    uint16_t nextMsgId;
-   unsigned long lastOutActivity;
-   unsigned long lastInActivity;
+   uint32_t lastOutActivity;
+   uint32_t lastInActivity;
    bool pingOutstanding;
    MQTT_CALLBACK_SIGNATURE;
    uint32_t readPacket(uint8_t*);
@@ -111,7 +104,7 @@ private:
    const char* domain;
    uint16_t port;
    Stream* stream;
-   int _state;
+   int8_t _state;
 public:
    PubSubClient();
    PubSubClient(Client& client);
@@ -150,10 +143,10 @@ public:
    void disconnect();
    bool publish(const char* topic, const char* payload);
    bool publish(const char* topic, const char* payload, bool retained);
-   bool publish(const char* topic, const uint8_t * payload, unsigned int plength);
-   bool publish(const char* topic, const uint8_t * payload, unsigned int plength, bool retained);
+   bool publish(const char* topic, const uint8_t * payload, uint16_t plength);
+   bool publish(const char* topic, const uint8_t * payload, uint16_t plength, bool retained);
    bool publish_P(const char* topic, const char* payload, bool retained);
-   bool publish_P(const char* topic, const uint8_t * payload, unsigned int plength, bool retained);
+   bool publish_P(const char* topic, const uint8_t * payload, uint16_t plength, bool retained);
    // Start to publish a message.
    // This API:
    //   beginPublish(...)
@@ -162,7 +155,7 @@ public:
    // Allows for arbitrarily large payloads to be sent without them having to be copied into
    // a new buffer and held in memory at one time
    // Returns 1 if the message was started successfully, 0 if there was an error
-   bool beginPublish(const char* topic, unsigned int plength, bool retained);
+   bool beginPublish(const char* topic, uint16_t plength, bool retained);
    // Finish off this publish message (started with beginPublish)
    // Returns 1 if the packet was sent successfully, 0 if there was an error
    bool endPublish();
@@ -176,9 +169,5 @@ public:
    bool unsubscribe(const char* topic);
    bool loop();
    bool connected();
-   [[nodiscard]] int state() const;
-
+   [[nodiscard]] int8_t state() const;
 };
-
-
-#endif

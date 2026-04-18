@@ -1,5 +1,4 @@
-#ifndef Arduino_h
-#define Arduino_h
+#pragma once
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -22,4 +21,3 @@ uint32_t millis(void);
 // clang-format off
 #define yield(x) {}
 // clang-format on
-#endif  // Arduino_h

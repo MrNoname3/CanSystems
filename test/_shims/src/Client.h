@@ -1,5 +1,4 @@
-#ifndef client_h
-#define client_h
+#pragma once
 #include "IPAddress.h"
 
 class Client {
@@ -18,4 +17,3 @@ public:
   virtual operator bool() = 0;
 };
 
-#endif

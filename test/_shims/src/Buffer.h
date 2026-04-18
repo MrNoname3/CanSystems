@@ -1,5 +1,4 @@
-#ifndef buffer_h
-#define buffer_h
+#pragma once
 
 #include "Arduino.h"
 
@@ -13,11 +12,9 @@ public:
   Buffer();
   Buffer(uint8_t* buf, size_t size);
 
-  virtual bool available();
-  virtual uint8_t next();
-  virtual void reset();
+  bool available();
+  uint8_t next();
+  void reset();
 
-  virtual void add(uint8_t* buf, size_t size);
+  void add(uint8_t* buf, size_t size);
 };
-
-#endif

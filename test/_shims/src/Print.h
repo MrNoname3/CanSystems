@@ -17,8 +17,7 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef Print_h
-#define Print_h
+#pragma once
 
 class Print {
 public:
@@ -26,4 +25,3 @@ public:
   virtual size_t write(const uint8_t* buffer, size_t size) { size_t n = 0; while(size--) { n += write(*buffer++); } return n; }
 };
 
-#endif
