@@ -61,9 +61,9 @@ private:
   };
   // clang-format on
 
-  static constexpr uint8_t MQTT_MAX_HEADER_SIZE  = 5U;
-  static constexpr uint16_t defaultBufferSize    = static_cast<uint16_t>(MQTT_MAX_PACKET_SIZE);
-  static constexpr uint16_t defaultKeepAlive     = static_cast<uint16_t>(MQTT_KEEPALIVE);
+  static constexpr uint8_t MQTT_MAX_HEADER_SIZE = 5U;
+  static constexpr uint16_t defaultBufferSize = static_cast<uint16_t>(MQTT_MAX_PACKET_SIZE);
+  static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);
 
 #if defined(ESP8266) || defined(ESP32)
