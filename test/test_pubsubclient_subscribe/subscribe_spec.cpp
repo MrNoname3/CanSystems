@@ -4,7 +4,7 @@
 #include "BDDTest.h"
 #include "trace.h"
 
-uint8_t server[] = {172, 16, 0, 2};
+uint8_t server[] = {172U, 16U, 0U, 2U};
 
 void callback(char* topic, uint8_t* payload, unsigned int length) {
   // handle message arrived
@@ -15,17 +15,17 @@ bool test_subscribe_no_qos() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t subscribe[] = {0x82, 0xa, 0x0, 0x2, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x0};
-  shimClient.expect(subscribe, 12);
-  uint8_t suback[] = {0x90, 0x3, 0x0, 0x2, 0x0};
-  shimClient.respond(suback, 5);
+  uint8_t subscribe[] = {0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x0U};
+  shimClient.expect(subscribe, 12U);
+  uint8_t suback[] = {0x90U, 0x3U, 0x0U, 0x2U, 0x0U};
+  shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic");
   IS_TRUE(rc);
@@ -40,19 +40,19 @@ bool test_subscribe_qos_1() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t subscribe[] = {0x82, 0xa, 0x0, 0x2, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x1};
-  shimClient.expect(subscribe, 12);
-  uint8_t suback[] = {0x90, 0x3, 0x0, 0x2, 0x1};
-  shimClient.respond(suback, 5);
+  uint8_t subscribe[] = {0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U};
+  shimClient.expect(subscribe, 12U);
+  uint8_t suback[] = {0x90U, 0x3U, 0x0U, 0x2U, 0x1U};
+  shimClient.respond(suback, 5U);
 
-  rc = client.subscribe("topic", 1);
+  rc = client.subscribe("topic", 1U);
   IS_TRUE(rc);
 
   IS_FALSE(shimClient.error());
@@ -79,16 +79,16 @@ bool test_subscribe_invalid_qos() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  rc = client.subscribe("topic", 2);
+  rc = client.subscribe("topic", 2U);
   IS_FALSE(rc);
-  rc = client.subscribe("topic", 254);
+  rc = client.subscribe("topic", 254U);
   IS_FALSE(rc);
 
   IS_FALSE(shimClient.error());
@@ -101,11 +101,11 @@ bool test_subscribe_too_long() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
-  client.setBufferSize(128);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setBufferSize(128U);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
@@ -128,17 +128,17 @@ bool test_unsubscribe() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t unsubscribe[] = {0xA2, 0x9, 0x0, 0x2, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63};
-  shimClient.expect(unsubscribe, 12);
-  uint8_t unsuback[] = {0xB0, 0x2, 0x0, 0x2};
-  shimClient.respond(unsuback, 4);
+  uint8_t unsubscribe[] = {0xA2U, 0x9U, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U};
+  shimClient.expect(unsubscribe, 12U);
+  uint8_t unsuback[] = {0xB0U, 0x2U, 0x0U, 0x2U};
+  shimClient.respond(unsuback, 4U);
 
   rc = client.unsubscribe("topic");
   IS_TRUE(rc);
@@ -152,7 +152,7 @@ bool test_unsubscribe_not_connected() {
   IT("unsubscribe fails when not connected");
   ShimClient shimClient;
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
 
   bool rc = client.unsubscribe("topic");
   IS_FALSE(rc);

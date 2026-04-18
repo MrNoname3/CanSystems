@@ -4,7 +4,7 @@
 #include "BDDTest.h"
 #include "trace.h"
 
-uint8_t server[] = {172, 16, 0, 2};
+uint8_t server[] = {172U, 16U, 0U, 2U};
 
 void callback(char* topic, uint8_t* payload, unsigned int length) {
   // handle message arrived
@@ -15,15 +15,15 @@ bool test_publish() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30, 0xe, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64};
-  shimClient.expect(publish, 16);
+  uint8_t publish[] = {0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  shimClient.expect(publish, 16U);
 
   rc = client.publish("topic", "payload");
   IS_TRUE(rc);
@@ -38,18 +38,18 @@ bool test_publish_bytes() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t payload[] = {0x01, 0x02, 0x03, 0x0, 0x05};
+  uint8_t payload[] = {0x01U, 0x02U, 0x03U, 0x0U, 0x05U};
   uint8_t length = 5U;
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30, 0xc, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x1, 0x2, 0x3, 0x0, 0x5};
-  shimClient.expect(publish, 14);
+  uint8_t publish[] = {0x30U, 0xcU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U, 0x2U, 0x3U, 0x0U, 0x5U};
+  shimClient.expect(publish, 14U);
 
   rc = client.publish("topic", payload, length);
   IS_TRUE(rc);
@@ -64,18 +64,18 @@ bool test_publish_retained() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t payload[] = {0x01, 0x02, 0x03, 0x0, 0x05};
+  uint8_t payload[] = {0x01U, 0x02U, 0x03U, 0x0U, 0x05U};
   uint8_t length = 5U;
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x31, 0xc, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x1, 0x2, 0x3, 0x0, 0x5};
-  shimClient.expect(publish, 14);
+  uint8_t publish[] = {0x31U, 0xcU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U, 0x2U, 0x3U, 0x0U, 0x5U};
+  shimClient.expect(publish, 14U);
 
   rc = client.publish("topic", payload, length, true);
   IS_TRUE(rc);
@@ -90,15 +90,15 @@ bool test_publish_retained_2() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x31, 0xc, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 'A', 'B', 'C', 'D', 'E'};
-  shimClient.expect(publish, 14);
+  uint8_t publish[] = {0x31U, 0xcU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 'A', 'B', 'C', 'D', 'E'};
+  shimClient.expect(publish, 14U);
 
   rc = client.publish("topic", "ABCDE", true);
   IS_TRUE(rc);
@@ -112,7 +112,7 @@ bool test_publish_not_connected() {
   IT("publish fails when not connected");
   ShimClient shimClient;
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
 
   bool rc = client.publish("topic", "payload");
   IS_FALSE(rc);
@@ -127,11 +127,11 @@ bool test_publish_too_long() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
-  client.setBufferSize(128);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setBufferSize(128U);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
@@ -149,18 +149,18 @@ bool test_publish_P() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t payload[] = {0x01, 0x02, 0x03, 0x0, 0x05};
+  uint8_t payload[] = {0x01U, 0x02U, 0x03U, 0x0U, 0x05U};
   uint8_t length = 5U;
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x31, 0xc, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x1, 0x2, 0x3, 0x0, 0x5};
-  shimClient.expect(publish, 14);
+  uint8_t publish[] = {0x31U, 0xcU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U, 0x2U, 0x3U, 0x0U, 0x5U};
+  shimClient.expect(publish, 14U);
 
   rc = client.publish_P("topic", payload, length, true);
   IS_TRUE(rc);

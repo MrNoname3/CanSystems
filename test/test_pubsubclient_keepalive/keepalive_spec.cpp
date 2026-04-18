@@ -5,7 +5,7 @@
 #include "trace.h"
 #include <unistd.h>
 
-uint8_t server[] = {172, 16, 0, 2};
+uint8_t server[] = {172U, 16U, 0U, 2U};
 
 void callback(char* topic, uint8_t* payload, unsigned int length) {
   // handle message arrived
@@ -17,23 +17,23 @@ bool test_keepalive_pings_idle() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t pingreq[] = {0xC0, 0x0};
-  shimClient.expect(pingreq, 2);
-  uint8_t pingresp[] = {0xD0, 0x0};
-  shimClient.respond(pingresp, 2);
+  uint8_t pingreq[] = {0xC0U, 0x0U};
+  shimClient.expect(pingreq, 2U);
+  uint8_t pingresp[] = {0xD0U, 0x0U};
+  shimClient.respond(pingresp, 2U);
 
-  for (uint8_t i = 0; i < 50U; i++) {
+  for (uint8_t i = 0U; i < 50U; i++) {
     sleep(1);
-    if (i == 15 || i == 31 || i == 47) {
-      shimClient.expect(pingreq, 2);
-      shimClient.respond(pingresp, 2);
+    if (i == 15U || i == 31U || i == 47U) {
+      shimClient.expect(pingreq, 2U);
+      shimClient.respond(pingresp, 2U);
     }
     rc = client.loop();
     IS_TRUE(rc);
@@ -50,27 +50,27 @@ bool test_keepalive_pings_with_outbound_qos0() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30, 0xe, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64};
+  uint8_t publish[] = {0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
 
-  for (uint8_t i = 0; i < 50U; i++) {
+  for (uint8_t i = 0U; i < 50U; i++) {
     TRACE(i << ":");
-    shimClient.expect(publish, 16);
+    shimClient.expect(publish, 16U);
     rc = client.publish("topic", "payload");
     IS_TRUE(rc);
     IS_FALSE(shimClient.error());
     sleep(1);
-    if (i == 15 || i == 31 || i == 47) {
-      uint8_t pingreq[] = {0xC0, 0x0};
-      shimClient.expect(pingreq, 2);
-      uint8_t pingresp[] = {0xD0, 0x0};
-      shimClient.respond(pingresp, 2);
+    if (i == 15U || i == 31U || i == 47U) {
+      uint8_t pingreq[] = {0xC0U, 0x0U};
+      shimClient.expect(pingreq, 2U);
+      uint8_t pingresp[] = {0xD0U, 0x0U};
+      shimClient.respond(pingresp, 2U);
     }
     rc = client.loop();
     IS_TRUE(rc);
@@ -86,25 +86,25 @@ bool test_keepalive_pings_with_inbound_qos0() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30, 0xe, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64};
+  uint8_t publish[] = {0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
 
-  for (uint8_t i = 0; i < 50U; i++) {
+  for (uint8_t i = 0U; i < 50U; i++) {
     TRACE(i << ":");
     sleep(1);
-    if (i == 15 || i == 31 || i == 47) {
-      uint8_t pingreq[] = {0xC0, 0x0};
-      shimClient.expect(pingreq, 2);
-      uint8_t pingresp[] = {0xD0, 0x0};
-      shimClient.respond(pingresp, 2);
+    if (i == 15U || i == 31U || i == 47U) {
+      uint8_t pingreq[] = {0xC0U, 0x0U};
+      shimClient.expect(pingreq, 2U);
+      uint8_t pingresp[] = {0xD0U, 0x0U};
+      shimClient.respond(pingresp, 2U);
     }
-    shimClient.respond(publish, 16);
+    shimClient.respond(publish, 16U);
     rc = client.loop();
     IS_TRUE(rc);
     IS_FALSE(shimClient.error());
@@ -119,19 +119,19 @@ bool test_keepalive_no_pings_inbound_qos1() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x32, 0x10, 0x0, 0x5, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x12, 0x34, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64};
-  uint8_t puback[] = {0x40, 0x2, 0x12, 0x34};
+  uint8_t publish[] = {0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t puback[] = {0x40U, 0x2U, 0x12U, 0x34U};
 
-  for (uint8_t i = 0; i < 50U; i++) {
-    shimClient.respond(publish, 18);
-    shimClient.expect(puback, 4);
+  for (uint8_t i = 0U; i < 50U; i++) {
+    shimClient.respond(publish, 18U);
+    shimClient.expect(puback, 4U);
     sleep(1);
     rc = client.loop();
     IS_TRUE(rc);
@@ -147,18 +147,18 @@ bool test_keepalive_disconnects_hung() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
-  shimClient.respond(connack, 4);
+  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  shimClient.respond(connack, 4U);
 
-  PubSubClient client(server, 1883, callback, shimClient);
+  PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t pingreq[] = {0xC0, 0x0};
-  shimClient.expect(pingreq, 2);
+  uint8_t pingreq[] = {0xC0U, 0x0U};
+  shimClient.expect(pingreq, 2U);
 
-  for (uint8_t i = 0; i < 32U; i++) {
-    sleep(1);
+  for (uint8_t i = 0U; i < 32U; i++) {
+    sleep(1U);
     rc = client.loop();
   }
   IS_FALSE(rc);
