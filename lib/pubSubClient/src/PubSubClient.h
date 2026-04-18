@@ -141,7 +141,7 @@ public:
   bool beginPublish(const char* topic, uint16_t plength, bool retained);
   // Finish off this publish message (started with beginPublish)
   // Returns 1 if the packet was sent successfully, 0 if there was an error
-  bool endPublish() { return true; }
+  bool endPublish() { return true; }  // NOLINT(readability-convert-member-functions-to-static)
   // Write a single byte of payload (only to be used with beginPublish/endPublish)
   size_t write(uint8_t) override;
   // Write size bytes from buffer into the payload (only to be used with beginPublish/endPublish)

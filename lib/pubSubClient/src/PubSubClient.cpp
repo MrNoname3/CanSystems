@@ -204,7 +204,7 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
 }
 
 // reads a byte into result
-bool PubSubClient::readByte(uint8_t* result) {
+bool PubSubClient::readByte(uint8_t* result) {  // NOLINT(readability-convert-member-functions-to-static)
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   uint32_t previousMillis = millis();
   while (tcpClient->available() == 0) {
