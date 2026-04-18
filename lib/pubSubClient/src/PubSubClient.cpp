@@ -563,24 +563,24 @@ size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
   uint8_t lenBuf[4];
-  uint8_t llen = 0U;
-  uint8_t pos = 0U;
+  size_t llen = 0U;
+  size_t pos = 0U;
   uint16_t len = length;
   do {
-    uint8_t digit = static_cast<uint8_t>(len & 127U);  // digit = len %128
-    len >>= 7U;                                        // len = len / 128
+    uint8_t digit = static_cast<uint8_t>(len & 127U);   // digit = len %128
+    len = static_cast<uint16_t>(len >> 7U);              // len = len / 128
     if (len > 0U) {
-      digit |= 0x80U;
+      digit = static_cast<uint8_t>(digit | 0x80U);
     }
     lenBuf[pos++] = digit;
     llen++;
   } while (len > 0U);
 
-  buf[4U - llen] = header;
-  for (uint8_t i = 0U; i < llen; i++) {
+  buf[MQTT_MAX_HEADER_SIZE - 1U - llen] = header;
+  for (size_t i = 0U; i < llen; i++) {
     buf[MQTT_MAX_HEADER_SIZE - llen + i] = lenBuf[i];
   }
-  return static_cast<size_t>(llen) + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
+  return llen + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
 }
 
 bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NOLINT(readability-convert-member-functions-to-static)
