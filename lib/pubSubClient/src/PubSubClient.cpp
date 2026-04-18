@@ -103,23 +103,12 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       memcpy(this->buffer + length, d, sizeof(d));
       length += sizeof(d);
 
-      uint8_t v;
-      if (willTopic != nullptr) {
-        v = static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U));
-      } else {
-        v = 0x00U;
-      }
-      if (cleanSession) {
-        v = v | 0x02U;
-      }
-
-      if (user != nullptr) {
-        v = v | 0x80U;
-
-        if (pass != nullptr) {
-          v = v | (0x80U >> 1U);
-        }
-      }
+      uint8_t v = (willTopic != nullptr)
+        ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
+        : 0x00U;
+      v |= cleanSession ? 0x02U : 0x00U;
+      v |= (user != nullptr) ? 0x80U : 0x00U;
+      v |= (user != nullptr && pass != nullptr) ? 0x40U : 0x00U;
       this->buffer[length++] = v;
 
       this->buffer[length++] = ((this->keepAlive) >> 8U);
@@ -237,7 +226,6 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
       tcpClient->stop();
       return 0U;
     }
-    digit = 0U;
     if (!readByte(&digit)) {
       return 0U;
     }
@@ -307,7 +295,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
     }
     if (tcpClient->available() != 0) {
       uint8_t llen;
-      uint16_t len = readPacket(&llen);
+      uint16_t len = static_cast<uint16_t>(readPacket(&llen));
       if (len > 0U) {
         lastInActivity = t;
         uint8_t type = this->buffer[0] & 0xF0U;
@@ -393,23 +381,19 @@ bool PubSubClient::publish_P(const char* topic, const char* payload, bool retain
 }
 
 bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
-  uint8_t llen = 0U;
-  uint16_t rc = 0U;
-  uint16_t tlen;
-  uint16_t pos = 0U;
-  uint16_t expectedLength;
-
   if (!connected()) {
     return false;
   }
 
-  tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
+  const uint16_t tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
 
   uint8_t header = MQTTPUBLISH;
   if (retained) {
     header |= 1U;
   }
+  uint16_t pos = 0U;
   this->buffer[pos++] = header;
+  uint8_t llen = 0U;
   uint16_t len = static_cast<uint16_t>(plength + 2U + tlen);
   do {
     uint8_t digit = static_cast<uint8_t>(len & 127U);  // digit = len %128
@@ -423,16 +407,14 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
 
   pos = writeString(topic, this->buffer, pos);
 
-  rc += static_cast<uint16_t>(tcpClient->write(this->buffer, pos));
-
+  uint16_t rc = static_cast<uint16_t>(tcpClient->write(this->buffer, pos));
   for (uint16_t i = 0U; i < plength; i++) {
     rc += static_cast<uint16_t>(tcpClient->write(pgm_read_byte_near(payload + i)));
   }
 
   lastOutActivity = millis();
 
-  expectedLength = static_cast<uint16_t>(1U + llen + 2U + tlen + plength);
-
+  const uint16_t expectedLength = static_cast<uint16_t>(1U + llen + 2U + tlen + plength);
   return (rc == expectedLength);
 }
 
@@ -466,7 +448,6 @@ size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
   uint8_t lenBuf[4];
-  size_t llen = 0U;
   size_t pos = 0U;
   uint16_t len = length;
   do {
@@ -476,12 +457,11 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
       digit = static_cast<uint8_t>(digit | 0x80U);
     }
     lenBuf[pos++] = digit;
-    llen++;
   } while (len > 0U);
 
-  buf[MQTT_MAX_HEADER_SIZE - 1U - llen] = header;
-  memcpy(buf + MQTT_MAX_HEADER_SIZE - llen, lenBuf, llen);
-  return llen + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
+  buf[MQTT_MAX_HEADER_SIZE - 1U - pos] = header;
+  memcpy(buf + MQTT_MAX_HEADER_SIZE - pos, lenBuf, pos);
+  return pos + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
 }
 
 bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NOLINT(readability-convert-member-functions-to-static)
