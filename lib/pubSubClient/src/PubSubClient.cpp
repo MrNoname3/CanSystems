@@ -205,11 +205,11 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
 
 // reads a byte into result
 bool PubSubClient::readByte(uint8_t* result) {
+  const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   uint32_t previousMillis = millis();
   while (tcpClient->available() == 0) {
     yield();
-    uint32_t currentMillis = millis();
-    if (currentMillis - previousMillis >= (static_cast<uint32_t>(this->socketTimeout) * 1000U)) {
+    if (millis() - previousMillis >= timeoutMs) {
       return false;
     }
   }
@@ -301,7 +301,8 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
 bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity)
   if (connected()) {
     uint32_t t = millis();
-    if ((t - lastInActivity > static_cast<uint32_t>(this->keepAlive) * 1000U) || (t - lastOutActivity > static_cast<uint32_t>(this->keepAlive) * 1000U)) {
+    const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
+    if ((t - lastInActivity > keepAliveMs) || (t - lastOutActivity > keepAliveMs)) {
       if (pingOutstanding) {
         this->connectionState = State::CONNECTION_TIMEOUT;
         tcpClient->stop();
@@ -384,9 +385,8 @@ bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t p
     length = writeString(topic, this->buffer, length);
 
     // Add payload
-    for (uint16_t i = 0U; i < plength; i++) {
-      this->buffer[length++] = payload[i];
-    }
+    memcpy(this->buffer + length, payload, plength);
+    length += plength;
 
     // Write the header
     uint8_t header = MQTTPUBLISH;
@@ -463,9 +463,6 @@ bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retain
   return false;
 }
 
-bool PubSubClient::endPublish() {  // NOLINT(readability-convert-member-functions-to-static)
-  return true;
-}
 
 size_t PubSubClient::write(uint8_t data) {
   lastOutActivity = millis();
@@ -528,10 +525,10 @@ bool PubSubClient::subscribe(const char* topic) {
 }
 
 bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
-  size_t topicLength = strnlen(topic, this->bufferSize);
   if (topic == nullptr) {
     return false;
   }
+  size_t topicLength = strnlen(topic, this->bufferSize);
   if (qos > 1U) {
     return false;
   }
@@ -556,10 +553,10 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
 }
 
 bool PubSubClient::unsubscribe(const char* topic) {
-  size_t topicLength = strnlen(topic, this->bufferSize);
   if (topic == nullptr) {
     return false;
   }
+  size_t topicLength = strnlen(topic, this->bufferSize);
   if (this->bufferSize < 9U + topicLength) {
     // Too long
     return false;
@@ -589,16 +586,11 @@ void PubSubClient::disconnect() {
 }
 
 uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t pos) {
-  const char* idp = string;
-  uint16_t i = 0U;
-  pos += 2U;
-  while (*idp != '\0') {
-    buf[pos++] = *idp++;
-    i++;
-  }
-  buf[pos - i - 2U] = static_cast<uint8_t>(i >> 8U);
-  buf[pos - i - 1U] = static_cast<uint8_t>(i & 0xFFU);
-  return pos;
+  const uint16_t len = static_cast<uint16_t>(strlen(string));
+  buf[pos++] = static_cast<uint8_t>(len >> 8U);
+  buf[pos++] = static_cast<uint8_t>(len & 0xFFU);
+  memcpy(buf + pos, string, len);
+  return static_cast<uint16_t>(pos + len);
 }
 
 bool PubSubClient::connected() {  // NOLINT(readability-convert-member-functions-to-static)
