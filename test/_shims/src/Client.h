@@ -16,4 +16,3 @@ public:
   virtual uint8_t connected() = 0;
   virtual operator bool() = 0;
 };
-

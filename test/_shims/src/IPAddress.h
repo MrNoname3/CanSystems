@@ -74,4 +74,3 @@ public:
   friend class DhcpClass;
   friend class DNSClient;
 };
-
