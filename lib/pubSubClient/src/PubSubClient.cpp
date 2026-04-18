@@ -86,17 +86,9 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {  // NOLINT(readability-function-cognitive-complexity)
   if (!connected()) {
-    bool result = false;
-
-    if (tcpClient->connected() != 0) {
-      result = true;
-    } else {
-      if (domain != nullptr) {
-        result = static_cast<bool>(tcpClient->connect(this->domain, this->port));
-      } else {
-        result = static_cast<bool>(tcpClient->connect(this->ip, this->port));
-      }
-    }
+    const bool result = (tcpClient->connected() != 0) ||
+      static_cast<bool>(domain != nullptr ? tcpClient->connect(this->domain, this->port)
+                                          : tcpClient->connect(this->ip, this->port));
 
     if (result) {
       nextMsgId = 1U;
@@ -138,14 +130,15 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       }
       length = writeString(id, this->buffer, length);
       if (willTopic != nullptr) {
+        const char* const willMsg = (willMessage != nullptr) ? willMessage : "";
         if (!checkStringLength(length, willTopic)) {
           return false;
         }
         length = writeString(willTopic, this->buffer, length);
-        if (!checkStringLength(length, willMessage)) {
+        if (!checkStringLength(length, willMsg)) {
           return false;
         }
-        length = writeString(willMessage, this->buffer, length);
+        length = writeString(willMsg, this->buffer, length);
       }
 
       if (user != nullptr) {
@@ -534,10 +527,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if (connected()) {
     // Leave room in the buffer for header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    nextMsgId++;
-    if (nextMsgId == 0U) {
-      nextMsgId = 1U;
-    }
+    if (++nextMsgId == 0U) { nextMsgId = 1U; }
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
@@ -558,10 +548,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
   }
   if (connected()) {
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    nextMsgId++;
-    if (nextMsgId == 0U) {
-      nextMsgId = 1U;
-    }
+    if (++nextMsgId == 0U) { nextMsgId = 1U; }
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
@@ -608,37 +595,6 @@ PubSubClient& PubSubClient::setServer(const uint8_t* ip, uint16_t port) {  // NO
   return setServer(addr, port);
 }
 
-PubSubClient& PubSubClient::setServer(IPAddress ip, uint16_t port) {
-  this->ip = ip;
-  this->port = port;
-  this->domain = nullptr;
-  return *this;
-}
-
-PubSubClient& PubSubClient::setServer(const char* domain, uint16_t port) {
-  this->domain = domain;
-  this->port = port;
-  return *this;
-}
-
-PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
-  this->callback = callback;
-  return *this;
-}
-
-PubSubClient& PubSubClient::setClient(Client& client) {
-  this->tcpClient = &client;
-  return *this;
-}
-
-PubSubClient& PubSubClient::setStream(Stream& stream) {
-  this->stream = &stream;
-  return *this;
-}
-
-PubSubClient::State PubSubClient::state() const {
-  return this->connectionState;
-}
 
 bool PubSubClient::setBufferSize(uint16_t size) {
   if (size == 0U || size > defaultBufferSize) {
@@ -648,14 +604,3 @@ bool PubSubClient::setBufferSize(uint16_t size) {
   return true;
 }
 
-uint16_t PubSubClient::getBufferSize() const {
-  return this->bufferSize;
-}
-PubSubClient& PubSubClient::setKeepAlive(uint16_t keepAlive) {
-  this->keepAlive = keepAlive;
-  return *this;
-}
-PubSubClient& PubSubClient::setSocketTimeout(uint16_t timeout) {
-  this->socketTimeout = timeout;
-  return *this;
-}

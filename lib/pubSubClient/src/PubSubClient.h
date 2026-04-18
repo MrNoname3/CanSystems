@@ -106,17 +106,21 @@ public:
   PubSubClient(const char*, uint16_t, MqttCallback callback, Client& client, Stream&);
   ~PubSubClient() = default;
 
-  PubSubClient& setServer(IPAddress ip, uint16_t port);
+  PubSubClient& setServer(IPAddress ip, uint16_t port) {
+    this->ip = ip; this->port = port; this->domain = nullptr; return *this;
+  }
   PubSubClient& setServer(const uint8_t* ip, uint16_t port);
-  PubSubClient& setServer(const char* domain, uint16_t port);
-  PubSubClient& setCallback(MqttCallback callback);
-  PubSubClient& setClient(Client& client);
-  PubSubClient& setStream(Stream& stream);
-  PubSubClient& setKeepAlive(uint16_t keepAlive);
-  PubSubClient& setSocketTimeout(uint16_t timeout);
+  PubSubClient& setServer(const char* domain, uint16_t port) {
+    this->domain = domain; this->port = port; return *this;
+  }
+  PubSubClient& setCallback(MqttCallback callback) { this->callback = callback; return *this; }
+  PubSubClient& setClient(Client& client) { this->tcpClient = &client; return *this; }
+  PubSubClient& setStream(Stream& stream) { this->stream = &stream; return *this; }
+  PubSubClient& setKeepAlive(uint16_t keepAlive) { this->keepAlive = keepAlive; return *this; }
+  PubSubClient& setSocketTimeout(uint16_t timeout) { this->socketTimeout = timeout; return *this; }
 
   bool setBufferSize(uint16_t size);
-  [[nodiscard]] uint16_t getBufferSize() const;
+  [[nodiscard]] uint16_t getBufferSize() const { return this->bufferSize; }
 
   bool connect(const char* id);
   bool connect(const char* id, const char* user, const char* pass);
@@ -152,7 +156,7 @@ public:
   bool unsubscribe(const char* topic);
   bool loop();
   bool connected();
-  [[nodiscard]] State state() const;
+  [[nodiscard]] State state() const { return this->connectionState; }
 
 private:
   Client* tcpClient = nullptr;
