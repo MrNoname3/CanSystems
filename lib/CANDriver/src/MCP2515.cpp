@@ -91,6 +91,7 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
   const uint8_t* cnf = nullptr;
 
   for(const CnfEntry& entry : cnfMapper) {
+    // cppcheck-suppress useStlAlgorithm
     if(entry.clockFrequency == clockFrequency && entry.baudRate == baudRate) {
       cnf = entry.cnf;
       break;

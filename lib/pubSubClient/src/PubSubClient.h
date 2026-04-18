@@ -119,10 +119,10 @@ public:
    PubSubClient(IPAddress, uint16_t, Client& client, Stream&);
    PubSubClient(IPAddress, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
    PubSubClient(IPAddress, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
-   PubSubClient(uint8_t *, uint16_t, Client& client);
-   PubSubClient(uint8_t *, uint16_t, Client& client, Stream&);
-   PubSubClient(uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
-   PubSubClient(uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
+   PubSubClient(const uint8_t *, uint16_t, Client& client);
+   PubSubClient(const uint8_t *, uint16_t, Client& client, Stream&);
+   PubSubClient(const uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
+   PubSubClient(const uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
    PubSubClient(const char*, uint16_t, Client& client);
    PubSubClient(const char*, uint16_t, Client& client, Stream&);
    PubSubClient(const char*, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
@@ -140,7 +140,7 @@ public:
    PubSubClient& setSocketTimeout(uint16_t timeout);
 
    bool setBufferSize(uint16_t size);
-   uint16_t getBufferSize() const;
+   [[nodiscard]] uint16_t getBufferSize() const;
 
    bool connect(const char* id);
    bool connect(const char* id, const char* user, const char* pass);
@@ -176,7 +176,7 @@ public:
    bool unsubscribe(const char* topic);
    bool loop();
    bool connected();
-   int state() const;
+   [[nodiscard]] int state() const;
 
 };
 
