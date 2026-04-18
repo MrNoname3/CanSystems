@@ -34,80 +34,55 @@
 //  pass the entire MQTT packet in each write call.
 // #define MQTT_MAX_TRANSFER_SIZE 80
 
-// Possible values for client.state()
-// clang-format off
-inline constexpr int8_t MQTT_CONNECTION_TIMEOUT     = -4;
-inline constexpr int8_t MQTT_CONNECTION_LOST        = -3;
-inline constexpr int8_t MQTT_CONNECT_FAILED         = -2;
-inline constexpr int8_t MQTT_DISCONNECTED           = -1;
-inline constexpr int8_t MQTT_CONNECTED               = 0;
-inline constexpr int8_t MQTT_CONNECT_BAD_PROTOCOL    = 1;
-inline constexpr int8_t MQTT_CONNECT_BAD_CLIENT_ID   = 2;
-inline constexpr int8_t MQTT_CONNECT_UNAVAILABLE     = 3;
-inline constexpr int8_t MQTT_CONNECT_BAD_CREDENTIALS = 4;
-inline constexpr int8_t MQTT_CONNECT_UNAUTHORIZED    = 5;
+class PubSubClient final : public Print {
+private:
+  // clang-format off
+  static inline constexpr uint8_t MQTTCONNECT     = 1U << 4U;  // Client request to connect to Server
+  static inline constexpr uint8_t MQTTCONNACK     = 2U << 4U;  // Connect Acknowledgment
+  static inline constexpr uint8_t MQTTPUBLISH     = 3U << 4U;  // Publish message
+  static inline constexpr uint8_t MQTTPUBACK      = 4U << 4U;  // Publish Acknowledgment
+  static inline constexpr uint8_t MQTTPUBREC      = 5U << 4U;  // Publish Received (assured delivery part 1)
+  static inline constexpr uint8_t MQTTPUBREL      = 6U << 4U;  // Publish Release (assured delivery part 2)
+  static inline constexpr uint8_t MQTTPUBCOMP     = 7U << 4U;  // Publish Complete (assured delivery part 3)
+  static inline constexpr uint8_t MQTTSUBSCRIBE   = 8U << 4U;  // Client Subscribe request
+  static inline constexpr uint8_t MQTTSUBACK      = 9U << 4U;  // Subscribe Acknowledgment
+  static inline constexpr uint8_t MQTTUNSUBSCRIBE = 10U << 4U; // Client Unsubscribe request
+  static inline constexpr uint8_t MQTTUNSUBACK    = 11U << 4U; // Unsubscribe Acknowledgment
+  static inline constexpr uint8_t MQTTPINGREQ     = 12U << 4U; // PING Request
+  static inline constexpr uint8_t MQTTPINGRESP    = 13U << 4U; // PING Response
+  static inline constexpr uint8_t MQTTDISCONNECT  = 14U << 4U; // Client is Disconnecting
+  static inline constexpr uint8_t MQTTReserved    = 15U << 4U; // Reserved
+  // clang-format on
 
-inline constexpr uint8_t MQTTCONNECT     = 1U << 4U;  // Client request to connect to Server
-inline constexpr uint8_t MQTTCONNACK     = 2U << 4U;  // Connect Acknowledgment
-inline constexpr uint8_t MQTTPUBLISH     = 3U << 4U;  // Publish message
-inline constexpr uint8_t MQTTPUBACK      = 4U << 4U;  // Publish Acknowledgment
-inline constexpr uint8_t MQTTPUBREC      = 5U << 4U;  // Publish Received (assured delivery part 1)
-inline constexpr uint8_t MQTTPUBREL      = 6U << 4U;  // Publish Release (assured delivery part 2)
-inline constexpr uint8_t MQTTPUBCOMP     = 7U << 4U;  // Publish Complete (assured delivery part 3)
-inline constexpr uint8_t MQTTSUBSCRIBE   = 8U << 4U;  // Client Subscribe request
-inline constexpr uint8_t MQTTSUBACK      = 9U << 4U;  // Subscribe Acknowledgment
-inline constexpr uint8_t MQTTUNSUBSCRIBE = 10U << 4U; // Client Unsubscribe request
-inline constexpr uint8_t MQTTUNSUBACK    = 11U << 4U; // Unsubscribe Acknowledgment
-inline constexpr uint8_t MQTTPINGREQ     = 12U << 4U; // PING Request
-inline constexpr uint8_t MQTTPINGRESP    = 13U << 4U; // PING Response
-inline constexpr uint8_t MQTTDISCONNECT  = 14U << 4U; // Client is Disconnecting
-inline constexpr uint8_t MQTTReserved    = 15U << 4U; // Reserved
-// clang-format on
+  static inline constexpr uint8_t MQTTQOS0 = (0U << 1U);
+  static inline constexpr uint8_t MQTTQOS1 = (1U << 1U);
+  static inline constexpr uint8_t MQTTQOS2 = (2U << 1U);
 
-inline constexpr uint8_t MQTTQOS0 = (0U << 1U);
-inline constexpr uint8_t MQTTQOS1 = (1U << 1U);
-inline constexpr uint8_t MQTTQOS2 = (2U << 1U);
-
-// Maximum size of fixed header and variable length size header
-inline constexpr uint8_t MQTT_MAX_HEADER_SIZE = 5U;
+  // Maximum size of fixed header and variable length size header
+  static inline constexpr uint8_t MQTT_MAX_HEADER_SIZE = 5U;
 
 #if defined(ESP8266) || defined(ESP32)
 #include <functional>
-using MqttCallback = std::function<void(char*, uint8_t*, unsigned int)>;
+  using MqttCallback = std::function<void(char*, uint8_t*, unsigned int)>;
 #else
-using MqttCallback = void (*)(char*, uint8_t*, unsigned int);
+  using MqttCallback = void (*)(char*, uint8_t*, unsigned int);
 #endif
 
-class PubSubClient : public Print {
-private:
-  Client* _client = nullptr;
-  uint8_t buffer[MQTT_MAX_PACKET_SIZE];
-  uint16_t bufferSize = MQTT_MAX_PACKET_SIZE;
-  uint16_t keepAlive = MQTT_KEEPALIVE;
-  uint16_t socketTimeout = MQTT_SOCKET_TIMEOUT;
-  uint16_t nextMsgId = 0U;
-  uint32_t lastOutActivity = 0U;
-  uint32_t lastInActivity = 0U;
-  bool pingOutstanding = false;
-  MqttCallback callback = nullptr;
-  uint32_t readPacket(uint8_t*);
-  bool readByte(uint8_t* result);
-  bool readByte(uint8_t* result, uint16_t* index);
-  bool write(uint8_t header, uint8_t* buf, uint16_t length);
-  bool checkStringLength(uint16_t length, const char* str);
-  static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
-  // Build up the header ready to send
-  // Returns the size of the header
-  // Note: the header is built at the end of the first MQTT_MAX_HEADER_SIZE bytes, so will start
-  //       (MQTT_MAX_HEADER_SIZE - <returned size>) bytes into the buffer
-  size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
-  IPAddress ip;
-  const char* domain = nullptr;
-  uint16_t port = 0U;
-  Stream* stream = nullptr;
-  int8_t _state = MQTT_DISCONNECTED;
-
 public:
+  // Possible values for client.state()
+  // clang-format off
+  static inline constexpr int8_t MQTT_CONNECTION_TIMEOUT     = -4;
+  static inline constexpr int8_t MQTT_CONNECTION_LOST        = -3;
+  static inline constexpr int8_t MQTT_CONNECT_FAILED         = -2;
+  static inline constexpr int8_t MQTT_DISCONNECTED           = -1;
+  static inline constexpr int8_t MQTT_CONNECTED               = 0;
+  static inline constexpr int8_t MQTT_CONNECT_BAD_PROTOCOL    = 1;
+  static inline constexpr int8_t MQTT_CONNECT_BAD_CLIENT_ID   = 2;
+  static inline constexpr int8_t MQTT_CONNECT_UNAVAILABLE     = 3;
+  static inline constexpr int8_t MQTT_CONNECT_BAD_CREDENTIALS = 4;
+  static inline constexpr int8_t MQTT_CONNECT_UNAUTHORIZED    = 5;
+  // clang-format on
+
   PubSubClient() = default;
   PubSubClient(Client& client);
   PubSubClient(IPAddress, uint16_t, Client& client);
@@ -171,4 +146,32 @@ public:
   bool loop();
   bool connected();
   [[nodiscard]] int8_t state() const;
+
+private:
+  Client* _client = nullptr;
+  uint8_t buffer[MQTT_MAX_PACKET_SIZE];
+  uint16_t bufferSize = MQTT_MAX_PACKET_SIZE;
+  uint16_t keepAlive = MQTT_KEEPALIVE;
+  uint16_t socketTimeout = MQTT_SOCKET_TIMEOUT;
+  uint16_t nextMsgId = 0U;
+  uint32_t lastOutActivity = 0U;
+  uint32_t lastInActivity = 0U;
+  bool pingOutstanding = false;
+  MqttCallback callback = nullptr;
+  uint32_t readPacket(uint8_t*);
+  bool readByte(uint8_t* result);
+  bool readByte(uint8_t* result, uint16_t* index);
+  bool write(uint8_t header, uint8_t* buf, uint16_t length);
+  bool checkStringLength(uint16_t length, const char* str);
+  static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
+  // Build up the header ready to send
+  // Returns the size of the header
+  // Note: the header is built at the end of the first MQTT_MAX_HEADER_SIZE bytes, so will start
+  //       (MQTT_MAX_HEADER_SIZE - <returned size>) bytes into the buffer
+  size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
+  IPAddress ip;
+  const char* domain = nullptr;
+  uint16_t port = 0U;
+  Stream* stream = nullptr;
+  int8_t _state = MQTT_DISCONNECTED;
 };

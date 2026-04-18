@@ -7,7 +7,7 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   tcpClient(),
   mqttClient(tcpClient),
   networkState(true),
-  mqttState(MQTT_CONNECTED),
+  mqttState(PubSubClient::MQTT_CONNECTED),
   onlineState(true),
   deviceResetTimer(0U),
   debugLed(debugLedFunc),
@@ -166,7 +166,7 @@ bool Connectivity::run() {
   if(mqttClient.loop()) {
     reconnectTimer = actualTime;
   } else {
-    if((mqttState != MQTT_CONNECTED) && networkState) {
+    if((mqttState != PubSubClient::MQTT_CONNECTED) && networkState) {
       if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
         reconnectTimer = actualTime;
         connectToMqttServer();
@@ -174,7 +174,7 @@ bool Connectivity::run() {
     }
   }
 
-  const bool actualOnlineState = networkState && (mqttState == MQTT_CONNECTED);
+  const bool actualOnlineState = networkState && (mqttState == PubSubClient::MQTT_CONNECTED);
   if(actualOnlineState) {
     deviceResetTimer = actualTime;
   }
@@ -236,16 +236,16 @@ bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readabili
 
 const char* Connectivity::getMqttStatusStr(int8_t status) {
   switch(status) {
-    case MQTT_CONNECTION_TIMEOUT:    { return mqttConnectionTimeoutStr; }
-    case MQTT_CONNECTION_LOST:       { return mqttConnectionLostStr; }
-    case MQTT_CONNECT_FAILED:        { return mqttConnectFailedStr; }
-    case MQTT_DISCONNECTED:          { return mqttDisconnectedStr; }
-    case MQTT_CONNECTED:             { return mqttConnectedStr; }
-    case MQTT_CONNECT_BAD_PROTOCOL:  { return mqttConnectBadProtocolStr; }
-    case MQTT_CONNECT_BAD_CLIENT_ID: { return mqttConnectBadClientIdStr; }
-    case MQTT_CONNECT_UNAVAILABLE:   { return mqttConnectUnavailableStr; }
-    case MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; }
-    case MQTT_CONNECT_UNAUTHORIZED:  { return mqttConnectUnauthorizedStr; }
-    default:                         { return mqttUnknownStatusStr; }
+    case PubSubClient::MQTT_CONNECTION_TIMEOUT:     { return mqttConnectionTimeoutStr; }
+    case PubSubClient::MQTT_CONNECTION_LOST:        { return mqttConnectionLostStr; }
+    case PubSubClient::MQTT_CONNECT_FAILED:         { return mqttConnectFailedStr; }
+    case PubSubClient::MQTT_DISCONNECTED:           { return mqttDisconnectedStr; }
+    case PubSubClient::MQTT_CONNECTED:              { return mqttConnectedStr; }
+    case PubSubClient::MQTT_CONNECT_BAD_PROTOCOL:   { return mqttConnectBadProtocolStr; }
+    case PubSubClient::MQTT_CONNECT_BAD_CLIENT_ID:  { return mqttConnectBadClientIdStr; }
+    case PubSubClient::MQTT_CONNECT_UNAVAILABLE:    { return mqttConnectUnavailableStr; }
+    case PubSubClient::MQTT_CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; }
+    case PubSubClient::MQTT_CONNECT_UNAUTHORIZED:   { return mqttConnectUnauthorizedStr; }
+    default:                                        { return mqttUnknownStatusStr; }
   }
 }
