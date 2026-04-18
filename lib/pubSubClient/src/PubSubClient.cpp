@@ -156,7 +156,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
         }
       }
       uint8_t llen;
-      uint32_t len = readPacket(&llen);
+      const uint32_t len = readPacket(&llen);
 
       if (len == 4U) {
         if (buffer[3] == 0U) {
@@ -212,12 +212,11 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   if (!readByte(this->buffer, &len)) {
     return 0U;
   }
-  bool isPublish = (this->buffer[0] & 0xF0U) == MQTTPUBLISH;
+  const bool isPublish = (this->buffer[0] & 0xF0U) == MQTTPUBLISH;
   uint32_t multiplier = 1U;
   uint32_t length = 0U;
   uint8_t digit = 0U;
   uint16_t skip = 0U;
-  uint32_t start = 0U;
 
   do {
     if (len == 5U) {
@@ -244,12 +243,12 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
       return 0U;
     }
     skip = static_cast<uint16_t>((this->buffer[*lengthLength + 1U] << 8U) + this->buffer[*lengthLength + 2U]);
-    start = 2U;
     if ((this->buffer[0] & MQTTQOS1) != 0U) {
       // skip message id
       skip += 2U;
     }
   }
+  const uint32_t start = isPublish ? 2U : 0U;
   uint32_t idx = static_cast<uint32_t>(len);
 
   for (uint32_t i = start; i < length; i++) {
@@ -338,10 +337,6 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
     return true;
   }
   return false;
-}
-
-bool PubSubClient::publish(const char* topic, const char* payload) {
-  return publish(topic, reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U, false);
 }
 
 bool PubSubClient::publish(const char* topic, const char* payload, bool retained) {
@@ -436,15 +431,6 @@ bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retain
 }
 
 
-size_t PubSubClient::write(uint8_t data) {
-  lastOutActivity = millis();
-  return tcpClient->write(data);
-}
-
-size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
-  lastOutActivity = millis();
-  return tcpClient->write(buffer, size);
-}
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
   uint8_t lenBuf[4];

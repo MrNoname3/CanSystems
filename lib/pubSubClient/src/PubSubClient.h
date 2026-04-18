@@ -128,8 +128,7 @@ public:
   bool connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage);
   bool connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession);
   void disconnect();
-  bool publish(const char* topic, const char* payload);
-  bool publish(const char* topic, const char* payload, bool retained);
+  bool publish(const char* topic, const char* payload, bool retained = false);
   bool publish(const char* topic, const uint8_t* payload, uint16_t plength);
   bool publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
   bool publish_P(const char* topic, const char* payload, bool retained);
@@ -147,10 +146,10 @@ public:
   // Returns 1 if the packet was sent successfully, 0 if there was an error
   bool endPublish() { return true; }  // NOLINT(readability-convert-member-functions-to-static)
   // Write a single byte of payload (only to be used with beginPublish/endPublish)
-  size_t write(uint8_t) override;
+  size_t write(uint8_t data) override { lastOutActivity = millis(); return tcpClient->write(data); }
   // Write size bytes from buffer into the payload (only to be used with beginPublish/endPublish)
   // Returns the number of bytes written
-  size_t write(const uint8_t* buffer, size_t size) override;
+  size_t write(const uint8_t* buf, size_t size) override { lastOutActivity = millis(); return tcpClient->write(buf, size); }
   bool subscribe(const char* topic);
   bool subscribe(const char* topic, uint8_t qos);
   bool unsubscribe(const char* topic);
