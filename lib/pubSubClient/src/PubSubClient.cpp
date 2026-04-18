@@ -446,7 +446,7 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
   return (rc == expectedLength);
 }
 
-bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {
+bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {  // NOLINT(readability-convert-member-functions-to-static)
   if (connected()) {
     // Send the header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
@@ -601,7 +601,7 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
   return pos;
 }
 
-bool PubSubClient::connected() {
+bool PubSubClient::connected() {  // NOLINT(readability-convert-member-functions-to-static)
   bool rc;
   if (tcpClient == nullptr) {
     rc = false;

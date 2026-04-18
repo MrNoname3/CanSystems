@@ -156,7 +156,7 @@ public:
 
 private:
   Client* tcpClient = nullptr;
-  uint8_t buffer[defaultBufferSize];
+  uint8_t buffer[defaultBufferSize]{};
   uint16_t bufferSize = defaultBufferSize;
   uint16_t keepAlive = defaultKeepAlive;
   uint16_t socketTimeout = defaultSocketTimeout;

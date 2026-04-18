@@ -234,7 +234,7 @@ bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readabili
   return true;
 }
 
-const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {
+const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {  // NOLINT(readability-convert-member-functions-to-static)
   switch(status) {
     case PubSubClient::State::CONNECTION_TIMEOUT:     { return mqttConnectionTimeoutStr; }
     case PubSubClient::State::CONNECTION_LOST:        { return mqttConnectionLostStr; }
