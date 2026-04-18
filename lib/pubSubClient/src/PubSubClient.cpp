@@ -162,19 +162,19 @@ PubSubClient::~PubSubClient() {
   free(this->buffer);
 }
 
-bool PubSubClient::connect(const char *id) {
+bool PubSubClient::connect(const char *id) { // NOLINT(readability-convert-member-functions-to-static)
     return connect(id,nullptr,nullptr,nullptr,0U,false,nullptr,true);
 }
 
-bool PubSubClient::connect(const char *id, const char *user, const char *pass) {
+bool PubSubClient::connect(const char *id, const char *user, const char *pass) { // NOLINT(readability-convert-member-functions-to-static)
     return connect(id,user,pass,nullptr,0U,false,nullptr,true);
 }
 
-bool PubSubClient::connect(const char *id, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {
+bool PubSubClient::connect(const char *id, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) { // NOLINT(readability-convert-member-functions-to-static)
     return connect(id,nullptr,nullptr,willTopic,willQos,willRetain,willMessage,true);
 }
 
-bool PubSubClient::connect(const char *id, const char *user, const char *pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {
+bool PubSubClient::connect(const char *id, const char *user, const char *pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) { // NOLINT(readability-convert-member-functions-to-static)
     return connect(id,user,pass,willTopic,willQos,willRetain,willMessage,true);
 }
 
@@ -210,7 +210,7 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, c
 
             uint8_t v;
             if (willTopic != nullptr) {
-                v = 0x04|(willQos<<3)|(static_cast<uint8_t>(willRetain)<<5);
+                v = static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U));
             } else {
                 v = 0x00;
             }
@@ -296,7 +296,7 @@ bool PubSubClient::readByte(uint8_t * result) {
 }
 
 // reads a byte into result[*index] and increments index
-bool PubSubClient::readByte(uint8_t * result, uint16_t * index){
+bool PubSubClient::readByte(uint8_t * result, uint16_t * index){ // NOLINT(readability-convert-member-functions-to-static)
   uint16_t current_index = *index;
   uint8_t * write_address = &(result[current_index]);
   if(readByte(write_address)){
@@ -430,14 +430,14 @@ bool PubSubClient::loop() { // NOLINT(readability-function-cognitive-complexity)
 }
 
 bool PubSubClient::publish(const char* topic, const char* payload) {
-    return publish(topic,reinterpret_cast<const uint8_t*>(payload), payload ? strnlen(payload, this->bufferSize) : 0,false);
+    return publish(topic,reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U,false);
 }
 
 bool PubSubClient::publish(const char* topic, const char* payload, bool retained) {
-    return publish(topic,reinterpret_cast<const uint8_t*>(payload), payload ? strnlen(payload, this->bufferSize) : 0,retained);
+    return publish(topic,reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U,retained);
 }
 
-bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength) {
+bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength) { // NOLINT(readability-convert-member-functions-to-static)
     return publish(topic, payload, plength, false);
 }
 
@@ -467,7 +467,7 @@ bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned i
 }
 
 bool PubSubClient::publish_P(const char* topic, const char* payload, bool retained) {
-    return publish_P(topic, reinterpret_cast<const uint8_t*>(payload), payload ? strnlen(payload, this->bufferSize) : 0, retained);
+    return publish_P(topic, reinterpret_cast<const uint8_t*>(payload), (payload != nullptr) ? strnlen(payload, this->bufferSize) : 0U, retained);
 }
 
 bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, unsigned int plength, bool retained) {
@@ -689,7 +689,7 @@ bool PubSubClient::connected() {
     return rc;
 }
 
-PubSubClient& PubSubClient::setServer(const uint8_t * ip, uint16_t port) {
+PubSubClient& PubSubClient::setServer(const uint8_t * ip, uint16_t port) { // NOLINT(readability-convert-member-functions-to-static)
     IPAddress addr(ip[0],ip[1],ip[2],ip[3]);
     return setServer(addr,port);
 }
