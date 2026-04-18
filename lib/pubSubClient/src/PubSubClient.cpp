@@ -280,11 +280,11 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 }
 
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
-  if (length + 2U + strnlen(str, this->bufferSize) > this->bufferSize) {
+  const bool fits = (length + 2U + strnlen(str, this->bufferSize) <= this->bufferSize);
+  if (!fits) {
     _client->stop();
-    return false;
   }
-  return true;
+  return fits;
 }
 
 // reads a byte into result
