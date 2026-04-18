@@ -493,7 +493,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if (connected()) {
     // Leave room in the buffer for header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    if (++nextMsgId == 0U) { nextMsgId = 1U; }
+    if (++nextMsgId == 0U) { nextMsgId = 1U; }  // cppcheck-suppress knownConditionTrueFalse
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
@@ -514,7 +514,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
   }
   if (connected()) {
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    if (++nextMsgId == 0U) { nextMsgId = 1U; }
+    if (++nextMsgId == 0U) { nextMsgId = 1U; }  // cppcheck-suppress knownConditionTrueFalse
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
