@@ -49,7 +49,7 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client) {
+PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client) {
   this->_state = MQTT_DISCONNECTED;
   setServer(addr, port);
   setCallback(callback);
@@ -60,7 +60,7 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MQTT_CALLBACK_SIGNATUR
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client, Stream& stream) {
+PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
   this->_state = MQTT_DISCONNECTED;
   setServer(addr, port);
   setCallback(callback);
@@ -92,7 +92,7 @@ PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, Client& client, Str
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client) {
+PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client) {
   this->_state = MQTT_DISCONNECTED;
   setServer(ip, port);
   setCallback(callback);
@@ -103,7 +103,7 @@ PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MQTT_CALLBACK_SIGNA
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client, Stream& stream) {
+PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
   this->_state = MQTT_DISCONNECTED;
   setServer(ip, port);
   setCallback(callback);
@@ -135,7 +135,7 @@ PubSubClient::PubSubClient(const char* domain, uint16_t port, Client& client, St
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(const char* domain, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client) {
+PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) {
   this->_state = MQTT_DISCONNECTED;
   setServer(domain, port);
   setCallback(callback);
@@ -146,7 +146,7 @@ PubSubClient::PubSubClient(const char* domain, uint16_t port, MQTT_CALLBACK_SIGN
   setKeepAlive(MQTT_KEEPALIVE);
   setSocketTimeout(MQTT_SOCKET_TIMEOUT);
 }
-PubSubClient::PubSubClient(const char* domain, uint16_t port, MQTT_CALLBACK_SIGNATURE, Client& client, Stream& stream) {
+PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
   this->_state = MQTT_DISCONNECTED;
   setServer(domain, port);
   setCallback(callback);
@@ -199,10 +199,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
 #if MQTT_VERSION == MQTT_VERSION_3_1
       const uint8_t d[9] = {0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION};
-#define MQTT_HEADER_VERSION_LENGTH 9
 #elif MQTT_VERSION == MQTT_VERSION_3_1_1
       const uint8_t d[7] = {0x00, 0x04, 'M', 'Q', 'T', 'T', MQTT_VERSION};
-#define MQTT_HEADER_VERSION_LENGTH 7
 #endif
       for (const uint8_t byte : d) {
         this->buffer[length++] = byte;
@@ -230,20 +228,20 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       this->buffer[length++] = ((this->keepAlive) >> 8);
       this->buffer[length++] = ((this->keepAlive) & 0xFF);
 
-      CHECK_STRING_LENGTH(length, id)
+      if (!checkStringLength(length, id)) { return false; }
       length = writeString(id, this->buffer, length);
       if (willTopic != nullptr) {
-        CHECK_STRING_LENGTH(length, willTopic)
+        if (!checkStringLength(length, willTopic)) { return false; }
         length = writeString(willTopic, this->buffer, length);
-        CHECK_STRING_LENGTH(length, willMessage)
+        if (!checkStringLength(length, willMessage)) { return false; }
         length = writeString(willMessage, this->buffer, length);
       }
 
       if (user != nullptr) {
-        CHECK_STRING_LENGTH(length, user)
+        if (!checkStringLength(length, user)) { return false; }
         length = writeString(user, this->buffer, length);
         if (pass != nullptr) {
-          CHECK_STRING_LENGTH(length, pass)
+          if (!checkStringLength(length, pass)) { return false; }
           length = writeString(pass, this->buffer, length);
         }
       }
@@ -276,6 +274,14 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     } else {
       _state = MQTT_CONNECT_FAILED;
     }
+    return false;
+  }
+  return true;
+}
+
+bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
+  if (length + 2U + strnlen(str, this->bufferSize) > this->bufferSize) {
+    _client->stop();
     return false;
   }
   return true;
@@ -716,7 +722,7 @@ PubSubClient& PubSubClient::setServer(const char* domain, uint16_t port) {
   return *this;
 }
 
-PubSubClient& PubSubClient::setCallback(MQTT_CALLBACK_SIGNATURE) {
+PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
   this->callback = callback;
   return *this;
 }

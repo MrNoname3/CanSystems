@@ -8,19 +8,13 @@ void bddtest_start(const char*);
 void bddtest_end();
 int bddtest_summary();
 
-#define SUITE(x)      \
-  {                   \
-    bddtest_suite(x); \
-  }
+inline void SUITE(const char* name) { bddtest_suite(name); }
 #define TEST(x)                                                                                           \
   {                                                                                                       \
     if (!bddtest_test(__FILE__, static_cast<uint32_t>(__LINE__), #x, static_cast<bool>(x))) return false; \
   }
 
-#define IT(x)         \
-  {                   \
-    bddtest_start(x); \
-  }
+inline void IT(const char* desc) { bddtest_start(desc); }
 #define END_IT     \
   {                \
     bddtest_end(); \
