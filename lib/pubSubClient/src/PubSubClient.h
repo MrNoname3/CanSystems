@@ -37,29 +37,34 @@
 class PubSubClient final : public Print {
 private:
   // clang-format off
-  static inline constexpr uint8_t MQTTCONNECT     = 1U << 4U;  // Client request to connect to Server
-  static inline constexpr uint8_t MQTTCONNACK     = 2U << 4U;  // Connect Acknowledgment
-  static inline constexpr uint8_t MQTTPUBLISH     = 3U << 4U;  // Publish message
-  static inline constexpr uint8_t MQTTPUBACK      = 4U << 4U;  // Publish Acknowledgment
-  static inline constexpr uint8_t MQTTPUBREC      = 5U << 4U;  // Publish Received (assured delivery part 1)
-  static inline constexpr uint8_t MQTTPUBREL      = 6U << 4U;  // Publish Release (assured delivery part 2)
-  static inline constexpr uint8_t MQTTPUBCOMP     = 7U << 4U;  // Publish Complete (assured delivery part 3)
-  static inline constexpr uint8_t MQTTSUBSCRIBE   = 8U << 4U;  // Client Subscribe request
-  static inline constexpr uint8_t MQTTSUBACK      = 9U << 4U;  // Subscribe Acknowledgment
-  static inline constexpr uint8_t MQTTUNSUBSCRIBE = 10U << 4U; // Client Unsubscribe request
-  static inline constexpr uint8_t MQTTUNSUBACK    = 11U << 4U; // Unsubscribe Acknowledgment
-  static inline constexpr uint8_t MQTTPINGREQ     = 12U << 4U; // PING Request
-  static inline constexpr uint8_t MQTTPINGRESP    = 13U << 4U; // PING Response
-  static inline constexpr uint8_t MQTTDISCONNECT  = 14U << 4U; // Client is Disconnecting
-  static inline constexpr uint8_t MQTTReserved    = 15U << 4U; // Reserved
+  enum PacketType : uint8_t {
+    MQTTCONNECT     = 1U << 4U,  // Client request to connect to Server
+    MQTTCONNACK     = 2U << 4U,  // Connect Acknowledgment
+    MQTTPUBLISH     = 3U << 4U,  // Publish message
+    MQTTPUBACK      = 4U << 4U,  // Publish Acknowledgment
+    MQTTPUBREC      = 5U << 4U,  // Publish Received (assured delivery part 1)
+    MQTTPUBREL      = 6U << 4U,  // Publish Release (assured delivery part 2)
+    MQTTPUBCOMP     = 7U << 4U,  // Publish Complete (assured delivery part 3)
+    MQTTSUBSCRIBE   = 8U << 4U,  // Client Subscribe request
+    MQTTSUBACK      = 9U << 4U,  // Subscribe Acknowledgment
+    MQTTUNSUBSCRIBE = 10U << 4U, // Client Unsubscribe request
+    MQTTUNSUBACK    = 11U << 4U, // Unsubscribe Acknowledgment
+    MQTTPINGREQ     = 12U << 4U, // PING Request
+    MQTTPINGRESP    = 13U << 4U, // PING Response
+    MQTTDISCONNECT  = 14U << 4U, // Client is Disconnecting
+    MQTTReserved    = 15U << 4U, // Reserved
+  };
+  enum Qos : uint8_t {
+    MQTTQOS0 = 0U << 1U,
+    MQTTQOS1 = 1U << 1U,
+    MQTTQOS2 = 2U << 1U,
+  };
   // clang-format on
 
-  static inline constexpr uint8_t MQTTQOS0 = (0U << 1U);
-  static inline constexpr uint8_t MQTTQOS1 = (1U << 1U);
-  static inline constexpr uint8_t MQTTQOS2 = (2U << 1U);
-
-  // Maximum size of fixed header and variable length size header
-  static inline constexpr uint8_t MQTT_MAX_HEADER_SIZE = 5U;
+  static constexpr uint8_t MQTT_MAX_HEADER_SIZE  = 5U;
+  static constexpr uint16_t defaultBufferSize    = static_cast<uint16_t>(MQTT_MAX_PACKET_SIZE);
+  static constexpr uint16_t defaultKeepAlive     = static_cast<uint16_t>(MQTT_KEEPALIVE);
+  static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);
 
 #if defined(ESP8266) || defined(ESP32)
 #include <functional>
@@ -71,16 +76,18 @@ private:
 public:
   // Possible values for client.state()
   // clang-format off
-  static inline constexpr int8_t MQTT_CONNECTION_TIMEOUT     = -4;
-  static inline constexpr int8_t MQTT_CONNECTION_LOST        = -3;
-  static inline constexpr int8_t MQTT_CONNECT_FAILED         = -2;
-  static inline constexpr int8_t MQTT_DISCONNECTED           = -1;
-  static inline constexpr int8_t MQTT_CONNECTED               = 0;
-  static inline constexpr int8_t MQTT_CONNECT_BAD_PROTOCOL    = 1;
-  static inline constexpr int8_t MQTT_CONNECT_BAD_CLIENT_ID   = 2;
-  static inline constexpr int8_t MQTT_CONNECT_UNAVAILABLE     = 3;
-  static inline constexpr int8_t MQTT_CONNECT_BAD_CREDENTIALS = 4;
-  static inline constexpr int8_t MQTT_CONNECT_UNAUTHORIZED    = 5;
+  enum class State : int8_t {
+    CONNECTION_TIMEOUT     = -4,
+    CONNECTION_LOST        = -3,
+    CONNECT_FAILED         = -2,
+    DISCONNECTED           = -1,
+    CONNECTED               = 0,
+    CONNECT_BAD_PROTOCOL    = 1,
+    CONNECT_BAD_CLIENT_ID   = 2,
+    CONNECT_UNAVAILABLE     = 3,
+    CONNECT_BAD_CREDENTIALS = 4,
+    CONNECT_UNAUTHORIZED    = 5
+  };
   // clang-format on
 
   PubSubClient() = default;
@@ -145,14 +152,14 @@ public:
   bool unsubscribe(const char* topic);
   bool loop();
   bool connected();
-  [[nodiscard]] int8_t state() const;
+  [[nodiscard]] State state() const;
 
 private:
-  Client* _client = nullptr;
-  uint8_t buffer[MQTT_MAX_PACKET_SIZE];
-  uint16_t bufferSize = MQTT_MAX_PACKET_SIZE;
-  uint16_t keepAlive = MQTT_KEEPALIVE;
-  uint16_t socketTimeout = MQTT_SOCKET_TIMEOUT;
+  Client* tcpClient = nullptr;
+  uint8_t buffer[defaultBufferSize];
+  uint16_t bufferSize = defaultBufferSize;
+  uint16_t keepAlive = defaultKeepAlive;
+  uint16_t socketTimeout = defaultSocketTimeout;
   uint16_t nextMsgId = 0U;
   uint32_t lastOutActivity = 0U;
   uint32_t lastInActivity = 0U;
@@ -173,5 +180,5 @@ private:
   const char* domain = nullptr;
   uint16_t port = 0U;
   Stream* stream = nullptr;
-  int8_t _state = MQTT_DISCONNECTED;
+  State connectionState = State::DISCONNECTED;
 };

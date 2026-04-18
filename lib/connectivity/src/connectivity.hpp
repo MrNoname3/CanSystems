@@ -117,14 +117,14 @@ private:
   /// @brief Converts MQTT connection state codes to human-readable strings.
   /// @param status The MQTT connection state code.
   /// @return A human-readable string describing the state
-  [[nodiscard]] static const char* getMqttStatusStr(int8_t status);
+  [[nodiscard]] static const char* getMqttStatusStr(PubSubClient::State status);
 
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
   MqttCredentials mqttCredentials;                                  // MQTT connection credentials.
   bool networkState;                                                // Indicates the network connection state.
-  int8_t mqttState;                                                 // MQTT connection state.
+  PubSubClient::State mqttState;                                    // MQTT connection state.
   bool onlineState;                                                 // Indicates whether the device is online.
   uint32_t deviceResetTimer;                                        // Timer for detecting prolonged offline states.
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.

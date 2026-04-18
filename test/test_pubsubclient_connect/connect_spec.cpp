@@ -17,8 +17,8 @@ bool test_connect_fails_no_network() {
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECT_FAILED);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECT_FAILED);
   END_IT
 }
 
@@ -29,8 +29,8 @@ bool test_connect_fails_on_no_response() {
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTION_TIMEOUT);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
   END_IT
 }
 
@@ -48,15 +48,15 @@ bool test_connect_properly_formatted() {
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_DISCONNECTED);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTED);
+  IS_TRUE(state == PubSubClient::State::CONNECTED);
 
   END_IT
 }
@@ -89,8 +89,8 @@ bool test_connect_fails_on_bad_rc() {
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
 
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECT_BAD_PROTOCOL);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECT_BAD_PROTOCOL);
 
   END_IT
 }
@@ -109,15 +109,15 @@ bool test_connect_non_clean_session() {
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_DISCONNECTED);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
   bool rc = client.connect("client_test1", nullptr, nullptr, nullptr, 0U, false, nullptr, false);
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTED);
+  IS_TRUE(state == PubSubClient::State::CONNECTED);
 
   END_IT
 }
@@ -244,15 +244,15 @@ bool test_connect_disconnect_connect() {
 
   PubSubClient client(server, 1883U, callback, shimClient);
 
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_DISCONNECTED);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTED);
+  IS_TRUE(state == PubSubClient::State::CONNECTED);
 
   uint8_t disconnect[] = {0xE0U, 0x00U};
   shimClient.expect(disconnect, 2U);
@@ -264,7 +264,7 @@ bool test_connect_disconnect_connect() {
   IS_FALSE(shimClient.error());
 
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_DISCONNECTED);
+  IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
   shimClient.expect(connect, 28U);
   shimClient.respond(connack, 4U);
@@ -272,7 +272,7 @@ bool test_connect_disconnect_connect() {
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTED);
+  IS_TRUE(state == PubSubClient::State::CONNECTED);
 
   END_IT
 }
@@ -293,8 +293,8 @@ bool test_connect_custom_keepalive() {
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_DISCONNECTED);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
   client.setKeepAlive(300U);
 
@@ -303,7 +303,7 @@ bool test_connect_custom_keepalive() {
   IS_FALSE(shimClient.error());
 
   state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTED);
+  IS_TRUE(state == PubSubClient::State::CONNECTED);
 
   END_IT
 }

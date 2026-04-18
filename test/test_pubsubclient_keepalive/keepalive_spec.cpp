@@ -163,8 +163,8 @@ bool test_keepalive_disconnects_hung() {
   }
   IS_FALSE(rc);
 
-  int8_t state = client.state();
-  IS_TRUE(state == PubSubClient::MQTT_CONNECTION_TIMEOUT);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
 
   IS_FALSE(shimClient.error());
 

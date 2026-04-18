@@ -89,13 +89,13 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   if (!connected()) {
     bool result = false;
 
-    if (_client->connected() != 0) {
+    if (tcpClient->connected() != 0) {
       result = true;
     } else {
       if (domain != nullptr) {
-        result = static_cast<bool>(_client->connect(this->domain, this->port));
+        result = static_cast<bool>(tcpClient->connect(this->domain, this->port));
       } else {
-        result = static_cast<bool>(_client->connect(this->ip, this->port));
+        result = static_cast<bool>(tcpClient->connect(this->ip, this->port));
       }
     }
 
@@ -157,11 +157,11 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
       lastInActivity = lastOutActivity = millis();
 
-      while (_client->available() == 0) {
+      while (tcpClient->available() == 0) {
         uint32_t t = millis();
         if (t - lastInActivity >= (static_cast<uint32_t>(this->socketTimeout) * 1000U)) {
-          _state = MQTT_CONNECTION_TIMEOUT;
-          _client->stop();
+          connectionState = State::CONNECTION_TIMEOUT;
+          tcpClient->stop();
           return false;
         }
       }
@@ -172,14 +172,14 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
         if (buffer[3] == 0U) {
           lastInActivity = millis();
           pingOutstanding = false;
-          _state = MQTT_CONNECTED;
+          connectionState = State::CONNECTED;
           return true;
         }
-        _state = static_cast<int8_t>(buffer[3]);
+        connectionState = static_cast<State>(buffer[3]);
       }
-      _client->stop();
+      tcpClient->stop();
     } else {
-      _state = MQTT_CONNECT_FAILED;
+      connectionState = State::CONNECT_FAILED;
     }
     return false;
   }
@@ -189,7 +189,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
   const bool fits = (length + 2U + strnlen(str, this->bufferSize) <= this->bufferSize);
   if (!fits) {
-    _client->stop();
+    tcpClient->stop();
   }
   return fits;
 }
@@ -197,14 +197,14 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
 // reads a byte into result
 bool PubSubClient::readByte(uint8_t* result) {
   uint32_t previousMillis = millis();
-  while (_client->available() == 0) {
+  while (tcpClient->available() == 0) {
     yield();
     uint32_t currentMillis = millis();
     if (currentMillis - previousMillis >= (static_cast<uint32_t>(this->socketTimeout) * 1000U)) {
       return false;
     }
   }
-  *result = _client->read();
+  *result = tcpClient->read();
   return true;
 }
 
@@ -234,8 +234,8 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   do {
     if (len == 5U) {
       // Invalid remaining length encoding - kill the connection
-      _state = MQTT_DISCONNECTED;
-      _client->stop();
+      connectionState = State::DISCONNECTED;
+      tcpClient->stop();
       return 0U;
     }
     digit = 0U;
@@ -294,18 +294,18 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
     uint32_t t = millis();
     if ((t - lastInActivity > static_cast<uint32_t>(this->keepAlive) * 1000U) || (t - lastOutActivity > static_cast<uint32_t>(this->keepAlive) * 1000U)) {
       if (pingOutstanding) {
-        this->_state = MQTT_CONNECTION_TIMEOUT;
-        _client->stop();
+        this->connectionState = State::CONNECTION_TIMEOUT;
+        tcpClient->stop();
         return false;
       }
       this->buffer[0] = MQTTPINGREQ;
       this->buffer[1] = 0U;
-      _client->write(this->buffer, 2U);
+      tcpClient->write(this->buffer, 2U);
       lastOutActivity = t;
       lastInActivity = t;
       pingOutstanding = true;
     }
-    if (_client->available() != 0) {
+    if (tcpClient->available() != 0) {
       uint8_t llen;
       uint16_t len = readPacket(&llen);
       if (len > 0U) {
@@ -327,7 +327,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
               this->buffer[1] = 2U;
               this->buffer[2] = static_cast<uint8_t>(msgId >> 8U);
               this->buffer[3] = static_cast<uint8_t>(msgId & 0xFFU);
-              _client->write(this->buffer, 4U);
+              tcpClient->write(this->buffer, 4U);
               lastOutActivity = t;
 
             } else {
@@ -338,7 +338,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
         } else if (type == MQTTPINGREQ) {
           this->buffer[0] = MQTTPINGRESP;
           this->buffer[1] = 0U;
-          _client->write(this->buffer, 2U);
+          tcpClient->write(this->buffer, 2U);
         } else if (type == MQTTPINGRESP) {
           pingOutstanding = false;
         }
@@ -424,10 +424,10 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
 
   pos = writeString(topic, this->buffer, pos);
 
-  rc += static_cast<uint16_t>(_client->write(this->buffer, pos));
+  rc += static_cast<uint16_t>(tcpClient->write(this->buffer, pos));
 
   for (uint16_t i = 0U; i < plength; i++) {
-    rc += static_cast<uint16_t>(_client->write(pgm_read_byte_near(payload + i)));
+    rc += static_cast<uint16_t>(tcpClient->write(pgm_read_byte_near(payload + i)));
   }
 
   lastOutActivity = millis();
@@ -447,7 +447,7 @@ bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retain
       header |= 1U;
     }
     size_t hlen = buildHeader(header, this->buffer, plength + length - MQTT_MAX_HEADER_SIZE);
-    uint16_t rc = _client->write(this->buffer + (MQTT_MAX_HEADER_SIZE - hlen), length - (MQTT_MAX_HEADER_SIZE - hlen));
+    uint16_t rc = tcpClient->write(this->buffer + (MQTT_MAX_HEADER_SIZE - hlen), length - (MQTT_MAX_HEADER_SIZE - hlen));
     lastOutActivity = millis();
     return (rc == (length - (MQTT_MAX_HEADER_SIZE - hlen)));
   }
@@ -460,12 +460,12 @@ bool PubSubClient::endPublish() {  // NOLINT(readability-convert-member-function
 
 size_t PubSubClient::write(uint8_t data) {
   lastOutActivity = millis();
-  return _client->write(data);
+  return tcpClient->write(data);
 }
 
 size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
   lastOutActivity = millis();
-  return _client->write(buffer, size);
+  return tcpClient->write(buffer, size);
 }
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
@@ -501,14 +501,14 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NO
   bool result = true;
   while ((bytesRemaining > 0U) && result) {
     bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
-    rc = _client->write(writeBuf, bytesToWrite);
+    rc = tcpClient->write(writeBuf, bytesToWrite);
     result = (rc == bytesToWrite);
     bytesRemaining -= rc;
     writeBuf += rc;
   }
   return result;
 #else
-  rc = _client->write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
+  rc = tcpClient->write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
   lastOutActivity = millis();
   return (rc == hlen + length);
 #endif
@@ -572,10 +572,10 @@ bool PubSubClient::unsubscribe(const char* topic) {
 void PubSubClient::disconnect() {
   this->buffer[0] = MQTTDISCONNECT;
   this->buffer[1] = 0U;
-  _client->write(this->buffer, 2U);
-  _state = MQTT_DISCONNECTED;
-  _client->flush();
-  _client->stop();
+  tcpClient->write(this->buffer, 2U);
+  connectionState = State::DISCONNECTED;
+  tcpClient->flush();
+  tcpClient->stop();
   lastInActivity = lastOutActivity = millis();
 }
 
@@ -594,18 +594,18 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
 
 bool PubSubClient::connected() {
   bool rc;
-  if (_client == nullptr) {
+  if (tcpClient == nullptr) {
     rc = false;
   } else {
-    rc = static_cast<bool>(_client->connected());
+    rc = static_cast<bool>(tcpClient->connected());
     if (!rc) {
-      if (this->_state == MQTT_CONNECTED) {
-        this->_state = MQTT_CONNECTION_LOST;
-        _client->flush();
-        _client->stop();
+      if (this->connectionState == State::CONNECTED) {
+        this->connectionState = State::CONNECTION_LOST;
+        tcpClient->flush();
+        tcpClient->stop();
       }
     } else {
-      return this->_state == MQTT_CONNECTED;
+      return this->connectionState == State::CONNECTED;
     }
   }
   return rc;
@@ -635,7 +635,7 @@ PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
 }
 
 PubSubClient& PubSubClient::setClient(Client& client) {
-  this->_client = &client;
+  this->tcpClient = &client;
   return *this;
 }
 
@@ -644,12 +644,12 @@ PubSubClient& PubSubClient::setStream(Stream& stream) {
   return *this;
 }
 
-int8_t PubSubClient::state() const {
-  return this->_state;
+PubSubClient::State PubSubClient::state() const {
+  return this->connectionState;
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {
-  if (size == 0U || size > MQTT_MAX_PACKET_SIZE) {
+  if (size == 0U || size > defaultBufferSize) {
     return false;
   }
   this->bufferSize = size;
