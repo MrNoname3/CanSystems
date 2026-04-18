@@ -19,7 +19,7 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 #endif
 {}
 
-bool Connectivity::init() {
+bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   { // Initialise the file system.
     delay(10U);
     uint32_t totalBytes = 0U;
@@ -139,7 +139,7 @@ bool Connectivity::init() {
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
-    mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+    mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(static_cast<int8_t>(mqttClient.state())));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
@@ -157,7 +157,7 @@ bool Connectivity::run() {
       mqttClient.disconnect();
     }
   }
-  const int8_t actualMqttState = mqttClient.state();
+  const int8_t actualMqttState = static_cast<int8_t>(mqttClient.state());
   if(mqttState != actualMqttState) {
     Logger::get().printf_P(PSTR("[MQTT] Status changed: %s -> %s\r\n"), getMqttStatusStr(mqttState), getMqttStatusStr(actualMqttState));
     mqttState = actualMqttState;

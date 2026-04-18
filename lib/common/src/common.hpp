@@ -202,7 +202,7 @@ private:
   static constexpr uint8_t gitDirty = static_cast<uint8_t>(GIT_DIRTY);                // Repository state indicating uncommitted changes.
   static constexpr uint32_t cppVersion = static_cast<uint32_t>(__cplusplus);          // C++ standard version used for compilation.
   static constexpr const char pioEnv[] = BUILD_ENV_NAME;                              // Name of the PlatformIO environment used for the build.
-  static constexpr const char pioEnvJson[] = "{\"Env\":\"" BUILD_ENV_NAME "\"}";      // JSON-formatted string containing the PlatformIO environment name.
+  static constexpr const char pioEnvJson[] = R"({"Env":")" BUILD_ENV_NAME R"("})";   // JSON-formatted string containing the PlatformIO environment name.
 };
 
 /// @brief Utility class for managing predefined file names in the file system.

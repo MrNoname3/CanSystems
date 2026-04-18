@@ -90,9 +90,9 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
 
   const uint8_t* cnf = nullptr;
 
-  for(uint8_t i = 0U; i < (sizeof(cnfMapper) / sizeof(cnfMapper[0])); i++) {
-    if(cnfMapper[i].clockFrequency == clockFrequency && cnfMapper[i].baudRate == baudRate) {
-      cnf = cnfMapper[i].cnf;
+  for(const CnfEntry& entry : cnfMapper) {
+    if(entry.clockFrequency == clockFrequency && entry.baudRate == baudRate) {
+      cnf = entry.cnf;
       break;
     }
   }
@@ -157,8 +157,8 @@ uint8_t MCP2515::endPacket() {
   bool aborted = false;
 
   uint8_t ctrl = readRegister(regTxBnCtrl(n));
-  while(ctrl & 0x08U) {
-    if(ctrl & 0x10U) {
+  while((ctrl & 0x08U) != 0U) {
+    if((ctrl & 0x10U) != 0U) {
       aborted = true;
       modifyRegister(regCanCtrl, 0x10U, 0x10U);
     }
@@ -173,16 +173,16 @@ uint8_t MCP2515::endPacket() {
   modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
 
   // Use the cached ctrl value from the loop — avoids a redundant SPI read.
-  return (ctrl & 0x70U) ? 0U : 1U;
+  return ((ctrl & 0x70U) != 0U) ? 0U : 1U;
 }
 
 uint8_t MCP2515::parsePacket() {
   const uint8_t intf = readRegister(regCanIntf);
 
   uint8_t n = 0U;
-  if(intf & flagRxnIf(0U)) {
+  if((intf & flagRxnIf(0U)) != 0U) {
     n = 0U;
-  } else if(intf & flagRxnIf(1U)) {
+  } else if((intf & flagRxnIf(1U)) != 0U) {
     n = 1U;
   } else {
     rxId = noId;
@@ -379,7 +379,7 @@ void MCP2515::handleInterrupt() {
   }
 }
 
-uint8_t MCP2515::readRegister(uint8_t address) {
+uint8_t MCP2515::readRegister(uint8_t address) { // NOLINT(readability-convert-member-functions-to-static)
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x03U);
