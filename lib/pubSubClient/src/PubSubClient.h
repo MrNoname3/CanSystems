@@ -80,16 +80,16 @@ using MqttCallback = void (*)(char*, uint8_t*, unsigned int);
 
 class PubSubClient : public Print {
 private:
-  Client* _client;
-  uint8_t* buffer;
-  uint16_t bufferSize;
-  uint16_t keepAlive;
-  uint16_t socketTimeout;
-  uint16_t nextMsgId;
-  uint32_t lastOutActivity;
-  uint32_t lastInActivity;
-  bool pingOutstanding;
-  MqttCallback callback;
+  Client* _client = nullptr;
+  uint8_t buffer[MQTT_MAX_PACKET_SIZE];
+  uint16_t bufferSize = MQTT_MAX_PACKET_SIZE;
+  uint16_t keepAlive = MQTT_KEEPALIVE;
+  uint16_t socketTimeout = MQTT_SOCKET_TIMEOUT;
+  uint16_t nextMsgId = 0U;
+  uint32_t lastOutActivity = 0U;
+  uint32_t lastInActivity = 0U;
+  bool pingOutstanding = false;
+  MqttCallback callback = nullptr;
   uint32_t readPacket(uint8_t*);
   bool readByte(uint8_t* result);
   bool readByte(uint8_t* result, uint16_t* index);
@@ -102,13 +102,13 @@ private:
   //       (MQTT_MAX_HEADER_SIZE - <returned size>) bytes into the buffer
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
   IPAddress ip;
-  const char* domain;
-  uint16_t port;
-  Stream* stream;
-  int8_t _state;
+  const char* domain = nullptr;
+  uint16_t port = 0U;
+  Stream* stream = nullptr;
+  int8_t _state = MQTT_DISCONNECTED;
 
 public:
-  PubSubClient();
+  PubSubClient() = default;
   PubSubClient(Client& client);
   PubSubClient(IPAddress, uint16_t, Client& client);
   PubSubClient(IPAddress, uint16_t, Client& client, Stream&);
@@ -122,8 +122,7 @@ public:
   PubSubClient(const char*, uint16_t, Client& client, Stream&);
   PubSubClient(const char*, uint16_t, MqttCallback callback, Client& client);
   PubSubClient(const char*, uint16_t, MqttCallback callback, Client& client, Stream&);
-
-  ~PubSubClient();
+  ~PubSubClient() = default;
 
   PubSubClient& setServer(IPAddress ip, uint16_t port);
   PubSubClient& setServer(const uint8_t* ip, uint16_t port);
