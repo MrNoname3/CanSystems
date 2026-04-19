@@ -1,19 +1,20 @@
 //--- Headers ---//
-#include <Arduino.h>                                                /// Arduino libraries header.
-#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
-#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
-#include "canHandler.hpp"                                           /// CAN handler library.
-#include "rgbLedWrapper.hpp"                                        /// RGB LED driver wrapper.
-#include "pushButtonHandler.hpp"                                    /// Pushbutton events library.
-#include "taskHandler.hpp"                                          /// Class for task scheduling.
-#include "common.hpp"                                               /// Common definitions and functions.
-#include "performance.hpp"                                          /// Performance measurement class.
-#include "dfPlayer.hpp"                                             /// MP3 player driver library.
-#include "ambientSensor.hpp"                                        /// Sensor handelr library.
-#include "externalSensor.hpp"                                       /// External temperature and humidity sensor library.
+#include <Arduino.h>              /// Arduino libraries header.
+#include "wdtHandler.hpp"         /// Handles the watchdog timer.
+#include "resetHandler.hpp"       /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"    /// Handles the debug LED.
+#include "canHandler.hpp"         /// CAN handler library.
+#include "rgbLedWrapper.hpp"      /// RGB LED driver wrapper.
+#include "pushButtonHandler.hpp"  /// Pushbutton events library.
+#include "taskHandler.hpp"        /// Class for task scheduling.
+#include "common.hpp"             /// Common definitions and functions.
+#include "performance.hpp"        /// Performance measurement class.
+#include "dfPlayer.hpp"           /// MP3 player driver library.
+#include "ambientSensor.hpp"      /// Sensor handelr library.
+#include "externalSensor.hpp"     /// External temperature and humidity sensor library.
 
 //--- Constants ---//
+// clang-format off
 static constexpr uint8_t RGB_LED_NUM                = 19U;          // Number of RGB LED's.
 static constexpr uint8_t RGB_PIN                    = 7U;           // LED DATA PIN
 static constexpr uint8_t LED_PIN                    = 4U;           // Pin of the LED.
@@ -29,6 +30,7 @@ static constexpr uint8_t LDR_PIN                    = 21U;          // Analog li
 static constexpr uint8_t EXT_SENSOR_EN              = 17U;          // External sensor enable pin. (A3)
 static constexpr uint8_t RS232_RX                   = 15U;          // RS232 serial RX pin. (A2)
 static constexpr uint8_t RS232_TX                   = 16U;          // RS232 serial TX pin. (A1)
+// clang-format on
 
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
@@ -43,7 +45,7 @@ static_assert(digitalPinToInterrupt(DFP_BUSY) != (NOT_AN_INTERRUPT), "DFPlayer m
 WdtHandler wdt(WdtHandler::WDT::T_1S);
 DebugLedHandler debugLed(LED_PIN, HIGH);
 CanHandler canHandler(debugLed, CAN_CS, CAN_INT, FLASH_CS);
-PushButtonHandler buttonHandler(canHandler, []() -> bool {return (analogRead(BUTTON_PIN) > 500);});
+PushButtonHandler buttonHandler(canHandler, []() -> bool { return (analogRead(BUTTON_PIN) > 500); });
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
@@ -51,13 +53,13 @@ const ExternalSensor extSensor(EXT_SENSOR_EN);
 Performance performance(3U, maxLoopTimeCallback);
 
 //--- Handling tasks ---//
-Task *task[] = {&canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance};
+Task* task[] = { &canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance };
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
 //--- Setup section ---//
 void setup() {
-  WdtHandler::resetWatchdog(); // cppcheck-suppress ignoredReturnValue
+  WdtHandler::resetWatchdog();  // cppcheck-suppress ignoredReturnValue
   Serial.begin(MONITOR_BAUD);
   DebugLedHandler::ledOn();
   canHandler.addCanCallback(canMessageArrived);
@@ -74,7 +76,7 @@ void setup() {
   const bool initSuccess = (initResult == 0U);
   Logger::get().print(F("Init: "));
   Logger::get().println(Str::getStateStr(initSuccess));
-  if(!initSuccess) {
+  if (!initSuccess) {
     Logger::get().print(F("Code: "));
     Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();
@@ -85,12 +87,12 @@ void setup() {
 }
 
 void loop() {
-  WdtHandler::resetWatchdog(); // cppcheck-suppress ignoredReturnValue
+  WdtHandler::resetWatchdog();  // cppcheck-suppress ignoredReturnValue
   (void)taskHandler.runTasks();
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
-  switch(command) {
+  switch (command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
       rgbLed.setColor(data[0], data[1], data[2], true);
       canHandler.send(command);
@@ -106,24 +108,26 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   Logger::get().print(F("Btn: "));
   Logger::get().println(static_cast<uint8_t>(btnEvent));
-  switch(btnEvent) {
+  switch (btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       static bool rgbLedState = false;
       rgbLedState = !rgbLedState;
       rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
     } break;
-    default: {} break;
+    default: {
+    } break;
   }
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
   Logger::get().print(F("Max loop time: "));
   Logger::get().println(maxLoopTime);
-  canHandler.send(CanCmd::LOOP_TIME_MAX, {
-    static_cast<uint8_t>(maxLoopTime & 0xFF),
-    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFF),
-    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFF),
-    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFF),
+  const uint8_t loopTimeBytes[8] = {
+    static_cast<uint8_t>(maxLoopTime & 0xFFU),
+    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFFU),
+    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFFU),
+    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFFU),
     0U, 0U, 0U, 0U
-  });
+  };
+  canHandler.send(CanCmd::LOOP_TIME_MAX, loopTimeBytes);
 }

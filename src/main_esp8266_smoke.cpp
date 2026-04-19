@@ -1,23 +1,25 @@
 //--- Headers ---//
-#include <Arduino.h>                                                /// Arduino libraries header.
-#include "wdtHandler.hpp"                                           /// Handles the watchdog timer.
-#include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include "debugLedHandler.hpp"                                      /// Handles the debug LED.
-#include "taskHandler.hpp"                                          /// Class for task scheduling.
-#include "common.hpp"                                               /// Common definitions and functions.
-#include "performance.hpp"                                          /// Performance measurement class.
-#include "networkManager.hpp"                                       /// Manages the network connection.
-#include "connectivity.hpp"                                         /// Handles the MQTT connection.
-#include "mqttCommon.hpp"                                           /// Handles the basic interaction between server and client.
+#include <Arduino.h>            /// Arduino libraries header.
+#include "wdtHandler.hpp"       /// Handles the watchdog timer.
+#include "resetHandler.hpp"     /// Handles MCU reset from the program.
+#include "debugLedHandler.hpp"  /// Handles the debug LED.
+#include "taskHandler.hpp"      /// Class for task scheduling.
+#include "common.hpp"           /// Common definitions and functions.
+#include "performance.hpp"      /// Performance measurement class.
+#include "networkManager.hpp"   /// Manages the network connection.
+#include "connectivity.hpp"     /// Handles the MQTT connection.
+#include "mqttCommon.hpp"       /// Handles the basic interaction between server and client.
 #include "adcReader.hpp"
 #include "mq135Handler.hpp"
 
 //--- Constants ---//
+// clang-format off
 static constexpr uint8_t LED_PIN                    = D8;           // Pin of the LED.
 static constexpr uint8_t SPI_CS                     = D0;           // Ethernet shield SPI CS.
 static constexpr uint8_t ADC_RDY                    = D2;           // ADC ready signal.
 static constexpr uint8_t I2C_SDA                    = D4;
 static constexpr uint8_t I2C_SCL                    = D3;
+// clang-format on
 
 //--- Functions ---//
 void maxLoopTimeCallback(uint32_t maxLoopTime);
@@ -27,20 +29,19 @@ DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(1U, maxLoopTimeCallback);
 NetworkManager networkManager(NetworkManager::Interface::WIFI);
 Connectivity iotConn(
-  networkManager,
-  [](bool state) -> void {
-    state ? debugLed.stopTicker() : debugLed.startTicker(250U);
-  },
-  WdtHandler::resetWatchdog
-);
+    networkManager,
+    [](bool state) -> void {
+      state ? debugLed.stopTicker() : debugLed.startTicker(250U);
+    },
+    WdtHandler::resetWatchdog);
 
 //--- MQTT handler objects ---//
-MqttCommon mqttCommon (iotConn, "common");
+MqttCommon mqttCommon(iotConn, "common");
 AdcReader adcReader(iotConn, "adcreader", 100U, ADC_RDY, I2C_SDA, I2C_SCL);
 Mq135Handler mq135(iotConn, "mq135", adcReader, AdcReader::Channel::AN0, 10000U);
 
 //--- Handling tasks ---//
-Task *task[] = {&iotConn, &performance, &mqttCommon/*, &adcReader, &mq135*/};
+Task* task[] = { &iotConn, &performance, &mqttCommon /*, &adcReader, &mq135*/ };
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -56,7 +57,7 @@ void setup() {
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Logger::get().printf_P(PSTR("Init: %s\r\n"), Str::getStateStr(initSuccess));
-  if(!initSuccess) {
+  if (!initSuccess) {
     Logger::get().printf_P(PSTR("  Code: "));
     Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();

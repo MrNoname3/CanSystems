@@ -5,3 +5,5 @@ ColumnLimit: 0
 SortIncludes: Never
 AllowShortFunctionsOnASingleLine: Empty
 AccessModifierOffset: -2
+AlignTrailingComments: true
+Cpp11BracedListStyle: false

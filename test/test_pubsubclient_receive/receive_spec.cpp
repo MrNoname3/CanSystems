@@ -4,7 +4,7 @@
 #include "BDDTest.h"
 #include "trace.h"
 
-uint8_t server[] = {172U, 16U, 0U, 2U};
+uint8_t server[] = { 172U, 16U, 0U, 2U };
 
 bool callback_called = false;
 char lastTopic[1024];
@@ -33,14 +33,14 @@ bool test_receive_callback() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(publish, 16U);
 
   rc = client.loop();
@@ -67,14 +67,14 @@ bool test_receive_stream() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient, stream);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(publish, 16U);
 
   rc = client.loop();
@@ -98,7 +98,7 @@ bool test_receive_max_sized_message() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
@@ -110,7 +110,7 @@ bool test_receive_max_sized_message() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   uint8_t bigPublish[length];
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
@@ -138,7 +138,7 @@ bool test_receive_oversized_message() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
@@ -148,7 +148,7 @@ bool test_receive_oversized_message() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   uint8_t bigPublish[length];
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
@@ -173,14 +173,14 @@ bool test_drop_invalid_remaining_length_message() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, 0x92U, 0x92U, 0x92U, 0x92U, 0x01U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, 0x92U, 0x92U, 0x92U, 0x92U, 0x01U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(publish, 20U);
 
   rc = client.loop();
@@ -201,7 +201,7 @@ bool test_resize_buffer() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
@@ -211,7 +211,7 @@ bool test_resize_buffer() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   uint8_t bigPublish[length];
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
@@ -252,7 +252,7 @@ bool test_receive_oversized_stream_message() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
@@ -262,7 +262,7 @@ bool test_receive_oversized_stream_message() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
 
   uint8_t bigPublish[length];
   memset(bigPublish, 'A', length);
@@ -294,17 +294,17 @@ bool test_receive_qos1() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = {0x20U, 0x02U, 0x00U, 0x00U};
+  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t publish[] = {0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U};
+  uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(publish, 18U);
 
-  uint8_t puback[] = {0x40U, 0x2U, 0x12U, 0x34U};
+  uint8_t puback[] = { 0x40U, 0x2U, 0x12U, 0x34U };
   shimClient.expect(puback, 4U);
 
   rc = client.loop();

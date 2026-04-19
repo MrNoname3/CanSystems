@@ -96,9 +96,9 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       uint16_t length = MQTT_MAX_HEADER_SIZE;
 
 #if MQTT_VERSION == MQTT_VERSION_3_1
-      const uint8_t d[9] = {0x00U, 0x06U, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION};
+      const uint8_t d[9] = { 0x00U, 0x06U, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION };
 #elif MQTT_VERSION == MQTT_VERSION_3_1_1
-      const uint8_t d[7] = {0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION};
+      const uint8_t d[7] = { 0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION };
 #endif
       memcpy(this->buffer + length, d, sizeof(d));
       length = static_cast<uint16_t>(length + sizeof(d));
@@ -300,8 +300,8 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
         if (type == MQTTPUBLISH) {
           if (callback != nullptr) {
             const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-            memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                       /* move topic inside buffer 1 byte to front */
-            this->buffer[llen + 2U + tl] = 0U;                                                                     /* end the topic as a 'C' string with \x00 */
+            memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
+            this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
             char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
             // msgId only present for QOS>0
             if ((this->buffer[0] & 0x06U) == MQTTQOS1) {
