@@ -101,7 +101,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       const uint8_t d[7] = {0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION};
 #endif
       memcpy(this->buffer + length, d, sizeof(d));
-      length += sizeof(d);
+      length = static_cast<uint16_t>(length + sizeof(d));
 
       uint8_t v = (willTopic != nullptr)
                       ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
@@ -149,7 +149,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
       const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
       while (tcpClient->available() == 0) {
-        uint32_t t = millis();
+        const uint32_t t = millis();
         if (t - lastInActivity >= socketTimeoutMs) {
           connectionState = State::CONNECTION_TIMEOUT;
           tcpClient->stop();
