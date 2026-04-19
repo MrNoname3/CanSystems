@@ -106,7 +106,7 @@ bool test_receive_max_sized_message() {
                          // is no longer valid as it assumes the remaining length
                          // is a single-uint8_t. Don't make that mistake like I just
                          // did and lose a whole evening tracking down the issue.
-  client.setBufferSize(length);
+  IS_TRUE(client.setBufferSize(length));
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
@@ -144,7 +144,7 @@ bool test_receive_oversized_message() {
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  client.setBufferSize(static_cast<uint16_t>(length - 1U));
+  IS_TRUE(client.setBufferSize(static_cast<uint16_t>(length - 1U)));
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
@@ -207,7 +207,7 @@ bool test_resize_buffer() {
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  client.setBufferSize(static_cast<uint16_t>(length - 1U));
+  IS_TRUE(client.setBufferSize(static_cast<uint16_t>(length - 1U)));
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
@@ -227,7 +227,7 @@ bool test_resize_buffer() {
   IS_FALSE(callback_called);
 
   // Resize the buffer
-  client.setBufferSize(length);
+  IS_TRUE(client.setBufferSize(length));
 
   rc = client.loop();
   IS_TRUE(rc);
@@ -258,7 +258,7 @@ bool test_receive_oversized_stream_message() {
   uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
 
   PubSubClient client(server, 1883U, callback, shimClient, stream);
-  client.setBufferSize(static_cast<uint16_t>(length - 1U));
+  IS_TRUE(client.setBufferSize(static_cast<uint16_t>(length - 1U)));
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 

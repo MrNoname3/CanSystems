@@ -6,7 +6,7 @@
 
 uint8_t server[] = {172U, 16U, 0U, 2U};
 
-void callback(char* topic, uint8_t* payload, unsigned int length) {
+void callback(char*, uint8_t*, unsigned int) {
   // handle message arrived
 }
 
@@ -131,7 +131,7 @@ bool test_publish_too_long() {
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  client.setBufferSize(128U);
+  IS_TRUE(client.setBufferSize(128U));
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 

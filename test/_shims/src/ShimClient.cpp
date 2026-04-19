@@ -21,7 +21,7 @@ ShimClient::ShimClient() {
   this->_expectedPort = 0;
 }
 
-bool ShimClient::connect(IPAddress ip, uint16_t port) {
+bool ShimClient::connect(IPAddress /*ip*/, uint16_t port) {
   if (this->_allowConnect) {
     this->_connected = true;
   }

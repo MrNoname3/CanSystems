@@ -6,7 +6,7 @@
 
 uint8_t server[] = {172U, 16U, 0U, 2U};
 
-void callback(char* topic, uint8_t* payload, unsigned int length) {
+void callback(char*, uint8_t*, unsigned int) {
   // handle message arrived
 }
 
