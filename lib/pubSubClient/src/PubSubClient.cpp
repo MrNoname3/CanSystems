@@ -147,9 +147,10 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
       lastInActivity = lastOutActivity = millis();
 
+      const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
       while (tcpClient->available() == 0) {
         uint32_t t = millis();
-        if (t - lastInActivity >= (static_cast<uint32_t>(this->socketTimeout) * 1000U)) {
+        if (t - lastInActivity >= socketTimeoutMs) {
           connectionState = State::CONNECTION_TIMEOUT;
           tcpClient->stop();
           return false;
@@ -256,10 +257,8 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
     if (!readByte(&dataByte)) {
       return 0U;
     }
-    if (this->stream != nullptr) {
-      if (isPublish && idx - *lengthLength - 2U > skip) {
-        this->stream->write(dataByte);
-      }
+    if (this->stream != nullptr && isPublish && idx - *lengthLength - 2U > skip) {
+      this->stream->write(dataByte);
     }
 
     if (len < this->bufferSize) {
@@ -288,8 +287,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
       this->buffer[0] = MQTTPINGREQ;
       this->buffer[1] = 0U;
       tcpClient->write(this->buffer, 2U);
-      lastOutActivity = t;
-      lastInActivity = t;
+      lastOutActivity = lastInActivity = t;
       pingOutstanding = true;
     }
     if (tcpClient->available() != 0) {
@@ -303,7 +301,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
             const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
             memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                       /* move topic inside buffer 1 byte to front */
             this->buffer[llen + 2U + tl] = 0U;                                                                     /* end the topic as a 'C' string with \x00 */
-            char* topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
+            char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
             // msgId only present for QOS>0
             if ((this->buffer[0] & 0x06U) == MQTTQOS1) {
               const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
@@ -442,10 +440,9 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NO
 #ifdef MQTT_MAX_TRANSFER_SIZE
   uint8_t* writeBuf = buf + (MQTT_MAX_HEADER_SIZE - hlen);
   uint16_t bytesRemaining = length + hlen;  // Match the length type
-  uint8_t bytesToWrite;
   bool result = true;
   while ((bytesRemaining > 0U) && result) {
-    bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
+    const uint8_t bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
     const uint16_t rc = tcpClient->write(writeBuf, bytesToWrite);
     result = (rc == bytesToWrite);
     bytesRemaining -= rc;
@@ -466,8 +463,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if (qos > 1U) {
     return false;
   }
-  const size_t topicLength = strnlen(topic, this->bufferSize);
-  if (this->bufferSize < 9U + topicLength) {
+  if (this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
     // Too long
     return false;
   }
@@ -490,8 +486,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
   if (topic == nullptr) {
     return false;
   }
-  const size_t topicLength = strnlen(topic, this->bufferSize);
-  if (this->bufferSize < 9U + topicLength) {
+  if (this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
     // Too long
     return false;
   }
