@@ -101,32 +101,32 @@ public:
   explicit PubSubClient(Client& client);
 
   /// @brief Constructs a PubSubClient with a server IP address.
-  /// @param ip Server IP address.
+  /// @param addr Server IP address.
   /// @param port Server port number.
   /// @param client Reference to the TCP client.
-  PubSubClient(IPAddress ip, uint16_t port, Client& client);
+  PubSubClient(IPAddress addr, uint16_t port, Client& client);
 
   /// @brief Constructs a PubSubClient with a server IP address and stream.
-  /// @param ip Server IP address.
+  /// @param addr Server IP address.
   /// @param port Server port number.
   /// @param client Reference to the TCP client.
   /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress ip, uint16_t port, Client& client, Stream& stream);
+  PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream& stream);
 
   /// @brief Constructs a PubSubClient with a server IP address and callback.
-  /// @param ip Server IP address.
+  /// @param addr Server IP address.
   /// @param port Server port number.
   /// @param callback Callback invoked when a message is received.
   /// @param client Reference to the TCP client.
-  PubSubClient(IPAddress ip, uint16_t port, MqttCallback callback, Client& client);
+  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client);
 
   /// @brief Constructs a PubSubClient with a server IP address, callback and stream.
-  /// @param ip Server IP address.
+  /// @param addr Server IP address.
   /// @param port Server port number.
   /// @param callback Callback invoked when a message is received.
   /// @param client Reference to the TCP client.
   /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
+  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
   /// @brief Constructs a PubSubClient with a server IP given as a byte array.
   /// @param ip Pointer to a 4-byte array holding the server IP address.

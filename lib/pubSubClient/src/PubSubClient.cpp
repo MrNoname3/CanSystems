@@ -149,6 +149,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 
       const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
       while (tcpClient->available() == 0) {
+        yield();
         const uint32_t t = millis();
         if (t - lastInActivity >= socketTimeoutMs) {
           connectionState = State::CONNECTION_TIMEOUT;
