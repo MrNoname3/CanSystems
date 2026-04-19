@@ -106,21 +106,17 @@ public:
   PubSubClient(const char*, uint16_t, MqttCallback callback, Client& client, Stream&);
   ~PubSubClient() = default;
 
-  PubSubClient& setServer(IPAddress ip, uint16_t port) {
-    this->ip = ip; this->port = port; this->domain = nullptr; return *this;
-  }
+  PubSubClient& setServer(IPAddress ip, uint16_t port);
   PubSubClient& setServer(const uint8_t* ip, uint16_t port);
-  PubSubClient& setServer(const char* domain, uint16_t port) {
-    this->domain = domain; this->port = port; return *this;
-  }
-  PubSubClient& setCallback(MqttCallback callback) { this->callback = callback; return *this; }
-  PubSubClient& setClient(Client& client) { this->tcpClient = &client; return *this; }
-  PubSubClient& setStream(Stream& stream) { this->stream = &stream; return *this; }
-  PubSubClient& setKeepAlive(uint16_t keepAlive) { this->keepAlive = keepAlive; return *this; }
-  PubSubClient& setSocketTimeout(uint16_t timeout) { this->socketTimeout = timeout; return *this; }
+  PubSubClient& setServer(const char* domain, uint16_t port);
+  PubSubClient& setCallback(MqttCallback callback);
+  PubSubClient& setClient(Client& client);
+  PubSubClient& setStream(Stream& stream);
+  PubSubClient& setKeepAlive(uint16_t keepAlive);
+  PubSubClient& setSocketTimeout(uint16_t timeout);
 
   bool setBufferSize(uint16_t size);
-  [[nodiscard]] uint16_t getBufferSize() const { return this->bufferSize; }
+  [[nodiscard]] uint16_t getBufferSize() const;
 
   bool connect(const char* id);
   bool connect(const char* id, const char* user, const char* pass);
@@ -144,18 +140,18 @@ public:
   bool beginPublish(const char* topic, uint16_t plength, bool retained);
   // Finish off this publish message (started with beginPublish)
   // Returns 1 if the packet was sent successfully, 0 if there was an error
-  bool endPublish() { return true; }  // NOLINT(readability-convert-member-functions-to-static)
+  bool endPublish();
   // Write a single byte of payload (only to be used with beginPublish/endPublish)
-  size_t write(uint8_t data) override { lastOutActivity = millis(); return tcpClient->write(data); }
+  size_t write(uint8_t) override;
   // Write size bytes from buffer into the payload (only to be used with beginPublish/endPublish)
   // Returns the number of bytes written
-  size_t write(const uint8_t* buf, size_t size) override { lastOutActivity = millis(); return tcpClient->write(buf, size); }
+  size_t write(const uint8_t* buffer, size_t size) override;
   bool subscribe(const char* topic);
   bool subscribe(const char* topic, uint8_t qos);
   bool unsubscribe(const char* topic);
   bool loop();
   bool connected();
-  [[nodiscard]] State state() const { return this->connectionState; }
+  [[nodiscard]] State state() const;
 
 private:
   Client* tcpClient = nullptr;

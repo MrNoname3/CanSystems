@@ -87,8 +87,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {  // NOLINT(readability-function-cognitive-complexity)
   if (!connected()) {
     const bool result = (tcpClient->connected() != 0) ||
-      static_cast<bool>(domain != nullptr ? tcpClient->connect(this->domain, this->port)
-                                          : tcpClient->connect(this->ip, this->port));
+                        static_cast<bool>(domain != nullptr ? tcpClient->connect(this->domain, this->port)
+                                                            : tcpClient->connect(this->ip, this->port));
 
     if (result) {
       nextMsgId = 1U;
@@ -104,8 +104,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       length += sizeof(d);
 
       uint8_t v = (willTopic != nullptr)
-        ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
-        : 0x00U;
+                      ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
+                      : 0x00U;
       v |= cleanSession ? 0x02U : 0x00U;
       v |= (user != nullptr) ? 0x80U : 0x00U;
       v |= (user != nullptr && pass != nullptr) ? 0x40U : 0x00U;
@@ -430,8 +430,6 @@ bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retain
   return false;
 }
 
-
-
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
   uint8_t lenBuf[4];
   size_t pos = 0U;
@@ -493,7 +491,9 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if (connected()) {
     // Leave room in the buffer for header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    if (++nextMsgId == 0U) { nextMsgId = 1U; }  // cppcheck-suppress knownConditionTrueFalse
+    if (++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
+      nextMsgId = 1U;
+    }
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
@@ -514,7 +514,9 @@ bool PubSubClient::unsubscribe(const char* topic) {
   }
   if (connected()) {
     uint16_t length = MQTT_MAX_HEADER_SIZE;
-    if (++nextMsgId == 0U) { nextMsgId = 1U; }  // cppcheck-suppress knownConditionTrueFalse
+    if (++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
+      nextMsgId = 1U;
+    }
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
@@ -556,11 +558,70 @@ bool PubSubClient::connected() {  // NOLINT(readability-convert-member-functions
   return this->connectionState == State::CONNECTED;
 }
 
+PubSubClient& PubSubClient::setServer(IPAddress ip, uint16_t port) {
+  this->ip = ip;
+  this->port = port;
+  this->domain = nullptr;
+  return *this;
+}
+
 PubSubClient& PubSubClient::setServer(const uint8_t* ip, uint16_t port) {  // NOLINT(readability-convert-member-functions-to-static)
   IPAddress addr(ip[0], ip[1], ip[2], ip[3]);
   return setServer(addr, port);
 }
 
+PubSubClient& PubSubClient::setServer(const char* domain, uint16_t port) {
+  this->domain = domain;
+  this->port = port;
+  return *this;
+}
+
+PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
+  this->callback = callback;
+  return *this;
+}
+
+PubSubClient& PubSubClient::setClient(Client& client) {
+  this->tcpClient = &client;
+  return *this;
+}
+
+PubSubClient& PubSubClient::setStream(Stream& stream) {
+  this->stream = &stream;
+  return *this;
+}
+
+PubSubClient& PubSubClient::setKeepAlive(uint16_t keepAlive) {
+  this->keepAlive = keepAlive;
+  return *this;
+}
+
+PubSubClient& PubSubClient::setSocketTimeout(uint16_t timeout) {
+  this->socketTimeout = timeout;
+  return *this;
+}
+
+PubSubClient::State PubSubClient::state() const {
+  return this->connectionState;
+}
+
+uint16_t PubSubClient::getBufferSize() const {
+  return this->bufferSize;
+}
+
+bool PubSubClient::endPublish() {  // NOLINT(readability-convert-member-functions-to-static)
+  return true;
+}
+
+size_t PubSubClient::write(uint8_t data) {
+  lastOutActivity = millis();
+  return tcpClient->write(data);
+}
+
+size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
+  lastOutActivity = millis();
+  return tcpClient->write(buffer, size);
+}
 
 bool PubSubClient::setBufferSize(uint16_t size) {
   if (size == 0U || size > defaultBufferSize) {
@@ -569,4 +630,3 @@ bool PubSubClient::setBufferSize(uint16_t size) {
   this->bufferSize = size;
   return true;
 }
-
