@@ -6,7 +6,7 @@
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
-void callback(char*, uint8_t*, unsigned int) {
+void callback([[maybe_unused]] char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
   // handle message arrived
 }
 
@@ -38,7 +38,7 @@ bool test_publish_bytes() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t payload[] = { 0x01U, 0x02U, 0x03U, 0x0U, 0x05U };
+  const uint8_t payload[] = { 0x01U, 0x02U, 0x03U, 0x0U, 0x05U };
   uint8_t length = 5U;
 
   uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
@@ -149,7 +149,7 @@ bool test_publish_P() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t payload[] = { 0x01U, 0x02U, 0x03U, 0x0U, 0x05U };
+  const uint8_t payload[] = { 0x01U, 0x02U, 0x03U, 0x0U, 0x05U };
   uint8_t length = 5U;
 
   uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };

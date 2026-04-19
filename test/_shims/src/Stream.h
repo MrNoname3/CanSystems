@@ -11,9 +11,11 @@ private:
 
 public:
   Stream();
+  Stream(const Stream&) = delete;
+  Stream& operator=(const Stream&) = delete;
   size_t write(uint8_t);
 
-  bool error();
-  void expect(uint8_t* buf, size_t size);
-  uint16_t length();
+  bool error() const;
+  void expect(const uint8_t* buf, size_t size);
+  uint16_t length() const;
 };

@@ -6,9 +6,10 @@
 #include <math.h>
 #include "Print.h"
 
+using byte = uint8_t;
+using boolean = uint8_t;
+
 extern "C" {
-typedef uint8_t byte;
-typedef uint8_t boolean;
 
 /* sketch */
 extern void setup(void);

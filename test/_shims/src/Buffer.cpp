@@ -11,7 +11,7 @@ Buffer::Buffer(uint8_t* buf, size_t size) {
   this->length = 0;
   this->add(buf, size);
 }
-bool Buffer::available() {
+bool Buffer::available() const {
   return this->pos < this->length;
 }
 
@@ -26,7 +26,7 @@ void Buffer::reset() {
   this->pos = 0;
 }
 
-void Buffer::add(uint8_t* buf, size_t size) {
+void Buffer::add(const uint8_t* buf, size_t size) {
   for (size_t i = 0; i < size; i++) {
     this->buffer[this->length++] = buf[i];
   }

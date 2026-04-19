@@ -26,14 +26,14 @@ size_t Stream::write(uint8_t b) {
   return 1;
 }
 
-bool Stream::error() {
+bool Stream::error() const {
   return this->_error;
 }
 
-void Stream::expect(uint8_t* buf, size_t size) {
+void Stream::expect(const uint8_t* buf, size_t size) {
   this->expectBuffer->add(buf, size);
 }
 
-uint16_t Stream::length() {
+uint16_t Stream::length() const {
   return this->_written;
 }

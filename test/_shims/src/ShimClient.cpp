@@ -19,6 +19,7 @@ ShimClient::ShimClient() {
   this->expectAnything = true;
   this->_received = 0;
   this->_expectedPort = 0;
+  this->_expectedHost = nullptr;
 }
 
 bool ShimClient::connect(IPAddress /*ip*/, uint16_t port) {
@@ -102,7 +103,7 @@ int16_t ShimClient::available() {
 int16_t ShimClient::read() {
   return static_cast<int16_t>(this->responseBuffer->next());
 }
-int16_t ShimClient::read(uint8_t* buf, size_t size) {
+int16_t ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
   for (size_t i = 0; i < size; i++) {
     buf[i] = static_cast<uint8_t>(this->read());
   }
@@ -116,18 +117,18 @@ void ShimClient::stop() {
   this->setConnected(false);
 }
 uint8_t ShimClient::connected() {
-  return this->_connected;
+  return this->_connected ? 1U : 0U;
 }
 ShimClient::operator bool() {
   return true;
 }
 
-ShimClient* ShimClient::respond(uint8_t* buf, size_t size) {
+ShimClient* ShimClient::respond(const uint8_t* buf, size_t size) {
   this->responseBuffer->add(buf, size);
   return this;
 }
 
-ShimClient* ShimClient::expect(uint8_t* buf, size_t size) {
+ShimClient* ShimClient::expect(const uint8_t* buf, size_t size) {
   this->expectAnything = false;
   this->expectBuffer->add(buf, size);
   return this;
@@ -140,11 +141,11 @@ void ShimClient::setAllowConnect(bool b) {
   this->_allowConnect = b;
 }
 
-bool ShimClient::error() {
+bool ShimClient::error() const {
   return this->_error;
 }
 
-uint16_t ShimClient::received() {
+uint16_t ShimClient::received() const {
   return this->_received;
 }
 

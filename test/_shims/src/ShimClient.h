@@ -20,6 +20,8 @@ private:
 
 public:
   ShimClient();
+  ShimClient(const ShimClient&) = delete;
+  ShimClient& operator=(const ShimClient&) = delete;
   bool connect(IPAddress ip, uint16_t port) override;
   bool connect(const char* host, uint16_t port) override;
   size_t write(uint8_t) override;
@@ -33,14 +35,14 @@ public:
   uint8_t connected() override;
   operator bool() override;
 
-  ShimClient* respond(uint8_t* buf, size_t size);
-  ShimClient* expect(uint8_t* buf, size_t size);
+  ShimClient* respond(const uint8_t* buf, size_t size);
+  ShimClient* expect(const uint8_t* buf, size_t size);
 
   void expectConnect(IPAddress ip, uint16_t port);
   void expectConnect(const char* host, uint16_t port);
 
-  uint16_t received();
-  bool error();
+  uint16_t received() const;
+  bool error() const;
 
   void setAllowConnect(bool b);
   void setConnected(bool b);

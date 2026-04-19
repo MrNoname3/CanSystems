@@ -22,7 +22,7 @@ void callback(char* topic, uint8_t* payload, uint32_t length) {
   TRACE("Callback received topic=[" << topic << "] length=" << length << "\n")
   callback_called = true;
   strcpy(lastTopic, topic);
-  memcpy(lastPayload, payload, length);
+  memcpy(lastPayload, payload, static_cast<size_t>(length));
   lastLength = length;
 }
 
@@ -62,7 +62,7 @@ bool test_receive_stream() {
   reset_callback();
 
   Stream stream;
-  stream.expect((uint8_t*)"payload", 7U);
+  stream.expect(reinterpret_cast<const uint8_t*>("payload"), 7U);
 
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
