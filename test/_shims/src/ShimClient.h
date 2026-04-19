@@ -41,8 +41,8 @@ public:
   void expectConnect(IPAddress ip, uint16_t port);
   void expectConnect(const char* host, uint16_t port);
 
-  uint16_t received() const;
-  bool error() const;
+  [[nodiscard]] uint16_t received() const;
+  [[nodiscard]] bool error() const;
 
   void setAllowConnect(bool b);
   void setConnected(bool b);

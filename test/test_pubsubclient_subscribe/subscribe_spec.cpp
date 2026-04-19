@@ -15,16 +15,16 @@ bool test_subscribe_no_qos() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x0U };
+  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x0U };
   shimClient.expect(subscribe, 12U);
-  uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x0U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x0U };
   shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic");
@@ -40,16 +40,16 @@ bool test_subscribe_qos_1() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U };
+  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U };
   shimClient.expect(subscribe, 12U);
-  uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x1U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x1U };
   shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic", 1U);
@@ -79,7 +79,7 @@ bool test_subscribe_invalid_qos() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
@@ -101,7 +101,7 @@ bool test_subscribe_too_long() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
@@ -128,16 +128,16 @@ bool test_unsubscribe() {
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
-  uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  uint8_t unsubscribe[] = { 0xA2U, 0x9U, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  const uint8_t unsubscribe[] = { 0xA2U, 0x9U, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
   shimClient.expect(unsubscribe, 12U);
-  uint8_t unsuback[] = { 0xB0U, 0x2U, 0x0U, 0x2U };
+  const uint8_t unsuback[] = { 0xB0U, 0x2U, 0x0U, 0x2U };
   shimClient.respond(unsuback, 4U);
 
   rc = client.unsubscribe("topic");

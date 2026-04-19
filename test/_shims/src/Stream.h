@@ -15,7 +15,7 @@ public:
   Stream& operator=(const Stream&) = delete;
   size_t write(uint8_t);
 
-  bool error() const;
+  [[nodiscard]] bool error() const;
   void expect(const uint8_t* buf, size_t size);
-  uint16_t length() const;
+  [[nodiscard]] uint16_t length() const;
 };

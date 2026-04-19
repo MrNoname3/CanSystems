@@ -10,9 +10,9 @@ private:
 
 public:
   Buffer();
-  Buffer(uint8_t* buf, size_t size);
+  Buffer(const uint8_t* buf, size_t size);
 
-  bool available() const;
+  [[nodiscard]] bool available() const;
   uint8_t next();
   void reset();
 
