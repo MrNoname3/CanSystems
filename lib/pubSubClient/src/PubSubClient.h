@@ -125,8 +125,7 @@ public:
   bool connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession);
   void disconnect();
   bool publish(const char* topic, const char* payload, bool retained = false);
-  bool publish(const char* topic, const uint8_t* payload, uint16_t plength);
-  bool publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
+  bool publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained = false);
   bool publish_P(const char* topic, const char* payload, bool retained);
   bool publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
   // Start to publish a message.
@@ -146,8 +145,7 @@ public:
   // Write size bytes from buffer into the payload (only to be used with beginPublish/endPublish)
   // Returns the number of bytes written
   size_t write(const uint8_t* buffer, size_t size) override;
-  bool subscribe(const char* topic);
-  bool subscribe(const char* topic, uint8_t qos);
+  bool subscribe(const char* topic, uint8_t qos = 0U);
   bool unsubscribe(const char* topic);
   bool loop();
   bool connected();
