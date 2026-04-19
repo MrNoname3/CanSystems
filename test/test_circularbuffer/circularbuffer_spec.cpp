@@ -131,6 +131,17 @@ bool test_struct_type() {
   END_IT
 }
 
+bool test_pop_on_empty_returns_default_no_state_change() {
+  IT("pop on empty buffer returns default value without corrupting state");
+  CircularBuffer<uint8_t, 4> buf;
+  IS_EQUAL(buf.pop(), 0U);
+  IS_TRUE(buf.isEmpty());
+  IS_EQUAL(buf.getSize(), 0U);
+  buf.put(42U);
+  IS_EQUAL(buf.pop(), 42U);
+  END_IT
+}
+
 bool test_capacity_one() {
   IT("capacity-1 buffer overwrites on second put");
   CircularBuffer<uint8_t, 1> buf;
@@ -158,5 +169,6 @@ int main() {
   test_multiple_overflows();
   test_struct_type();
   test_capacity_one();
+  test_pop_on_empty_returns_default_no_state_change();
   FINISH
 }

@@ -10,16 +10,18 @@ class TestTarget : public OtaTarget {
 public:
   const char* const fileName;
   bool triggered = false;
+  uint8_t triggerCount = 0U;
 
   explicit TestTarget(const char* fn) : fileName(fn) {}
   [[nodiscard]] const char* getFwFileName() const override { return fileName; }
-  void triggerOta() override { triggered = true; }
+  void triggerOta() override { triggered = true; triggerCount++; }
 };
 
 TestTarget targetA{"fw_a.bin"};
 TestTarget targetB{"fw_b.bin"};
 TestTarget targetC{"fw_a.bin"}; // same file name as targetA
 TestTarget targetNull{nullptr};  // null file name
+TestTarget targetDup{"fw_dup.bin"};
 
 bool test_matching_target_triggered() {
   IT("triggers the registered target whose file name matches");
@@ -86,6 +88,19 @@ bool test_null_named_target_skipped_on_real_file() {
   END_IT
 }
 
+bool test_duplicate_add_is_idempotent() {
+  IT("adding the same target twice does not duplicate it in the registry");
+  OtaRegistry::add(targetDup);
+  OtaRegistry::add(targetDup); // second add must be a no-op
+
+  targetDup.triggered = false;
+  targetDup.triggerCount = 0U;
+  OtaRegistry::triggerForFile("fw_dup.bin");
+  IS_TRUE(targetDup.triggered);
+  IS_EQUAL(targetDup.triggerCount, 1U); // triggered exactly once, not twice
+  END_IT
+}
+
 int main() {
   SUITE("OtaRegistry");
   test_matching_target_triggered();
@@ -94,5 +109,6 @@ int main() {
   test_null_filename_trigger_is_noop();
   test_unknown_file_nothing_triggered();
   test_null_named_target_skipped_on_real_file();
+  test_duplicate_add_is_idempotent();
   FINISH
 }

@@ -4,6 +4,9 @@
 OtaTarget* OtaRegistry::head = nullptr;
 
 void OtaRegistry::add(OtaTarget& target) {
+  for(OtaTarget* current = head; current != nullptr; current = current->next) {
+    if(current == &target) { return; }
+  }
   target.next = nullptr;
   if(head == nullptr) {
     head = &target;

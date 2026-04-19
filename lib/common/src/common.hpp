@@ -148,6 +148,9 @@ private:
   static constexpr const char PROGMEM sectionSeparator[] = {  // Section separator string, stored in program memory on ESP platforms.
     "*************************************************"
   };
+#else
+  static constexpr const char* okStr  = "[OK]";               // Status string for "OK" on native/test platforms.
+  static constexpr const char* errStr = "[ERR]";              // Status string for "Error" on native/test platforms.
 #endif
 };
 

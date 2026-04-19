@@ -1,6 +1,13 @@
 #include "taskHandler.hpp"
 #include "BDDTest.h"
 
+struct SimpleTask : public Task {
+  const bool result;
+  explicit SimpleTask(bool r) : result(r) {}
+  [[nodiscard]] bool init() override { return result; }
+  [[nodiscard]] bool run()  override { return result; }
+};
+
 class TrackingTask : public Task {
 public:
   const bool initResult;
@@ -137,6 +144,27 @@ bool test_run_failure_sets_bitmask() {
   END_IT
 }
 
+bool test_32_tasks_highest_bit_bitmask() {
+  IT("32 tasks: failure at index 31 sets bit 31 in the bitmask");
+  SimpleTask t00(true),  t01(true),  t02(true),  t03(true),
+             t04(true),  t05(true),  t06(true),  t07(true),
+             t08(true),  t09(true),  t10(true),  t11(true),
+             t12(true),  t13(true),  t14(true),  t15(true),
+             t16(true),  t17(true),  t18(true),  t19(true),
+             t20(true),  t21(true),  t22(true),  t23(true),
+             t24(true),  t25(true),  t26(true),  t27(true),
+             t28(true),  t29(true),  t30(true),  t31(false);
+  Task* list[] = {
+    &t00, &t01, &t02, &t03, &t04, &t05, &t06, &t07,
+    &t08, &t09, &t10, &t11, &t12, &t13, &t14, &t15,
+    &t16, &t17, &t18, &t19, &t20, &t21, &t22, &t23,
+    &t24, &t25, &t26, &t27, &t28, &t29, &t30, &t31
+  };
+  TaskHandler<32U, true> handler(list);
+  IS_EQUAL(handler.initTasks(), 0x80000000U);
+  END_IT
+}
+
 int main() {
   SUITE("TaskHandler");
   test_single_task_init_success();
@@ -148,5 +176,6 @@ int main() {
   test_partial_round_robin_first_task_always_runs();
   test_nullptr_task_skipped();
   test_run_failure_sets_bitmask();
+  test_32_tasks_highest_bit_bitmask();
   FINISH
 }

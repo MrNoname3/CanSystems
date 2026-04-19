@@ -74,6 +74,7 @@ void CircularBuffer<T, buffSize>::put(T item) {
 
 template<class T, uint16_t buffSize>
 T CircularBuffer<T, buffSize>::pop() {
+  if(isEmpty()) { return T(); }
   T result = buffer[tail];
   tail = (tail + 1U) % buffSize;
   full = false;
