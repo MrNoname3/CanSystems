@@ -155,7 +155,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
           return false;
         }
       }
-      uint8_t llen;
+      uint8_t llen = 0U;
       const uint32_t len = readPacket(&llen);
 
       if (len == 4U) {
@@ -187,7 +187,7 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
 // reads a byte into result
 bool PubSubClient::readByte(uint8_t* result) {  // NOLINT(readability-convert-member-functions-to-static)
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
-  uint32_t previousMillis = millis();
+  const uint32_t previousMillis = millis();
   while (tcpClient->available() == 0) {
     yield();
     if (millis() - previousMillis >= timeoutMs) {
@@ -277,7 +277,7 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
 
 bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity)
   if (connected()) {
-    uint32_t t = millis();
+    const uint32_t t = millis();
     const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
     if ((t - lastInActivity > keepAliveMs) || (t - lastOutActivity > keepAliveMs)) {
       if (pingOutstanding) {
@@ -293,7 +293,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
       pingOutstanding = true;
     }
     if (tcpClient->available() != 0) {
-      uint8_t llen;
+      uint8_t llen = 0U;
       const uint16_t len = static_cast<uint16_t>(readPacket(&llen));
       if (len > 0U) {
         lastInActivity = t;
@@ -410,8 +410,8 @@ bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retain
     uint16_t length = MQTT_MAX_HEADER_SIZE;
     length = writeString(topic, this->buffer, length);
     const uint8_t header = static_cast<uint8_t>(MQTTPUBLISH | (retained ? 1U : 0U));
-    size_t hlen = buildHeader(header, this->buffer, plength + length - MQTT_MAX_HEADER_SIZE);
-    uint16_t rc = tcpClient->write(this->buffer + (MQTT_MAX_HEADER_SIZE - hlen), length - (MQTT_MAX_HEADER_SIZE - hlen));
+    const size_t hlen = buildHeader(header, this->buffer, plength + length - MQTT_MAX_HEADER_SIZE);
+    const uint16_t rc = tcpClient->write(this->buffer + (MQTT_MAX_HEADER_SIZE - hlen), length - (MQTT_MAX_HEADER_SIZE - hlen));
     lastOutActivity = millis();
     return (rc == (length - (MQTT_MAX_HEADER_SIZE - hlen)));
   }
@@ -437,7 +437,6 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
 }
 
 bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NOLINT(readability-convert-member-functions-to-static)
-  uint16_t rc;
   const uint8_t hlen = static_cast<uint8_t>(buildHeader(header, buf, length));
 
 #ifdef MQTT_MAX_TRANSFER_SIZE
@@ -447,14 +446,14 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NO
   bool result = true;
   while ((bytesRemaining > 0U) && result) {
     bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
-    rc = tcpClient->write(writeBuf, bytesToWrite);
+    const uint16_t rc = tcpClient->write(writeBuf, bytesToWrite);
     result = (rc == bytesToWrite);
     bytesRemaining -= rc;
     writeBuf += rc;
   }
   return result;
 #else
-  rc = tcpClient->write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
+  const uint16_t rc = tcpClient->write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
   lastOutActivity = millis();
   return (rc == hlen + length);
 #endif
@@ -464,10 +463,10 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if (topic == nullptr) {
     return false;
   }
-  size_t topicLength = strnlen(topic, this->bufferSize);
   if (qos > 1U) {
     return false;
   }
+  const size_t topicLength = strnlen(topic, this->bufferSize);
   if (this->bufferSize < 9U + topicLength) {
     // Too long
     return false;
@@ -491,7 +490,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
   if (topic == nullptr) {
     return false;
   }
-  size_t topicLength = strnlen(topic, this->bufferSize);
+  const size_t topicLength = strnlen(topic, this->bufferSize);
   if (this->bufferSize < 9U + topicLength) {
     // Too long
     return false;
