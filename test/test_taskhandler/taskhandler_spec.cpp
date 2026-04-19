@@ -44,7 +44,9 @@ bool test_single_task_init_failure() {
 
 bool test_multi_task_init_all_success() {
   IT("all tasks init successfully - returns 0");
-  TrackingTask t0(true, true), t1(true, true), t2(true, true);
+  TrackingTask t0(true, true);
+  TrackingTask t1(true, true);
+  TrackingTask t2(true, true);
   Task* list[] = { &t0, &t1, &t2 };
   TaskHandler<3, true> handler(list);
 
@@ -57,7 +59,10 @@ bool test_multi_task_init_all_success() {
 
 bool test_multi_task_init_partial_failure_bitmask() {
   IT("failed init tasks set their corresponding bitmask bits");
-  TrackingTask t0(true, true), t1(false, true), t2(true, true), t3(false, true);
+  TrackingTask t0(true, true);
+  TrackingTask t1(false, true);
+  TrackingTask t2(true, true);
+  TrackingTask t3(false, true);
   Task* list[] = { &t0, &t1, &t2, &t3 };
   TaskHandler<4, true> handler(list);
 
@@ -79,7 +84,9 @@ bool test_single_task_run_count() {
 
 bool test_full_round_robin_order() {
   IT("full round-robin cycles through tasks one at a time in order");
-  TrackingTask t0(true, true), t1(true, true), t2(true, true);
+  TrackingTask t0(true, true);
+  TrackingTask t1(true, true);
+  TrackingTask t2(true, true);
   Task* list[] = { &t0, &t1, &t2 };
   TaskHandler<3, true> handler(list);
 
@@ -97,7 +104,9 @@ bool test_full_round_robin_order() {
 
 bool test_partial_round_robin_first_task_always_runs() {
   IT("partial round-robin always runs first task and alternates the rest");
-  TrackingTask t0(true, true), t1(true, true), t2(true, true);
+  TrackingTask t0(true, true);
+  TrackingTask t1(true, true);
+  TrackingTask t2(true, true);
   Task* list[] = { &t0, &t1, &t2 };
   TaskHandler<3, false> handler(list);
 
@@ -114,7 +123,8 @@ bool test_partial_round_robin_first_task_always_runs() {
 
 bool test_nullptr_task_skipped() {
   IT("nullptr task entries are safely skipped in init and run");
-  TrackingTask t0(true, true), t2(true, true);
+  TrackingTask t0(true, true);
+  TrackingTask t2(true, true);
   Task* list[] = { &t0, nullptr, &t2 };
   TaskHandler<3, true> handler(list);
 
@@ -130,7 +140,9 @@ bool test_nullptr_task_skipped() {
 
 bool test_run_failure_sets_bitmask() {
   IT("failed run sets the task's bit in the returned bitmask");
-  TrackingTask t0(true, true), t1(true, false), t2(true, true);
+  TrackingTask t0(true, true);
+  TrackingTask t1(true, false);
+  TrackingTask t2(true, true);
   Task* list[] = { &t0, &t1, &t2 };
   TaskHandler<3, true> handler(list);
 
@@ -146,14 +158,14 @@ bool test_run_failure_sets_bitmask() {
 
 bool test_32_tasks_highest_bit_bitmask() {
   IT("32 tasks: failure at index 31 sets bit 31 in the bitmask");
-  SimpleTask t00(true),  t01(true),  t02(true),  t03(true),
-             t04(true),  t05(true),  t06(true),  t07(true),
-             t08(true),  t09(true),  t10(true),  t11(true),
-             t12(true),  t13(true),  t14(true),  t15(true),
-             t16(true),  t17(true),  t18(true),  t19(true),
-             t20(true),  t21(true),  t22(true),  t23(true),
-             t24(true),  t25(true),  t26(true),  t27(true),
-             t28(true),  t29(true),  t30(true),  t31(false);
+  SimpleTask t00(true);  SimpleTask t01(true);  SimpleTask t02(true);  SimpleTask t03(true);
+  SimpleTask t04(true);  SimpleTask t05(true);  SimpleTask t06(true);  SimpleTask t07(true);
+  SimpleTask t08(true);  SimpleTask t09(true);  SimpleTask t10(true);  SimpleTask t11(true);
+  SimpleTask t12(true);  SimpleTask t13(true);  SimpleTask t14(true);  SimpleTask t15(true);
+  SimpleTask t16(true);  SimpleTask t17(true);  SimpleTask t18(true);  SimpleTask t19(true);
+  SimpleTask t20(true);  SimpleTask t21(true);  SimpleTask t22(true);  SimpleTask t23(true);
+  SimpleTask t24(true);  SimpleTask t25(true);  SimpleTask t26(true);  SimpleTask t27(true);
+  SimpleTask t28(true);  SimpleTask t29(true);  SimpleTask t30(true);  SimpleTask t31(false);
   Task* list[] = {
     &t00, &t01, &t02, &t03, &t04, &t05, &t06, &t07,
     &t08, &t09, &t10, &t11, &t12, &t13, &t14, &t15,

@@ -3,7 +3,7 @@
 
 class HardwareSerial : public Print {
 public:
-  size_t write(uint8_t) override { return 0U; }
+  size_t write(uint8_t /*byte*/) override { return 0U; }
 };
 
 inline HardwareSerial Serial;
