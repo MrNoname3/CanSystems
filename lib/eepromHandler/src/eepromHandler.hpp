@@ -112,8 +112,8 @@ private:
   struct __attribute__((packed))
   EEPROMData {
     uint16_t crc = 0U;                              // CRC16 value of the data.
-    T data;                                         // User-defined data type.
-    EEPROMData() = default;                         // Default constructor initializes members to zero.
+    T data{};                                       // User-defined data type, value-initialized to zero.
+    EEPROMData() = default;
   };
 #if defined(ESP8266) || defined(ESP32)
   static inline bool eepromInitialised = false;     // Tracks whether the EEPROM has been initialized.
