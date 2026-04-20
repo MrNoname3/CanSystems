@@ -13,8 +13,8 @@ public:
            uint32_t capacity = SPIFLASH_DEFAULT_CAPACITY)
     : jedecId(id), flashCapacity(capacity) {}
 
-  [[nodiscard]] bool initialize() const { return true; }
-  [[nodiscard]] uint8_t readStatus() const { return 0U; }
+  [[nodiscard]] static bool initialize() { return true; }
+  [[nodiscard]] static uint8_t readStatus() { return 0U; }
 
   [[nodiscard]] uint8_t readByte(uint32_t addr) const {
     assert(addr < flashCapacity);
@@ -29,7 +29,7 @@ public:
     }
   }
 
-  void writeByte(uint32_t addr, uint8_t byt) {
+  void writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
     assert(addr < flashCapacity);
     memory[addr] = readByte(addr) & byt; // NAND: write can only clear bits (1→0); erase resets to 0xFF
   }
@@ -60,7 +60,7 @@ public:
 
   [[nodiscard]] uint16_t readDeviceId() const { return jedecId; }
 
-  void readUniqueId(uint8_t (&buf)[8]) const { memset(buf, 0, sizeof(buf)); }
+  static void readUniqueId(uint8_t (&buf)[8]) { memset(buf, 0, sizeof(buf)); }
 
   void sleep() const {}
   void wakeup() const {}
@@ -72,7 +72,7 @@ public:
   SPIFlash& operator=(SPIFlash&&) = delete;
 
 private:
-  void eraseRange(uint32_t base, uint32_t size) {
+  void eraseRange(uint32_t base, uint32_t size) { // NOLINT(readability-convert-member-functions-to-static)
     std::map<uint32_t, uint8_t>::iterator it = memory.lower_bound(base);
     while (it != memory.end() && it->first < base + size) {
       it = memory.erase(it);
