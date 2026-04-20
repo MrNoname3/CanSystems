@@ -4,8 +4,15 @@
 #include <Arduino.h>
 #include <ctime>
 
+static uint32_t fakeMillisValue = 0U;
+static bool fakeMillisActive = false;
+
+void setFakeMillis(uint32_t t) { fakeMillisValue = t; fakeMillisActive = true; }
+void clearFakeMillis()         { fakeMillisActive = false; }
+
 extern "C" {
 uint32_t millis(void) {
+  if (fakeMillisActive) { return fakeMillisValue; }
   return static_cast<uint32_t>(time(nullptr)) * 1000U;
 }
 }

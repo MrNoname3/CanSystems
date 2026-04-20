@@ -17,6 +17,9 @@ extern void loop(void);
 uint32_t millis(void);
 }
 
+void setFakeMillis(uint32_t t);
+void clearFakeMillis();
+
 #define PROGMEM
 #define pgm_read_byte_near(x) *(x)
 // clang-format off
