@@ -155,6 +155,47 @@ bool test_capacity_one() {
   END_IT
 }
 
+bool test_capacity_two() {
+  IT("capacity-2 buffer wraps around correctly");
+  CircularBuffer<uint8_t, 2> buf;
+  buf.put(1U);
+  buf.put(2U);
+  IS_TRUE(buf.isFull());
+  buf.put(3U); // overwrites 1
+  IS_EQUAL(buf.getSize(), 2U);
+  IS_EQUAL(buf.pop(), 2U);
+  IS_EQUAL(buf.pop(), 3U);
+  IS_TRUE(buf.isEmpty());
+  END_IT
+}
+
+bool test_peek_on_full_buffer() {
+  IT("peek on a full buffer returns the oldest element without changing size");
+  CircularBuffer<uint8_t, 3> buf;
+  buf.put(10U);
+  buf.put(20U);
+  buf.put(30U);
+  IS_TRUE(buf.isFull());
+  IS_EQUAL(buf.peek(), 10U);
+  IS_EQUAL(buf.getSize(), 3U);
+  END_IT
+}
+
+bool test_pop_after_clear() {
+  IT("pop after clear returns default and buffer stays operational");
+  CircularBuffer<uint8_t, 4> buf;
+  buf.put(1U);
+  buf.put(2U);
+  buf.clear();
+  IS_EQUAL(buf.pop(), 0U);
+  IS_TRUE(buf.isEmpty());
+  IS_EQUAL(buf.getSize(), 0U);
+  buf.put(42U);
+  IS_EQUAL(buf.pop(), 42U);
+  IS_TRUE(buf.isEmpty());
+  END_IT
+}
+
 int main() {
   SUITE("CircularBuffer");
   test_empty_on_construction();
@@ -170,5 +211,8 @@ int main() {
   test_struct_type();
   test_capacity_one();
   test_pop_on_empty_returns_default_no_state_change();
+  test_capacity_two();
+  test_peek_on_full_buffer();
+  test_pop_after_clear();
   FINISH
 }

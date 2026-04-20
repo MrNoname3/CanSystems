@@ -101,6 +101,15 @@ bool test_duplicate_add_is_idempotent() {
   END_IT
 }
 
+bool test_case_sensitivity() {
+  IT("triggerForFile is case-sensitive; wrong case does not trigger a target");
+  OtaRegistry::triggerForFile("FW_B.BIN");
+  IS_FALSE(targetB.triggered);
+  OtaRegistry::triggerForFile("Fw_b.Bin");
+  IS_FALSE(targetB.triggered);
+  END_IT
+}
+
 int main() {
   SUITE("OtaRegistry");
   test_matching_target_triggered();
@@ -110,5 +119,6 @@ int main() {
   test_unknown_file_nothing_triggered();
   test_null_named_target_skipped_on_real_file();
   test_duplicate_add_is_idempotent();
+  test_case_sensitivity();
   FINISH
 }

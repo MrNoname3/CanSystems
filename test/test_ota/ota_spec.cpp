@@ -179,7 +179,63 @@ bool test_run_invalid_clears_flash() {
   END_IT
 }
 
+bool test_start_restart_clears_previous_session() {
+  IT("calling start() again erases flash and resets the write pointer to 0");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  uint8_t chunk[OTA::fwPieceSize] = { 0xAAU, 0xBBU, 0xCCU, 0xDDU };
+  IS_TRUE(ota.storeNextData(0U, chunk));
+  IS_EQUAL(flash.readByte(2U), 0xCCU); // written in first session
+
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), 0xFFFFU));
+  IS_EQUAL(flash.readByte(2U), 0xFFU); // chipErase wiped it
+  IS_TRUE(ota.storeNextData(0U, chunk)); // write pointer is back at 0
+  END_IT
+}
+
+bool test_store_block1_writes_at_correct_flash_offset() {
+  IT("storeNextData for block 1 writes bytes starting at the 32KB flash offset");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.start(1U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  uint8_t chunk[OTA::fwPieceSize] = { 0xAAU, 0xBBU, 0xCCU, 0xDDU };
+  IS_TRUE(ota.storeNextData(0U, chunk));
+  IS_EQUAL(flash.readByte(32768U + 0U), 0xFFU); // first 2 bytes kept in OTA memory
+  IS_EQUAL(flash.readByte(32768U + 1U), 0xFFU);
+  IS_EQUAL(flash.readByte(32768U + 2U), 0xCCU); // written at block-1 offset
+  IS_EQUAL(flash.readByte(32768U + 3U), 0xDDU);
+  IS_EQUAL(flash.readByte(0U), 0xFFU); // block-0 untouched
+  END_IT
+}
+
+bool test_run_full_valid_flow_block1() {
+  IT("full store+CRC flow works correctly for block 1 (CHECK reads from 32KB offset)");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
+  IS_TRUE(ota.start(1U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  IS_TRUE(ota.storeNextData(0U, fw));
+  IS_EQUAL(ota.run(), OtaState::STORE);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::VALID);
+  IS_EQUAL(ota.run(), OtaState::IDLE);
+  END_IT
+}
+
 // ---- isOwnFw() ----
+
+bool test_is_own_fw_before_start() {
+  IT("isOwnFw returns true on a fresh OTA object before start() is called");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.isOwnFw()); // flashBlockBeginAddress defaults to 0
+  END_IT
+}
 
 bool test_is_own_fw_block_zero() {
   IT("isOwnFw returns true when firmware is stored in flash block 0");
@@ -215,6 +271,10 @@ int main() {
   test_run_full_valid_flow();
   test_run_crc_mismatch_goes_invalid();
   test_run_invalid_clears_flash();
+  test_start_restart_clears_previous_session();
+  test_store_block1_writes_at_correct_flash_offset();
+  test_run_full_valid_flow_block1();
+  test_is_own_fw_before_start();
   test_is_own_fw_block_zero();
   test_is_own_fw_other_block();
   FINISH

@@ -60,6 +60,13 @@ bool test_time_has_elapsed_overflow() {
   END_IT
 }
 
+bool test_time_has_elapsed_zero_duration() {
+  IT("hasElapsed with zero duration: false when equal, true when any time has passed");
+  IS_FALSE(Time::hasElapsed(100U, 100U, 0U)); // delta=0, 0 > 0 is false
+  IS_TRUE(Time::hasElapsed(101U, 100U, 0U));  // delta=1, 1 > 0 is true
+  END_IT
+}
+
 // ---- Analog ----
 
 bool test_analog_filter_full_new() {
@@ -85,6 +92,15 @@ bool test_analog_filter10() {
   IT("complementaryFilter10 applies ~10% weight to new value");
   // alpha=25: (25 * 100 + 230 * 900) / 255 = 209500 / 255 = 821
   IS_EQUAL(Analog::complementaryFilter10(100U, 900U), 821U);
+  END_IT
+}
+
+bool test_analog_filter_alpha_boundary() {
+  IT("complementaryFilter at alpha=1 and alpha=254 stays close to old/new respectively");
+  // alpha=1:   (1*1000 + 254*0)   / 255 = 3
+  IS_EQUAL(Analog::complementaryFilter<1U>(1000U, 0U), 3U);
+  // alpha=254: (254*1000 + 1*0)   / 255 = 996
+  IS_EQUAL(Analog::complementaryFilter<254U>(1000U, 0U), 996U);
   END_IT
 }
 
@@ -144,6 +160,23 @@ bool test_error_state_clear_all() {
   END_IT
 }
 
+enum class WideErr : uint16_t { X = 0x0001U, Y = 0x0100U, Z = 0x8000U };
+
+bool test_error_state_wide_storage() {
+  IT("ErrorState with uint16_t storage tracks bits beyond the uint8_t range");
+  ErrorState<WideErr, uint16_t> state;
+  state.setError(WideErr::X);
+  state.setError(WideErr::Z);
+  IS_EQUAL(state.getRawErrorState(), 0x8001U);
+  IS_TRUE(state.hasError(WideErr::X));
+  IS_FALSE(state.hasError(WideErr::Y));
+  IS_TRUE(state.hasError(WideErr::Z));
+  state.clearError(WideErr::Z);
+  IS_EQUAL(state.getRawErrorState(), 0x0001U);
+  IS_FALSE(state.hasAnyError() && !state.hasError(WideErr::X));
+  END_IT
+}
+
 // ---- Str ----
 
 bool test_str_get_state_str() {
@@ -175,15 +208,18 @@ int main() {
   test_time_ms_to_us();
   test_time_has_elapsed();
   test_time_has_elapsed_overflow();
+  test_time_has_elapsed_zero_duration();
   test_analog_filter_full_new();
   test_analog_filter_full_old();
   test_analog_filter_mixed();
   test_analog_filter10();
+  test_analog_filter_alpha_boundary();
   test_error_state_initial_clear();
   test_error_state_set_and_check();
   test_error_state_multiple_errors();
   test_error_state_clear_single();
   test_error_state_clear_all();
+  test_error_state_wide_storage();
   test_str_get_state_str();
   test_array_size();
   FINISH

@@ -133,6 +133,42 @@ bool test_decode_invalid_character() {
   END_IT
 }
 
+bool test_encode_zero_length_input() {
+  IT("encodeBase64 with zero-length input returns 0 and writes null terminator");
+  uint8_t out[8] = {0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU};
+  const uint8_t in[] = {0x00U};
+  IS_EQUAL(Base64::encodeBase64(in, out, 0U, sizeof(out)), 0U);
+  IS_EQUAL(out[0], static_cast<uint8_t>('\0'));
+  END_IT
+}
+
+bool test_decode_zero_length_input() {
+  IT("decodeBase64 with zero-length input returns 0 and writes null terminator");
+  uint8_t out[8] = {0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU};
+  const uint8_t in[] = {'T', 'W', 'F', 'u'};
+  IS_EQUAL(Base64::decodeBase64(in, out, 0U, sizeof(out)), 0U);
+  IS_EQUAL(out[0], static_cast<uint8_t>('\0'));
+  END_IT
+}
+
+bool test_decode_two_chars_no_padding() {
+  IT("decodes 2-character block without padding to 1 byte");
+  uint8_t out[8] = {};
+  const uint8_t in[] = {'T', 'Q'}; // "M" without '==' padding
+  IS_EQUAL(Base64::decodeBase64(in, out, 2U, sizeof(out)), 1U);
+  IS_EQUAL(out[0], static_cast<uint8_t>('M'));
+  END_IT
+}
+
+bool test_decode_three_chars_no_padding() {
+  IT("decodes 3-character block without padding to 2 bytes");
+  uint8_t out[8] = {};
+  const uint8_t in[] = {'T', 'W', 'E'}; // "Ma" without '=' padding
+  IS_EQUAL(Base64::decodeBase64(in, out, 3U, sizeof(out)), 2U);
+  IS_TRUE(memcmp(out, "Ma", 2U) == 0);
+  END_IT
+}
+
 int main() {
   SUITE("Base64");
   test_encoded_length();
@@ -148,5 +184,9 @@ int main() {
   test_encode_output_buffer_too_small();
   test_decode_output_buffer_too_small();
   test_decode_invalid_character();
+  test_encode_zero_length_input();
+  test_decode_zero_length_input();
+  test_decode_two_chars_no_padding();
+  test_decode_three_chars_no_padding();
   FINISH
 }

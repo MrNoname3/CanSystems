@@ -109,6 +109,40 @@ bool test_two_segment_continuity() {
   END_IT
 }
 
+bool test_custom_polynomial() {
+  IT("custom polynomial produces different CRC than the default polynomial");
+  const uint8_t data[] = {0x01U, 0x02U, 0x03U};
+  uint16_t crcDefault = Crc16::calculate(data, 3U, 0U, 0x1021U);
+  uint16_t crcCustom  = Crc16::calculate(data, 3U, 0U, 0x8005U);
+  IS_NOT_EQUAL(crcDefault, crcCustom);
+  Crc16 crc(0U, 0x8005U);
+  crc.next(data, 3U);
+  IS_EQUAL(crc.get(), crcCustom);
+  END_IT
+}
+
+bool test_verify_detects_data_corruption() {
+  IT("verify returns false when a data byte is changed after CRC was computed");
+  const uint8_t original[]  = {0x01U, 0x02U, 0x03U};
+  const uint8_t corrupted[] = {0x01U, 0x02U, 0x04U};
+  uint16_t crc = Crc16::calculate(original, 3U);
+  IS_TRUE(Crc16::verify(original,  3U, crc));
+  IS_FALSE(Crc16::verify(corrupted, 3U, crc));
+  END_IT
+}
+
+bool test_three_segment_continuity() {
+  IT("CRC computed in three unequal segments matches one-shot calculation");
+  const uint8_t full[] = {0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U};
+  uint16_t expected = Crc16::calculate(full, 9U);
+  Crc16 crc;
+  crc.next(full,       2U);
+  crc.next(full + 2U,  4U);
+  crc.next(full + 6U,  3U);
+  IS_EQUAL(crc.get(), expected);
+  END_IT
+}
+
 int main() {
   SUITE("Crc16");
   test_calculate_known_vector();
@@ -121,5 +155,8 @@ int main() {
   test_custom_init_value();
   test_next_ignores_null_array();
   test_two_segment_continuity();
+  test_custom_polynomial();
+  test_verify_detects_data_corruption();
+  test_three_segment_continuity();
   FINISH
 }
