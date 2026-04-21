@@ -47,7 +47,7 @@ DebugLedHandler debugLed(LED_PIN, HIGH);
 CanHandler canHandler(debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool { return (analogRead(BUTTON_PIN) > 500); });
 RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
-AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(15U));
+AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::secToMs(30U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
 Performance performance(3U, maxLoopTimeCallback);

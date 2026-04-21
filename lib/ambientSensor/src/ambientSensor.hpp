@@ -34,11 +34,17 @@ public:
   AmbientSensor& operator=(AmbientSensor&&) = delete;                 // Define move assignment operator.
 
 private:
+  static constexpr uint32_t kSendMaxPeriod  = 1800000UL; // 30 minutes between forced sends.
+  static constexpr int16_t  kTempTolerance  = 50;        // 0.50 °C in hundredths of a degree.
+  static constexpr uint8_t  kHumTolerance   = 3U;        // 3 % relative humidity.
+  static constexpr uint16_t kLightTolerance = 20U;       // Filtered ADC counts.
+
   /// @brief Defines the state of the sensor task.
   enum class Event : uint8_t {
     IDLE = 0U,                        // Idle state, waiting for the next action.
     READ_TEMPERATURE,                 // Read temperature from the SI7021 sensor.
     READ_HUMIDITY,                    // Read humidity from the SI7021 sensor.
+    CHECK_SEND,                       // Decide whether to send based on threshold or elapsed time.
     SEND_VALUES,                      // Transmit the collected data.
     SENSOR_ERROR                      // Handle sensor errors.
   };
@@ -50,7 +56,11 @@ private:
   uint16_t lightValue;                                                      // Filtered light intensity value.
   int16_t temperature;                                                      // Current temperature reading in hundredths of a degree Celsius.
   uint16_t humidity;                                                        // Current relative humidity reading in percentage.
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  int16_t lastSentTemperature;                                              // Temperature value at the last send (sentinel INT16_MIN forces first send).
+  uint16_t lastSentHumidity;                                                // Humidity value at the last send (sentinel UINT16_MAX forces first send).
+  uint16_t lastSentLight;                                                   // Light value at the last send (sentinel UINT16_MAX forces first send).
+  uint32_t eventTimer;                                                      // Timer for measurement period.
+  uint32_t sendThrottleTimer;                                               // Timer for the 30-minute forced-send period.
   Event event;                                                              // Current state of the sensor task.
 };
 #endif // AMBIENT_SENSOR_HPP
