@@ -1,4 +1,5 @@
 #include "pushButtonHandler.hpp"
+#include <Arduino.h>
 
 PushButtonHandler::PushButtonHandler(const CanHandler& canHandler, bool (*buttonReader)()) :
   canHandler(canHandler),

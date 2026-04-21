@@ -3,18 +3,39 @@
 #include <iostream>
 #include <Arduino.h>
 #include <ctime>
+#include <string.h>
 
 static uint32_t fakeMillisValue = 0U;
-static bool fakeMillisActive = false;
+static bool     fakeMillisActive = false;
+static uint8_t  pinModes[256]  = {};
+static uint8_t  pinValues[256] = {};
+static uint16_t analogReadValue = 0U;
 
-void setFakeMillis(uint32_t t) { fakeMillisValue = t; fakeMillisActive = true; }
-void clearFakeMillis()         { fakeMillisActive = false; }
+void setFakeMillis(uint32_t t)     { fakeMillisValue = t; fakeMillisActive = true; }
+void clearFakeMillis()             { fakeMillisActive = false; }
+void setAnalogReadValue(uint16_t v){ analogReadValue = v; }
+uint8_t getDigitalWriteValue(uint8_t pin) { return pinValues[pin]; }
+uint8_t getPinMode(uint8_t pin)    { return pinModes[pin]; }
+void resetGpioState() {
+  memset(pinModes,  0, sizeof(pinModes));
+  memset(pinValues, 0, sizeof(pinValues));
+  analogReadValue = 0U;
+}
 
 extern "C" {
 uint32_t millis(void) {
   if (fakeMillisActive) { return fakeMillisValue; }
   return static_cast<uint32_t>(time(nullptr)) * 1000U;
 }
+void     pinMode(uint8_t pin, uint8_t mode)       { pinModes[pin]  = mode; }
+void     digitalWrite(uint8_t pin, uint8_t val)   { pinValues[pin] = val; }
+int      digitalRead(uint8_t pin)                 { return pinValues[pin]; }
+uint16_t analogRead(uint8_t /*pin*/)              { return analogReadValue; }
+void     attachInterrupt(uint8_t, void(*)(), uint8_t) {}
+void     detachInterrupt(uint8_t) {}
+uint8_t  digitalPinToInterrupt(uint8_t pin)       { return pin; }
+void     cli() {}
+void     sei() {}
 }
 
 ShimClient::ShimClient() {
