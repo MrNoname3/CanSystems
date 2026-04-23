@@ -26,7 +26,7 @@
 
 // MQTT_SOCKET_TIMEOUT : Socket timeout interval in seconds. Override with setSocketTimeout().
 #ifndef MQTT_SOCKET_TIMEOUT
-#define MQTT_SOCKET_TIMEOUT 5
+#define MQTT_SOCKET_TIMEOUT 2
 #endif
 
 // MQTT_MAX_TRANSFER_SIZE : Limit data per network write call (needed for Arduino WiFi Shield).

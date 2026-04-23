@@ -94,7 +94,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
       }
       return serverCert.has_value();
 #elif defined ESP32
-      tcpClient.setTimeout(10U);
+      tcpClient.setTimeout(5U);  // seconds; ESP32 crypto is fast (TLS handshake < 3s typical)
       return tcpClient.loadCACert(certFile, certFileSize);
 #endif
     });
