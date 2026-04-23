@@ -8,7 +8,7 @@ static constexpr uint16_t kLong     = 500U;
 static constexpr uint8_t  kDebounce = 70U;
 static constexpr bool     kPol      = false;
 
-static PushButton make() { return PushButton(kDead, kLong, kDebounce, kPol); }
+static PushButton make() { return {kDead, kLong, kDebounce, kPol}; }
 
 // ---- idle / no event ----
 

@@ -110,10 +110,10 @@ private:
   static constexpr uint8_t CMD_READ_MAC      = 0x4BU;              // Read unique ID (MAC).
 
   /// @brief Asserts chip-select and saves SPI state.
-  void select();
+  void select(); // NOLINT(readability-make-member-function-const)
 
   /// @brief De-asserts chip-select and restores SPI state.
-  void unselect();
+  void unselect(); // NOLINT(readability-make-member-function-const)
 
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.

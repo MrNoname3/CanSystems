@@ -12,14 +12,14 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static)
+bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
   return true;
 }
 
-void Radiation::end() {
+void Radiation::end() { // NOLINT(readability-make-member-function-const)
   detachInterrupt(digitalPinToInterrupt(sensorPin));
   measureTicker.detach();
   cpm = 0U;

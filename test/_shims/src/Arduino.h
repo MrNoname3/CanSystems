@@ -9,11 +9,8 @@
 using byte = uint8_t;
 using boolean = uint8_t;
 
-#define HIGH    1U
-#define LOW     0U
-#define OUTPUT  1U
-#define INPUT   0U
-#define FALLING 2U
+enum : uint8_t { LOW = 0U, HIGH = 1U };
+enum : uint8_t { INPUT = 0U, OUTPUT = 1U, FALLING = 2U };
 #define IRAM_ATTR
 
 extern "C" {

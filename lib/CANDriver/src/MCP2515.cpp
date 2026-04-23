@@ -359,7 +359,7 @@ void MCP2515::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-
   }
 }
 
-void MCP2515::reset() { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::reset() const { // NOLINT(readability-convert-member-functions-to-static)
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0xC0U);
@@ -380,7 +380,7 @@ void MCP2515::handleInterrupt() {
   }
 }
 
-uint8_t MCP2515::readRegister(uint8_t address) { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t MCP2515::readRegister(uint8_t address) const { // NOLINT(readability-convert-member-functions-to-static)
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x03U);
@@ -392,7 +392,7 @@ uint8_t MCP2515::readRegister(uint8_t address) { // NOLINT(readability-convert-m
   return value;
 }
 
-void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) const { // NOLINT(readability-convert-member-functions-to-static)
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x03U);
@@ -404,7 +404,7 @@ void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) { // NOL
   SPI.endTransaction();
 }
 
-void MCP2515::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
+void MCP2515::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x05U);
@@ -415,7 +415,7 @@ void MCP2515::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
   SPI.endTransaction();
 }
 
-void MCP2515::writeRegister(uint8_t address, uint8_t value) {
+void MCP2515::writeRegister(uint8_t address, uint8_t value) const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x02U);
@@ -425,7 +425,7 @@ void MCP2515::writeRegister(uint8_t address, uint8_t value) {
   SPI.endTransaction();
 }
 
-void MCP2515::writeBurst(uint8_t address, const uint8_t* data, uint8_t length) { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::writeBurst(uint8_t address, const uint8_t* data, uint8_t length) const { // NOLINT(readability-convert-member-functions-to-static)
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x02U);

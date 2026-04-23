@@ -8,7 +8,7 @@ static const uint8_t kSelPins[4]    = { 4U, 5U, 6U, 7U };
 
 static Multiplexer make() {
   resetGpioState();
-  return Multiplexer(kReadPin, kEnablePin, kSelPins);
+  return {kReadPin, kEnablePin, kSelPins};
 }
 
 // ---- constructor ----
@@ -26,8 +26,9 @@ bool test_constructor_sets_select_pins_output() {
   IT("constructor configures all 4 select pins as OUTPUT");
   resetGpioState();
   Multiplexer mux(kReadPin, kEnablePin, kSelPins);
-  for(uint8_t i = 0U; i < 4U; ++i) {
-    IS_EQUAL(getPinMode(kSelPins[i]), static_cast<uint8_t>(OUTPUT));
+  // cppcheck-suppress useStlAlgorithm
+  for(uint8_t pin : kSelPins) {
+    IS_EQUAL(getPinMode(pin), static_cast<uint8_t>(OUTPUT));
   }
   END_IT
 }
@@ -38,8 +39,9 @@ bool test_select_channel_0_all_pins_low() {
   IT("selectChannel(0) drives all select pins LOW");
   Multiplexer mux = make();
   mux.selectChannel(0U);
-  for(uint8_t i = 0U; i < 4U; ++i) {
-    IS_EQUAL(getDigitalWriteValue(kSelPins[i]), static_cast<uint8_t>(LOW));
+  // cppcheck-suppress useStlAlgorithm
+  for(uint8_t pin : kSelPins) {
+    IS_EQUAL(getDigitalWriteValue(pin), static_cast<uint8_t>(LOW));
   }
   END_IT
 }
@@ -70,8 +72,9 @@ bool test_select_channel_15_all_high() {
   IT("selectChannel(15) drives all select pins HIGH");
   Multiplexer mux = make();
   mux.selectChannel(15U); // 0b1111
-  for(uint8_t i = 0U; i < 4U; ++i) {
-    IS_EQUAL(getDigitalWriteValue(kSelPins[i]), static_cast<uint8_t>(HIGH));
+  // cppcheck-suppress useStlAlgorithm
+  for(uint8_t pin : kSelPins) {
+    IS_EQUAL(getDigitalWriteValue(pin), static_cast<uint8_t>(HIGH));
   }
   END_IT
 }
@@ -80,8 +83,9 @@ bool test_select_channel_wraps_lower_4_bits() {
   IT("selectChannel masks to 4 bits: channel 16 behaves like channel 0");
   Multiplexer mux = make();
   mux.selectChannel(16U); // 16 & 15 = 0
-  for(uint8_t i = 0U; i < 4U; ++i) {
-    IS_EQUAL(getDigitalWriteValue(kSelPins[i]), static_cast<uint8_t>(LOW));
+  // cppcheck-suppress useStlAlgorithm
+  for(uint8_t pin : kSelPins) {
+    IS_EQUAL(getDigitalWriteValue(pin), static_cast<uint8_t>(LOW));
   }
   END_IT
 }
