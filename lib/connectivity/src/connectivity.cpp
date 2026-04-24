@@ -73,7 +73,9 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const char* deviceId = underscore + 1;
     char macHex[macHexLen + 1U] = { '\0' };
     const int32_t macHexSize = snprintf_P(macHex, sizeof(macHex), PSTR("%02x%02x%02x%02x%02x%02x"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    if(macHexSize != static_cast<int32_t>(macHexLen)) { return false; }
+    const bool macHexValid = (macHexSize == static_cast<int32_t>(macHexLen));
+    Logger::get().printf_P(PSTR("[MQTT] MAC hex: %s\r\n"), Str::getStateStr(macHexValid));
+    if(!macHexValid) { return false; }
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, macHex);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, macHex);
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, macHex);
