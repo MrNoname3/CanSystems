@@ -1,6 +1,9 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>
+#if defined(ESP32)
+  #include <esp_sntp.h>
+#endif
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
@@ -41,7 +44,9 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   }
   { // Set time via NTP, as required for x.509 validation.
     resetWatchdogTimer();
-    syncNtpTime();
+    const bool ntpSynced = syncNtpTime();
+    Logger::get().printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
+    if(!ntpSynced) { return false; }
     char dateTimeStr[dateTimeStrBufSize] = {'\0'};
     const bool dateTimeValid = getIsoTimeString(dateTimeStr);
     if(dateTimeValid) {
@@ -203,17 +208,24 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   return mqttClient.publish(actualTopic, payload);
 }
 
-void Connectivity::syncNtpTime() {
+bool Connectivity::syncNtpTime() {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
-  constexpr time_t minValidTime = 8L * 3600L * 2L;  // Any real NTP-synced Unix timestamp vastly exceeds this; serves as sync completion check.
+  constexpr uint32_t timeoutMs = Time::secToMs(5U);
 
   Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
-  time_t currentTime = time(nullptr);
-  while(currentTime < minValidTime) {
+
+  const uint32_t startMs = millis();
+#if defined(ESP32)
+  while(sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) {
+#else
+  constexpr time_t minValidTime = 8L * 3600L * 2L;
+  while(time(nullptr) < minValidTime) {
+#endif
+    if(Time::hasElapsed(millis(), startMs, timeoutMs)) { return false; }
     yield();
-    currentTime = time(nullptr);
   }
+  return true;
 }
 
 bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) {

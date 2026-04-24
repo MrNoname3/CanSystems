@@ -103,7 +103,8 @@ private:
   bool connectToMqttServer();
 
   /// @brief Synchronizes the system time using NTP.
-  static void syncNtpTime();
+  /// @return `true` if synchronisation completed within the timeout; `false` if it timed out.
+  [[nodiscard]] static bool syncNtpTime();
 
   /// @brief Retrieves the current time as an ISO8601 string.
   /// @param dateTimeBuffer Buffer to store the ISO8601 string.
