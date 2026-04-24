@@ -196,10 +196,10 @@ bool Connectivity::run() {
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
-  char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
-  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), PSTR("%s%s"), mqttCredentials.senderTopic, subTopic);
-  const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
-  if(!actualTopicValid) { return false; }
+  char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()] = { '\0' };
+  strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
+  const size_t actualTopicLen = strlcat(actualTopic, subTopic, sizeof(actualTopic));
+  if(actualTopicLen >= sizeof(actualTopic)) { return false; }
   return mqttClient.publish(actualTopic, payload);
 }
 
@@ -217,7 +217,6 @@ void Connectivity::syncNtpTime() {
 }
 
 bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) {
-  memset(dateTimeBuffer, '\0', sizeof(dateTimeBuffer));
   const time_t currentTime = time(nullptr);
   if(currentTime == -1) { return false; }           // Check if time retrieval failed.
   const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
