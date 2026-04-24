@@ -29,24 +29,26 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
-  static constexpr uint8_t macHexLen            = 12U;              // MAC address formatted as 6 hex byte pairs.
-  static constexpr uint8_t subtopicOffset       = sizeof("iot/stod/") - 1U + macHexLen + 1U;                      // Offset past "iot/stod/<MAC>/" in received topics.
-  static constexpr uint8_t senderTopicBufSize   = sizeof("iot/dtos/") - 1U + macHexLen + sizeof("/");             // Buffer for "iot/dtos/<MAC>/" plus null.
-  static constexpr uint8_t receiverTopicBufSize = sizeof("iot/stod/") - 1U + macHexLen + sizeof("/#");            // Buffer for "iot/stod/<MAC>/#" plus null.
-  static constexpr const char PROGMEM mqttClientName[]                = "%s_%s";                                  // MQTT client name: <deviceId>_<MAC>.
-  static constexpr const char PROGMEM mqttOutTopic[]                  = "iot/dtos/%s/";                           // MQTT sender topic base: iot/dtos/<MAC>/.
-  static constexpr const char PROGMEM mqttInTopic[]                   = "iot/stod/%s/#";                          // MQTT receiver topic: iot/stod/<MAC>/#.
-  static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";                // MQTT connection timeout string.
-  static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";                   // MQTT connection lost string.
-  static constexpr const char PROGMEM mqttConnectFailedStr[]          = "MQTT_CONNECT_FAILED";                    // MQTT connection failed string.
-  static constexpr const char PROGMEM mqttDisconnectedStr[]           = "MQTT_DISCONNECTED";                      // MQTT disconnected string.
-  static constexpr const char PROGMEM mqttConnectedStr[]              = "MQTT_CONNECTED";                         // MQTT connected string.
-  static constexpr const char PROGMEM mqttConnectBadProtocolStr[]     = "MQTT_CONNECT_BAD_PROTOCOL";              // MQTT bad protocol string.
-  static constexpr const char PROGMEM mqttConnectBadClientIdStr[]     = "MQTT_CONNECT_BAD_CLIENT_ID";             // MQTT bad client ID string.
-  static constexpr const char PROGMEM mqttConnectUnavailableStr[]     = "MQTT_CONNECT_UNAVAILABLE";               // MQTT server unavailable string.
-  static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";           // MQTT bad credentials string.
-  static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";              // MQTT unauthorized string.
-  static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";                    // MQTT unknown status string.
+  static constexpr uint8_t macHexLen = 12U;                                                               // MAC address formatted as 6 hex byte pairs.
+  static constexpr const char PROGMEM mqttClientName[]  = "%s_%s";                                        // MQTT client name: <deviceId>_<MAC>.
+  static constexpr const char PROGMEM mqttOutTopic[]    = "iot/dtos/%s/";                                 // MQTT sender topic base: iot/dtos/<MAC>/.
+  static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
+  // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by macHexLen chars.
+  static constexpr uint8_t senderTopicBufSize   = sizeof(mqttOutTopic) - 2U + macHexLen;                  // "iot/dtos/<MAC>/" + null.
+  static constexpr uint8_t receiverTopicBufSize = sizeof(mqttInTopic)  - 2U + macHexLen;                  // "iot/stod/<MAC>/#" + null.
+  static constexpr uint8_t subtopicOffset       = sizeof(mqttInTopic)  - 4U + macHexLen;                  // sizeof - null - '#' - "%s"(2) + macHexLen.
+
+  static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
+  static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.
+  static constexpr const char PROGMEM mqttConnectFailedStr[]          = "MQTT_CONNECT_FAILED";            // MQTT connection failed string.
+  static constexpr const char PROGMEM mqttDisconnectedStr[]           = "MQTT_DISCONNECTED";              // MQTT disconnected string.
+  static constexpr const char PROGMEM mqttConnectedStr[]              = "MQTT_CONNECTED";                 // MQTT connected string.
+  static constexpr const char PROGMEM mqttConnectBadProtocolStr[]     = "MQTT_CONNECT_BAD_PROTOCOL";      // MQTT bad protocol string.
+  static constexpr const char PROGMEM mqttConnectBadClientIdStr[]     = "MQTT_CONNECT_BAD_CLIENT_ID";     // MQTT bad client ID string.
+  static constexpr const char PROGMEM mqttConnectUnavailableStr[]     = "MQTT_CONNECT_UNAVAILABLE";       // MQTT server unavailable string.
+  static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
+  static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
+  static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
 
 public:
   /// @brief Constructs a Connectivity instance.
