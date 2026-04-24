@@ -111,8 +111,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       v |= (user != nullptr && pass != nullptr) ? 0x40U : 0x00U;
       this->buffer[length++] = v;
 
-      this->buffer[length++] = static_cast<uint8_t>((this->keepAlive) >> 8U);
-      this->buffer[length++] = static_cast<uint8_t>((this->keepAlive) & 0xFFU);
+      this->buffer[length++] = static_cast<uint8_t>(this->keepAlive >> 8U);
+      this->buffer[length++] = static_cast<uint8_t>(this->keepAlive & 0xFFU);
 
       if (!checkStringLength(length, id)) {
         return false;
@@ -275,7 +275,49 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   return len;
 }
 
-bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity)
+bool PubSubClient::handlePacket(uint32_t t) {
+  uint8_t llen = 0U;
+  const uint16_t len = static_cast<uint16_t>(readPacket(&llen));
+  if (len > 0U) {
+    lastInActivity = t;
+    const uint8_t type = this->buffer[0] & 0xF0U;
+    if (type == MQTTPUBLISH) {
+      if (callback != nullptr) {
+        const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+        memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
+        this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
+        char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
+        // msgId only present for QOS>0
+        if ((this->buffer[0] & 0x06U) == MQTTQOS1) {
+          const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
+          uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
+          callback(topic, payload, len - llen - 3U - tl - 2U);
+
+          this->buffer[0] = MQTTPUBACK;
+          this->buffer[1] = 2U;
+          this->buffer[2] = static_cast<uint8_t>(msgId >> 8U);
+          this->buffer[3] = static_cast<uint8_t>(msgId & 0xFFU);
+          tcpClient->write(this->buffer, 4U);
+          lastOutActivity = t;
+
+        } else {
+          uint8_t* const payload = this->buffer + llen + 3U + tl;
+          callback(topic, payload, len - llen - 3U - tl);
+        }
+      }
+    } else if (type == MQTTPINGREQ) {
+      this->buffer[0] = MQTTPINGRESP;
+      this->buffer[1] = 0U;
+      tcpClient->write(this->buffer, 2U);
+    } else if (type == MQTTPINGRESP) {
+      pingOutstanding = false;
+    }
+    return true;
+  }
+  return connected();
+}
+
+bool PubSubClient::loop() {
   if (connected()) {
     const uint32_t t = millis();
     const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
@@ -292,46 +334,7 @@ bool PubSubClient::loop() {  // NOLINT(readability-function-cognitive-complexity
       pingOutstanding = true;
     }
     if (tcpClient->available() != 0) {
-      uint8_t llen = 0U;
-      const uint16_t len = static_cast<uint16_t>(readPacket(&llen));
-      if (len > 0U) {
-        lastInActivity = t;
-        const uint8_t type = this->buffer[0] & 0xF0U;
-        if (type == MQTTPUBLISH) {
-          if (callback != nullptr) {
-            const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-            memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
-            this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
-            char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
-            // msgId only present for QOS>0
-            if ((this->buffer[0] & 0x06U) == MQTTQOS1) {
-              const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
-              uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
-              callback(topic, payload, len - llen - 3U - tl - 2U);
-
-              this->buffer[0] = MQTTPUBACK;
-              this->buffer[1] = 2U;
-              this->buffer[2] = static_cast<uint8_t>(msgId >> 8U);
-              this->buffer[3] = static_cast<uint8_t>(msgId & 0xFFU);
-              tcpClient->write(this->buffer, 4U);
-              lastOutActivity = t;
-
-            } else {
-              uint8_t* const payload = this->buffer + llen + 3U + tl;
-              callback(topic, payload, len - llen - 3U - tl);
-            }
-          }
-        } else if (type == MQTTPINGREQ) {
-          this->buffer[0] = MQTTPINGRESP;
-          this->buffer[1] = 0U;
-          tcpClient->write(this->buffer, 2U);
-        } else if (type == MQTTPINGRESP) {
-          pingOutstanding = false;
-        }
-      } else if (!connected()) {
-        // readPacket has closed the connection
-        return false;
-      }
+      return handlePacket(t);
     }
     return true;
   }

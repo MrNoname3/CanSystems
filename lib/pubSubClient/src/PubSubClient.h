@@ -230,7 +230,7 @@ public:
   /// @return Reference to this instance for method chaining.
   PubSubClient& setKeepAlive(uint16_t keepAlive);
 
-  /// @brief Sets the socket timeout interval.
+  /// @brief Sets the socket read timeout.
   /// @param timeout Socket timeout in seconds.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setSocketTimeout(uint16_t timeout);
@@ -421,6 +421,12 @@ private:
   /// @param length Payload length to encode in the variable-length field.
   /// @return Total header size (fixed byte + variable-length field bytes).
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
+
+  /// @brief Reads and dispatches one incoming MQTT packet.
+  /// @param t Current timestamp from millis(), used to update lastInActivity and lastOutActivity.
+  /// @return `true` if a packet was processed or the connection is still open;
+  ///         `false` if readPacket() detected a closed connection.
+  [[nodiscard]] bool handlePacket(uint32_t t);
 
   Client* tcpClient = nullptr;                    // Pointer to the TCP client used for the connection.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
