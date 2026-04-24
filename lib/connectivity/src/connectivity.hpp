@@ -30,10 +30,13 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
-
-  static constexpr const char PROGMEM mqttClientName[]                = "%s_%02x%02x%02x%02x%02x%02x";            // MQTT client name format.
-  static constexpr const char PROGMEM mqttOutTopic[]                  = "iot/dtos/%02x%02x%02x%02x%02x%02x/%s";   // MQTT topic format for outgoing messages.
-  static constexpr const char PROGMEM mqttInTopic[]                   = "iot/stod/%02x%02x%02x%02x%02x%02x/#";    // MQTT topic format for incoming messages.
+  static constexpr uint8_t macHexLen            = 12U;              // MAC address formatted as 6 hex byte pairs.
+  static constexpr uint8_t subtopicOffset       = sizeof("iot/stod/") - 1U + macHexLen + 1U;                      // Offset past "iot/stod/<MAC>/" in received topics.
+  static constexpr uint8_t senderTopicBufSize   = sizeof("iot/dtos/") - 1U + macHexLen + sizeof("/");             // Buffer for "iot/dtos/<MAC>/" plus null.
+  static constexpr uint8_t receiverTopicBufSize = sizeof("iot/stod/") - 1U + macHexLen + sizeof("/#");            // Buffer for "iot/stod/<MAC>/#" plus null.
+  static constexpr const char PROGMEM mqttClientName[]                = "%s_%s";                                  // MQTT client name: <deviceId>_<MAC>.
+  static constexpr const char PROGMEM mqttOutTopic[]                  = "iot/dtos/%s/";                           // MQTT sender topic base: iot/dtos/<MAC>/.
+  static constexpr const char PROGMEM mqttInTopic[]                   = "iot/stod/%s/#";                          // MQTT receiver topic: iot/stod/<MAC>/#.
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";                // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";                   // MQTT connection lost string.
   static constexpr const char PROGMEM mqttConnectFailedStr[]          = "MQTT_CONNECT_FAILED";                    // MQTT connection failed string.
@@ -88,8 +91,8 @@ private:
     char serverName[ConfigHandler::getMaxMqttServerUrlSize()]{};    // MQTT server URL.
     uint16_t serverPort = 0U;                                       // MQTT server port.
     char clientName[32]{};                                          // MQTT client identifier.
-    char senderTopic[28]{};                                         // MQTT topic for outgoing messages.
-    char receiverTopic[28]{};                                       // MQTT topic for incoming messages.
+    char senderTopic[senderTopicBufSize]{};                         // MQTT base topic for outgoing messages.
+    char receiverTopic[receiverTopicBufSize]{};                     // MQTT topic for incoming messages.
 
     /// @brief Initializes all members to default values.
     MqttCredentials() = default;
@@ -129,7 +132,6 @@ private:
   uint32_t deviceResetTimer;                                        // Timer for detecting prolonged offline states.
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.
   void (*resetWdt)();                                               // Function pointer for resetting the watchdog timer.
-  uint8_t subtopicOffset;                                           // Offset for MQTT subtopic parsing.
   uint32_t reconnectTimer;                                          // Timer for managing MQTT reconnections.
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.

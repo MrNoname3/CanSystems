@@ -12,7 +12,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   deviceResetTimer(0U),
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
-  subtopicOffset(0U),
   reconnectTimer(0U)
 #ifdef ESP8266
   ,serverCert{}
@@ -72,9 +71,11 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
       return false;
     }
     const char* deviceId = underscore + 1;
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], PSTR("%s"));
-    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    char macHex[macHexLen + 1U] = { '\0' };
+    snprintf(macHex, sizeof(macHex), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, macHex);
+    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, macHex);
+    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, macHex);
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
@@ -82,7 +83,6 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     Logger::get().printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
     Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid ? mqttCredentials.receiverTopic : Str::getErrStr());
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
-    subtopicOffset = senderTopicSize - 2U;
   }
   { // Open certificate.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
@@ -194,7 +194,7 @@ bool Connectivity::run() {
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
   char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
-  const int32_t actualTopicSize = snprintf(actualTopic, sizeof(actualTopic), mqttCredentials.senderTopic, subTopic);
+  const int32_t actualTopicSize = snprintf(actualTopic, sizeof(actualTopic), "%s%s", mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return false; }
   return mqttClient.publish(actualTopic, payload);
