@@ -7,8 +7,7 @@
 #error "MQTT_MAX_PACKET_SIZE is not defined in platformio.ini file!"
 #endif
 
-static constexpr uint16_t ALLOWED_MQTT_PACKET_SIZE = 1024U;         // Minimum allowed MQTT packet size for proper operation.
-static_assert(MQTT_MAX_PACKET_SIZE >= ALLOWED_MQTT_PACKET_SIZE, "MQTT buffer size is too short!");
+static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (minimum: 1024 bytes)!");
 
 #include "networkManager.hpp"                                       /// Manages the network connection.
 #include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
@@ -61,11 +60,11 @@ public:
 
   /// @brief Initializes the connectivity system.
   /// @return `true` if initialization succeeds; otherwise, `false`.
-  bool init() override;
+  [[nodiscard]] bool init() override;
 
   /// @brief Main execution loop for the connectivity system.
   /// @return `true` if the task executes successfully; otherwise, `false`.
-  bool run() override;
+  [[nodiscard]] bool run() override;
 
   /// @brief Sends a message to the MQTT broker.
   /// @param subTopic The subtopic to publish to.
@@ -112,7 +111,7 @@ private:
   [[nodiscard]] static bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]);
 
   /// @brief Resets the watchdog timer.
-  inline void resetWatchdogTimer() const {
+  void resetWatchdogTimer() const {
     if(resetWdt != nullptr) {
       resetWdt();
     }
@@ -166,7 +165,7 @@ public:
   /// A subtopic is considered valid if it is non-null and its length is within the allowed range.
   /// @param subTopic Pointer to the subtopic string.
   /// @return `true` if the subtopic is valid; otherwise, `false`.
-  [[nodiscard]] static inline bool isSubtopicValid(const char* subTopic) {
+  [[nodiscard]] static bool isSubtopicValid(const char* subTopic) {
     if(subTopic == nullptr) { return false; }
     const uint32_t subtopicLength = strnlen(subTopic, subtopicSize);
     return ((subtopicLength > 0U) && (subtopicLength < subtopicSize));
@@ -174,7 +173,7 @@ public:
 
   /// @brief Gets the current subtopic associated with the MQTT base instance.
   /// @return Pointer to the subtopic string.
-  [[nodiscard]] inline const char* getSubtopic() const { return subtopic; }
+  [[nodiscard]] const char* getSubtopic() const { return subtopic; }
 
   /// @brief Gets the maximum allowed size for MQTT subtopics.
   /// @return The maximum subtopic size.
@@ -188,7 +187,7 @@ public:
   /// @brief Sends an MQTT message with the specified payload.
   /// @param payload Pointer to the message payload.
   /// @return `true` if the message was sent successfully; otherwise, `false`.
-  [[nodiscard]] inline bool sendMessage(const char* payload) {
+  [[nodiscard]] bool sendMessage(const char* payload) {
     if(payload == nullptr) { return false; }
     return connectivity.sendMqttMessage(subtopic, payload);
   }
