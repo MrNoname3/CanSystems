@@ -72,7 +72,8 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     }
     const char* deviceId = underscore + 1;
     char macHex[macHexLen + 1U] = { '\0' };
-    snprintf(macHex, sizeof(macHex), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    const int32_t macHexSize = snprintf_P(macHex, sizeof(macHex), PSTR("%02x%02x%02x%02x%02x%02x"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    if(macHexSize != static_cast<int32_t>(macHexLen)) { return false; }
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, macHex);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, macHex);
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, macHex);
@@ -194,7 +195,7 @@ bool Connectivity::run() {
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
   char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()];
-  const int32_t actualTopicSize = snprintf(actualTopic, sizeof(actualTopic), "%s%s", mqttCredentials.senderTopic, subTopic);
+  const int32_t actualTopicSize = snprintf_P(actualTopic, sizeof(actualTopic), PSTR("%s%s"), mqttCredentials.senderTopic, subTopic);
   const bool actualTopicValid = (actualTopicSize >= 0 && actualTopicSize < static_cast<int32_t>(sizeof(actualTopic)));
   if(!actualTopicValid) { return false; }
   return mqttClient.publish(actualTopic, payload);
