@@ -119,8 +119,8 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
         JsonDocument payloadJson;
         DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
         if(parsingError != DeserializationError::Code::Ok) {
-        Logger::get().printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
-          currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+          Logger::get().printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
+            currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
           return;
         }
         currentMessageHandler->messageArrivedCallback(payloadJson);
@@ -205,7 +205,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 
 void Connectivity::syncNtpTime() {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
-  constexpr time_t minValidTime = 8L * 3600L * 2L;  // Minimum valid epoch time (arbitrary example)
+  constexpr time_t minValidTime = 8L * 3600L * 2L;  // Any real NTP-synced Unix timestamp vastly exceeds this; serves as sync completion check.
 
   Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
