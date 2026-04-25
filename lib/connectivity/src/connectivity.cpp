@@ -1,6 +1,7 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>
+#include <ctype.h>
 #if defined(ESP32)
   #include <esp_sntp.h>
 #endif
@@ -81,6 +82,15 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool macHexValid = (macHexSize == static_cast<int32_t>(macHexLen));
     Logger::get().printf_P(PSTR("[MQTT] MAC hex: %s\r\n"), Str::getStateStr(macHexValid));
     if(!macHexValid) { return false; }
+    // Build device name: uppercase deviceId with underscores as spaces, then " " + last 3 MAC bytes.
+    for(uint8_t i = 0U; deviceId[i] != '\0' && i < (deviceNameBufSize - 8U); ++i) {
+      mqttCredentials.deviceName[i] = (deviceId[i] == '_')
+        ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[i])));
+    }
+    const uint8_t namePrefixLen = static_cast<uint8_t>(strnlen(mqttCredentials.deviceName, deviceNameBufSize));
+    mqttCredentials.deviceName[namePrefixLen] = ' ';
+    (void)snprintf_P(mqttCredentials.deviceName + namePrefixLen + 1U, 7U, PSTR("%02X%02X%02X"), mac[3], mac[4], mac[5]);
+    Logger::get().printf_P(PSTR("[MQTT] Device name: %s\r\n"), mqttCredentials.deviceName);
     const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), mqttClientName, deviceId, macHex);
     const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), mqttOutTopic, macHex);
     const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), mqttInTopic, macHex);
@@ -172,7 +182,14 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   if(!subResult) { return false; }
   const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, availOnlinePayload, true);
   Logger::get().printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
-  return availResult;
+  if(!availResult) { return false; }
+  (void)publishConnectivityDiscovery();
+  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+    if(!h->publishDiscovery()) {
+      Logger::get().printf_P(PSTR("[MQTT] Discovery failed: %s\r\n"), h->getSubtopic());
+    }
+  }
+  return true;
 }
 
 bool Connectivity::run() {
@@ -257,6 +274,51 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
   if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
   const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
   return (formattedSize > 0U && formattedSize < sizeof(dateTimeBuffer));
+}
+
+void Connectivity::getSwVersionStr(char (&buf)[swVersionBufSize]) {
+  (void)snprintf_P(buf, sizeof(buf), PSTR("%hu (%08x)"), Build::getFwVersion(), Build::getGitHash());
+}
+
+bool Connectivity::publishConnectivityDiscovery() {
+  char swVersion[swVersionBufSize] = { '\0' };
+  getSwVersionStr(swVersion);
+  char discTopic[discoveryTopicBufSize] = { '\0' };
+  const int32_t topicSize = snprintf_P(discTopic, sizeof(discTopic), mqttConnDiscoveryTopic, mqttCredentials.clientName);
+  if(topicSize < 0 || topicSize >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
+  char payload[discoveryPayloadBufSize] = { '\0' };
+  const int32_t payloadSize = snprintf_P(payload, sizeof(payload), mqttConnDiscoveryPayload,
+    mqttCredentials.clientName, mqttCredentials.availabilityTopic,
+    mqttCredentials.clientName, mqttCredentials.deviceName, swVersion);
+  if(payloadSize < 0 || payloadSize >= static_cast<int32_t>(sizeof(payload))) { return false; }
+  const bool result = mqttClient.publish(discTopic, payload, true);
+  Logger::get().printf_P(PSTR("[MQTT] Connection discovery: %s\r\n"), Str::getStateStr(result));
+  return result;
+}
+
+bool Connectivity::publishDiscovery(const char* subtopic, const char* entityName, const char* haType,
+                                     const char* valueTemplate, const char* unit) {
+  if(subtopic == nullptr || entityName == nullptr || haType == nullptr || valueTemplate == nullptr) { return false; }
+  char swVersion[swVersionBufSize] = { '\0' };
+  getSwVersionStr(swVersion);
+  char discTopic[discoveryTopicBufSize] = { '\0' };
+  const int32_t topicSize = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
+    haType, mqttCredentials.clientName, subtopic);
+  if(topicSize < 0 || topicSize >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
+  char payload[discoveryPayloadBufSize] = { '\0' };
+  const int32_t payloadSize = (unit != nullptr)
+    ? snprintf_P(payload, sizeof(payload), mqttDiscoveryPayloadUnit,
+        entityName, mqttCredentials.clientName, subtopic,
+        mqttCredentials.senderTopic, subtopic, valueTemplate, unit,
+        mqttCredentials.availabilityTopic, mqttCredentials.clientName,
+        mqttCredentials.deviceName, swVersion)
+    : snprintf_P(payload, sizeof(payload), mqttDiscoveryPayload,
+        entityName, mqttCredentials.clientName, subtopic,
+        mqttCredentials.senderTopic, subtopic, valueTemplate,
+        mqttCredentials.availabilityTopic, mqttCredentials.clientName,
+        mqttCredentials.deviceName, swVersion);
+  if(payloadSize < 0 || payloadSize >= static_cast<int32_t>(sizeof(payload))) { return false; }
+  return mqttClient.publish(discTopic, payload, true);
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
