@@ -25,6 +25,85 @@ class MqttBase;                                                     // Forward d
 
 /// @brief Manages network and MQTT connectivity for the system.
 class Connectivity final : public Task {
+public:
+  /// @brief Handles Home Assistant MQTT auto-discovery.
+  /// All HA-specific format strings, buffer sizes, and publish methods live here.
+  class HADiscovery {
+  public:
+    /// @brief Supported Home Assistant MQTT component types.
+    enum class EntityType : uint8_t {
+      sensor,
+      binary_sensor,
+      button,
+    };
+
+    /// @brief Discovery configuration for a single entity.
+    /// `entityFields` should be a `static constexpr const char PROGMEM` member of the handler.
+    struct EntityConfig {
+      EntityType   type;           // HA component type; resolved to a PROGMEM string internally.
+      const char*  entityFields;   // PROGMEM: entity-specific JSON fields; no leading/trailing comma.
+      bool isCommandTopic = false; // false: adds state_topic to JSON; true: adds command_topic.
+    };
+
+    explicit HADiscovery(Connectivity& conn) : conn(conn) {}
+    HADiscovery(const HADiscovery&)             = delete;
+    HADiscovery& operator=(const HADiscovery&)  = delete;
+
+    /// @brief Builds the human-readable device name from the deviceId and MAC address.
+    /// Stored internally; used in every entity discovery payload as `device.name`.
+    /// @param mac 6-byte MAC address array.
+    /// @param deviceId Null-terminated device ID string (e.g. "esp32_can").
+    void buildDeviceName(const uint8_t mac[6], const char* deviceId);
+
+    /// @brief Publishes the HA MQTT discovery config for any entity type.
+    /// Fills in unique_id, state_topic or command_topic, availability, and device blocks
+    /// automatically; the handler only supplies the entity-specific JSON fields via `config`.
+    /// @param subtopic Entity subtopic — used to build unique_id and complete the topic URL.
+    /// @param config Entity-specific discovery configuration.
+    /// @return `true` if the discovery message was published successfully; otherwise, `false`.
+    [[nodiscard]] bool publishEntity(const char* subtopic, const EntityConfig& config);
+
+    /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
+    /// This creates the HA device entry (with device name and sw_version) on every connect.
+    /// @return `true` if the discovery message was published successfully; otherwise, `false`.
+    bool publishConnectivity();
+
+  private:
+    static constexpr uint8_t  haTypeBufSize           = 16U;    // Max HA component type string length ("binary_sensor" = 13).
+    static constexpr uint8_t  entityFieldsBufSize     = 160U;   // Max entity-specific JSON fields string length.
+    static constexpr uint8_t  discoveryTopicBufSize   = 96U;    // "homeassistant/<type>/<uid>/config" topic buffer.
+    static constexpr uint16_t discoveryPayloadBufSize = 512U;   // HA MQTT discovery JSON payload buffer.
+    static constexpr uint8_t  swVersionBufSize        = 24U;    // "65535 (ffffffff)" sw version string buffer.
+    static constexpr uint8_t  deviceNameBufSize       = 32U;    // "ESP32 CAN A1B2C3" device name buffer.
+
+    // HA component type strings (PROGMEM) — one per EntityType enum value.
+    static constexpr const char PROGMEM typeStrSensor[]       = "sensor";
+    static constexpr const char PROGMEM typeStrBinarySensor[] = "binary_sensor";
+    static constexpr const char PROGMEM typeStrButton[]       = "button";
+    // HA discovery format strings (PROGMEM).
+    static constexpr const char PROGMEM mqttDiscoveryTopic[]    = "homeassistant/%s/%s_%s/config";
+    // Unified payload template — %s args: clientName, subtopic, entityFields, topicFieldName,
+    // topicBase, subtopic, availabilityTopic, clientName, deviceName, swVersion.
+    static constexpr const char PROGMEM mqttDiscoveryTemplate[] = R"({"unique_id":"%s_%s",%s,"%s":"%s%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})";
+    static constexpr const char PROGMEM connEntityFields[]      = R"("name":"Connection","value_template":"{{ value_json.state }}","payload_on":"online","payload_off":"offline","device_class":"connectivity")"; // Entity fields for the connectivity binary sensor.
+
+    /// @brief Returns the PROGMEM type string for the given EntityType.
+    static constexpr const char* getTypeStr(EntityType type) {
+      switch(type) {
+        case EntityType::sensor:        return typeStrSensor;
+        case EntityType::binary_sensor: return typeStrBinarySensor;
+        case EntityType::button:        return typeStrButton;
+        default:                        return nullptr;
+      }
+    }
+
+    /// @brief Formats the firmware version string used in HA `device.sw_version`.
+    static void getSwVersionStr(char (&buf)[swVersionBufSize]);
+
+    char deviceName[deviceNameBufSize]{};  // Human-readable device name, built in buildDeviceName().
+    Connectivity& conn;
+  };
+
 private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
@@ -57,17 +136,6 @@ private:
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
   static constexpr const char availOnlinePayload[]  = R"({"state":"online"})";                            // Availability online payload (RAM; publish/connect require a normal pointer).
   static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";                           // Availability offline payload (RAM; publish/connect require a normal pointer).
-  // HA MQTT discovery buffer sizes.
-  static constexpr uint8_t  deviceNameBufSize       = 32U;                                               // "ESP32 CAN A1B2C3" human-readable device name buffer.
-  static constexpr uint8_t  swVersionBufSize        = 24U;                                               // "65535 (ffffffff)" sw version string buffer.
-  static constexpr uint8_t  discoveryTopicBufSize   = 96U;                                               // "homeassistant/<type>/<uid>/config" topic buffer.
-  static constexpr uint16_t discoveryPayloadBufSize = 512U;                                              // HA MQTT discovery JSON payload buffer.
-  // HA MQTT discovery format strings (PROGMEM).
-  static constexpr const char PROGMEM mqttDiscoveryTopic[]       = "homeassistant/%s/%s_%s/config";      // HA discovery topic: homeassistant/<haType>/<clientName>_<subtopic>/config.
-  static constexpr const char PROGMEM mqttDiscoveryPayload[]     = R"({"name":"%s","unique_id":"%s_%s","state_topic":"%s%s","value_template":"%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"; // HA sensor discovery payload without unit.
-  static constexpr const char PROGMEM mqttDiscoveryPayloadUnit[] = R"({"name":"%s","unique_id":"%s_%s","state_topic":"%s%s","value_template":"%s","unit_of_measurement":"%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"; // HA sensor discovery payload with unit.
-  static constexpr const char PROGMEM mqttConnDiscoveryTopic[]   = "homeassistant/binary_sensor/%s_availability/config"; // HA discovery topic for the built-in connectivity binary sensor.
-  static constexpr const char PROGMEM mqttConnDiscoveryPayload[] = R"({"name":"Connection","unique_id":"%s_availability","state_topic":"%s","value_template":"{{ value_json.state }}","payload_on":"online","payload_off":"offline","device_class":"connectivity","device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"; // HA connectivity binary sensor discovery payload.
 
 public:
   /// @brief Constructs a Connectivity instance.
@@ -98,16 +166,13 @@ public:
   /// @return `true` if the callback is registered successfully; otherwise, `false`.
   bool registerCallback(MqttBase* mqttBasePtr);
 
-  /// @brief Publishes a Home Assistant MQTT discovery config for an entity.
-  /// Derives unique_id and state_topic from the known client name and sender topic.
-  /// @param subtopic Entity subtopic (appended to senderTopic for state_topic; appended to clientName for unique_id).
-  /// @param entityName Human-readable entity name shown in HA.
-  /// @param haType HA component type string (e.g. `"sensor"`, `"binary_sensor"`).
-  /// @param valueTemplate HA Jinja2 template to extract the state value (e.g. `"{{ value_json.cpm }}"`).
-  /// @param unit Optional unit of measurement (e.g. `"CPM"`); pass `nullptr` to omit.
+  /// @brief Publishes a Home Assistant MQTT discovery config for any entity type.
+  /// Delegates to `HADiscovery::publishEntity()`; unique_id, topic, availability, and device
+  /// blocks are filled in automatically from the known connection credentials.
+  /// @param subtopic Entity subtopic — used to build unique_id and complete the topic URL.
+  /// @param config Entity-specific discovery configuration (see `HADiscovery::EntityConfig`).
   /// @return `true` if the discovery message was published successfully; otherwise, `false`.
-  [[nodiscard]] bool publishDiscovery(const char* subtopic, const char* entityName, const char* haType,
-                                      const char* valueTemplate, const char* unit = nullptr);
+  [[nodiscard]] bool publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config);
 
   Connectivity(const Connectivity&) = delete;                       // Delete copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Delete copy assignment operator.
@@ -125,7 +190,6 @@ private:
     char senderTopic[senderTopicBufSize]{};                         // MQTT base topic for outgoing messages.
     char receiverTopic[receiverTopicBufSize]{};                     // MQTT topic for incoming messages.
     char availabilityTopic[availTopicBufSize]{};                    // MQTT availability topic for online/offline signalling.
-    char deviceName[deviceNameBufSize]{};                           // Human-readable device name: "ESP32 CAN A1B2C3".
 
     /// @brief Initializes all members to default values.
     MqttCredentials() = default;
@@ -143,14 +207,6 @@ private:
   /// @param dateTimeBuffer Buffer to store the ISO8601 string.
   /// @return `true` if the time is retrieved successfully; otherwise, `false`.
   [[nodiscard]] static bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]);
-
-  /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
-  /// @return `true` if the discovery message was published successfully; otherwise, `false`.
-  bool publishConnectivityDiscovery();
-
-  /// @brief Formats the firmware version string used in HA device info (`sw_version`).
-  /// @param buf Fixed-size buffer to write the formatted string into.
-  static void getSwVersionStr(char (&buf)[swVersionBufSize]);
 
   /// @brief Resets the watchdog timer.
   void resetWatchdogTimer() const {
@@ -180,6 +236,7 @@ private:
 #endif
   MqttBase* handlerListHead = nullptr;                              // Head of the intrusive linked list of registered MQTT message handlers.
   MqttBase* handlerListTail = nullptr;                              // Tail of the intrusive linked list, kept for O(1) append.
+  HADiscovery haDiscovery;                                          // HA auto-discovery handler; holds device name and all HA infrastructure.
 };
 
 /// @brief Base class for handling MQTT communication tasks.
@@ -255,16 +312,13 @@ public:
   /// @return `true` if publishing succeeded or no discovery is needed; `false` on publish failure.
   virtual bool publishDiscovery() { return true; }
 
-  /// @brief Publishes the HA MQTT discovery config for this entity via Connectivity.
-  /// Call this from a `publishDiscovery()` override, passing only the entity-specific fields.
-  /// @param entityName Human-readable entity name shown in HA.
-  /// @param haType HA component type string (e.g. `"sensor"`, `"binary_sensor"`).
-  /// @param valueTemplate HA Jinja2 template to extract the state value.
-  /// @param unit Optional unit of measurement; pass `nullptr` to omit.
+  /// @brief Publishes the HA MQTT discovery config for this entity via `HADiscovery::publishEntity`.
+  /// Call from a `publishDiscovery()` override with a brace-initialized `EntityConfig`.
+  /// @param config Discovery config — both PROGMEM pointers must be
+  ///        `static constexpr const char PROGMEM` members of the derived class.
   /// @return `true` if the message was sent successfully; otherwise, `false`.
-  [[nodiscard]] bool doPublishDiscovery(const char* entityName, const char* haType,
-                                        const char* valueTemplate, const char* unit = nullptr) {
-    return connectivity.publishDiscovery(subtopic, entityName, haType, valueTemplate, unit);
+  [[nodiscard]] bool doPublishEntityDiscovery(const Connectivity::HADiscovery::EntityConfig& config) {
+    return connectivity.publishEntityDiscovery(subtopic, config);
   }
 
   /// @brief Returns the next handler in the intrusive linked list managed by Connectivity.

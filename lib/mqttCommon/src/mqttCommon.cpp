@@ -12,6 +12,10 @@ bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-stat
   return true;
 }
 
+bool MqttCommon::publishDiscovery() {
+  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::button, discEntityFields, true});
+}
+
 bool MqttCommon::run() {
   if(isFileCheckDone) {
     isFileCheckDone = false;

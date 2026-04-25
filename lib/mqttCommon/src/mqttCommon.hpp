@@ -9,7 +9,8 @@ class MqttCommon final : public MqttBase {
 private:
   static constexpr uint8_t maxCmdLength   = 16U;                    // Maximum length of a command string.
 
-  static constexpr const char PROGMEM cmdReboot[] = "reboot";       // Command name strings stored in flash.
+  static constexpr const char PROGMEM cmdReboot[] = "reboot";       // Command name stored in flash.
+  static constexpr const char PROGMEM discEntityFields[] = R"("name":"Reboot","device_class":"restart","payload_press":"{\"cmd\":\"reboot\"}")";           // HA discovery entity fields stored in flash.
 
 public:
   /// @brief Constructs a new MqttCommon object.
@@ -27,6 +28,10 @@ public:
   /// @brief Executes periodic tasks for file transfer and command processing.
   /// @return `true` if the run cycle is executed successfully, `false` otherwise.
   bool run() override;
+
+  /// @brief Publishes the HA MQTT discovery config for the reboot button entity.
+  /// @return `true` if publishing succeeded; otherwise, `false`.
+  bool publishDiscovery() override;
 
   /// @brief Processes an incoming MQTT message in JSON format.
   /// @param payloadJson JSON document containing the received MQTT message.
