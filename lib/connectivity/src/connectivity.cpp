@@ -206,15 +206,13 @@ bool Connectivity::run() {
   if(mqttClient.loop()) {
     reconnectTimer = actualTime;
   } else {
-    if((mqttState != PubSubClient::State::CONNECTED) && networkState) {
-      if(Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
-        reconnectTimer = actualTime;
-        connectToMqttServer();
-      }
+    if(networkState && Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
+      reconnectTimer = actualTime;
+      connectToMqttServer();
     }
   }
 
-  const bool actualOnlineState = networkState && (mqttState == PubSubClient::State::CONNECTED);
+  const bool actualOnlineState = networkState && mqttClient.connected();
   if(actualOnlineState) {
     deviceResetTimer = actualTime;
   }
