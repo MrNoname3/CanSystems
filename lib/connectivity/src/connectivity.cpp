@@ -150,14 +150,14 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   const bool mqttConResult = mqttClient.connect(
     mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
-    mqttCredentials.availabilityTopic, 1U, true, R"({"state":"offline"})");
+    mqttCredentials.availabilityTopic, 1U, true, availOfflinePayload);
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   if(!subResult) { return false; }
-  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, R"({"state":"online"})", true);
+  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, availOnlinePayload, true);
   Logger::get().printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
   return availResult;
 }
@@ -170,7 +170,7 @@ bool Connectivity::run() {
     if(networkState) {
       connectToMqttServer();
     } else {
-      (void)mqttClient.publish(mqttCredentials.availabilityTopic, R"({"state":"offline"})", true);
+      (void)mqttClient.publish(mqttCredentials.availabilityTopic, availOfflinePayload, true);
       mqttClient.disconnect();
     }
   }

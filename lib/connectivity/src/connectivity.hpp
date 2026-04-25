@@ -51,6 +51,8 @@ private:
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
+  static constexpr const char availOnlinePayload[]  = R"({"state":"online"})";                            // Availability online payload (RAM; publish/connect require a normal pointer).
+  static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";                           // Availability offline payload (RAM; publish/connect require a normal pointer).
 
 public:
   /// @brief Constructs a Connectivity instance.
