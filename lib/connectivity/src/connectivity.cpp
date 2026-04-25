@@ -274,6 +274,7 @@ void Connectivity::HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
 }
 
 void Connectivity::HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
+  memset(deviceName, '\0', sizeof(deviceName));
   for(uint8_t i = 0U; deviceId[i] != '\0' && i < (deviceNameBufSize - 8U); ++i) {
     deviceName[i] = (deviceId[i] == '_')
       ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[i])));
@@ -286,8 +287,8 @@ void Connectivity::HADiscovery::buildDeviceName(const uint8_t mac[6], const char
 
 bool Connectivity::HADiscovery::publishConnectivity() {
   constexpr EntityConfig config = {EntityType::binary_sensor, connEntityFields, false};
-  // Advance past the "%s" prefix of mqttAvailTopic ("%savailability") to get "availability".
-  const bool result = publishEntity(mqttAvailTopic + 2U, config);
+  // Advance past the "%s" prefix of mqttAvailTopic to get the "availability" subtopic string.
+  const bool result = publishEntity(mqttAvailTopic + (sizeof("%s") - 1U), config);
   Logger::get().printf_P(PSTR("[MQTT] Connection discovery: %s\r\n"), Str::getStateStr(result));
   return result;
 }

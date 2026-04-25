@@ -66,11 +66,11 @@ public:
     /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
     /// This creates the HA device entry (with device name and sw_version) on every connect.
     /// @return `true` if the discovery message was published successfully; otherwise, `false`.
-    bool publishConnectivity();
+    [[nodiscard]] bool publishConnectivity();
 
   private:
     static constexpr uint8_t  discoveryTopicBufSize   = 96U;    // "homeassistant/<type>/<uid>/config" topic buffer.
-    static constexpr uint16_t discoveryPayloadBufSize = 512U;   // HA MQTT discovery JSON payload buffer.
+    static constexpr uint16_t discoveryPayloadBufSize = 640U;   // HA MQTT discovery JSON payload buffer (max ~560 chars with longest entity fields).
     static constexpr uint8_t  swVersionBufSize        = 24U;    // "65535 (ffffffff)" sw version string buffer.
     static constexpr uint8_t  deviceNameBufSize       = 32U;    // "ESP32 CAN A1B2C3" device name buffer.
 
