@@ -69,8 +69,6 @@ public:
     bool publishConnectivity();
 
   private:
-    static constexpr uint8_t  haTypeBufSize           = 16U;    // Max HA component type string length ("binary_sensor" = 13).
-    static constexpr uint8_t  entityFieldsBufSize     = 160U;   // Max entity-specific JSON fields string length.
     static constexpr uint8_t  discoveryTopicBufSize   = 96U;    // "homeassistant/<type>/<uid>/config" topic buffer.
     static constexpr uint16_t discoveryPayloadBufSize = 512U;   // HA MQTT discovery JSON payload buffer.
     static constexpr uint8_t  swVersionBufSize        = 24U;    // "65535 (ffffffff)" sw version string buffer.
@@ -85,7 +83,9 @@ public:
     // Unified payload template — %s args: clientName, subtopic, entityFields, topicFieldName,
     // topicBase, subtopic, availabilityTopic, clientName, deviceName, swVersion.
     static constexpr const char PROGMEM mqttDiscoveryTemplate[] = R"({"unique_id":"%s_%s",%s,"%s":"%s%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})";
-    static constexpr const char PROGMEM connEntityFields[]      = R"("name":"Connection","value_template":"{{ value_json.state }}","payload_on":"online","payload_off":"offline","device_class":"connectivity")"; // Entity fields for the connectivity binary sensor.
+    static constexpr const char PROGMEM connEntityFields[]  = R"("name":"Connection","value_template":"{{ value_json.state }}","payload_on":"online","payload_off":"offline","device_class":"connectivity")"; // Entity fields for the connectivity binary sensor.
+    static constexpr const char PROGMEM topicFieldState[]   = "state_topic";    // HA topic field name for outgoing sensor data.
+    static constexpr const char PROGMEM topicFieldCmd[]     = "command_topic";  // HA topic field name for inbound commands.
 
     /// @brief Returns the PROGMEM type string for the given EntityType.
     static constexpr const char* getTypeStr(EntityType type) {

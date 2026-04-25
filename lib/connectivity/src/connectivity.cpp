@@ -286,37 +286,33 @@ void Connectivity::HADiscovery::buildDeviceName(const uint8_t mac[6], const char
 
 bool Connectivity::HADiscovery::publishConnectivity() {
   constexpr EntityConfig config = {EntityType::binary_sensor, connEntityFields, false};
-  const bool result = publishEntity("availability", config);
+  // Advance past the "%s" prefix of mqttAvailTopic ("%savailability") to get "availability".
+  const bool result = publishEntity(mqttAvailTopic + 2U, config);
   Logger::get().printf_P(PSTR("[MQTT] Connection discovery: %s\r\n"), Str::getStateStr(result));
   return result;
 }
 
 bool Connectivity::HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config) {
-  const char* haTypePgm = getTypeStr(config.type);
-  if(subtopic == nullptr || haTypePgm == nullptr || config.entityFields == nullptr) { return false; }
+  const char* haType = getTypeStr(config.type);
+  if(subtopic == nullptr || haType == nullptr || config.entityFields == nullptr) { return false; }
   char swVersion[swVersionBufSize] = { '\0' };
   getSwVersionStr(swVersion);
-  // Copy haType and entityFields from PROGMEM to RAM (strncpy_P works on both ESP8266 and ESP32).
-  char haType[haTypeBufSize] = { '\0' };
-  strncpy_P(haType, haTypePgm, sizeof(haType) - 1U);
   char discTopic[discoveryTopicBufSize] = { '\0' };
   const int32_t topicSize = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
     haType, conn.mqttCredentials.clientName, subtopic);
   if(topicSize < 0 || topicSize >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
-  char entityFields[entityFieldsBufSize] = { '\0' };
-  strncpy_P(entityFields, config.entityFields, sizeof(entityFields) - 1U);
-  // Build topic value: senderTopic+subtopic for state_topic, receiverBase+subtopic for command_topic.
+  // Build topic base: senderTopic for state_topic, receiverBase for command_topic.
   char topicBase[receiverTopicBufSize] = { '\0' };
   if(config.isCommandTopic) {
     strlcpy(topicBase, conn.mqttCredentials.receiverTopic, subtopicOffset + 1U);
   } else {
     strlcpy(topicBase, conn.mqttCredentials.senderTopic, sizeof(topicBase));
   }
-  const char* topicFieldName = config.isCommandTopic ? "command_topic" : "state_topic";
+  const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
   char payload[discoveryPayloadBufSize] = { '\0' };
   const int32_t payloadSize = snprintf_P(payload, sizeof(payload), mqttDiscoveryTemplate,
-    conn.mqttCredentials.clientName, subtopic, entityFields,
-    topicFieldName, topicBase, subtopic,
+    conn.mqttCredentials.clientName, subtopic, config.entityFields,
+    topicField, topicBase, subtopic,
     conn.mqttCredentials.availabilityTopic, conn.mqttCredentials.clientName,
     deviceName, swVersion);
   if(payloadSize < 0 || payloadSize >= static_cast<int32_t>(sizeof(payload))) { return false; }
