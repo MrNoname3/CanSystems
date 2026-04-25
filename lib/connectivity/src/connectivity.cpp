@@ -87,10 +87,13 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
     const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
     const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
+    const int32_t availTopicSize = snprintf_P(mqttCredentials.availabilityTopic, sizeof(mqttCredentials.availabilityTopic), mqttAvailTopic, mqttCredentials.senderTopic);
+    const bool availTopicValid = (availTopicSize >= 0 && availTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.availabilityTopic)));
     Logger::get().printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
     Logger::get().printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
     Logger::get().printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid ? mqttCredentials.receiverTopic : Str::getErrStr());
-    if(!clientNameValid || !senderTopicValid || !receiverTopicValid) { return false; }
+    Logger::get().printf_P(PSTR("[MQTT] Availability topic: %s\r\n"), availTopicValid ? mqttCredentials.availabilityTopic : Str::getErrStr());
+    if(!clientNameValid || !senderTopicValid || !receiverTopicValid || !availTopicValid) { return false; }
   }
   { // Open certificate.
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
@@ -145,13 +148,18 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 }
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
-  const bool mqttConResult = mqttClient.connect(mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password);
+  const bool mqttConResult = mqttClient.connect(
+    mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
+    mqttCredentials.availabilityTopic, 1U, true, R"({"state":"offline"})");
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
-  return subResult;
+  if(!subResult) { return false; }
+  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, R"({"state":"online"})", true);
+  Logger::get().printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
+  return availResult;
 }
 
 bool Connectivity::run() {
@@ -162,6 +170,7 @@ bool Connectivity::run() {
     if(networkState) {
       connectToMqttServer();
     } else {
+      (void)mqttClient.publish(mqttCredentials.availabilityTopic, R"({"state":"offline"})", true);
       mqttClient.disconnect();
     }
   }
