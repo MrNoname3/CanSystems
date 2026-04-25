@@ -9,12 +9,7 @@ MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
 {}
 
 bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-static)
-  char versionString[dataOutBufSize] = {'\0'};
-  const int32_t versionStringSize = snprintf_P(versionString, sizeof(versionString), versionMessageFrame,
-  Build::getCppVersion(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
-  const bool versionStringValid = (versionStringSize >= 0 && versionStringSize < static_cast<int32_t>(sizeof(versionString)));
-  if(!versionStringValid) { return false; }
-  return MqttBase::sendMessage(versionString);
+  return true;
 }
 
 bool MqttCommon::run() {

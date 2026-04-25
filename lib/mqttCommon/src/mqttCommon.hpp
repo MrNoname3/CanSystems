@@ -7,10 +7,7 @@
 /// @brief Provides common MQTT functionalities.
 class MqttCommon final : public MqttBase {
 private:
-  static constexpr uint8_t dataOutBufSize = 68U;                    // Buffer size for outgoing data messages.
   static constexpr uint8_t maxCmdLength   = 16U;                    // Maximum length of a command string.
-  // Format string for version messages.
-  static constexpr const char PROGMEM versionMessageFrame[] = R"({"CPP":%u,"FW":%hu,"GH":"%x","Dirty":%hu,"RR":%hu})";
 
   static constexpr const char PROGMEM cmdReboot[] = "reboot";       // Command name strings stored in flash.
 

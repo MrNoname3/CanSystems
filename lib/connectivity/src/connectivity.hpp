@@ -34,11 +34,15 @@ private:
   static constexpr const char PROGMEM mqttOutTopic[]    = "iot/dtos/%s/";                                 // MQTT sender topic base: iot/dtos/<MAC>/.
   static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
   static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic suffix; %s receives senderTopic ("iot/dtos/<MAC>/").
+  static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT device info topic: iot/dtos/<MAC>/info.
+  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})"; // Device info JSON payload.
   // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by macHexLen chars.
   static constexpr uint8_t senderTopicBufSize   = sizeof(mqttOutTopic)  - 2U + macHexLen;                 // "iot/dtos/<MAC>/" + null.
   static constexpr uint8_t receiverTopicBufSize = sizeof(mqttInTopic)   - 2U + macHexLen;                 // "iot/stod/<MAC>/#" + null.
   static constexpr uint8_t subtopicOffset       = sizeof(mqttInTopic)   - 4U + macHexLen;                 // sizeof - null - '#' - "%s"(2) + macHexLen.
   static constexpr uint8_t availTopicBufSize    = sizeof(mqttAvailTopic) - 2U + senderTopicBufSize - 1U;  // "iot/dtos/<MAC>/availability" + null.
+  static constexpr uint8_t infoTopicBufSize     = sizeof(mqttInfoTopic)  - 2U + senderTopicBufSize - 1U;  // "iot/dtos/<MAC>/info" + null.
+  static constexpr uint8_t infoPayloadBufSize   = 52U;                                                    // {"fw":65535,"git":"ffffffff","dirty":1,"rr":255} = 48 chars + null.
 
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.
