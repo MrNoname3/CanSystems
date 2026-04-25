@@ -81,8 +81,9 @@ public:
     // HA discovery format strings (PROGMEM).
     static constexpr const char PROGMEM mqttDiscoveryTopic[]    = "homeassistant/%s/%s_%s/config";
     // Unified payload template — %s args: clientName, subtopic, entityFields, topicFieldName,
-    // topicBase, subtopic, availabilityTopic, clientName, deviceName, swVersion.
-    static constexpr const char PROGMEM mqttDiscoveryTemplate[] = R"({"unique_id":"%s_%s",%s,"%s":"%s%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})";
+    // topicBase, subtopic, topicBase, subtopic (json_attributes_topic = same as entity topic),
+    // availabilityTopic, clientName, deviceName, swVersion.
+    static constexpr const char PROGMEM mqttDiscoveryTemplate[] = R"({"unique_id":"%s_%s",%s,"%s":"%s%s","json_attributes_topic":"%s%s","availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}],"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})";
     static constexpr const char PROGMEM connEntityFields[]  = R"("name":"Connection","value_template":"{{ value_json.state }}","payload_on":"online","payload_off":"offline","device_class":"connectivity")"; // Entity fields for the connectivity binary sensor.
     static constexpr const char PROGMEM topicFieldState[]   = "state_topic";    // HA topic field name for outgoing sensor data.
     static constexpr const char PROGMEM topicFieldCmd[]     = "command_topic";  // HA topic field name for inbound commands.

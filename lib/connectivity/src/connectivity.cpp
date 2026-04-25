@@ -312,6 +312,7 @@ bool Connectivity::HADiscovery::publishEntity(const char* subtopic, const Entity
   const int32_t payloadSize = snprintf_P(payload, sizeof(payload), mqttDiscoveryTemplate,
     conn.mqttCredentials.clientName, subtopic, config.entityFields,
     topicField, topicBase, subtopic,
+    topicBase, subtopic,
     conn.mqttCredentials.availabilityTopic, conn.mqttCredentials.clientName,
     deviceName, swVersion);
   if(payloadSize < 0 || payloadSize >= static_cast<int32_t>(sizeof(payload))) { return false; }

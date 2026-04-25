@@ -14,7 +14,7 @@ private:
 
   // Format string for the MQTT message containing RF data.
   static constexpr const char PROGMEM rfMessageFrame[]  = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";
-  static constexpr const char PROGMEM discEntityFields[] = R"("name":"RF Received","value_template":"{{ value_json.RfReceived.Data }}","icon":"mdi:remote")"; // HA discovery entity fields stored in flash.
+  static constexpr const char PROGMEM discEntityFields[] = R"("name":"RF Received","value_template":"{{ value_json.RfReceived.Data }}","json_attributes_template":"{{ value_json.RfReceived | tojson }}","icon":"mdi:remote")"; // HA discovery entity fields stored in flash.
 
 public:
   /// @brief Constructs the RF handler object.
