@@ -15,7 +15,8 @@ private:
   static constexpr uint32_t measureTime = Time::minToMs(1U);  // Measurement interval in milliseconds for calculating CPM.
 
   // Format string for the MQTT message containing CPM data.
-  static constexpr const char PROGMEM cpmMessageFrame[] = R"({"cpm":%hu})";
+  static constexpr const char PROGMEM cpmMessageFrame[]   = R"({"cpm":%hu})";
+  static constexpr const char PROGMEM discEntityFields[]  = R"("name":"Radiation","value_template":"{{ value_json.cpm }}","unit_of_measurement":"CPM","state_class":"measurement","icon":"mdi:radioactive")"; // HA discovery entity fields stored in flash.
 
 public:
   /// @brief Constructs the Radiation monitoring object.
@@ -34,6 +35,10 @@ public:
   /// @brief Executes the radiation monitoring logic and sends data if ready.
   /// @return `true` if the operation was successful; otherwise, `false`.
   bool run() override;
+
+  /// @brief Publishes the HA MQTT discovery config for the radiation sensor entity.
+  /// @return `true` if publishing succeeded; otherwise, `false`.
+  bool publishDiscovery() override;
 
   /// @brief Stops the radiation monitoring and detaches interrupts.
   void end();

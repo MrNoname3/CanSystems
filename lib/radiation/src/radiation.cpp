@@ -12,6 +12,10 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
   pinMode(sensorPin, INPUT);
 }
 
+bool Radiation::publishDiscovery() {
+  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::sensor, discEntityFields});
+}
+
 bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
