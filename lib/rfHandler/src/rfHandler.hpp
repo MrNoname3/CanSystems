@@ -13,7 +13,8 @@ private:
   static constexpr uint8_t dataCheckTime = 100U;                    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
 
   // Format string for the MQTT message containing RF data.
-  static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";
+  static constexpr const char PROGMEM rfMessageFrame[]  = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";
+  static constexpr const char PROGMEM discEntityFields[] = R"("name":"RF Received","value_template":"{{ value_json.RfReceived.Data }}","icon":"mdi:remote")"; // HA discovery entity fields stored in flash.
 
 public:
   /// @brief Constructs the RF handler object.
@@ -33,6 +34,10 @@ public:
   /// @brief Executes the RF handling logic, including receiving and sending RF data.
   /// @return `true` if the operation was successful; otherwise, `false`.
   bool run() override;
+
+  /// @brief Publishes the HA MQTT discovery config for the RF received sensor entity.
+  /// @return `true` if publishing succeeded; otherwise, `false`.
+  bool publishDiscovery() override;
 
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.

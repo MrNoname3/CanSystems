@@ -2,6 +2,10 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "common.hpp"                                               /// Common definitions and functions.
 
+bool RfHandler::publishDiscovery() {
+  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::sensor, discEntityFields});
+}
+
 RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
   MqttBase(connectivity, subtopic),
   rfRxPin(rfRxPin),
