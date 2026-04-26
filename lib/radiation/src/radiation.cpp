@@ -13,7 +13,11 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
 }
 
 bool Radiation::publishDiscovery() {
-  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::sensor, discEntityFields});
+  using HA = Connectivity::HADiscovery;
+  const HA::EntityConfig config = HA::EntityConfig::sensor(
+    PSTR("Radiation"), PSTR("{{ value_json.cpm }}"), PSTR("CPM"),
+    HA::StateClass::measurement, HA::DeviceClass::none, PSTR("mdi:radioactive"));
+  return doPublishEntityDiscovery(config);
 }
 
 bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)

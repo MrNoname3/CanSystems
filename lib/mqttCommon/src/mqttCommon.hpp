@@ -9,8 +9,7 @@ class MqttCommon final : public MqttBase {
 private:
   static constexpr uint8_t maxCmdLength   = 16U;                    // Maximum length of a command string.
 
-  static constexpr const char PROGMEM cmdReboot[] = "reboot";       // Command name stored in flash.
-  static constexpr const char PROGMEM discEntityFields[] = R"("name":"Reboot","device_class":"restart","payload_press":"{\"cmd\":\"reboot\"}")";           // HA discovery entity fields stored in flash.
+  static constexpr const char PROGMEM cmdReboot[] = "reboot";  // Command name stored in flash; must match cmdValue in publishDiscovery().
 
 public:
   /// @brief Constructs a new MqttCommon object.

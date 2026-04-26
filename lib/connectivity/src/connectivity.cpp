@@ -283,9 +283,56 @@ void Connectivity::HADiscovery::buildDeviceName(const uint8_t mac[6], const char
   Logger::get().printf_P(PSTR("[MQTT] Device name: %s\r\n"), deviceName);
 }
 
+Connectivity::HADiscovery::EntityConfig
+Connectivity::HADiscovery::EntityConfig::sensor(
+    const char* name, const char* valueTemplate, const char* unit,
+    StateClass stateClass, DeviceClass deviceClass,
+    const char* icon, const char* attributesTemplate) {
+  EntityConfig c;
+  c.type               = EntityType::sensor;
+  c.name               = name;
+  c.valueTemplate      = valueTemplate;
+  c.unit               = unit;
+  c.stateClass         = stateClass;
+  c.deviceClass        = deviceClass;
+  c.icon               = icon;
+  c.attributesTemplate = attributesTemplate;
+  return c;
+}
+
+Connectivity::HADiscovery::EntityConfig
+Connectivity::HADiscovery::EntityConfig::button(
+    const char* name, const char* cmdValue, DeviceClass deviceClass) {
+  EntityConfig c;
+  c.type          = EntityType::button;
+  c.name          = name;
+  c.payloadPress  = cmdValue;
+  c.deviceClass   = deviceClass;
+  c.isCommandTopic = true;
+  return c;
+}
+
+Connectivity::HADiscovery::EntityConfig
+Connectivity::HADiscovery::EntityConfig::binarySensor(
+    const char* name, const char* valueTemplate,
+    const char* payloadOn, const char* payloadOff,
+    DeviceClass deviceClass, const char* icon) {
+  EntityConfig c;
+  c.type          = EntityType::binary_sensor;
+  c.name          = name;
+  c.valueTemplate = valueTemplate;
+  c.payloadOn     = payloadOn;
+  c.payloadOff    = payloadOff;
+  c.deviceClass   = deviceClass;
+  c.icon          = icon;
+  return c;
+}
+
 bool Connectivity::HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
-  constexpr EntityConfig config = {EntityType::binary_sensor, connEntityFields, false};
-  // Advance past the "%s" prefix of mqttAvailTopic to get the "availability" subtopic string.
+  const EntityConfig config = EntityConfig::binarySensor(
+    PSTR("Connection"), PSTR("{{ value_json.state }}"),
+    PSTR("online"), PSTR("offline"), DeviceClass::connectivity);
+  // Advance past the "%s" prefix of mqttAvailTopic to get "availability".
   const bool result = publishEntity(mqttAvailTopic + (sizeof("%s") - 1U), config);
   Logger::get().printf_P(PSTR("[MQTT] Connection discovery: %s\r\n"), Str::getStateStr(result));
   return result;
@@ -293,13 +340,15 @@ bool Connectivity::HADiscovery::publishConnectivity() { // NOLINT(readability-co
 
 bool Connectivity::HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config) {
   const char* haType = getTypeStr(config.type);
-  if(subtopic == nullptr || haType == nullptr || config.entityFields == nullptr) { return false; }
+  if(subtopic == nullptr || haType == nullptr || config.name == nullptr) { return false; }
   char swVersion[swVersionBufSize] = { '\0' };
   getSwVersionStr(swVersion);
   char discTopic[discoveryTopicBufSize] = { '\0' };
-  const int32_t topicSize = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
-    haType, conn.mqttCredentials.clientName, subtopic);
-  if(topicSize < 0 || topicSize >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
+  {
+    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
+      haType, conn.mqttCredentials.clientName, subtopic);
+    if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
+  }
   // Build topic base: senderTopic for state_topic, receiverBase for command_topic.
   char topicBase[receiverTopicBufSize] = { '\0' };
   if(config.isCommandTopic) {
@@ -308,14 +357,40 @@ bool Connectivity::HADiscovery::publishEntity(const char* subtopic, const Entity
     strlcpy(topicBase, conn.mqttCredentials.senderTopic, sizeof(topicBase));
   }
   const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
+
+  // Build payload incrementally — only set fields appear in the JSON output.
   char payload[discoveryPayloadBufSize] = { '\0' };
-  const int32_t payloadSize = snprintf_P(payload, sizeof(payload), mqttDiscoveryTemplate,
-    conn.mqttCredentials.clientName, subtopic, config.entityFields,
-    topicField, topicBase, subtopic,
-    topicBase, subtopic,
-    conn.mqttCredentials.availabilityTopic, conn.mqttCredentials.clientName,
-    deviceName, swVersion);
-  if(payloadSize < 0 || payloadSize >= static_cast<int32_t>(sizeof(payload))) { return false; }
+  size_t pos = 0U;
+  int32_t n = 0;
+
+#define PAYLOAD_APPEND(fmt, ...) \
+  n = snprintf_P(payload + pos, sizeof(payload) - pos, PSTR(fmt), ##__VA_ARGS__); \
+  if(n < 0 || static_cast<size_t>(n) >= sizeof(payload) - pos) { return false; } \
+  pos += static_cast<size_t>(n);
+
+  PAYLOAD_APPEND(R"({"unique_id":"%s_%s","name":"%s")", conn.mqttCredentials.clientName, subtopic, config.name)
+  if(config.valueTemplate      != nullptr) { PAYLOAD_APPEND(R"(,"value_template":"%s")",        config.valueTemplate) }
+  if(config.payloadOn          != nullptr) { PAYLOAD_APPEND(R"(,"payload_on":"%s")",             config.payloadOn) }
+  if(config.payloadOff         != nullptr) { PAYLOAD_APPEND(R"(,"payload_off":"%s")",            config.payloadOff) }
+  if(config.payloadPress       != nullptr) { PAYLOAD_APPEND(R"(,"payload_press":"{\"cmd\":\"%s\"}")", config.payloadPress) }
+  if(config.unit               != nullptr) { PAYLOAD_APPEND(R"(,"unit_of_measurement":"%s")",    config.unit) }
+  {
+    const char* sc = getStateClassStr(config.stateClass);
+    if(sc != nullptr)                      { PAYLOAD_APPEND(R"(,"state_class":"%s")",            sc) }
+  }
+  {
+    const char* dc = getDeviceClassStr(config.deviceClass);
+    if(dc != nullptr)                      { PAYLOAD_APPEND(R"(,"device_class":"%s")",           dc) }
+  }
+  if(config.icon               != nullptr) { PAYLOAD_APPEND(R"(,"icon":"%s")",                   config.icon) }
+  if(config.attributesTemplate != nullptr) { PAYLOAD_APPEND(R"(,"json_attributes_template":"%s")", config.attributesTemplate) }
+  PAYLOAD_APPEND(R"(,"%s":"%s%s")", topicField, topicBase, subtopic)
+  if(!config.isCommandTopic)               { PAYLOAD_APPEND(R"(,"json_attributes_topic":"%s%s")", topicBase, subtopic) }
+  PAYLOAD_APPEND(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])", conn.mqttCredentials.availabilityTopic)
+  PAYLOAD_APPEND(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})", conn.mqttCredentials.clientName, deviceName, swVersion)
+
+#undef PAYLOAD_APPEND
+
   return conn.mqttClient.publish(discTopic, payload, true);
 }
 

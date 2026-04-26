@@ -13,7 +13,9 @@ bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-stat
 }
 
 bool MqttCommon::publishDiscovery() {
-  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::button, discEntityFields, true});
+  using HA = Connectivity::HADiscovery;
+  const HA::EntityConfig config = HA::EntityConfig::button(PSTR("Reboot"), cmdReboot, HA::DeviceClass::restart);
+  return doPublishEntityDiscovery(config);
 }
 
 bool MqttCommon::run() {

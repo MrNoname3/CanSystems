@@ -3,7 +3,12 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 bool RfHandler::publishDiscovery() {
-  return doPublishEntityDiscovery({Connectivity::HADiscovery::EntityType::sensor, discEntityFields});
+  using HA = Connectivity::HADiscovery;
+  const HA::EntityConfig config = HA::EntityConfig::sensor(
+    PSTR("RF Received"), PSTR("{{ value_json.RfReceived.Data }}"),
+    nullptr, HA::StateClass::none, HA::DeviceClass::none,
+    PSTR("mdi:remote"), PSTR("{{ value_json.RfReceived | tojson }}"));
+  return doPublishEntityDiscovery(config);
 }
 
 RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
