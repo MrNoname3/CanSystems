@@ -98,9 +98,10 @@ HADiscovery::EntityConfig::binarySensor(
 }
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
-  const EntityConfig config = EntityConfig::binarySensor(
+  EntityConfig config = EntityConfig::binarySensor(
     PSTR("Connection"), PSTR("{{ value_json.state }}"),
     PSTR("online"), PSTR("offline"), DeviceClass::connectivity);
+  config.skipAvailability = true;
   // "availability" is the literal suffix of the availability topic (after the sender topic base).
   const bool result = publishEntity(PSTR("availability"), config);
   Logger::get().printf_P(PSTR("[HA] Connection discovery: %s\r\n"), Str::getStateStr(result));
@@ -148,8 +149,8 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   if(config.icon               != nullptr) { appendP(pw, PSTR(R"(,"icon":"%s")"),                   config.icon); }
   if(config.attributesTemplate != nullptr) { appendP(pw, PSTR(R"(,"json_attributes_template":"%s")"), config.attributesTemplate); }
   appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                              topicField, topicBase, subtopic);
-  if(!config.isCommandTopic)               { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, subtopic); }
-  appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic);
+  if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, subtopic); }
+  if(!config.skipAvailability)             { appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic); }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"),           clientName, deviceName, swVersion);
 
   if(!pw.ok()) { return false; }

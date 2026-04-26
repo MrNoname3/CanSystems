@@ -32,6 +32,7 @@ public:
     const char*  icon               = nullptr;  // PROGMEM: Material Design icon (e.g. "mdi:remote").
     const char*  attributesTemplate = nullptr;  // PROGMEM: Jinja2 template for JSON attributes.
     bool         isCommandTopic     = false;    // true → command_topic; false → state_topic.
+    bool         skipAvailability   = false;    // true → omit availability block and json_attributes_topic (use for the availability entity itself).
 
     /// @brief Creates config for a sensor entity.
     static EntityConfig sensor(const char* name, const char* valueTemplate,
