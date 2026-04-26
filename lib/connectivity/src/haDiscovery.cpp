@@ -9,7 +9,7 @@ namespace {
     size_t       pos      = 0U;
     bool         overflow = false;
     PayloadWriter(char* b, size_t s) : buf(b), bufSize(s) {}
-    bool ok() const { return !overflow; }
+    [[nodiscard]] bool ok() const { return !overflow; }
   };
 
   template<typename... Args>
