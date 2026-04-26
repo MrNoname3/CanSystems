@@ -20,145 +20,24 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
+#include "mqttTopics.hpp"                                           /// MQTT topic format strings and derived buffer sizes.
+#include "haDiscovery.hpp"                                          /// Home Assistant MQTT auto-discovery handler.
 
 class MqttBase;                                                     // Forward declaration.
 
 /// @brief Manages network and MQTT connectivity for the system.
 class Connectivity final : public Task {
 public:
-  /// @brief Handles Home Assistant MQTT auto-discovery.
-  /// All HA-specific strings, enums, and publish logic live here; handlers provide only typed data.
-  class HADiscovery {
-  public:
-    /// @brief Supported Home Assistant MQTT component types.
-    enum class EntityType  : uint8_t { sensor, binary_sensor, button };
-    /// @brief Supported HA `state_class` values.
-    enum class StateClass  : uint8_t { none, measurement, total_increasing };
-    /// @brief Supported HA `device_class` values.
-    enum class DeviceClass : uint8_t { none, connectivity, restart };
-
-    /// @brief Typed discovery configuration for a single entity.
-    /// Construct via the factory methods: `EntityConfig::sensor()`, `::button()`, `::binarySensor()`.
-    struct EntityConfig {
-      EntityType   type               = EntityType::sensor;
-      const char*  name               = nullptr;  // PROGMEM: human-readable entity name.
-      const char*  valueTemplate      = nullptr;  // PROGMEM: Jinja2 template to extract state value.
-      const char*  payloadPress       = nullptr;  // PROGMEM: command name for button (e.g. "reboot"); HADiscovery wraps it as {"cmd":"<value>"}.
-      const char*  payloadOn          = nullptr;  // PROGMEM: binary_sensor on-payload string.
-      const char*  payloadOff         = nullptr;  // PROGMEM: binary_sensor off-payload string.
-      const char*  unit               = nullptr;  // PROGMEM: unit of measurement (e.g. "CPM").
-      StateClass   stateClass         = StateClass::none;
-      DeviceClass  deviceClass        = DeviceClass::none;
-      const char*  icon               = nullptr;  // PROGMEM: Material Design icon (e.g. "mdi:remote").
-      const char*  attributesTemplate = nullptr;  // PROGMEM: Jinja2 template for JSON attributes.
-      bool         isCommandTopic     = false;    // true → command_topic; false → state_topic.
-
-      /// @brief Creates config for a sensor entity.
-      static EntityConfig sensor(const char* name, const char* valueTemplate,
-                                  const char* unit = nullptr,
-                                  StateClass stateClass = StateClass::none,
-                                  DeviceClass deviceClass = DeviceClass::none,
-                                  const char* icon = nullptr,
-                                  const char* attributesTemplate = nullptr);
-
-      /// @brief Creates config for a button entity. HADiscovery wraps `cmdValue` as `{"cmd":"<cmdValue>"}`.
-      static EntityConfig button(const char* name, const char* cmdValue,
-                                  DeviceClass deviceClass = DeviceClass::none);
-
-      /// @brief Creates config for a binary_sensor entity.
-      static EntityConfig binarySensor(const char* name, const char* valueTemplate,
-                                        const char* payloadOn, const char* payloadOff,
-                                        DeviceClass deviceClass = DeviceClass::none,
-                                        const char* icon = nullptr);
-    };
-
-    explicit HADiscovery(Connectivity& conn) : conn(conn) {}
-    HADiscovery(const HADiscovery&)             = delete;
-    HADiscovery& operator=(const HADiscovery&)  = delete;
-
-    /// @brief Builds the human-readable device name from the deviceId and MAC address.
-    void buildDeviceName(const uint8_t mac[6], const char* deviceId);
-
-    /// @brief Publishes the HA MQTT discovery config for any entity type.
-    /// Assembles the full JSON payload from the typed config fields; only fields that are set
-    /// appear in the payload. `json_attributes_topic` is added automatically for state-topic entities.
-    /// @param subtopic Entity subtopic — used to build unique_id and complete the topic URL.
-    /// @param config Typed entity discovery configuration.
-    /// @return `true` if the discovery message was published successfully; otherwise, `false`.
-    [[nodiscard]] bool publishEntity(const char* subtopic, const EntityConfig& config);
-
-    /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
-    [[nodiscard]] bool publishConnectivity();
-
-  private:
-    static constexpr uint8_t  discoveryTopicBufSize   = 96U;   // "homeassistant/<type>/<uid>/config" topic buffer.
-    static constexpr uint16_t discoveryPayloadBufSize = 640U;  // HA MQTT discovery JSON payload buffer.
-    static constexpr uint8_t  swVersionBufSize        = 24U;   // "65535 (ffffffff)" sw version string buffer.
-    static constexpr uint8_t  deviceNameBufSize       = 32U;   // "ESP32 CAN A1B2C3" device name buffer.
-
-    // HA component type strings (PROGMEM).
-    static constexpr const char PROGMEM typeStrSensor[]          = "sensor";
-    static constexpr const char PROGMEM typeStrBinarySensor[]    = "binary_sensor";
-    static constexpr const char PROGMEM typeStrButton[]          = "button";
-    // HA state_class strings (PROGMEM).
-    static constexpr const char PROGMEM stateClassMeasurement[]  = "measurement";
-    static constexpr const char PROGMEM stateClassTotalIncr[]    = "total_increasing";
-    // HA device_class strings (PROGMEM).
-    static constexpr const char PROGMEM deviceClassConn[]        = "connectivity";
-    static constexpr const char PROGMEM deviceClassRestart[]     = "restart";
-    // HA topic field name strings (PROGMEM).
-    static constexpr const char PROGMEM topicFieldState[]        = "state_topic";
-    static constexpr const char PROGMEM topicFieldCmd[]          = "command_topic";
-    // HA discovery topic format string (PROGMEM).
-    static constexpr const char PROGMEM mqttDiscoveryTopic[]     = "homeassistant/%s/%s_%s/config";
-
-    static constexpr const char* getTypeStr(EntityType t) {
-      switch(t) {
-        case EntityType::sensor:        return typeStrSensor;
-        case EntityType::binary_sensor: return typeStrBinarySensor;
-        case EntityType::button:        return typeStrButton;
-        default:                        return nullptr;
-      }
-    }
-    static constexpr const char* getStateClassStr(StateClass sc) {
-      switch(sc) {
-        case StateClass::measurement:      return stateClassMeasurement;
-        case StateClass::total_increasing: return stateClassTotalIncr;
-        default:                           return nullptr;
-      }
-    }
-    static constexpr const char* getDeviceClassStr(DeviceClass dc) {
-      switch(dc) {
-        case DeviceClass::connectivity: return deviceClassConn;
-        case DeviceClass::restart:      return deviceClassRestart;
-        default:                        return nullptr;
-      }
-    }
-
-    /// @brief Formats the firmware version string used in HA `device.sw_version`.
-    static void getSwVersionStr(char (&buf)[swVersionBufSize]);
-
-    char deviceName[deviceNameBufSize]{};
-    Connectivity& conn;
-  };
+  /// @brief Type alias exposing HADiscovery as a nested name for backward compatibility with handlers.
+  using HADiscovery = ::HADiscovery;
 
 private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
-  static constexpr uint8_t macHexLen = 12U;                                                               // MAC address formatted as 6 hex byte pairs.
-  static constexpr const char PROGMEM mqttClientName[]  = "%s_%s";                                        // MQTT client name: <deviceId>_<MAC>.
-  static constexpr const char PROGMEM mqttOutTopic[]    = "iot/dtos/%s/";                                 // MQTT sender topic base: iot/dtos/<MAC>/.
-  static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
-  static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic suffix; %s receives senderTopic ("iot/dtos/<MAC>/").
   static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT device info topic: iot/dtos/<MAC>/info.
   static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})"; // Device info JSON payload.
-  // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by macHexLen chars.
-  static constexpr uint8_t senderTopicBufSize   = sizeof(mqttOutTopic)  - 2U + macHexLen;                 // "iot/dtos/<MAC>/" + null.
-  static constexpr uint8_t receiverTopicBufSize = sizeof(mqttInTopic)   - 2U + macHexLen;                 // "iot/stod/<MAC>/#" + null.
-  static constexpr uint8_t subtopicOffset       = sizeof(mqttInTopic)   - 4U + macHexLen;                 // sizeof - null - '#' - "%s"(2) + macHexLen.
-  static constexpr uint8_t availTopicBufSize    = sizeof(mqttAvailTopic) - 2U + senderTopicBufSize - 1U;  // "iot/dtos/<MAC>/availability" + null.
-  static constexpr uint8_t infoTopicBufSize     = sizeof(mqttInfoTopic)  - 2U + senderTopicBufSize - 1U;  // "iot/dtos/<MAC>/info" + null.
+  static constexpr uint8_t infoTopicBufSize     = sizeof(mqttInfoTopic) - 2U + MqttTopics::getSenderTopicBufSize() - 1U; // "iot/dtos/<MAC>/info" + null.
   static constexpr uint8_t infoPayloadBufSize   = 52U;                                                    // {"fw":65535,"git":"ffffffff","dirty":1,"rr":255} = 48 chars + null.
 
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
@@ -225,9 +104,9 @@ private:
     char serverName[ConfigHandler::getMaxMqttServerUrlSize()]{};    // MQTT server URL.
     uint16_t serverPort = 0U;                                       // MQTT server port.
     char clientName[32]{};                                          // MQTT client identifier.
-    char senderTopic[senderTopicBufSize]{};                         // MQTT base topic for outgoing messages.
-    char receiverTopic[receiverTopicBufSize]{};                     // MQTT topic for incoming messages.
-    char availabilityTopic[availTopicBufSize]{};                    // MQTT availability topic for online/offline signalling.
+    char senderTopic[MqttTopics::getSenderTopicBufSize()]{};        // MQTT base topic for outgoing messages.
+    char receiverTopic[MqttTopics::getReceiverTopicBufSize()]{};    // MQTT topic for incoming messages.
+    char availabilityTopic[MqttTopics::getAvailTopicBufSize()]{};   // MQTT availability topic for online/offline signalling.
 
     /// @brief Initializes all members to default values.
     MqttCredentials() = default;
@@ -354,7 +233,7 @@ public:
   /// Call from a `publishDiscovery()` override using one of the `EntityConfig` factory methods.
   /// @param config Typed entity discovery configuration built via `EntityConfig::sensor()` etc.
   /// @return `true` if the message was sent successfully; otherwise, `false`.
-  [[nodiscard]] bool doPublishEntityDiscovery(const Connectivity::HADiscovery::EntityConfig& config) {
+  [[nodiscard]] bool doPublishEntityDiscovery(const HADiscovery::EntityConfig& config) {
     return connectivity.publishEntityDiscovery(subtopic, config);
   }
 
