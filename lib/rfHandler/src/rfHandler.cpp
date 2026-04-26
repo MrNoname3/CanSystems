@@ -2,7 +2,7 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "common.hpp"                                               /// Common definitions and functions.
 
-bool RfHandler::publishDiscovery() {
+bool RfHandler::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
     PSTR("RF Received"), PSTR("{{ value_json.RfReceived.Data }}"),

@@ -2,6 +2,28 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <ctype.h>
 
+namespace {
+  struct PayloadWriter {
+    char* const  buf;
+    const size_t bufSize;
+    size_t       pos      = 0U;
+    bool         overflow = false;
+    PayloadWriter(char* b, size_t s) : buf(b), bufSize(s) {}
+    bool ok() const { return !overflow; }
+  };
+
+  template<typename... Args>
+  void appendP(PayloadWriter& pw, const char* fmt_p, Args... args) {
+    if(pw.overflow) { return; }
+    const int32_t n = snprintf_P(pw.buf + pw.pos, pw.bufSize - pw.pos, fmt_p, args...);
+    if(n < 0 || static_cast<size_t>(n) >= pw.bufSize - pw.pos) {
+      pw.overflow = true;
+    } else {
+      pw.pos += static_cast<size_t>(n);
+    }
+  }
+} // namespace
+
 HADiscovery::HADiscovery(PubSubClient& mqttClient,
                          const char* clientName,
                          const char* senderTopic,
@@ -107,36 +129,29 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
 
   // Build payload incrementally — only set fields appear in the JSON output.
   char payload[discoveryPayloadBufSize] = { '\0' };
-  size_t pos = 0U;
-  int32_t n = 0;
+  PayloadWriter pw(payload, sizeof(payload));
 
-#define PAYLOAD_APPEND(fmt, ...) \
-  n = snprintf_P(payload + pos, sizeof(payload) - pos, PSTR(fmt), ##__VA_ARGS__); \
-  if(n < 0 || static_cast<size_t>(n) >= sizeof(payload) - pos) { return false; } \
-  pos += static_cast<size_t>(n);
-
-  PAYLOAD_APPEND(R"({"unique_id":"%s_%s","name":"%s")", clientName, subtopic, config.name)
-  if(config.valueTemplate      != nullptr) { PAYLOAD_APPEND(R"(,"value_template":"%s")",           config.valueTemplate) }
-  if(config.payloadOn          != nullptr) { PAYLOAD_APPEND(R"(,"payload_on":"%s")",               config.payloadOn) }
-  if(config.payloadOff         != nullptr) { PAYLOAD_APPEND(R"(,"payload_off":"%s")",              config.payloadOff) }
-  if(config.payloadPress       != nullptr) { PAYLOAD_APPEND(R"(,"payload_press":"{\"cmd\":\"%s\"}")", config.payloadPress) }
-  if(config.unit               != nullptr) { PAYLOAD_APPEND(R"(,"unit_of_measurement":"%s")",      config.unit) }
+  appendP(pw, PSTR(R"({"unique_id":"%s_%s","name":"%s")"),                                          clientName, subtopic, config.name);
+  if(config.valueTemplate      != nullptr) { appendP(pw, PSTR(R"(,"value_template":"%s")"),         config.valueTemplate); }
+  if(config.payloadOn          != nullptr) { appendP(pw, PSTR(R"(,"payload_on":"%s")"),             config.payloadOn); }
+  if(config.payloadOff         != nullptr) { appendP(pw, PSTR(R"(,"payload_off":"%s")"),            config.payloadOff); }
+  if(config.payloadPress       != nullptr) { appendP(pw, PSTR(R"(,"payload_press":"{\"cmd\":\"%s\"}")"), config.payloadPress); }
+  if(config.unit               != nullptr) { appendP(pw, PSTR(R"(,"unit_of_measurement":"%s")"),    config.unit); }
   {
     const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr)                      { PAYLOAD_APPEND(R"(,"state_class":"%s")",              sc) }
+    if(sc != nullptr)                      { appendP(pw, PSTR(R"(,"state_class":"%s")"),            sc); }
   }
   {
     const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr)                      { PAYLOAD_APPEND(R"(,"device_class":"%s")",             dc) }
+    if(dc != nullptr)                      { appendP(pw, PSTR(R"(,"device_class":"%s")"),           dc); }
   }
-  if(config.icon               != nullptr) { PAYLOAD_APPEND(R"(,"icon":"%s")",                     config.icon) }
-  if(config.attributesTemplate != nullptr) { PAYLOAD_APPEND(R"(,"json_attributes_template":"%s")", config.attributesTemplate) }
-  PAYLOAD_APPEND(R"(,"%s":"%s%s")", topicField, topicBase, subtopic)
-  if(!config.isCommandTopic)               { PAYLOAD_APPEND(R"(,"json_attributes_topic":"%s%s")",  topicBase, subtopic) }
-  PAYLOAD_APPEND(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])", availabilityTopic)
-  PAYLOAD_APPEND(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})", clientName, deviceName, swVersion)
+  if(config.icon               != nullptr) { appendP(pw, PSTR(R"(,"icon":"%s")"),                   config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, PSTR(R"(,"json_attributes_template":"%s")"), config.attributesTemplate); }
+  appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                              topicField, topicBase, subtopic);
+  if(!config.isCommandTopic)               { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, subtopic); }
+  appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic);
+  appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"),           clientName, deviceName, swVersion);
 
-#undef PAYLOAD_APPEND
-
+  if(!pw.ok()) { return false; }
   return mqttClient.publish(discTopic, payload, true);
 }

@@ -12,7 +12,7 @@ bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-stat
   return true;
 }
 
-bool MqttCommon::publishDiscovery() {
+bool MqttCommon::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::button(PSTR("Reboot"), cmdReboot, HA::DeviceClass::restart);
   return doPublishEntityDiscovery(config);

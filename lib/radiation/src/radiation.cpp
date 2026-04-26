@@ -12,7 +12,7 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::publishDiscovery() {
+bool Radiation::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
     PSTR("Radiation"), PSTR("{{ value_json.cpm }}"), PSTR("CPM"),
