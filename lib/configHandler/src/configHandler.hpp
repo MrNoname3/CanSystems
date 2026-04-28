@@ -20,11 +20,14 @@ private:
   static constexpr uint8_t maxMqttServerUrlSize = 32U;                // Maximum size of the MQTT server URL string.
 
 public:
+  /// @brief Result of a `loadJsonFile` call.
+  enum class JsonLoadResult : uint8_t { Ok, FileOpenFailed, ParseFailed };
+
   /// @brief Opens a LittleFS file and deserializes its JSON content into `doc`.
   /// @param filePath_P PROGMEM path to the JSON file.
   /// @param doc JsonDocument to populate; must outlive any use of its contents.
-  /// @return `true` if the file was opened and parsed successfully; `false` otherwise.
-  [[nodiscard]] static bool loadJsonFile(const char* filePath_P, JsonDocument& doc);
+  /// @return `JsonLoadResult::Ok` on success; `FileOpenFailed` or `ParseFailed` otherwise.
+  [[nodiscard]] static JsonLoadResult loadJsonFile(const char* filePath_P, JsonDocument& doc);
 
   /// @brief Opens a LittleFS JSON file and returns the value of a single key.
   /// @tparam T Value type to extract. Pointer types (e.g. `const char*`) are forbidden at
@@ -38,7 +41,7 @@ public:
     static_assert(!std::is_pointer<T>::value,
       "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
     JsonDocument doc;
-    if(!loadJsonFile(filePath_P, doc)) { return false; }
+    if(loadJsonFile(filePath_P, doc) != JsonLoadResult::Ok) { return false; }
     JsonVariant var = doc[FPSTR(key_P)];
     if(!var.is<T>()) { return false; }
     outValue = var.as<T>();

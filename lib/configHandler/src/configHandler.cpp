@@ -1,11 +1,11 @@
 #include "configHandler.hpp"
 
-bool ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
+ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
   File file = LittleFS.open(FPSTR(filePath_P), "r");
-  if(!file) { return false; }
+  if(!file) { return JsonLoadResult::FileOpenFailed; }
   const DeserializationError err = deserializeJson(doc, file);
   file.close();
-  return err == DeserializationError::Code::Ok;
+  return (err == DeserializationError::Code::Ok) ? JsonLoadResult::Ok : JsonLoadResult::ParseFailed;
 }
 
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
@@ -31,43 +31,31 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   ErrorState<WifiConfigError, WifiConfigErrorType> wifiConfErrState;
   const char* const credPath = FileName::getMqttServerCredentialsLocation();
 
-  File wifiFile = LittleFS.open(FPSTR(credPath), "r");
-  if(!wifiFile) {
-    wifiConfErrState.setError(WifiConfigError::FILE_OPEN_FAILED);
-    return wifiConfErrState.getRawErrorState();
-  }
-
   JsonDocument wifiJson;
-  DeserializationError deserializationError = deserializeJson(wifiJson, wifiFile);
-  wifiFile.close();
+  const JsonLoadResult loadResult = loadJsonFile(credPath, wifiJson);
+  if(loadResult == JsonLoadResult::FileOpenFailed) { wifiConfErrState.setError(WifiConfigError::FILE_OPEN_FAILED); return wifiConfErrState.getRawErrorState(); }
+  if(loadResult == JsonLoadResult::ParseFailed) { wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR); return wifiConfErrState.getRawErrorState(); }
 
-  const bool isDeserializationSuccessful = (deserializationError == DeserializationError::Code::Ok);
-  if(isDeserializationSuccessful) {
-    JsonVariant ssidJsonVar = wifiJson[F("ssid")];
-    JsonVariant passwordJsonVar = wifiJson[F("password")];
-    const bool ssidKeyOk = ssidJsonVar.is<const char*>();
-    const bool passwordKeyOk = passwordJsonVar.is<const char*>();
-    if(!ssidKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_SSID_KEY); }
-    if(!passwordKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_PWD_KEY); }
-    if(!ssidKeyOk || !passwordKeyOk) {
-      return wifiConfErrState.getRawErrorState();
-    }
-    const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
-    const char* passJsonPtr = passwordJsonVar.as<const char*>();
-    const uint8_t ssidLength = static_cast<uint8_t>(strnlen(ssidJsonPtr, maxWifiSsidSize));
-    const uint8_t passLength = static_cast<uint8_t>(strnlen(passJsonPtr, maxWifiPasswordSize));
-    const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
-    const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
-    if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
-    if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
-    if(ssidLengthValid && passLengthValid) {
-      strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
-      strlcpy(password, passJsonPtr, maxWifiPasswordSize);
-    }
-  } else {
-    wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR);
+  JsonVariant ssidJsonVar = wifiJson[F("ssid")];
+  JsonVariant passwordJsonVar = wifiJson[F("password")];
+  const bool ssidKeyOk = ssidJsonVar.is<const char*>();
+  const bool passwordKeyOk = passwordJsonVar.is<const char*>();
+  if(!ssidKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_SSID_KEY); }
+  if(!passwordKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_PWD_KEY); }
+  if(!ssidKeyOk || !passwordKeyOk) { return wifiConfErrState.getRawErrorState(); }
+
+  const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
+  const char* passJsonPtr = passwordJsonVar.as<const char*>();
+  const uint8_t ssidLength = static_cast<uint8_t>(strnlen(ssidJsonPtr, maxWifiSsidSize));
+  const uint8_t passLength = static_cast<uint8_t>(strnlen(passJsonPtr, maxWifiPasswordSize));
+  const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
+  const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
+  if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
+  if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
+  if(ssidLengthValid && passLengthValid) {
+    strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
+    strlcpy(password, passJsonPtr, maxWifiPasswordSize);
   }
-
   return wifiConfErrState.getRawErrorState();
 }
 
@@ -76,20 +64,10 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
   ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
   const char* const credPath = FileName::getMqttServerCredentialsLocation();
 
-  File credFile = LittleFS.open(FPSTR(credPath), "r");
-  if(!credFile) {
-    serverCredErrState.setError(ServerCredError::FILE_OPEN_FAILED);
-    return serverCredErrState.getRawErrorState();
-  }
-
   JsonDocument serverCredJson;
-  DeserializationError deserializationError = deserializeJson(serverCredJson, credFile);
-  credFile.close();
-
-  if(deserializationError != DeserializationError::Code::Ok) {
-    serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR);
-    return serverCredErrState.getRawErrorState();
-  }
+  const JsonLoadResult loadResult = loadJsonFile(credPath, serverCredJson);
+  if(loadResult == JsonLoadResult::FileOpenFailed) { serverCredErrState.setError(ServerCredError::FILE_OPEN_FAILED); return serverCredErrState.getRawErrorState(); }
+  if(loadResult == JsonLoadResult::ParseFailed) { serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR); return serverCredErrState.getRawErrorState(); }
 
   JsonVariant mqttUserNameVar = serverCredJson[F("mqttUserName")];
   JsonVariant mqttPasswordVar = serverCredJson[F("mqttPassword")];
