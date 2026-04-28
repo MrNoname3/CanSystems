@@ -1,13 +1,5 @@
 #include "configHandler.hpp"
 
-ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
-  File file = LittleFS.open(FPSTR(filePath_P), "r");
-  if(!file) { return JsonLoadResult::FileOpenFailed; }
-  const DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  return (err == DeserializationError::Code::Ok) ? JsonLoadResult::Ok : JsonLoadResult::ParseFailed;
-}
-
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
   const bool initFS = LittleFS.begin();
   if(!initFS) { return false; } // NOLINT(readability-simplify-boolean-expr)
@@ -25,6 +17,14 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
 #endif
   freeBytes = totalBytes - usedBytes;
   return true;
+}
+
+ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
+  File file = LittleFS.open(FPSTR(filePath_P), "r");
+  if(!file) { return JsonLoadResult::FileOpenFailed; }
+  const DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  return (err == DeserializationError::Code::Ok) ? JsonLoadResult::Ok : JsonLoadResult::ParseFailed;
 }
 
 ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[maxWifiSsidSize], char (&password)[maxWifiPasswordSize]) {

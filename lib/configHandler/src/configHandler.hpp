@@ -23,6 +23,13 @@ public:
   /// @brief Result of a `loadJsonFile` call.
   enum class JsonLoadResult : uint8_t { Ok, FileOpenFailed, ParseFailed };
 
+  /// @brief Initializes the file system and retrieves usage statistics.
+  /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
+  /// @param usedBytes Reference to a variable where the used space (in bytes) will be stored.
+  /// @param freeBytes Reference to a variable where the free space (in bytes) will be stored.
+  /// @return `true` if the initialization was successful; `false` otherwise.
+  [[nodiscard]] static bool initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes);
+
   /// @brief Opens a LittleFS file and deserializes its JSON content into `doc`.
   /// @param filePath_P PROGMEM path to the JSON file.
   /// @param doc JsonDocument to populate; must outlive any use of its contents.
@@ -47,13 +54,6 @@ public:
     outValue = var.as<T>();
     return true;
   }
-
-  /// @brief Initializes the file system and retrieves usage statistics.
-  /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
-  /// @param usedBytes Reference to a variable where the used space (in bytes) will be stored.
-  /// @param freeBytes Reference to a variable where the free space (in bytes) will be stored.
-  /// @return `true` if the initialization was successful; `false` otherwise.
-  [[nodiscard]] static bool initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes);
 
   /// @brief Gets the maximum allowed size for the Wi-Fi SSID.
   /// @return Maximum size of the SSID string.
