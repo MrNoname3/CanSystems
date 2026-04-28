@@ -1,5 +1,12 @@
 #include "configHandler.hpp"
-#include <ArduinoJson.h>                                            /// Handle JSON files.
+
+bool ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
+  File file = LittleFS.open(FPSTR(filePath_P), "r");
+  if(!file) { return false; }
+  const DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  return err == DeserializationError::Code::Ok;
+}
 
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
   const bool initFS = LittleFS.begin();

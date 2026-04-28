@@ -2,8 +2,10 @@
 #define CONFIG_HANDLER_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <type_traits>                                              /// For static_assert type checks in getJsonValue.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <LittleFS.h>                                               /// For File and Stream types used in getServerCert.
+#include <ArduinoJson.h>                                            /// For JsonDocument and JsonVariant used in JSON helpers.
 
 /// @brief A utility class to manage configurations and error states.
 class ConfigHandler final {
@@ -18,6 +20,31 @@ private:
   static constexpr uint8_t maxMqttServerUrlSize = 32U;                // Maximum size of the MQTT server URL string.
 
 public:
+  /// @brief Opens a LittleFS file and deserializes its JSON content into `doc`.
+  /// @param filePath_P PROGMEM path to the JSON file.
+  /// @param doc JsonDocument to populate; must outlive any use of its contents.
+  /// @return `true` if the file was opened and parsed successfully; `false` otherwise.
+  [[nodiscard]] static bool loadJsonFile(const char* filePath_P, JsonDocument& doc);
+
+  /// @brief Opens a LittleFS JSON file and returns the value of a single key.
+  /// @tparam T Value type to extract. Pointer types (e.g. `const char*`) are forbidden at
+  ///           compile time — use `loadJsonFile` instead when you need string values.
+  /// @param filePath_P PROGMEM path to the JSON file.
+  /// @param key_P PROGMEM key to look up in the JSON object.
+  /// @param outValue Reference that receives the extracted value on success.
+  /// @return `true` if the file was parsed and the key was found with the expected type.
+  template<typename T>
+  [[nodiscard]] static bool getJsonValue(const char* filePath_P, const char* key_P, T& outValue) {
+    static_assert(!std::is_pointer<T>::value,
+      "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
+    JsonDocument doc;
+    if(!loadJsonFile(filePath_P, doc)) { return false; }
+    JsonVariant var = doc[FPSTR(key_P)];
+    if(!var.is<T>()) { return false; }
+    outValue = var.as<T>();
+    return true;
+  }
+
   /// @brief Initializes the file system and retrieves usage statistics.
   /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
   /// @param usedBytes Reference to a variable where the used space (in bytes) will be stored.
