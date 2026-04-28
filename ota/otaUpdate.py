@@ -9,6 +9,7 @@ Uses YAML configuration file (config.yaml) and device list (devices.yaml).
 """
 
 import json
+import re
 import time
 import base64
 import sys
@@ -479,12 +480,20 @@ class FileDataProvider:
             self._data = self._serialize_json(raw) if self.file_path.suffix.lower() == '.json' else raw
         return self._data
 
+    @staticmethod
+    def _strip_comments(text: str) -> str:
+        """Remove // line comments and /* */ block comments from JSON-like text.
+        String literals are left untouched."""
+        def replacer(match: re.Match) -> str:
+            return match.group(1) if match.group(1) else ''
+        return re.sub(r'("(?:[^"\\]|\\.)*")|//[^\r\n]*|/\*.*?\*/', replacer, text, flags=re.DOTALL)
+
     def _serialize_json(self, raw: bytes) -> bytes:
-        """Parse and re-serialize JSON to remove whitespace.
+        """Strip comments, parse and re-serialize JSON to remove whitespace.
         If the content is already serialized (compact), it is returned as-is.
         Raises ValueError if the content is not valid JSON."""
         try:
-            parsed = json.loads(raw.decode('utf-8'))
+            parsed = json.loads(self._strip_comments(raw.decode('utf-8')))
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise ValueError(f"Invalid JSON file '{self.file_path.name}': {e}")
 
