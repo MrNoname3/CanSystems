@@ -43,6 +43,9 @@ projects:
           - name: "Server configuration upload"
             local_path: files/c82b96034710/server.json
             device_path: /config/server.json
+          - name: "Tube configuration upload"
+            local_path: files/c82b96034710/tube.json
+            device_path: /config/tube.json
       - mac: cc50e30872d3
         friendly_name: "Home H"
         files:
@@ -52,6 +55,9 @@ projects:
           - name: "Server configuration upload"
             local_path: files/cc50e30872d3/server.json
             device_path: /config/server.json
+          - name: "Tube configuration upload"
+            local_path: files/cc50e30872d3/tube.json
+            device_path: /config/tube.json
 
   - name: "CAN gateway"
     pio_project: project_esp32_can

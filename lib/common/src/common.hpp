@@ -228,9 +228,13 @@ public:
   /// @return Constant string representing the path to the MQTT server certificate file.
   static constexpr const char* getMqttServerCertLocation() { return mqttServerCertLocation; }
 
-  /// @brief Retrieces the MQTT server credentials file location.
+  /// @brief Retrieves the MQTT server credentials file location.
   /// @return Constant string representing the path to the MQTT server credentials file.
   static constexpr const char* getMqttServerCredentialsLocation() { return mqttServerCredLocation; }
+
+  /// @brief Retrieves the radiation tube configuration file location.
+  /// @return Constant string representing the path to the tube config file.
+  static constexpr const char* getTubeConfigLocation() { return tubeConfigLocation; }
 
   /// @brief Checks if a given file name is accepted by this device.
   /// @param fileName The file name to validate (must not be nullptr).
@@ -252,6 +256,7 @@ private:
   static constexpr const char PROGMEM canAlertFwLocation[]     = "/canAlertFw.bin";       // File location for CAN alert device OTA firmware.
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.
   static constexpr const char PROGMEM mqttServerCredLocation[] = "/config/server.json";   // File location for the MQTT server credentials.
+  static constexpr const char PROGMEM tubeConfigLocation[]     = "/config/tube.json";     // File location for the radiation tube type configuration.
 #endif
 };
 

@@ -11,7 +11,8 @@ bool FileName::isValidFileName(const char* fileName) {
     otaFwLocation,
     mqttServerCertLocation,
     mqttServerCredLocation,
-    canAlertFwLocation
+    canAlertFwLocation,
+    tubeConfigLocation
   };
   for(const char* const location : allowedLocations) {
     // cppcheck-suppress useStlAlgorithm

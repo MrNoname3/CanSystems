@@ -1,4 +1,5 @@
 #include "radiation.hpp"
+#include "configHandler.hpp"                                        /// Read tube type from /config/tube.json.
 
 volatile uint16_t Radiation::cpm = 0U;
 volatile bool Radiation::measureDone = false;
@@ -20,10 +21,28 @@ bool Radiation::publishDiscovery() { // NOLINT(readability-convert-member-functi
   return doPublishEntityDiscovery(config);
 }
 
+Radiation::TubeType Radiation::loadTubeType() {
+  uint8_t tubeValue = 0U;
+  if(!ConfigHandler::getJsonValue(FileName::getTubeConfigLocation(), PSTR("tube"), tubeValue)) {
+    return TubeType::Unknown;
+  }
+  const TubeType t = static_cast<TubeType>(tubeValue);
+  switch(t) {
+    case TubeType::J305:
+    case TubeType::M4011:
+      return t;
+    default:
+      Logger::get().printf_P(PSTR("[RAD] Unknown tube value: %hhu\r\n"), tubeValue);
+      return TubeType::Unknown;
+  }
+}
+
 bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
+  tubeType = loadTubeType();
+  Logger::get().printf_P(PSTR("[RAD] Tube type: %hhu\r\n"), static_cast<uint8_t>(tubeType));
   return true;
 }
 
@@ -38,7 +57,21 @@ bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), cpmMessageFrame, cpmToSend);
+    int32_t dataOutSize;
+
+    const float factor = getTubeFactor(tubeType);
+    if(factor > 0.0f) {
+      // Scale CPM/factor by 10000 for 4-decimal fixed-point.
+      // radian = sievert * 100 shares the same integer (sievert*10000 / 100 = radian*100).
+      const uint32_t sX10k = static_cast<uint32_t>(static_cast<float>(cpmToSend) / factor * 10000.0f + 0.5f);
+      dataOutSize = snprintf_P(dataOut, sizeof(dataOut), fullMessageFrame,
+        cpmToSend,
+        sX10k / 10000U, sX10k % 10000U,   // sievert: whole + 4-digit frac
+        sX10k / 100U,   sX10k % 100U);    // radian:  whole + 2-digit frac
+    } else {
+      dataOutSize = snprintf_P(dataOut, sizeof(dataOut), cpmMessageFrame, cpmToSend);
+    }
+
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }
     if(!MqttBase::sendMessage(dataOut)) { return false; }

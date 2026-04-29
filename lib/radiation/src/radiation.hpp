@@ -10,12 +10,20 @@
 /// The class counts radiation pulses detected on a sensor pin, calculates counts per minute (CPM),
 /// and sends the data as an MQTT message at regular intervals.
 class Radiation final : public MqttBase {
-private:
-  static constexpr uint8_t dataOutBufSize = 16U;              // Size of the buffer used for outgoing MQTT data messages.
-  static constexpr uint32_t measureTime = Time::minToMs(1U);  // Measurement interval in milliseconds for calculating CPM.
+public:
+  /// @brief Supported Geiger-Müller tube types.
+  /// Values must match the integer stored in /config/tube.json: { "tube": <value> }.
+  enum class TubeType : uint8_t { Unknown = 0U, J305 = 1U, M4011 = 2U };
 
-  // Format string for the MQTT message containing CPM data.
-  static constexpr const char PROGMEM cpmMessageFrame[] = R"({"cpm":%hu})";
+private:
+  static constexpr uint8_t  dataOutBufSize = 64U;              // Buffer for outgoing MQTT data messages.
+  static constexpr uint32_t measureTime = Time::minToMs(1U);   // Measurement interval in milliseconds for calculating CPM.
+
+  // CPM-only message frame (used when tube type is unknown).
+  static constexpr const char PROGMEM cpmMessageFrame[]  = R"({"cpm":%hu})";
+  // Full message frame including sievert (µSv/h) and radian (µrad/h) computed from CPM.
+  // Values use fixed-point integer formatting to avoid float printf on ESP8266.
+  static constexpr const char PROGMEM fullMessageFrame[] = R"({"cpm":%hu,"sievert":%u.%04u,"radian":%u.%02u})";
 
 public:
   /// @brief Constructs the Radiation monitoring object.
@@ -55,6 +63,18 @@ public:
   Radiation& operator=(Radiation&&) = delete;                 // Define move assignment operator.
 
 private:
+  /// @brief Reads the tube type from /config/tube.json and returns the matching enum value.
+  static TubeType loadTubeType();
+
+  /// @brief Returns the CPM-to-µSv/h conversion factor for the given tube type; 0.0f if unknown.
+  static constexpr float getTubeFactor(TubeType t) {
+    switch(t) {
+      case TubeType::J305:  return 123.153f;
+      case TubeType::M4011: return 153.8f;
+      default:              return 0.0f;
+    }
+  }
+
   /// @brief Interrupt Service Routine (ISR) for counting radiation pulses.
   static IRAM_ATTR void counter();
 
@@ -67,5 +87,6 @@ private:
 
   Ticker measureTicker;                         // Timer used for periodically triggering the measurement ISR.
   const uint8_t sensorPin;                      // GPIO pin connected to the radiation sensor.
+  TubeType tubeType = TubeType::Unknown;        // Tube type read from config at init; determines sievert/radian calculation.
 };
 #endif // RADIATION_HPP
