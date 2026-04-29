@@ -16,7 +16,7 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
 bool Radiation::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
-    PSTR("Radiation"), PSTR("{{ value_json.cpm }}"), PSTR("CPM"),
+    PSTR("Radiation"), PSTR("{{ value_json.tick }}"), PSTR("CPM"),
     HA::StateClass::measurement, HA::DeviceClass::none, PSTR("mdi:radioactive"));
   return doPublishEntityDiscovery(config);
 }
