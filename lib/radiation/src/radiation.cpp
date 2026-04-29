@@ -1,9 +1,9 @@
 #include "radiation.hpp"
 #include "configHandler.hpp"                                        /// Read tube type from /config/tube.json.
 
-volatile uint16_t Radiation::cpm = 0U;
+volatile uint32_t Radiation::cpm = 0U;
 volatile bool Radiation::measureDone = false;
-volatile uint16_t Radiation::cpmToSend = 0U;
+volatile uint32_t Radiation::cpmToSend = 0U;
 
 Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin) :
   MqttBase(connectivity, subtopic),
@@ -84,9 +84,7 @@ void Radiation::counter() { // NOLINT(readability-convert-member-functions-to-st
 }
 
 void Radiation::measure() { // NOLINT(readability-convert-member-functions-to-static)
-  cli();
   cpmToSend = cpm;
   cpm = 0U;
   measureDone = true;
-  sei();
 }

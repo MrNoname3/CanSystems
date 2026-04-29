@@ -20,10 +20,10 @@ private:
   static constexpr uint32_t measureTime = Time::minToMs(1U);   // Measurement interval in milliseconds for calculating CPM.
 
   // Tick-only message frame (used when tube type is unknown).
-  static constexpr const char PROGMEM cpmMessageFrame[]  = R"({"tick":%hu})";
+  static constexpr const char PROGMEM cpmMessageFrame[]  = R"({"tick":%u})";
   // Full message frame including sievert (µSv/h) and radian (µrad/h) computed from CPM.
   // Values use fixed-point integer formatting to avoid float printf on ESP8266.
-  static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%hu,"sievert":%u.%04u,"radian":%u.%02u})";
+  static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%u,"sievert":%u.%04u,"radian":%u.%02u})";
 
 public:
   /// @brief Constructs the Radiation monitoring object.
@@ -81,9 +81,9 @@ private:
   /// @brief ISR for measuring CPM and preparing data for transmission.
   static IRAM_ATTR void measure();
 
-  static volatile uint16_t cpm;                 // Counter for radiation pulses detected during the current measurement period.
+  static volatile uint32_t cpm;                 // Counter for radiation pulses detected during the current measurement period.
   static volatile bool measureDone;             // Flag indicating whether a measurement period has completed.
-  static volatile uint16_t cpmToSend;           // CPM value to be sent over MQTT.
+  static volatile uint32_t cpmToSend;           // CPM value to be sent over MQTT.
 
   Ticker measureTicker;                         // Timer used for periodically triggering the measurement ISR.
   const uint8_t sensorPin;                      // GPIO pin connected to the radiation sensor.
