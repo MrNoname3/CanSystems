@@ -19,9 +19,7 @@ private:
   static constexpr uint8_t  dataOutBufSize = 64U;              // Buffer for outgoing MQTT data messages.
   static constexpr uint32_t measureTime = Time::minToMs(1U);   // Measurement interval in milliseconds for calculating CPM.
 
-  // Tick-only message frame (used when tube type is unknown).
-  static constexpr const char PROGMEM cpmMessageFrame[]  = R"({"tick":%u})";
-  // Full message frame including sievert (µSv/h) and radian (µrad/h) computed from CPM.
+  // Message frame; sievert and radian are 0 when tube type is unknown.
   // Values use fixed-point integer formatting to avoid float printf on ESP8266.
   static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%u,"sievert":%u.%04u,"radian":%u.%02u})";
 
