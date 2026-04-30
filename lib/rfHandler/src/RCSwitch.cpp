@@ -91,7 +91,7 @@
  */
 
 #if defined(ESP8266) || defined(ESP32)
-  static const VAR_ISR_ATTR RCSwitch::Protocol proto[] = {
+  static constexpr RCSwitch::Protocol proto[] = {
 #else
   static const RCSwitch::Protocol PROGMEM proto[] = {
 #endif
