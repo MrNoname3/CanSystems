@@ -41,11 +41,10 @@ void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
 }
 
 void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
-  // Skip "project_<mcu>_" prefix — start after the 2nd underscore (e.g. "project_esp8266_rad" → "rad").
+  // Start after the first underscore to get just "smoke".
   uint8_t start = 0U;
-  uint8_t underscores = 0U;
   for(uint8_t i = 0U; deviceId[i] != '\0'; ++i) {
-    if(deviceId[i] == '_' && (++underscores == 2U)) { start = i + 1U; break; }
+    if(deviceId[i] == '_') { start = i + 1U; break; }
   }
   memset(deviceName, '\0', sizeof(deviceName));
   for(uint8_t i = 0U; i < (deviceNameBufSize - 8U) && deviceId[start + i] != '\0'; ++i) {
