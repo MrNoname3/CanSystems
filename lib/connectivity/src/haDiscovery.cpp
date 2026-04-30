@@ -41,10 +41,16 @@ void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
 }
 
 void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
+  // Skip "project_<mcu>_" prefix — start after the 2nd underscore (e.g. "project_esp8266_rad" → "rad").
+  uint8_t start = 0U;
+  uint8_t underscores = 0U;
+  for(uint8_t i = 0U; deviceId[i] != '\0'; ++i) {
+    if(deviceId[i] == '_' && (++underscores == 2U)) { start = i + 1U; break; }
+  }
   memset(deviceName, '\0', sizeof(deviceName));
-  for(uint8_t i = 0U; i < (deviceNameBufSize - 8U) && deviceId[i] != '\0'; ++i) {
-    deviceName[i] = (deviceId[i] == '_')
-      ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[i])));
+  for(uint8_t i = 0U; i < (deviceNameBufSize - 8U) && deviceId[start + i] != '\0'; ++i) {
+    deviceName[i] = (deviceId[start + i] == '_')
+      ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[start + i])));
   }
   const uint8_t prefixLen = static_cast<uint8_t>(strnlen(deviceName, deviceNameBufSize));
   deviceName[prefixLen] = ' ';
@@ -151,7 +157,7 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                              topicField, topicBase, subtopic);
   if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, subtopic); }
   if(!config.skipAvailability)             { appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic); }
-  appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s"}})"),           clientName, deviceName, swVersion);
+  appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }
   return mqttClient.publish(discTopic, payload, true);
