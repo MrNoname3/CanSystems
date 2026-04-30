@@ -67,9 +67,9 @@ private:
   /// @brief Returns the CPM-to-µSv/h conversion factor for the given tube type; 0.0f if unknown.
   static constexpr float getTubeFactor(TubeType t) {
     switch(t) {
-      case TubeType::J305:  return 123.153f;
-      case TubeType::M4011: return 153.8f;
-      default:              return 0.0f;
+      case TubeType::J305:  return 123.153F;
+      case TubeType::M4011: return 153.8F;
+      default:              return 0.0F;
     }
   }
 

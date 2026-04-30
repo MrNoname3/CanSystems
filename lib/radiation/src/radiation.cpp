@@ -1,5 +1,6 @@
 #include "radiation.hpp"
 #include "configHandler.hpp"                                        /// Read tube type from /config/tube.json.
+#include <cmath>                                                    /// lroundf for correct float-to-integer rounding.
 
 volatile uint32_t Radiation::cpm = 0U;
 volatile bool Radiation::measureDone = false;
@@ -62,8 +63,8 @@ bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static
     const float factor = getTubeFactor(tubeType);
     // Scale CPM/factor by 10000 for 4-decimal fixed-point; 0 when tube type is unknown.
     // radian = sievert * 100 shares the same integer (sievert*10000 / 100 = radian*100).
-    const uint32_t sX10k = (factor > 0.0f)
-      ? static_cast<uint32_t>(static_cast<float>(cpmToSend) / factor * 10000.0f + 0.5f)
+    const uint32_t sX10k = (factor > 0.0F)
+      ? static_cast<uint32_t>(lroundf(static_cast<float>(cpmToSend) / factor * 10000.0F))
       : 0U;
     dataOutSize = snprintf_P(dataOut, sizeof(dataOut), fullMessageFrame,
       cpmToSend,

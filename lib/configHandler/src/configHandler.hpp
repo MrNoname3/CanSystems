@@ -50,9 +50,9 @@ public:
     JsonDocument doc;
     if(loadJsonFile(filePath_P, doc) != JsonLoadResult::Ok) { return false; }
     JsonVariant var = doc[FPSTR(key_P)];
-    if(!var.is<T>()) { return false; }
-    outValue = var.as<T>();
-    return true;
+    const bool typeOk = var.is<T>();
+    if(typeOk) { outValue = var.as<T>(); }
+    return typeOk;
   }
 
   /// @brief Gets the maximum allowed size for the Wi-Fi SSID.

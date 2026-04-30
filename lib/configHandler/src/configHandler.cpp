@@ -19,7 +19,7 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
   return true;
 }
 
-ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
+ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) { // NOLINT(readability-convert-member-functions-to-static)
   File file = LittleFS.open(FPSTR(filePath_P), "r");
   if(!file) { return JsonLoadResult::FileOpenFailed; }
   const DeserializationError err = deserializeJson(doc, file);
