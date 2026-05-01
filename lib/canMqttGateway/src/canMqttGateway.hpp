@@ -178,7 +178,7 @@ protected:
   char canInfoTopic[48]{};        // Full retained info topic:         "iot/dtos/<mac>/<subtopic>/info".
   char canSwVersion[24]{};        // CAN device sw version string:     "65535 (ffffffff)".
   char canDeviceId[48]{};         // CAN device unique identifier:     "<clientName>_<subtopic>" (max 31+1+15+1=48).
-  char canDeviceName[20]{};       // CAN device human-readable name:   "ALERT1 DDEEFF".
+  char canDeviceName[MqttBase::getSubtopicSize() + 7U]{};  // UPPERCASE(subtopic)(max 15) + ' ' + MAC6 + null.
   bool canTopicsBuilt = false;    // True after buildCanTopics() completes successfully.
 
   static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";  // Hardware version string for CAN sub-devices.
