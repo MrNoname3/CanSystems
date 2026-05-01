@@ -43,6 +43,11 @@ private:
   static constexpr const char PROGMEM entitySubTemp[]   = "temperature";
   static constexpr const char PROGMEM entitySubHum[]    = "humidity";
   static constexpr const char PROGMEM entitySubLight[]  = "illuminance";
+  static constexpr const char PROGMEM entitySubConn[]   = "connectivity";
+  static constexpr const char PROGMEM entityNameConn[]  = "Connection";
+  static constexpr const char PROGMEM valTplConn[]      = "{{ value_json.state }}";
+  static constexpr const char PROGMEM payloadOnConn[]   = "online";
+  static constexpr const char PROGMEM payloadOffConn[]  = "offline";
 
   /// @brief Publishes HA discovery configs for the three sensor entities (temperature, humidity, light).
   bool publishDiscovery() override;

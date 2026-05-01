@@ -62,6 +62,7 @@ public:
     const char* extraAvailTopic; // RAM: full CAN availability topic for dual-availability block.
     const char* dataSubtopic;    // RAM: driver's MQTT subtopic for state_topic (e.g. "alert2").
     const char* hwVersion;       // PROGMEM or RAM: hardware version string (e.g. "ATmega328P").
+    bool skipCanAvailability = false; // true → single availability (ESP32 only); use for the CAN connectivity sensor itself.
   };
 
   /// @brief Constructs the HADiscovery instance with references to the MQTT client and topic strings.

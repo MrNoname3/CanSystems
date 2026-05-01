@@ -34,6 +34,13 @@ bool CanAlertDriver::publishDiscovery() {
     HA::StateClass::measurement, HA::DeviceClass::illuminance, iconBright);
   result = doPublishCanDeviceEntityDiscovery(entitySubLight, lightConfig, canDevConfig) && result;
 
+  HA::EntityConfig connConfig = HA::EntityConfig::binarySensor(
+    entityNameConn, valTplConn, payloadOnConn, payloadOffConn, HA::DeviceClass::connectivity);
+  HA::CanDeviceConfig connDevConfig = canDevConfig;
+  connDevConfig.dataSubtopic    = getCanAvailTopic() + (MqttTopics::getSenderTopicBufSize() - 1U);
+  connDevConfig.skipCanAvailability = true;
+  result = doPublishCanDeviceEntityDiscovery(entitySubConn, connConfig, connDevConfig) && result;
+
   return result;
 }
 
