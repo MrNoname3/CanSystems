@@ -152,10 +152,10 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
-    char infoTopic[infoTopicBufSize] = { '\0' };
-    const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), mqttInfoTopic, mqttCredentials.senderTopic);
-    char infoPayload[infoPayloadBufSize] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), mqttInfoPayload,
+    char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
+    const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
+    char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
+    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(),
       Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
     const bool infoTopicValid   = (infoTopicSize   >= 0 && infoTopicSize   < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));

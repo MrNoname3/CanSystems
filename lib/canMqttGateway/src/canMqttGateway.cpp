@@ -182,13 +182,14 @@ void CanMqttGateway::buildCanTopics() {
   if(sender == nullptr || sub == nullptr || client == nullptr) { return; }
   if(sender[0] == '\0' || sub[0] == '\0' || client[0] == '\0') { return; }
 
-  strlcpy(canAvailTopic, sender, sizeof(canAvailTopic));
-  strlcat(canAvailTopic, sub, sizeof(canAvailTopic));
-  strlcat(canAvailTopic, MqttTopics::availSubtopicSuffix, sizeof(canAvailTopic));
+  // Build base: senderTopic + subtopic + "/" — used as %s argument for the topic templates.
+  char base[MqttTopics::getSenderTopicBufSize() + MqttBase::getSubtopicSize()] = {};
+  strlcpy(base, sender, sizeof(base));
+  strlcat(base, sub, sizeof(base));
+  strlcat(base, "/", sizeof(base));
 
-  strlcpy(canInfoTopic, sender, sizeof(canInfoTopic));
-  strlcat(canInfoTopic, sub, sizeof(canInfoTopic));
-  strlcat(canInfoTopic, MqttTopics::infoSubtopicSuffix, sizeof(canInfoTopic));
+  (void)snprintf_P(canAvailTopic, sizeof(canAvailTopic), MqttTopics::getMqttAvailTopic(), base);
+  (void)snprintf_P(canInfoTopic,  sizeof(canInfoTopic),  MqttTopics::getMqttInfoTopic(),  base);
 
   (void)snprintf(canDeviceId, sizeof(canDeviceId), "%s_%s", client, sub);
 
@@ -232,13 +233,8 @@ void CanMqttGateway::handlePing() {
   const bool clientOnlineActual = !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
-    Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(), clientOnline ? statusOnline : statusOffline);
-    char dataOut[statusFrameBufSize] = {'\0'};
-    const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), statusFrame, clientOnline ? statusOnline : statusOffline);
-    const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-    if(dataOutValid) {
-      (void)MqttBase::sendMessage(dataOut);
-    }
+    Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
+      clientOnline ? PSTR("ONLINE") : PSTR("OFFLINE"));
     const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
     (void)MqttBase::sendRetainedSubtopic(availSubtopic,
       clientOnline ? MqttTopics::availOnlinePayload : MqttTopics::availOfflinePayload);
@@ -269,11 +265,7 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
   switch(static_cast<uint16_t>(canFrame.cmd)) {
     case static_cast<uint16_t>(CanCmd::PING): {} break;
     case static_cast<uint16_t>(CanCmd::RESTART): {
-      char dataOut[statusFrameBufSize] = {'\0'};
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), statusFrame, statusRestarted);
-      const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return; }
-      (void)MqttBase::sendMessage(dataOut);
+      (void)sendCanFrame(CanCmd::FW_VERSION);
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
       const uint16_t fwVersion =
@@ -286,8 +278,8 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
         (static_cast<uint32_t>(canFrame.data[5]) << 24U);
       const uint8_t gitDirty = canFrame.data[6];
       (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
-      char dataOut[buildInfoFrameBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buildInfoFrame, fwVersion, gitHash, gitDirty, 255U);
+      char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, 255U);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(dataOutValid) {
         const char* infoSubtopic = canInfoTopic + (MqttTopics::getSenderTopicBufSize() - 1U);

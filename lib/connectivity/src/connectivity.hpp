@@ -35,10 +35,6 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
-  static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT device info topic: iot/dtos/<MAC>/info.
-  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})"; // Device info JSON payload.
-  static constexpr uint8_t infoTopicBufSize     = sizeof(mqttInfoTopic) - 2U + MqttTopics::getSenderTopicBufSize() - 1U; // "iot/dtos/<MAC>/info" + null.
-  static constexpr uint8_t infoPayloadBufSize   = 52U;                                                    // {"fw":65535,"git":"ffffffff","dirty":1,"rr":255} = 48 chars + null.
 
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.
