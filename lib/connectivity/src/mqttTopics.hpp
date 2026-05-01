@@ -19,6 +19,13 @@ private:
   static constexpr uint8_t availTopicBufSize    = sizeof(mqttAvailTopic) - 2U + senderTopicBufSize - 1U; // "iot/dtos/<MAC>/availability" + null.
 
 public:
+  // Availability state payloads (RAM; PubSubClient::publish and connect require non-PROGMEM pointers).
+  static constexpr const char availOnlinePayload[]          = R"({"state":"online"})";
+  static constexpr const char availOfflinePayload[]         = R"({"state":"offline"})";
+  // Sub-subtopic suffixes for CAN device retained topics.
+  static constexpr const char availSubtopicSuffix[]         = "/availability";
+  static constexpr const char infoSubtopicSuffix[]          = "/info";
+
   static constexpr uint8_t       getMacHexLen()           { return macHexLen; }
   static constexpr const char*   getMqttClientName()      { return mqttClientName; }
   static constexpr const char*   getMqttOutTopic()        { return mqttOutTopic; }

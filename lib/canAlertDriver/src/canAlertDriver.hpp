@@ -28,6 +28,25 @@ public:
   CanAlertDriver& operator=(CanAlertDriver&&) = delete;                 // Define move assignment operator.
 
 private:
+  static constexpr const char PROGMEM entityNameTemp[]  = "Temperature";
+  static constexpr const char PROGMEM entityNameHum[]   = "Humidity";
+  static constexpr const char PROGMEM entityNameLight[] = "Light";
+  static constexpr const char PROGMEM valTplTemp[]      = "{{ value_json.Temperature }}";
+  static constexpr const char PROGMEM valTplHum[]       = "{{ value_json.Humidity }}";
+  static constexpr const char PROGMEM valTplLight[]     = "{{ value_json.Light }}";
+  static constexpr const char PROGMEM unitDegC[]        = "\xc2\xb0\x43"; // UTF-8 "°C"
+  static constexpr const char PROGMEM unitPct[]         = "%";
+  static constexpr const char PROGMEM unitLux[]         = "lx";
+  static constexpr const char PROGMEM iconTherm[]       = "mdi:thermometer";
+  static constexpr const char PROGMEM iconWater[]       = "mdi:water-percent";
+  static constexpr const char PROGMEM iconBright[]      = "mdi:brightness-5";
+  static constexpr const char PROGMEM entitySubTemp[]   = "temperature";
+  static constexpr const char PROGMEM entitySubHum[]    = "humidity";
+  static constexpr const char PROGMEM entitySubLight[]  = "illuminance";
+
+  /// @brief Publishes HA discovery configs for the three sensor entities (temperature, humidity, light).
+  bool publishDiscovery() override;
+
   /// @brief Perform any local initialization required by the driver.
   /// @return Always returns `true` for this implementation.
   bool initLocal() override { return true; }

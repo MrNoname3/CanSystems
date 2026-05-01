@@ -1,4 +1,5 @@
 #include "canMqttGateway.hpp"
+#include <ctype.h>
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   canMqttGateway(canMqttGateway),
@@ -173,9 +174,46 @@ bool CanMqttGateway::isOtaInProgress() const {
   return canOta.isOtaInProgress();
 }
 
+void CanMqttGateway::buildCanTopics() {
+  if(canTopicsBuilt) { return; }
+  const char* sender   = MqttBase::getSenderTopicStr();
+  const char* sub      = MqttBase::getSubtopic();
+  const char* client   = MqttBase::getClientNameStr();
+  if(sender == nullptr || sub == nullptr || client == nullptr) { return; }
+  if(sender[0] == '\0' || sub[0] == '\0' || client[0] == '\0') { return; }
+
+  strlcpy(canAvailTopic, sender, sizeof(canAvailTopic));
+  strlcat(canAvailTopic, sub, sizeof(canAvailTopic));
+  strlcat(canAvailTopic, MqttTopics::availSubtopicSuffix, sizeof(canAvailTopic));
+
+  strlcpy(canInfoTopic, sender, sizeof(canInfoTopic));
+  strlcat(canInfoTopic, sub, sizeof(canInfoTopic));
+  strlcat(canInfoTopic, MqttTopics::infoSubtopicSuffix, sizeof(canInfoTopic));
+
+  (void)snprintf(canDeviceId, sizeof(canDeviceId), "%s_%s", client, sub);
+
+  // canDeviceName = UPPERCASE(subtopic) + " " + last 3 MAC byte pairs.
+  // senderTopic: "iot/dtos/<12hex>/" — MAC last-3-pairs start at offset 9+6=15.
+  static constexpr uint8_t mac3Offset = 15U;
+  uint8_t i = 0U;
+  while((i < sizeof(canDeviceName) - 8U) && (sub[i] != '\0')) {
+    canDeviceName[i] = static_cast<char>(toupper(static_cast<unsigned char>(sub[i])));
+    ++i;
+  }
+  if(i < sizeof(canDeviceName) - 1U) {
+    canDeviceName[i++] = ' ';
+    (void)snprintf(canDeviceName + i, 7U, "%.6s", sender + mac3Offset);
+  }
+
+  canTopicsBuilt = true;
+}
+
 bool CanMqttGateway::init() {
-  (void)sendCanFrame(CanCmd::PING);
+  buildCanTopics();
+  (void)sendCanFrame(CanCmd::FW_VERSION);
   clientPingTimer = clientOfflineTimer = millis();
+  const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+  (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
   return initLocal();
 }
 
@@ -201,6 +239,9 @@ void CanMqttGateway::handlePing() {
     if(dataOutValid) {
       (void)MqttBase::sendMessage(dataOut);
     }
+    const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+    (void)MqttBase::sendRetainedSubtopic(availSubtopic,
+      clientOnline ? MqttTopics::availOnlinePayload : MqttTopics::availOfflinePayload);
   }
 }
 
@@ -244,11 +285,15 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
         (static_cast<uint32_t>(canFrame.data[4]) << 16U) |
         (static_cast<uint32_t>(canFrame.data[5]) << 24U);
       const uint8_t gitDirty = canFrame.data[6];
+      (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
       char dataOut[buildInfoFrameBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buildInfoFrame, fwVersion, gitHash, gitDirty);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buildInfoFrame, fwVersion, gitHash, gitDirty, 255U);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return; }
-      (void)MqttBase::sendMessage(dataOut);
+      if(dataOutValid) {
+        const char* infoSubtopic = canInfoTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+        (void)MqttBase::sendRetainedSubtopic(infoSubtopic, dataOut);
+      }
+      (void)publishDiscovery();
     } break;
     case static_cast<uint16_t>(CanCmd::BUTTON_EVENT): {
       const uint8_t buttonState = canFrame.data[0];

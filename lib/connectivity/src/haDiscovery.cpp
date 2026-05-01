@@ -102,6 +102,60 @@ HADiscovery::EntityConfig::binarySensor(
   return c;
 }
 
+bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
+                                         const EntityConfig& config,
+                                         const CanDeviceConfig& canDevConfig) {
+  const char* haType = getTypeStr(config.type);
+  if(subtopic == nullptr || haType == nullptr || config.name == nullptr) { return false; }
+  if(canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr) { return false; }
+  if(canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr) { return false; }
+  if(canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
+
+  char discTopic[discoveryTopicBufSize] = { '\0' };
+  {
+    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
+      haType, canDevConfig.deviceId, subtopic);
+    if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
+  }
+
+  char topicBase[MqttTopics::getReceiverTopicBufSize()] = { '\0' };
+  if(config.isCommandTopic) {
+    strlcpy(topicBase, receiverTopic, MqttTopics::getSubtopicOffset() + 1U);
+  } else {
+    strlcpy(topicBase, senderTopic, sizeof(topicBase));
+  }
+  const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
+
+  char payload[canDiscoveryPayloadBufSize] = { '\0' };
+  PayloadWriter pw(payload, sizeof(payload));
+
+  appendP(pw, PSTR(R"({"unique_id":"%s_%s","name":"%s")"),     canDevConfig.deviceId, subtopic, config.name);
+  if(config.valueTemplate      != nullptr) { appendP(pw, PSTR(R"(,"value_template":"%s")"),         config.valueTemplate); }
+  if(config.payloadOn          != nullptr) { appendP(pw, PSTR(R"(,"payload_on":"%s")"),              config.payloadOn); }
+  if(config.payloadOff         != nullptr) { appendP(pw, PSTR(R"(,"payload_off":"%s")"),             config.payloadOff); }
+  if(config.payloadPress       != nullptr) { appendP(pw, PSTR(R"(,"payload_press":"{\"cmd\":\"%s\"}")"), config.payloadPress); }
+  if(config.unit               != nullptr) { appendP(pw, PSTR(R"(,"unit_of_measurement":"%s")"),    config.unit); }
+  {
+    const char* sc = getStateClassStr(config.stateClass);
+    if(sc != nullptr)                      { appendP(pw, PSTR(R"(,"state_class":"%s")"),             sc); }
+  }
+  {
+    const char* dc = getDeviceClassStr(config.deviceClass);
+    if(dc != nullptr)                      { appendP(pw, PSTR(R"(,"device_class":"%s")"),            dc); }
+  }
+  if(config.icon               != nullptr) { appendP(pw, PSTR(R"(,"icon":"%s")"),                   config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, PSTR(R"(,"json_attributes_template":"%s")"), config.attributesTemplate); }
+  appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                               topicField, topicBase, canDevConfig.dataSubtopic);
+  if(!config.isCommandTopic)               { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, canDevConfig.dataSubtopic); }
+  appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"},)"), availabilityTopic);
+  appendP(pw, PSTR(R"({"topic":"%s","value_template":"{{ value_json.state }}"}],"availability_mode":"all")"), canDevConfig.extraAvailTopic);
+  appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s","via_device":"%s"}})"),
+    canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
+
+  if(!pw.ok()) { return false; }
+  return mqttClient.publish(discTopic, payload, true);
+}
+
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
   EntityConfig config = EntityConfig::binarySensor(
     PSTR("Connection"), PSTR("{{ value_json.state }}"),

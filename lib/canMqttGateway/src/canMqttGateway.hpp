@@ -92,9 +92,9 @@ private:
   static constexpr uint8_t buttonFrameBufSize = 16U;                    // Buffer size for button messages.
   static constexpr uint8_t buildInfoFrameBufSize = 60U;                 // Buffer size for build info messages.
 
-  static constexpr const char PROGMEM statusOnline[]     = "ONLINE";    // Status message for online state.
-  static constexpr const char PROGMEM statusOffline[]    = "OFFLINE";   // Status message for offline state.
-  static constexpr const char PROGMEM statusRestarted[]  = "RESTARTED"; // Status message for restarted state.
+  static constexpr const char PROGMEM statusOnline[]    = "ONLINE";                    // Status message for online state.
+  static constexpr const char PROGMEM statusOffline[]   = "OFFLINE";                   // Status message for offline state.
+  static constexpr const char PROGMEM statusRestarted[] = "RESTARTED";                 // Status message for restarted state.
 
   // JSON template for status messages.
   static constexpr const char PROGMEM statusFrame[] = R"({"Status":"%s"})";
@@ -102,8 +102,8 @@ private:
   // JSON template for button messages.
   static constexpr const char PROGMEM buttonFrame[] = R"({"Button":%hu})";
 
-  // JSON template for build info messages.
-  static constexpr const char PROGMEM buildInfoFrame[] = R"({"Firmware":%hu,"GitHash":"%x","GitDirty":%hu})";
+  // JSON template for build info messages (matches main device info format; rr=255 = unknown for CAN devices).
+  static constexpr const char PROGMEM buildInfoFrame[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})";
 
 public:
   /// @brief Processes an MQTT message received for this client.
@@ -180,4 +180,24 @@ private:
   uint32_t clientOfflineTimer;    // Timer for tracking the time since the last client ping to detect offline status.
   bool clientOnline;              // Flag indicating the current online status of the client. True if online, false if offline.
   const char* fwFileNamePtr;      // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
+
+protected:
+  /// @brief Builds CAN topic and device metadata buffers from senderTopic, clientName, and subtopic.
+  /// Idempotent: if already built (canTopicsBuilt == true), returns immediately.
+  void buildCanTopics();
+
+  char canAvailTopic[48]{};       // Full retained availability topic: "iot/dtos/<mac>/<subtopic>/availability".
+  char canInfoTopic[48]{};        // Full retained info topic:         "iot/dtos/<mac>/<subtopic>/info".
+  char canSwVersion[24]{};        // CAN device sw version string:     "65535 (ffffffff)".
+  char canDeviceId[48]{};         // CAN device unique identifier:     "<clientName>_<subtopic>" (max 31+1+15+1=48).
+  char canDeviceName[20]{};       // CAN device human-readable name:   "ALERT1 DDEEFF".
+  bool canTopicsBuilt = false;    // True after buildCanTopics() completes successfully.
+
+  static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";  // Hardware version string for CAN sub-devices.
+
+  [[nodiscard]] const char* getCanAvailTopic()  const { return canAvailTopic; }
+  [[nodiscard]] const char* getCanInfoTopic()   const { return canInfoTopic; }
+  [[nodiscard]] const char* getCanSwVersion()   const { return canSwVersion; }
+  [[nodiscard]] const char* getCanDeviceId()    const { return canDeviceId; }
+  [[nodiscard]] const char* getCanDeviceName()  const { return canDeviceName; }
 };

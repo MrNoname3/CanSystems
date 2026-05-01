@@ -169,14 +169,14 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   const bool mqttConResult = mqttClient.connect(
     mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
-    mqttCredentials.availabilityTopic, 1U, true, availOfflinePayload);
+    mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   if(!subResult) { return false; }
-  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, availOnlinePayload, true);
+  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOnlinePayload, true);
   Logger::get().printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
   if(!availResult) { return false; }
   (void)haDiscovery.publishConnectivity();
@@ -196,7 +196,7 @@ bool Connectivity::run() {
     if(networkState) {
       connectToMqttServer();
     } else {
-      (void)mqttClient.publish(mqttCredentials.availabilityTopic, availOfflinePayload, true);
+      (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
       mqttClient.disconnect();
     }
   }
@@ -272,6 +272,22 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 
 bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
   return haDiscovery.publishEntity(subtopic, config);
+}
+
+bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
+  if(subSubTopic == nullptr || payload == nullptr) { return false; }
+  static constexpr uint8_t retainedTopicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
+  char actualTopic[retainedTopicBufSize] = { '\0' };
+  strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
+  const size_t len = strlcat(actualTopic, subSubTopic, sizeof(actualTopic));
+  if(len >= sizeof(actualTopic)) { return false; }
+  return mqttClient.publish(actualTopic, payload, true);
+}
+
+bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
+                                                    const HADiscovery::EntityConfig& config,
+                                                    const HADiscovery::CanDeviceConfig& canDevConfig) {
+  return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)

@@ -51,8 +51,6 @@ private:
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
-  static constexpr const char availOnlinePayload[]  = R"({"state":"online"})";                            // Availability online payload (RAM; publish/connect require a normal pointer).
-  static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";                           // Availability offline payload (RAM; publish/connect require a normal pointer).
 
 public:
   /// @brief Constructs a Connectivity instance.
@@ -90,6 +88,27 @@ public:
   /// @param config Entity-specific discovery configuration (see `HADiscovery::EntityConfig`).
   /// @return `true` if the discovery message was published successfully; otherwise, `false`.
   [[nodiscard]] bool publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config);
+
+  /// @brief Publishes a retained MQTT message to senderTopic + subSubTopic.
+  /// @param subSubTopic Extended subtopic appended to the sender topic base.
+  /// @param payload     The message payload.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool publishRetained(const char* subSubTopic, const char* payload);
+
+  /// @brief Publishes a HA discovery config for a CAN sub-device entity via HADiscovery.
+  /// @param subtopic     Entity subtopic.
+  /// @param config       Typed entity discovery configuration.
+  /// @param canDevConfig CAN device identification struct (RAM strings).
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool publishCanDeviceEntityDiscovery(const char* subtopic,
+                                                     const HADiscovery::EntityConfig& config,
+                                                     const HADiscovery::CanDeviceConfig& canDevConfig);
+
+  /// @brief Returns the MQTT sender topic base (e.g. "iot/dtos/aabbccddeeff/"). Valid after init().
+  [[nodiscard]] const char* getSenderTopic() const { return mqttCredentials.senderTopic; }
+
+  /// @brief Returns the MQTT client name (e.g. "esp32_can_aabbccddeeff"). Valid after init().
+  [[nodiscard]] const char* getClientName() const { return mqttCredentials.clientName; }
 
   Connectivity(const Connectivity&) = delete;                       // Delete copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Delete copy assignment operator.
@@ -236,6 +255,32 @@ public:
   [[nodiscard]] bool doPublishEntityDiscovery(const HADiscovery::EntityConfig& config) {
     return connectivity.publishEntityDiscovery(subtopic, config);
   }
+
+  /// @brief Publishes a retained MQTT message to senderTopic + subSubTopic.
+  /// Use for CAN device availability and info topics (e.g. "alert1/availability", "alert1/info").
+  /// @param subSubTopic Extended subtopic (e.g. "alert1/availability") appended to the sender topic.
+  /// @param payload     Message payload.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool sendRetainedSubtopic(const char* subSubTopic, const char* payload) {
+    return connectivity.publishRetained(subSubTopic, payload);
+  }
+
+  /// @brief Publishes a HA discovery config for a CAN sub-device entity.
+  /// @param subtopic     Entity subtopic (e.g. "temperature").
+  /// @param config       Entity discovery configuration.
+  /// @param canDevConfig CAN device identification and availability data.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool doPublishCanDeviceEntityDiscovery(const char* subtopic,
+                                                       const HADiscovery::EntityConfig& config,
+                                                       const HADiscovery::CanDeviceConfig& canDevConfig) {
+    return connectivity.publishCanDeviceEntityDiscovery(subtopic, config, canDevConfig);
+  }
+
+  /// @brief Returns the MQTT sender topic base. Valid after Connectivity::init().
+  [[nodiscard]] const char* getSenderTopicStr() const { return connectivity.getSenderTopic(); }
+
+  /// @brief Returns the MQTT client name. Valid after Connectivity::init().
+  [[nodiscard]] const char* getClientNameStr() const { return connectivity.getClientName(); }
 
   /// @brief Returns the next handler in the intrusive linked list managed by Connectivity.
   [[nodiscard]] MqttBase* getNextHandler() const { return nextHandler; }

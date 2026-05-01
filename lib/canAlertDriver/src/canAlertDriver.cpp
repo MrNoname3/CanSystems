@@ -6,6 +6,37 @@ CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
   tempOffset(tempOffset)
 {}
 
+bool CanAlertDriver::publishDiscovery() {
+  using HA = HADiscovery;
+  buildCanTopics();
+
+  const HA::CanDeviceConfig canDevConfig = {
+    getCanDeviceId(),
+    getCanDeviceName(),
+    getCanSwVersion(),
+    getCanAvailTopic(),
+    MqttBase::getSubtopic(),
+    canHwVersionStr
+  };
+
+  const HA::EntityConfig tempConfig = HA::EntityConfig::sensor(
+    entityNameTemp, valTplTemp, unitDegC,
+    HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
+  bool result = doPublishCanDeviceEntityDiscovery(entitySubTemp, tempConfig, canDevConfig);
+
+  const HA::EntityConfig humConfig = HA::EntityConfig::sensor(
+    entityNameHum, valTplHum, unitPct,
+    HA::StateClass::measurement, HA::DeviceClass::humidity, iconWater);
+  result = doPublishCanDeviceEntityDiscovery(entitySubHum, humConfig, canDevConfig) && result;
+
+  const HA::EntityConfig lightConfig = HA::EntityConfig::sensor(
+    entityNameLight, valTplLight, unitLux,
+    HA::StateClass::measurement, HA::DeviceClass::illuminance, iconBright);
+  result = doPublishCanDeviceEntityDiscovery(entitySubLight, lightConfig, canDevConfig) && result;
+
+  return result;
+}
+
 void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];

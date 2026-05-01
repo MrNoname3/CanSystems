@@ -15,7 +15,8 @@ public:
   /// @brief Supported HA `state_class` values.
   enum class StateClass  : uint8_t { none, measurement, total_increasing };
   /// @brief Supported HA `device_class` values.
-  enum class DeviceClass : uint8_t { none, connectivity, restart };
+  enum class DeviceClass : uint8_t { none, connectivity, restart,
+                                     temperature, humidity, illuminance };
 
   /// @brief Typed discovery configuration for a single entity.
   /// Construct via the factory methods: `EntityConfig::sensor()`, `::button()`, `::binarySensor()`.
@@ -53,6 +54,16 @@ public:
                                      const char* icon = nullptr);
   };
 
+  /// @brief Discovery configuration for a CAN sub-device (all pointers are RAM strings, not PROGMEM).
+  struct CanDeviceConfig {
+    const char* deviceId;        // RAM: unique device identifier  (e.g. "esp32_can_aabbccddeeff_alert1").
+    const char* deviceName;      // RAM: human-readable device name (e.g. "ALERT1 DDEEFF").
+    const char* swVersion;       // RAM: sw version string         (e.g. "1234 (deadbeef)").
+    const char* extraAvailTopic; // RAM: full CAN availability topic for dual-availability block.
+    const char* dataSubtopic;    // RAM: driver's MQTT subtopic for state_topic (e.g. "alert2").
+    const char* hwVersion;       // PROGMEM or RAM: hardware version string (e.g. "ATmega328P").
+  };
+
   /// @brief Constructs the HADiscovery instance with references to the MQTT client and topic strings.
   /// The topic string pointers must remain valid for the lifetime of this object and will be
   /// read-only after construction; they are populated by Connectivity before first publish.
@@ -80,12 +91,23 @@ public:
   /// @return `true` if the discovery message was published successfully; otherwise, `false`.
   [[nodiscard]] bool publishEntity(const char* subtopic, const EntityConfig& config);
 
+  /// @brief Publishes the HA MQTT discovery config for a CAN sub-device entity.
+  /// Like publishEntity() but uses dual availability (ESP32 + CAN device) and a via_device link.
+  /// @param subtopic     Entity subtopic — used to build unique_id and complete the topic URL.
+  /// @param config       Typed entity discovery configuration.
+  /// @param canDevConfig CAN sub-device identification and availability data (RAM strings).
+  /// @return `true` if the discovery message was published successfully; otherwise, `false`.
+  [[nodiscard]] bool publishCanDeviceEntity(const char* subtopic,
+                                            const EntityConfig& config,
+                                            const CanDeviceConfig& canDevConfig);
+
   /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
   [[nodiscard]] bool publishConnectivity();
 
 private:
-  static constexpr uint8_t  discoveryTopicBufSize   = 96U;   // "homeassistant/<type>/<uid>/config" topic buffer.
-  static constexpr uint16_t discoveryPayloadBufSize = 656U;  // HA MQTT discovery JSON payload buffer.
+  static constexpr uint8_t  discoveryTopicBufSize      = 96U;  // "homeassistant/<type>/<uid>/config" topic buffer.
+  static constexpr uint16_t discoveryPayloadBufSize    = 656U; // HA MQTT discovery JSON payload buffer.
+  static constexpr uint16_t canDiscoveryPayloadBufSize = 752U; // CAN entity payload: dual avail + via_device.
   static constexpr uint8_t  swVersionBufSize        = 24U;   // "65535 (ffffffff)" sw version string buffer.
   static constexpr uint8_t  deviceNameBufSize       = 32U;   // "CAN A1B2C3" device name buffer.
   static constexpr uint8_t  hwVersionBufSize        = 8U;    // "ESP8266" / "ESP32" hw version string buffer.
@@ -105,8 +127,11 @@ private:
   static constexpr const char PROGMEM stateClassMeasurement[]  = "measurement";
   static constexpr const char PROGMEM stateClassTotalIncr[]    = "total_increasing";
   // HA device_class strings (PROGMEM).
-  static constexpr const char PROGMEM deviceClassConn[]        = "connectivity";
-  static constexpr const char PROGMEM deviceClassRestart[]     = "restart";
+  static constexpr const char PROGMEM deviceClassConn[]         = "connectivity";
+  static constexpr const char PROGMEM deviceClassRestart[]      = "restart";
+  static constexpr const char PROGMEM deviceClassTemperature[]  = "temperature";
+  static constexpr const char PROGMEM deviceClassHumidity[]     = "humidity";
+  static constexpr const char PROGMEM deviceClassIlluminance[]  = "illuminance";
   // HA topic field name strings (PROGMEM).
   static constexpr const char PROGMEM topicFieldState[]        = "state_topic";
   static constexpr const char PROGMEM topicFieldCmd[]          = "command_topic";
@@ -130,9 +155,12 @@ private:
   }
   static constexpr const char* getDeviceClassStr(DeviceClass dc) {
     switch(dc) {
-      case DeviceClass::connectivity: return deviceClassConn;
-      case DeviceClass::restart:      return deviceClassRestart;
-      default:                        return nullptr;
+      case DeviceClass::connectivity:  return deviceClassConn;
+      case DeviceClass::restart:       return deviceClassRestart;
+      case DeviceClass::temperature:   return deviceClassTemperature;
+      case DeviceClass::humidity:      return deviceClassHumidity;
+      case DeviceClass::illuminance:   return deviceClassIlluminance;
+      default:                         return nullptr;
     }
   }
 
