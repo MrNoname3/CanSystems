@@ -33,9 +33,7 @@ public:
 
 private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
-  static constexpr uint32_t reconnectTime = Time::secToMs(10U);     // Time interval for retrying MQTT reconnections.
-  static constexpr uint16_t connectBackoffSec = 60U;                          // Fixed backoff duration in seconds.
-  static constexpr uint32_t connectBackoffMs  = Time::secToMs(connectBackoffSec); // Same in milliseconds for the wait loop.
+  static constexpr uint32_t reconnectTime = Time::secToMs(60U);     // Interval for MQTT reconnect retries and WDT-reset backoff.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
 
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.

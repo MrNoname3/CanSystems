@@ -152,9 +152,9 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
     if(ResetHandler::isWdtReset()) {
       Logger::get().printf_P(PSTR("[MQTT] WDT reset — backoff %us\r\n"),
-        static_cast<uint32_t>(connectBackoffSec));
+        static_cast<uint32_t>(reconnectTime / 1000U));
       const uint32_t startMs = millis();
-      while(!Time::hasElapsed(millis(), startMs, connectBackoffMs)) {
+      while(!Time::hasElapsed(millis(), startMs, reconnectTime)) {
         delay(1000U);
         resetWatchdogTimer();
       }
