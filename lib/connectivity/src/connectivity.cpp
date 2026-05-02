@@ -150,6 +150,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     Logger::get().printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
 
+  resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
