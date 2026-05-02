@@ -38,8 +38,12 @@ uint8_t  getDigitalWriteValue(uint8_t pin);
 uint8_t  getPinMode(uint8_t pin);
 void     resetGpioState();
 
+#ifndef PROGMEM
 #define PROGMEM
+#endif
+#ifndef pgm_read_byte_near
 #define pgm_read_byte_near(x) *(x)
+#endif
 // clang-format off
 #define yield(x) {}
 // clang-format on
