@@ -7,6 +7,7 @@
 #elif defined(ESP32)
 #include <Esp.h>                                                    /// Restart and reset-related functions for ESP32.
 #include <esp_task_wdt.h>                                           /// Watchdog timer functions specific to ESP32.
+#include <esp_system.h>                                             /// Provides esp_reset_reason() and esp_reset_reason_t.
 #endif
 #include "common.hpp"                                               /// Common definitions and functions.
 
@@ -29,6 +30,16 @@ uint8_t ResetHandler::getResetReason() {
   return static_cast<uint8_t>(ESP.getResetInfoPtr()->reason);
 #elif defined ESP32
   return static_cast<uint8_t>(esp_reset_reason());
+#endif
+}
+
+bool ResetHandler::isWdtReset() {
+#ifdef ESP8266
+  const uint8_t reason = getResetReason();
+  return (reason == REASON_WDT_RST) || (reason == REASON_SOFT_WDT_RST); // hardware WDT or software WDT
+#elif defined(ESP32)
+  const uint8_t reason = getResetReason();
+  return (reason == ESP_RST_INT_WDT) || (reason == ESP_RST_TASK_WDT) || (reason == ESP_RST_WDT); // interrupt WDT, task WDT, or RTC WDT
 #endif
 }
 #endif

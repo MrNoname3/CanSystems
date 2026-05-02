@@ -13,6 +13,9 @@ public:
   /// @brief Retrieves the reason for the last system reset.
   /// @return A `uint8_t` value representing the reset reason, where each value corresponds to a specific reset cause.
   [[nodiscard]] static uint8_t getResetReason();
+
+  /// @brief Returns true if the last reset was caused by any watchdog timer.
+  [[nodiscard]] static bool isWdtReset();
 #endif
 
   ResetHandler() = delete;                                           // Delete constructor.

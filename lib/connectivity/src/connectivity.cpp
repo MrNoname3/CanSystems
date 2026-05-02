@@ -149,7 +149,17 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
     Logger::get().printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
-
+  { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
+    if(ResetHandler::isWdtReset()) {
+      Logger::get().printf_P(PSTR("[MQTT] WDT reset — backoff %us\r\n"),
+        static_cast<uint32_t>(connectBackoffSec));
+      const uint32_t startMs = millis();
+      while(!Time::hasElapsed(millis(), startMs, connectBackoffMs)) {
+        delay(1000U);
+        resetWatchdogTimer();
+      }
+    }
+  }
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
