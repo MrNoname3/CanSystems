@@ -44,7 +44,7 @@ public:
   int16_t read() override {
     return (respPos < respLen) ? static_cast<int16_t>(respData[respPos++]) : -1;
   }
-  int16_t read(uint8_t* buf, size_t size) override {
+  int16_t read(uint8_t* buf, size_t size) override { // NOLINT(readability-non-const-parameter)
     for(size_t i = 0U; i < size; ++i) {
       const int16_t c = read();
       if(c < 0) { return static_cast<int16_t>(i); }
@@ -86,7 +86,8 @@ static PublishRecord decodeMqttPublish(const uint8_t* buf, size_t len) {
 
   // Decode variable-length remaining field.
   size_t pos = 1U;
-  uint32_t remaining = 0U, mult = 1U;
+  uint32_t remaining = 0U;
+  uint32_t mult      = 1U;
   uint8_t enc;
   do {
     if(pos >= len) { return r; }

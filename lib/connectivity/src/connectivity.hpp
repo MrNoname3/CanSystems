@@ -232,7 +232,7 @@ public:
   [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {
     char responseBuffer[responseBufferSize] = { '\0' };
     const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
-      PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint8_t>(response), command, errCode);
+      PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
     const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
       (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
     if(!responseBufferValid) { return false; }
