@@ -179,7 +179,6 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 }
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
-  while(true) {;}
   const bool mqttConResult = mqttClient.connect(
     mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
     mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
