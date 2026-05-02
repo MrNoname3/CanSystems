@@ -106,10 +106,10 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
                                          const EntityConfig& config,
                                          const CanDeviceConfig& canDevConfig) {
   const char* haType = getTypeStr(config.type);
-  if(subtopic == nullptr || haType == nullptr || config.name == nullptr) { return false; }
-  if(canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr) { return false; }
-  if(canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr) { return false; }
-  if(canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
+  if(subtopic == nullptr || haType == nullptr || config.name == nullptr
+     || canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr
+     || canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr
+     || canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
 
   char discTopic[discoveryTopicBufSize] = { '\0' };
   {
