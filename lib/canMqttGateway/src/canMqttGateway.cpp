@@ -266,6 +266,13 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
     case static_cast<uint16_t>(CanCmd::PING): {} break;
     case static_cast<uint16_t>(CanCmd::RESTART): {
       (void)sendCanFrame(CanCmd::FW_VERSION);
+      // Publish offline then online so brief restarts are visible in HA connection history,
+      // even if the device came back before the ping timeout would have caught the outage.
+      // clientOnline is forced true so handlePing() does not publish a duplicate online.
+      const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOfflinePayload);
+      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
+      clientOnline = true;
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
       const uint16_t fwVersion =
