@@ -172,6 +172,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
       tcpClient->stop();
     } else {
       connectionState = State::CONNECT_FAILED;
+      tcpClient->stop();
     }
     return false;
   }
