@@ -187,10 +187,16 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   if(!mqttConResult) { return false; }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
-  if(!subResult) { return false; }
+  if(!subResult) {
+    mqttClient.disconnect();
+    return false;
+  }
   const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOnlinePayload, true);
   Logger::get().printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
-  if(!availResult) { return false; }
+  if(!availResult) {
+    mqttClient.disconnect();
+    return false;
+  }
   (void)haDiscovery.publishConnectivity();
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
     if(!h->publishDiscovery()) {
