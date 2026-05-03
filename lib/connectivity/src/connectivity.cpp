@@ -212,6 +212,7 @@ bool Connectivity::run() {
   if(actualNetworkState != networkState) {
     networkState = actualNetworkState;
     if(networkState) {
+      resetWatchdogTimer();
       connectToMqttServer();
     } else {
       (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
@@ -229,6 +230,7 @@ bool Connectivity::run() {
   } else {
     if(networkState && Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
       reconnectTimer = actualTime;
+      resetWatchdogTimer();
       connectToMqttServer();
     }
   }
