@@ -212,9 +212,12 @@ void CanMqttGateway::buildCanTopics() {
 bool CanMqttGateway::init() {
   buildCanTopics();
   (void)sendCanFrame(CanCmd::FW_VERSION);
-  clientPingTimer = clientOfflineTimer = millis();
+  clientPingTimer = millis();
+  // clientOfflineTimer is intentionally NOT reset here so handlePing() continues to base
+  // its decision on the last real CAN activity, not on a forced timestamp.
   const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
-  (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
+  (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOfflinePayload);
+  clientOnline = false;
   return initLocal();
 }
 
@@ -291,6 +294,11 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       if(dataOutValid) {
         const char* infoSubtopic = canInfoTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
         (void)MqttBase::sendRetainedSubtopic(infoSubtopic, dataOut);
+      }
+      if(!clientOnline) {
+        const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+        (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
+        clientOnline = true;
       }
       (void)publishDiscovery();
     } break;
