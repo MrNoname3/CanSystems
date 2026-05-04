@@ -177,8 +177,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
   EntityConfig config = EntityConfig::binarySensor(
-    PSTR("Connection"), PSTR("{{ value_json.state }}"),
-    PSTR("online"), PSTR("offline"), DeviceClass::connectivity);
+    connName, connValueTpl, connPayloadOn, connPayloadOff, DeviceClass::connectivity);
   config.skipAvailability = true;
   // "availability" is the literal suffix of the availability topic (after the sender topic base).
   const bool result = publishEntity(PSTR("availability"), config);

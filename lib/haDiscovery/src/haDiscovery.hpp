@@ -65,6 +65,12 @@ public:
     bool skipCanAvailability = false; // true → single availability (ESP32 only); use for the CAN connectivity sensor itself.
   };
 
+  /// HA MQTT binary sensor protocol strings for the connectivity entity — shared with CAN device drivers.
+  static constexpr const char PROGMEM connName[]      = "Connection";
+  static constexpr const char PROGMEM connValueTpl[]  = "{{ value_json.state }}";
+  static constexpr const char PROGMEM connPayloadOn[] = "online";
+  static constexpr const char PROGMEM connPayloadOff[]= "offline";
+
   /// @brief Constructs the HADiscovery instance with references to the MQTT client and topic strings.
   /// The topic string pointers must remain valid for the lifetime of this object and will be
   /// read-only after construction; they are populated by Connectivity before first publish.
