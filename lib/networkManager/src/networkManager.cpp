@@ -2,6 +2,14 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"
 
+namespace {
+  constexpr const char PROGMEM logConnecting[] = "[NETWORK] Connecting to router...\r\n";
+  constexpr const char PROGMEM logEthInit[]    = "[NETWORK] Initialising ethernet modul: %s\r\n";
+  constexpr const char PROGMEM logIp[]         = "  IP: %s\r\n";
+  constexpr const char PROGMEM logGw[]         = "  GW: %s\r\n";
+  constexpr const char PROGMEM logSnm[]        = "  SNM: %s\r\n";
+} // namespace
+
 #ifdef ESP32
 volatile bool NetworkManager::ethConnected = false;
 #endif
@@ -59,13 +67,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.setHostname(Build::getPioEnv());
 #endif
       WiFi.begin(ssid, password);
-      Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
+      Logger::get().printf_P(logConnecting);
       while(WiFi.status() != WL_CONNECTED) {
         yield();
       }
-      Logger::get().printf_P(PSTR("  IP: %s\r\n"), WiFi.localIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  GW: %s\r\n"), WiFi.gatewayIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  SNM: %s\r\n"), WiFi.subnetMask().toString().c_str());
+      Logger::get().printf_P(logIp, WiFi.localIP().toString().c_str());
+      Logger::get().printf_P(logGw, WiFi.gatewayIP().toString().c_str());
+      Logger::get().printf_P(logSnm, WiFi.subnetMask().toString().c_str());
     } break;
 #ifdef ESP8266
     case Interface::ENC28J60: {
@@ -78,18 +86,18 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.mode(WIFI_OFF);
       ethernetEnc28j60.value().setDefault();         // default route set through this interface
       const bool ethInit = ethernetEnc28j60.value().begin(mac);
-      Logger::get().printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
+      Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
+      Logger::get().printf_P(logConnecting);
       while(!ethernetEnc28j60.value().connected()) {
         yield();
       }
-      Logger::get().printf_P(PSTR("  IP: %s\r\n"), ethernetEnc28j60.value().localIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  GW: %s\r\n"), ethernetEnc28j60.value().gatewayIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  SNM: %s\r\n"), ethernetEnc28j60.value().subnetMask().toString().c_str());
+      Logger::get().printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
+      Logger::get().printf_P(logGw, ethernetEnc28j60.value().gatewayIP().toString().c_str());
+      Logger::get().printf_P(logSnm, ethernetEnc28j60.value().subnetMask().toString().c_str());
     } break;
 #elif defined ESP32
     case Interface::LAN8720: {
@@ -97,18 +105,18 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.mode(WIFI_OFF);
       WiFi.onEvent(NetworkManager::WiFiEvent);
       const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
-      Logger::get().printf_P(PSTR("[NETWORK] Initialising ethernet modul: %s\r\n"), Str::getStateStr(ethInit));
+      Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
-      Logger::get().printf_P(PSTR("[NETWORK] Connecting to router...\r\n"));
+      Logger::get().printf_P(logConnecting);
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
       }
-      Logger::get().printf_P(PSTR("  IP: %s\r\n"), ETH.localIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  GW: %s\r\n"), ETH.gatewayIP().toString().c_str());
-      Logger::get().printf_P(PSTR("  SNM: %s\r\n"), ETH.subnetMask().toString().c_str());
+      Logger::get().printf_P(logIp, ETH.localIP().toString().c_str());
+      Logger::get().printf_P(logGw, ETH.gatewayIP().toString().c_str());
+      Logger::get().printf_P(logSnm, ETH.subnetMask().toString().c_str());
       ETH.setHostname(Build::getPioEnv());
       ETH.macAddress(mac);
     } break;
