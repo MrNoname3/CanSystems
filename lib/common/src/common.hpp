@@ -128,6 +128,10 @@ public:
   /// @brief Retrieves the section separator string.
   /// @return Constant string used to separate sections in logs or messages, stored in program memory.
   static constexpr const char* getSectionSeparator() { return sectionSeparator; }
+  /// @brief Retrieves "ONLINE" or "OFFLINE" based on the given state.
+  static constexpr const char* getOnlineStateStr(bool online) { return online ? onlineStr : offlineStr; }
+  /// @brief Retrieves the indented error-code printf format string `"  Code: %hu\r\n"`.
+  static constexpr const char* getErrCodeFmt() { return errCodeFmt; }
 #endif
 
   Str() = delete;                                   // Delete constructor.
@@ -143,11 +147,12 @@ private:
   static constexpr const char* errStr           = "[ERR]";    // Status string for "Error" on AVR platforms.
   static constexpr const char* spacerStr        = "|";        // A string used as a spacer in formatting.
 #elif defined(ESP8266) || defined(ESP32)
-  static constexpr const char PROGMEM okStr[]      = "[OK]";  // Status string for "OK" stored in program memory for ESP platforms.
-  static constexpr const char PROGMEM errStr[]     = "[ERR]"; // Status string for "Error" stored in program memory for ESP platforms.
-  static constexpr const char PROGMEM sectionSeparator[] = {  // Section separator string, stored in program memory on ESP platforms.
-    "*************************************************"
-  };
+  static constexpr const char PROGMEM okStr[]             = "[OK]";  // Status string for "OK" stored in program memory for ESP platforms.
+  static constexpr const char PROGMEM errStr[]            = "[ERR]"; // Status string for "Error" stored in program memory for ESP platforms.
+  static constexpr const char PROGMEM sectionSeparator[]  = "*************************************************"; // Section separator string.
+  static constexpr const char PROGMEM onlineStr[]         = "ONLINE";
+  static constexpr const char PROGMEM offlineStr[]        = "OFFLINE";
+  static constexpr const char PROGMEM errCodeFmt[]        = "  Code: %hu\r\n";
 #else
   static constexpr const char* okStr  = "[OK]";               // Status string for "OK" on native/test platforms.
   static constexpr const char* errStr = "[ERR]";              // Status string for "Error" on native/test platforms.

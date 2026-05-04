@@ -164,7 +164,7 @@ bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-conv
   Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
     MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
   if(!fileTransferStartResult) {
-    Logger::get().printf_P(PSTR("  Code: %hu\r\n"), otaStartResultCode);
+    Logger::get().printf_P(Str::getErrCodeFmt(), otaStartResultCode);
     return false;
   }
   return true;
@@ -237,7 +237,7 @@ void CanMqttGateway::handlePing() {
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
     Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
-      clientOnline ? PSTR("ONLINE") : PSTR("OFFLINE"));
+      Str::getOnlineStateStr(clientOnline));
     const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
     (void)MqttBase::sendRetainedSubtopic(availSubtopic,
       clientOnline ? MqttTopics::availOnlinePayload : MqttTopics::availOfflinePayload);

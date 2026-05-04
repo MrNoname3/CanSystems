@@ -57,7 +57,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       const bool wifiConfigOk = (wifiConfigResult == 0U);
       Logger::get().printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
       if(!wifiConfigOk) {
-        Logger::get().printf_P(PSTR("  Code: %hu\r\n"), wifiConfigResult);
+        Logger::get().printf_P(Str::getErrCodeFmt(), wifiConfigResult);
         networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
         return networkErrState.getRawErrorState();
       }

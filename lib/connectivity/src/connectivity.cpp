@@ -2,9 +2,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>
 
-namespace {
-  constexpr const char PROGMEM logErrCode[] = "  Code: %hu\r\n";
-} // namespace
 #if defined(ESP32)
   #include <esp_sntp.h>
 #endif
@@ -47,7 +44,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool connResultOk = (connResult == 0U);
     Logger::get().printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
     if(!connResultOk) {
-      Logger::get().printf_P(logErrCode, connResult);
+      Logger::get().printf_P(Str::getErrCodeFmt(), connResult);
       return false;
     }
   }
@@ -70,7 +67,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool credResultOk = (credResult == 0U);
     Logger::get().printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
     if(!credResultOk) {
-      Logger::get().printf_P(logErrCode, credResult);
+      Logger::get().printf_P(Str::getErrCodeFmt(), credResult);
       return false;
     }
   }
@@ -122,7 +119,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool certResultOk = (certResult == 0U);
     Logger::get().printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
     if(!certResultOk) {
-      Logger::get().printf_P(logErrCode, certResult);
+      Logger::get().printf_P(Str::getErrCodeFmt(), certResult);
       return false;
     }
   }
@@ -246,7 +243,7 @@ bool Connectivity::run() {
   if(actualOnlineState != onlineState) {
     onlineState = actualOnlineState;
     if(debugLed != nullptr) { debugLed(onlineState); }
-    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), onlineState ? PSTR("ONLINE") : PSTR("OFFLINE"));
+    Logger::get().printf_P(PSTR("[RUN] Device is: %s\r\n"), Str::getOnlineStateStr(onlineState));
   }
 
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {

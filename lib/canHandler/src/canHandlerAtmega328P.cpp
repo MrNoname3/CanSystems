@@ -4,6 +4,10 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 
+namespace {
+  constexpr const char PROGMEM storingStr[] = "Storing: ";
+} // namespace
+
 volatile uint8_t CanHandlerAtmega328P::intCount = 0U;
 
 CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
@@ -141,13 +145,13 @@ bool CanHandlerAtmega328P::run() {
   }
   if(otaState == OTA::OtaState::VALID) {
     CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
-    Logger::get().print(F("Storing: "));
+    Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
     Logger::get().println(Str::getOkStr());
     if(ota.isOwnFw()) { ResetHandler::restartMCU(); }
   }
   if(otaState == OTA::OtaState::INVALID) {
     CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
-    Logger::get().print(F("Storing: "));
+    Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
     Logger::get().println(Str::getErrStr());
   }
   lastOtaState = otaState;
