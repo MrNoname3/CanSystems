@@ -22,6 +22,21 @@ namespace {
       pw.pos += static_cast<size_t>(n);
     }
   }
+
+  // Named PROGMEM constants prevent duplicate flash arrays that PSTR() creates at each call site.
+  constexpr const char PROGMEM fmtUniqueId[]      = R"({"unique_id":"%s_%s","name":"%s")";
+  constexpr const char PROGMEM fmtValueTemplate[] = R"(,"value_template":"%s")";
+  constexpr const char PROGMEM fmtPayloadOn[]     = R"(,"payload_on":"%s")";
+  constexpr const char PROGMEM fmtPayloadOff[]    = R"(,"payload_off":"%s")";
+  constexpr const char PROGMEM fmtPayloadPress[]  = R"(,"payload_press":"{\"cmd\":\"%s\"}")";
+  constexpr const char PROGMEM fmtUnit[]          = R"(,"unit_of_measurement":"%s")";
+  constexpr const char PROGMEM fmtStateClass[]    = R"(,"state_class":"%s")";
+  constexpr const char PROGMEM fmtDeviceClass[]   = R"(,"device_class":"%s")";
+  constexpr const char PROGMEM fmtIcon[]          = R"(,"icon":"%s")";
+  constexpr const char PROGMEM fmtAttrTemplate[]  = R"(,"json_attributes_template":"%s")";
+  constexpr const char PROGMEM fmtTopicField[]    = R"(,"%s":"%s%s")";
+  constexpr const char PROGMEM fmtAttrTopic[]     = R"(,"json_attributes_topic":"%s%s")";
+  constexpr const char PROGMEM fmtAvailSingle[]   = R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])";
 } // namespace
 
 HADiscovery::HADiscovery(PubSubClient& mqttClient,
@@ -129,26 +144,26 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
   char payload[canDiscoveryPayloadBufSize] = { '\0' };
   PayloadWriter pw(payload, sizeof(payload));
 
-  appendP(pw, PSTR(R"({"unique_id":"%s_%s","name":"%s")"),     canDevConfig.deviceId, subtopic, config.name);
-  if(config.valueTemplate      != nullptr) { appendP(pw, PSTR(R"(,"value_template":"%s")"),         config.valueTemplate); }
-  if(config.payloadOn          != nullptr) { appendP(pw, PSTR(R"(,"payload_on":"%s")"),              config.payloadOn); }
-  if(config.payloadOff         != nullptr) { appendP(pw, PSTR(R"(,"payload_off":"%s")"),             config.payloadOff); }
-  if(config.payloadPress       != nullptr) { appendP(pw, PSTR(R"(,"payload_press":"{\"cmd\":\"%s\"}")"), config.payloadPress); }
-  if(config.unit               != nullptr) { appendP(pw, PSTR(R"(,"unit_of_measurement":"%s")"),    config.unit); }
+  appendP(pw, fmtUniqueId,                                                  canDevConfig.deviceId, subtopic, config.name);
+  if(config.valueTemplate      != nullptr) { appendP(pw, fmtValueTemplate,  config.valueTemplate); }
+  if(config.payloadOn          != nullptr) { appendP(pw, fmtPayloadOn,      config.payloadOn); }
+  if(config.payloadOff         != nullptr) { appendP(pw, fmtPayloadOff,     config.payloadOff); }
+  if(config.payloadPress       != nullptr) { appendP(pw, fmtPayloadPress,   config.payloadPress); }
+  if(config.unit               != nullptr) { appendP(pw, fmtUnit,           config.unit); }
   {
     const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr)                      { appendP(pw, PSTR(R"(,"state_class":"%s")"),             sc); }
+    if(sc != nullptr)                      { appendP(pw, fmtStateClass,     sc); }
   }
   {
     const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr)                      { appendP(pw, PSTR(R"(,"device_class":"%s")"),            dc); }
+    if(dc != nullptr)                      { appendP(pw, fmtDeviceClass,    dc); }
   }
-  if(config.icon               != nullptr) { appendP(pw, PSTR(R"(,"icon":"%s")"),                   config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, PSTR(R"(,"json_attributes_template":"%s")"), config.attributesTemplate); }
-  appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                               topicField, topicBase, canDevConfig.dataSubtopic);
-  if(!config.isCommandTopic)               { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, canDevConfig.dataSubtopic); }
+  if(config.icon               != nullptr) { appendP(pw, fmtIcon,           config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate,   config.attributesTemplate); }
+  appendP(pw, fmtTopicField,                                                 topicField, topicBase, canDevConfig.dataSubtopic);
+  if(!config.isCommandTopic)               { appendP(pw, fmtAttrTopic,      topicBase, canDevConfig.dataSubtopic); }
   if(canDevConfig.skipCanAvailability) {
-    appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic);
+    appendP(pw, fmtAvailSingle,                                              availabilityTopic);
   } else {
     appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"},)"), availabilityTopic);
     appendP(pw, PSTR(R"({"topic":"%s","value_template":"{{ value_json.state }}"}],"availability_mode":"all")"), canDevConfig.extraAvailTopic);
@@ -195,25 +210,25 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   char payload[discoveryPayloadBufSize] = { '\0' };
   PayloadWriter pw(payload, sizeof(payload));
 
-  appendP(pw, PSTR(R"({"unique_id":"%s_%s","name":"%s")"),                                          clientName, subtopic, config.name);
-  if(config.valueTemplate      != nullptr) { appendP(pw, PSTR(R"(,"value_template":"%s")"),         config.valueTemplate); }
-  if(config.payloadOn          != nullptr) { appendP(pw, PSTR(R"(,"payload_on":"%s")"),             config.payloadOn); }
-  if(config.payloadOff         != nullptr) { appendP(pw, PSTR(R"(,"payload_off":"%s")"),            config.payloadOff); }
-  if(config.payloadPress       != nullptr) { appendP(pw, PSTR(R"(,"payload_press":"{\"cmd\":\"%s\"}")"), config.payloadPress); }
-  if(config.unit               != nullptr) { appendP(pw, PSTR(R"(,"unit_of_measurement":"%s")"),    config.unit); }
+  appendP(pw, fmtUniqueId,                                                  clientName, subtopic, config.name);
+  if(config.valueTemplate      != nullptr) { appendP(pw, fmtValueTemplate,  config.valueTemplate); }
+  if(config.payloadOn          != nullptr) { appendP(pw, fmtPayloadOn,      config.payloadOn); }
+  if(config.payloadOff         != nullptr) { appendP(pw, fmtPayloadOff,     config.payloadOff); }
+  if(config.payloadPress       != nullptr) { appendP(pw, fmtPayloadPress,   config.payloadPress); }
+  if(config.unit               != nullptr) { appendP(pw, fmtUnit,           config.unit); }
   {
     const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr)                      { appendP(pw, PSTR(R"(,"state_class":"%s")"),            sc); }
+    if(sc != nullptr)                      { appendP(pw, fmtStateClass,     sc); }
   }
   {
     const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr)                      { appendP(pw, PSTR(R"(,"device_class":"%s")"),           dc); }
+    if(dc != nullptr)                      { appendP(pw, fmtDeviceClass,    dc); }
   }
-  if(config.icon               != nullptr) { appendP(pw, PSTR(R"(,"icon":"%s")"),                   config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, PSTR(R"(,"json_attributes_template":"%s")"), config.attributesTemplate); }
-  appendP(pw, PSTR(R"(,"%s":"%s%s")"),                                                              topicField, topicBase, subtopic);
-  if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, PSTR(R"(,"json_attributes_topic":"%s%s")"), topicBase, subtopic); }
-  if(!config.skipAvailability)             { appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])"), availabilityTopic); }
+  if(config.icon               != nullptr) { appendP(pw, fmtIcon,           config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate,   config.attributesTemplate); }
+  appendP(pw, fmtTopicField,                                                 topicField, topicBase, subtopic);
+  if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, fmtAttrTopic, topicBase, subtopic); }
+  if(!config.skipAvailability)             { appendP(pw, fmtAvailSingle,    availabilityTopic); }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }
