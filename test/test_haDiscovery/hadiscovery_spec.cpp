@@ -367,6 +367,84 @@ bool test_publishCanDeviceEntity_skip_can_avail() {
   END_IT
 }
 
+bool test_publishEntity_button_command_topic_url() {
+  IT("publishEntity command_topic uses trimmed receiverTopic, not senderTopic");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+
+  const auto cfg = HADiscovery::EntityConfig::button("Restart", "reboot");
+  IS_TRUE(f.had.publishEntity("restart", cfg));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  // Receiver topic "iot/stod/AABBCCDDEEFF/#" trimmed to "iot/stod/AABBCCDDEEFF/" + subtopic.
+  IS_TRUE(strstr(rec.payload,
+    "\"command_topic\":\"iot/stod/AABBCCDDEEFF/restart\"") != nullptr);
+  END_IT
+}
+
+bool test_publishEntity_sw_version_in_device_block() {
+  IT("publishEntity device block contains a non-empty sw_version");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
+  IS_TRUE(f.had.publishEntity("data", cfg));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"")      != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"\"")    == nullptr);  // must not be empty
+  END_IT
+}
+
+bool test_publishEntity_no_via_device() {
+  IT("publishEntity device block does not contain via_device");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
+  IS_TRUE(f.had.publishEntity("data", cfg));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  IS_TRUE(strstr(rec.payload, "\"via_device\"") == nullptr);
+  END_IT
+}
+
+bool test_publishCanDeviceEntity_via_device_and_unique_id() {
+  IT("publishCanDeviceEntity sets via_device and unique_id uses entity subtopic");
+  Fixture f;
+
+  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
+    "Temperature", "{{ value_json.t }}");
+
+  const HADiscovery::CanDeviceConfig canCfg = {
+    "esp32_can_AABBCCDDEEFF_alert1",
+    "ALERT1 DDEEFF",
+    "771 (12345678)",
+    "iot/dtos/AABBCCDDEEFF/alert1/availability",
+    "alert1",         // dataSubtopic — used for state_topic
+    "ATmega328P",
+    false
+  };
+
+  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, canCfg));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  // unique_id must use the entity subtopic "temperature", not the data subtopic "alert1".
+  IS_TRUE(strstr(rec.payload,
+    "\"unique_id\":\"esp32_can_AABBCCDDEEFF_alert1_temperature\"") != nullptr);
+  // via_device must point to the ESP32 client name.
+  IS_TRUE(strstr(rec.payload,
+    "\"via_device\":\"esp32_can_AABBCCDDEEFF\"")                   != nullptr);
+  END_IT
+}
+
 bool test_publishEntity_returns_false_when_disconnected() {
   IT("publishEntity returns false when the MQTT client is not connected");
   CapturingClient cap;
@@ -391,6 +469,10 @@ int main() {
   test_publishCanDeviceEntity_state_topic_uses_dataSubtopic();
   test_publishCanDeviceEntity_dual_availability();
   test_publishCanDeviceEntity_skip_can_avail();
+  test_publishEntity_button_command_topic_url();
+  test_publishEntity_sw_version_in_device_block();
+  test_publishEntity_no_via_device();
+  test_publishCanDeviceEntity_via_device_and_unique_id();
   test_publishEntity_returns_false_when_disconnected();
   FINISH
 }
