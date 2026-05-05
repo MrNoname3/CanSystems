@@ -165,9 +165,8 @@ bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-conv
     MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
   if(!fileTransferStartResult) {
     Logger::get().printf_P(Str::getErrCodeFmt(), otaStartResultCode);
-    return false;
   }
-  return true;
+  return fileTransferStartResult;
 }
 
 bool CanMqttGateway::isOtaInProgress() const {
