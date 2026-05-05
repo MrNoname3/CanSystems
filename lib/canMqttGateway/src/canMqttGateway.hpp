@@ -174,8 +174,8 @@ protected:
   /// Idempotent: if already built (canTopicsBuilt == true), returns immediately.
   void buildCanTopics();
 
-  char canAvailTopic[56]{};       // Full retained availability topic: "iot/dtos/<mac>/<subtopic>/availability" (max 50 chars + null).
-  char canInfoTopic[48]{};        // Full retained info topic:         "iot/dtos/<mac>/<subtopic>/info".
+  char canAvailTopic[MqttTopics::getAvailTopicBufSize() + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/availability" + null.
+  char canInfoTopic[MqttTopics::getInfoTopicBufSize()  + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/info" + null.
   char canSwVersion[24]{};        // CAN device sw version string:     "65535 (ffffffff)".
   char canDeviceId[48]{};         // CAN device unique identifier:     "<clientName>_<subtopic>" (max 31+1+15+1=48).
   char canDeviceName[MqttBase::getSubtopicSize() + 7U]{};  // UPPERCASE(subtopic)(max 15) + ' ' + MAC6 + null.
