@@ -194,8 +194,8 @@ void CanMqttGateway::buildCanTopics() {
   (void)snprintf(canDeviceId, sizeof(canDeviceId), "%s_%s", client, sub);
 
   // canDeviceName = UPPERCASE(subtopic) + " " + last 3 MAC byte pairs.
-  // senderTopic: "iot/dtos/<12hex>/" — MAC last-3-pairs start at offset 9+6=15.
-  static constexpr uint8_t mac3Offset = 15U;
+  // senderTopic layout: "iot/dtos/<12hex>/" — last 3 pairs start at offset (prefix + first 3 pairs).
+  static constexpr uint8_t mac3Offset = 9U + MqttTopics::getMacHexLen() / 2U;
   uint8_t i = 0U;
   while((i < sizeof(canDeviceName) - 8U) && (sub[i] != '\0')) {
     canDeviceName[i] = static_cast<char>(toupper(static_cast<unsigned char>(sub[i])));

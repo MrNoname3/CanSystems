@@ -176,7 +176,7 @@ protected:
 
   char canAvailTopic[MqttTopics::getAvailTopicBufSize() + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/availability" + null.
   char canInfoTopic[MqttTopics::getInfoTopicBufSize()  + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/info" + null.
-  char canSwVersion[24]{};        // CAN device sw version string:     "65535 (ffffffff)".
+  char canSwVersion[18]{};        // CAN device sw version string:     "65535 (ffffffff)" + null.
   char canDeviceId[48]{};         // CAN device unique identifier:     "<clientName>_<subtopic>" (max 31+1+15+1=48).
   char canDeviceName[MqttBase::getSubtopicSize() + 7U]{};  // UPPERCASE(subtopic)(max 15) + ' ' + MAC6 + null.
   bool canTopicsBuilt = false;    // True after buildCanTopics() completes successfully.
