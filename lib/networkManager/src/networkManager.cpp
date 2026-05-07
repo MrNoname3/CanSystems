@@ -36,6 +36,16 @@ void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetSh
   networkInterface = interface;
 }
 
+void NetworkManager::buildHostname() {
+  const char* envName = Build::getPioEnv();
+  static constexpr uint8_t prefixLen = sizeof(hostnamePrefix) - 1U;
+  if(strncmp(envName, hostnamePrefix, prefixLen) == 0) {
+    envName += prefixLen;
+  }
+  snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x%02x",
+    envName, mac[2], mac[3], mac[4], mac[5]);
+}
+
 NetworkManager::NetworkErrorType NetworkManager::connect() {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   Logger::get().printf_P(PSTR("[NETWORK] Network interface: "));
@@ -43,6 +53,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
     case Interface::WIFI: {
       Logger::get().printf_P(PSTR("[Wi-Fi]\r\n"));
       WiFi.macAddress(mac);
+      buildHostname();
       const bool wifiInit = WiFi.mode(WIFI_STA);
       Logger::get().printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
       if(!wifiInit) {
@@ -62,9 +73,9 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         return networkErrState.getRawErrorState();
       }
 #ifdef ESP8266
-      WiFi.hostname(Build::getPioEnv());
+      WiFi.hostname(hostnameBuffer);
 #elif defined ESP32
-      WiFi.setHostname(Build::getPioEnv());
+      WiFi.setHostname(hostnameBuffer);
 #endif
       WiFi.begin(ssid, password);
       Logger::get().printf_P(logConnecting);
@@ -83,9 +94,10 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         return networkErrState.getRawErrorState();
       }
       WiFi.macAddress(mac);
+      buildHostname();
       WiFi.mode(WIFI_OFF);
       ethernetEnc28j60.value().setDefault();         // default route set through this interface
-      ethernetEnc28j60.value().hostname(Build::getPioEnv());
+      ethernetEnc28j60.value().hostname(hostnameBuffer);
       const bool ethInit = ethernetEnc28j60.value().begin(mac);
       Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
@@ -111,6 +123,8 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
         return networkErrState.getRawErrorState();
       }
+      ETH.macAddress(mac);
+      buildHostname();
       Logger::get().printf_P(logConnecting);
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
@@ -118,8 +132,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       Logger::get().printf_P(logIp, ETH.localIP().toString().c_str());
       Logger::get().printf_P(logGw, ETH.gatewayIP().toString().c_str());
       Logger::get().printf_P(logSnm, ETH.subnetMask().toString().c_str());
-      ETH.setHostname(Build::getPioEnv());
-      ETH.macAddress(mac);
+      ETH.setHostname(hostnameBuffer);
     } break;
 #endif
     default: {

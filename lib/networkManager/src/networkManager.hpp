@@ -2,6 +2,7 @@
 #define NETWORK_MANAGER_HPP
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "common.hpp"                                               /// Common definitions and functions.
 #ifdef ESP8266
 #include <ESP8266WiFi.h>                                            /// WiFi driver for ESP8266.
 #include <ENC28J60lwIP.h>                                           /// Ethernet driver for ENC28J60 on ESP8266.
@@ -17,6 +18,14 @@ private:
   using NetworkErrorType = uint16_t;                                // Underlying type for network error states.
   static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
   static constexpr uint8_t invalidPin = 0xFF;                       // Invalid pin value.
+  static constexpr char hostnamePrefix[] = "project_";              // PIO env prefix stripped from the hostname.
+  static constexpr uint8_t macSuffixBytes = 4U;                     // Number of MAC bytes (from the end) appended to the hostname.
+  static constexpr uint8_t hostnameLen =
+    static_cast<uint8_t>(Build::getPioEnvLength()
+      - (sizeof(hostnamePrefix) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
+      + 1U                              // underscore separator
+      + macSuffixBytes * 2U            // 2 hex digits per MAC byte
+      + 1U);                           // null terminator
 #ifdef ESP32
   static constexpr uint8_t ethPhyAddress = 1U;                      // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
   static constexpr int32_t ethPhyPower = 17;                        // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
@@ -87,6 +96,10 @@ private:
   /// @param status The Wi-Fi status to convert.
   /// @return A string representation of the Wi-Fi status.
   [[nodiscard]] static const char* getIntStatusStr(wl_status_t status);
+
+  /// @brief Builds a unique hostname from the PIO env name (without "project_" prefix) and the last 4 MAC bytes.
+  /// Must be called after mac[] is populated. Result is stored in hostnameBuffer.
+  void buildHostname();
 #ifdef ESP32
   /// @brief Handles ESP32-specific Ethernet events.
   /// @param event The Wi-Fi event type.
@@ -112,5 +125,6 @@ private:
   Interface networkInterface;                                       // Current network interface.
   wl_status_t interfaceStatus;                                      // Current network interface status.
   uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.
+  char hostnameBuffer[hostnameLen]{};                               // Unique hostname: env (no prefix) + "_" + last 4 MAC bytes.
 };
 #endif // NETWORK_MANAGER_HPP
