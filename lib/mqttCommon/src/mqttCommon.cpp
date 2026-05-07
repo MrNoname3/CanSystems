@@ -107,7 +107,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   }
 }
 
-void MqttCommon::reboot() {
+void MqttCommon::reboot() { // NOLINT(readability-convert-member-functions-to-static)
   shutdownMqtt();
   ResetHandler::restartMCU();
 }
