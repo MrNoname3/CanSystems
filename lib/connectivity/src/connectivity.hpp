@@ -91,6 +91,10 @@ public:
   /// @return `true` if published successfully; otherwise, `false`.
   [[nodiscard]] bool publishRetained(const char* subSubTopic, const char* payload);
 
+  /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
+  /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
+  void shutdownMqtt();
+
   /// @brief Publishes a HA discovery config for a CAN sub-device entity via HADiscovery.
   /// @param subtopic     Entity subtopic.
   /// @param config       Typed entity discovery configuration.
@@ -272,6 +276,10 @@ public:
                                                        const HADiscovery::CanDeviceConfig& canDevConfig) {
     return connectivity.publishCanDeviceEntityDiscovery(subtopic, config, canDevConfig);
   }
+
+  /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
+  /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
+  void shutdownMqtt() { connectivity.shutdownMqtt(); }
 
   /// @brief Returns the MQTT sender topic base. Valid after Connectivity::init().
   [[nodiscard]] const char* getSenderTopicStr() const { return connectivity.getSenderTopic(); }

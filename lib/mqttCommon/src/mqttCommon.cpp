@@ -27,7 +27,7 @@ bool MqttCommon::run() {
       Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
     } else {
       if(isRestartRequired) {
-        ResetHandler::restartMCU();
+        reboot();
       } else {
         OtaRegistry::triggerForFile(dataTransfer.getFileName());
       }
@@ -107,6 +107,11 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   }
 }
 
+void MqttCommon::reboot() {
+  shutdownMqtt();
+  ResetHandler::restartMCU();
+}
+
 // Lookup table mapping command strings to their handler functions.
 const MqttCommon::CmdEntry MqttCommon::cmdTable[] = {
   { cmdReboot, &MqttCommon::handleReboot },
@@ -127,5 +132,5 @@ void MqttCommon::dispatchCommand(const char* cmd) {
 void MqttCommon::handleReboot() {
   Logger::get().printf_P(PSTR("[COMMON] Reboot command received.\r\n"));
   sendResponse(true);
-  ResetHandler::restartMCU();
+  reboot();
 }

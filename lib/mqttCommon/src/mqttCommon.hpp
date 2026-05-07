@@ -59,6 +59,9 @@ private:
   /// @brief Handles the reboot command by restarting the MCU.
   void handleReboot();
 
+  /// @brief Publishes offline availability, disconnects MQTT, then restarts the MCU.
+  void reboot();
+
   // --- Command dispatch table types ---
 
   using CmdHandler = void (MqttCommon::*)();                    // Pointer-to-member type for command handlers.

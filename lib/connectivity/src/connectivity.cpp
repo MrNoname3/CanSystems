@@ -216,8 +216,7 @@ bool Connectivity::run() {
       resetWatchdogTimer();
       connectToMqttServer();
     } else {
-      (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
-      mqttClient.disconnect();
+      shutdownMqtt();
     }
   }
   const PubSubClient::State actualMqttState = mqttClient.state();
@@ -251,6 +250,11 @@ bool Connectivity::run() {
     ResetHandler::restartMCU();
   }
   return true;
+}
+
+void Connectivity::shutdownMqtt() {
+  (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
+  mqttClient.disconnect();
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
