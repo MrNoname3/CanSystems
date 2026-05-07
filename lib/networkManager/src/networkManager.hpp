@@ -22,8 +22,8 @@ private:
   static constexpr uint8_t macSuffixBytes = 4U;                     // Number of MAC bytes (from the end) appended to the hostname.
   static constexpr uint8_t hostnameLen =
     static_cast<uint8_t>(Build::getPioEnvLength()
-      - (sizeof(hostnamePrefix) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
-      + 1U                              // underscore separator
+      - (static_cast<uint8_t>(sizeof(hostnamePrefix)) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
+      + 1U                             // underscore separator
       + macSuffixBytes * 2U            // 2 hex digits per MAC byte
       + 1U);                           // null terminator
 #ifdef ESP32
