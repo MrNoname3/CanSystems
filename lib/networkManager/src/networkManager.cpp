@@ -85,6 +85,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       WiFi.macAddress(mac);
       WiFi.mode(WIFI_OFF);
       ethernetEnc28j60.value().setDefault();         // default route set through this interface
+      ethernetEnc28j60.value().hostname(Build::getPioEnv());
       const bool ethInit = ethernetEnc28j60.value().begin(mac);
       Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
