@@ -97,12 +97,18 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       buildHostname();
       WiFi.mode(WIFI_OFF);
       ethernetEnc28j60.value().setDefault();         // default route set through this interface
-      ethernetEnc28j60.value().hostname(hostnameBuffer);
       const bool ethInit = ethernetEnc28j60.value().begin(mac);
       Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
+      }
+      // Set hostname directly on all lwIP netifs without calling dhcp_renew():
+      // begin() creates the ENC28J60 netif but leaves hostname null; calling
+      // hostname() here would trigger dhcp_renew() on the freshly-started DHCP
+      // state machine (INIT state) and corrupt it, causing a WDT reset.
+      for(netif* intf = netif_list; intf != nullptr; intf = intf->next) {
+        intf->hostname = hostnameBuffer;
       }
       Logger::get().printf_P(logConnecting);
       while(!ethernetEnc28j60.value().connected()) {
