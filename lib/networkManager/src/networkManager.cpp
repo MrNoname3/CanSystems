@@ -42,8 +42,8 @@ void NetworkManager::buildHostname() {
   if(strncmp(envName, hostnamePrefix, prefixLen) == 0) {
     envName += prefixLen;
   }
-  snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x%02x",
-    envName, mac[2], mac[3], mac[4], mac[5]);
+  snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x",
+    envName, mac[3], mac[4], mac[5]);
 }
 
 NetworkManager::NetworkErrorType NetworkManager::connect() {

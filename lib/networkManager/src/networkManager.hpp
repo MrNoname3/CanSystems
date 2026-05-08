@@ -19,7 +19,7 @@ private:
   static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
   static constexpr uint8_t invalidPin = 0xFF;                       // Invalid pin value.
   static constexpr char hostnamePrefix[] = "project_";              // PIO env prefix stripped from the hostname.
-  static constexpr uint8_t macSuffixBytes = 4U;                     // Number of MAC bytes (from the end) appended to the hostname.
+  static constexpr uint8_t macSuffixBytes = 3U;                     // Number of MAC bytes (from the end) appended to the hostname.
   static constexpr uint8_t hostnameLen =
     static_cast<uint8_t>(Build::getPioEnvLength()
       - (static_cast<uint8_t>(sizeof(hostnamePrefix)) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
