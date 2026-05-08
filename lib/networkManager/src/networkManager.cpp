@@ -125,6 +125,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       }
       ETH.macAddress(mac);
       buildHostname();
+      ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
       Logger::get().printf_P(logConnecting);
       while(!ethConnected) {    // Wait until the device receives an IP address.
         yield();
@@ -132,7 +133,6 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       Logger::get().printf_P(logIp, ETH.localIP().toString().c_str());
       Logger::get().printf_P(logGw, ETH.gatewayIP().toString().c_str());
       Logger::get().printf_P(logSnm, ETH.subnetMask().toString().c_str());
-      ETH.setHostname(hostnameBuffer);
     } break;
 #endif
     default: {
