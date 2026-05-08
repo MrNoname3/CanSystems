@@ -38,6 +38,19 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     if(!initFS) { return false; }
     Logger::get().printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
+  { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
+    if(ResetHandler::isWdtReset()) {
+      Logger::get().printf_P(PSTR("[MQTT] WDT reset — waiting %us before reconnect\r\n"),
+        static_cast<uint32_t>(reconnectTime / 1000U));
+      const uint32_t startMs = millis();
+      while(!Time::hasElapsed(millis(), startMs, reconnectTime)) {
+        delay(1000U);
+        resetWatchdogTimer();
+        Logger::get().printf_P(PSTR("."));
+      }
+      Logger::get().printf_P(PSTR("\r\n[MQTT] Backoff elapsed, reconnecting\r\n"));
+    }
+  }
   { // Start network interface.
     resetWatchdogTimer();
     const uint16_t connResult = networkManager.connect();
@@ -149,18 +162,6 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   uint8_t handlerIndex = 0U;
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
     Logger::get().printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
-  }
-  { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
-    if(ResetHandler::isWdtReset()) {
-      Logger::get().printf_P(PSTR("[MQTT] WDT reset — waiting %us before reconnect\r\n"),
-        static_cast<uint32_t>(reconnectTime / 1000U));
-      const uint32_t startMs = millis();
-      while(!Time::hasElapsed(millis(), startMs, reconnectTime)) {
-        delay(1000U);
-        resetWatchdogTimer();
-      }
-      Logger::get().printf_P(PSTR("[MQTT] Backoff elapsed, reconnecting\r\n"));
-    }
   }
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
