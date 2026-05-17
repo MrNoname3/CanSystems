@@ -46,12 +46,14 @@ void NetworkManager::buildHostname() {
     envName, mac[3], mac[4], mac[5]);
 }
 
-NetworkManager::NetworkErrorType NetworkManager::connect() {
+NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { // NOLINT(readability-function-cognitive-complexity)
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
+  static constexpr uint32_t connectTimeoutMs = Time::secToMs(30U);
   Logger::get().printf_P(PSTR("[NETWORK] Network interface: "));
   switch(networkInterface) {
     case Interface::WIFI: {
       Logger::get().printf_P(PSTR("[Wi-Fi]\r\n"));
+      WiFi.disconnect(true);                           // Wipe cached BSSID/FT state from SDK flash before each connect attempt.
       WiFi.macAddress(mac);
       buildHostname();
       const bool wifiInit = WiFi.mode(WIFI_STA);
@@ -79,7 +81,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
 #endif
       WiFi.begin(ssid, password);
       Logger::get().printf_P(logConnecting);
+      const uint32_t wifiConnectStartMs = millis();
       while(WiFi.status() != WL_CONNECTED) {
+        if(Time::hasElapsed(millis(), wifiConnectStartMs, connectTimeoutMs)) {
+          networkErrState.setError(NetworkError::WIFI_CONNECT_TIMEOUT);
+          return networkErrState.getRawErrorState();
+        }
+        if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
       Logger::get().printf_P(logIp, WiFi.localIP().toString().c_str());
@@ -111,7 +119,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
         intf->hostname = hostnameBuffer;
       }
       Logger::get().printf_P(logConnecting);
+      const uint32_t enc28ConnectStartMs = millis();
       while(!ethernetEnc28j60.value().connected()) {
+        if(Time::hasElapsed(millis(), enc28ConnectStartMs, connectTimeoutMs)) {
+          networkErrState.setError(NetworkError::ENC28J60_CONNECT_TIMEOUT);
+          return networkErrState.getRawErrorState();
+        }
+        if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
       Logger::get().printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
@@ -133,7 +147,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect() {
       buildHostname();
       ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
       Logger::get().printf_P(logConnecting);
-      while(!ethConnected) {    // Wait until the device receives an IP address.
+      const uint32_t lan8720ConnectStartMs = millis();
+      while(!ethConnected) {
+        if(Time::hasElapsed(millis(), lan8720ConnectStartMs, connectTimeoutMs)) {
+          networkErrState.setError(NetworkError::LAN8720_CONNECT_TIMEOUT);
+          return networkErrState.getRawErrorState();
+        }
+        if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
       Logger::get().printf_P(logIp, ETH.localIP().toString().c_str());

@@ -74,8 +74,9 @@ public:
   void setNetworkInterface(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
 
   /// @brief Connects to the configured network interface.
+  /// @param resetWdt Optional watchdog reset callback, called inside the connection wait loop.
   /// @return A bitfield representing network error states.
-  [[nodiscard]] NetworkErrorType connect();
+  [[nodiscard]] NetworkErrorType connect(void (*resetWdt)() = nullptr);
 
   /// @brief Checks if the network connection is available.
   /// @return True if the network is connected, false otherwise.
@@ -114,7 +115,10 @@ private:
     ENC28J60_NO_DRIVER    = 1 << 3U,              // ENC28J60 driver not initialized.
     ENC28J60_INIT_FAILED  = 1 << 4U,              // ENC28J60 initialization failed.
     LAN8720_INIT_FAILED   = 1 << 5U,              // LAN8720 initialization failed.
-    MAC_ADDRESS_INVALID   = 1 << 6U               // Invalid MAC address.
+    MAC_ADDRESS_INVALID      = 1 << 6U,           // Invalid MAC address.
+    WIFI_CONNECT_TIMEOUT     = 1 << 7U,           // Wi-Fi connect timed out waiting for DHCP.
+    ENC28J60_CONNECT_TIMEOUT = 1 << 8U,           // ENC28J60 connect timed out waiting for DHCP.
+    LAN8720_CONNECT_TIMEOUT  = 1 << 9U            // LAN8720 connect timed out waiting for DHCP.
   };
 
 #ifdef ESP32
