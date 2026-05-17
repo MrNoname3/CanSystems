@@ -52,7 +52,6 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     }
   }
   { // Start network interface.
-    resetWatchdogTimer();
     const uint16_t connResult = networkManager.connect(resetWdt);
     const bool connResultOk = (connResult == 0U);
     Logger::get().printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
