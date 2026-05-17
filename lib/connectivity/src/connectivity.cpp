@@ -61,7 +61,6 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     }
   }
   { // Set time via NTP, as required for x.509 validation.
-    resetWatchdogTimer();
     const bool ntpSynced = syncNtpTime();
     Logger::get().printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
@@ -268,7 +267,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 
 bool Connectivity::syncNtpTime() {
   const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
-  constexpr uint32_t timeoutMs = Time::secToMs(5U);
+  constexpr uint32_t timeoutMs = Time::secToMs(15U);
 
   Logger::get().printf_P(PSTR("[NTP] Synchronising...\r\n"));
   configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
@@ -281,6 +280,7 @@ bool Connectivity::syncNtpTime() {
   while(time(nullptr) < minValidTime) {
 #endif
     if(Time::hasElapsed(millis(), startMs, timeoutMs)) { return false; }
+    resetWatchdogTimer();
     yield();
   }
   return true;
