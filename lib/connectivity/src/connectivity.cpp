@@ -119,12 +119,17 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
       serverCert.emplace(certFile, certFileSize);
       if(serverCert.has_value()) {
         tcpClient.setTrustAnchors(&serverCert.value());
+        Logger::get().printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
         tcpClient.setTimeout(Time::secToMs(5U));
       }
       return serverCert.has_value();
 #elif defined ESP32
       tcpClient.setTimeout(5U);  // seconds; ESP32 crypto is fast (TLS handshake < 3s typical)
-      return tcpClient.loadCACert(certFile, certFileSize);
+      const bool loaded = tcpClient.loadCACert(certFile, certFileSize);
+      if(loaded) {
+        Logger::get().printf_P(PSTR("[TCP] CA cert loaded: %u bytes\r\n"), certFileSize);
+      }
+      return loaded;
 #endif
     });
     const bool certResultOk = (certResult == 0U);
@@ -184,7 +189,16 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
   Logger::get().printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
     mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
-  if(!mqttConResult) { return false; }
+  if(!mqttConResult) {
+    char sslErr[64] = { '\0' };
+#ifdef ESP8266
+    tcpClient.getLastSSLError(sslErr, sizeof(sslErr));
+#elif defined ESP32
+    tcpClient.lastError(sslErr, sizeof(sslErr));
+#endif
+    Logger::get().printf_P(PSTR("  SSL error: %s\r\n"), sslErr);
+    return false;
+  }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get().printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   if(!subResult) {
