@@ -26,5 +26,6 @@ data/*.bin
 ota/config.yaml
 ota/.venv
 ota/files/**/*.crt
+ota/files/**/*.bak
 ota/files/**/server.json
 ota/files/**/wifi.json
