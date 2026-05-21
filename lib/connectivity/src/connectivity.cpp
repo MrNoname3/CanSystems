@@ -192,11 +192,12 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   if(!mqttConResult) {
     char sslErr[64] = { '\0' };
 #ifdef ESP8266
-    tcpClient.getLastSSLError(sslErr, sizeof(sslErr));
+    const int sslErrCode = tcpClient.getLastSSLError(sslErr, sizeof(sslErr));
+    Logger::get().printf_P(PSTR("  SSL error: %s (code: %d)\r\n"), sslErr, sslErrCode);
 #elif defined ESP32
     tcpClient.lastError(sslErr, sizeof(sslErr));
-#endif
     Logger::get().printf_P(PSTR("  SSL error: %s\r\n"), sslErr);
+#endif
     return false;
   }
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
