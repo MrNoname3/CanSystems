@@ -173,7 +173,7 @@ bool CanMqttGateway::isOtaInProgress() const {
   return canOta.isOtaInProgress();
 }
 
-bool CanMqttGateway::sendOtaStatusMessage(const char* payload) {
+bool CanMqttGateway::sendOtaStatusMessage(const char* payload) { // NOLINT(readability-convert-member-functions-to-static)
   const char* subSubTopic = canOtaTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
   return MqttBase::sendSubtopicMessage(subSubTopic, payload);
 }
