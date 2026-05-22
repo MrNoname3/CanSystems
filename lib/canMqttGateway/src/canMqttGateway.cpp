@@ -128,7 +128,7 @@ void CanOta::runOta() {
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), otaFrame, Str::getStateStr(otaStatus));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
         if(dataOutValid) {
-          (void)canMqttGateway.sendMessage(dataOut);
+          (void)canMqttGateway.sendOtaStatusMessage(dataOut);
         }
       }
       if(receivedFile){
@@ -173,6 +173,11 @@ bool CanMqttGateway::isOtaInProgress() const {
   return canOta.isOtaInProgress();
 }
 
+bool CanMqttGateway::sendOtaStatusMessage(const char* payload) {
+  const char* subSubTopic = canOtaTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+  return MqttBase::sendSubtopicMessage(subSubTopic, payload);
+}
+
 void CanMqttGateway::buildCanTopics() {
   if(canTopicsBuilt) { return; }
   const char* sender   = MqttBase::getSenderTopicStr();
@@ -189,6 +194,8 @@ void CanMqttGateway::buildCanTopics() {
 
   (void)snprintf_P(canAvailTopic, sizeof(canAvailTopic), MqttTopics::getMqttAvailTopic(), base);
   (void)snprintf_P(canInfoTopic,  sizeof(canInfoTopic),  MqttTopics::getMqttInfoTopic(),  base);
+  (void)snprintf_P(canOtaTopic,    sizeof(canOtaTopic),    PSTR("%s%s"), base, canOtaSuffix);
+  (void)snprintf_P(canButtonTopic, sizeof(canButtonTopic), PSTR("%s%s"), base, canButtonSuffix);
 
   (void)snprintf(canDeviceId, sizeof(canDeviceId), "%s_%s", client, sub);
 
@@ -307,7 +314,8 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), buttonFrame, buttonState);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
-      (void)MqttBase::sendMessage(dataOut);
+      const char* subSubTopic = canButtonTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
+      (void)MqttBase::sendSubtopicMessage(subSubTopic, dataOut);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START):
     case static_cast<uint16_t>(CanCmd::OTA_SEND):

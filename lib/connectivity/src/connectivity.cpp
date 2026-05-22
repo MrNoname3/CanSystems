@@ -274,7 +274,8 @@ void Connectivity::shutdownMqtt() {
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
-  char actualTopic[sizeof(mqttCredentials.senderTopic) + MqttBase::getSubtopicSize()] = { '\0' };
+  static constexpr uint8_t topicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
+  char actualTopic[topicBufSize] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
   const size_t actualTopicLen = strlcat(actualTopic, subTopic, sizeof(actualTopic));
   if(actualTopicLen >= sizeof(actualTopic)) { return false; }

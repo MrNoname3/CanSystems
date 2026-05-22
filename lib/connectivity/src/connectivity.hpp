@@ -266,6 +266,15 @@ public:
     return connectivity.publishRetained(subSubTopic, payload);
   }
 
+  /// @brief Publishes a non-retained MQTT message to senderTopic + subSubTopic.
+  /// Use for CAN device event sub-topics (e.g. "alert1/ota", "alert1/button").
+  /// @param subSubTopic Extended subtopic (e.g. "alert1/ota") appended to the sender topic.
+  /// @param payload     Message payload.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool sendSubtopicMessage(const char* subSubTopic, const char* payload) {
+    return connectivity.sendMqttMessage(subSubTopic, payload);
+  }
+
   /// @brief Publishes a HA discovery config for a CAN sub-device entity.
   /// @param subtopic     Entity subtopic (e.g. "temperature").
   /// @param config       Entity discovery configuration.

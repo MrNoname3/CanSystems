@@ -111,6 +111,11 @@ public:
   /// @return True if OTA is in progress, false otherwise.
   [[nodiscard]] bool isOtaInProgress() const;
 
+  /// @brief Sends the OTA result payload to the dedicated OTA sub-topic instead of the main topic.
+  /// @param payload JSON payload to send (e.g. {"OTA":"OK"}).
+  /// @return True if the message was sent successfully.
+  [[nodiscard]] bool sendOtaStatusMessage(const char* payload);
+
   /// @brief Returns the firmware file name configured for this device (PROGMEM pointer).
   [[nodiscard]] const char* getFwFileName() const override { return fwFileNamePtr; }
 
@@ -174,14 +179,18 @@ protected:
   /// Idempotent: if already built (canTopicsBuilt == true), returns immediately.
   void buildCanTopics();
 
+  static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";  // Hardware version string for CAN sub-devices.
+  static constexpr const char PROGMEM canOtaSuffix[]    = "ota";          // Suffix for the OTA status sub-topic.
+  static constexpr const char PROGMEM canButtonSuffix[] = "button";       // Suffix for the button event sub-topic.
+
   char canAvailTopic[MqttTopics::getAvailTopicBufSize() + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/availability" + null.
   char canInfoTopic[MqttTopics::getInfoTopicBufSize()  + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/info" + null.
+  char canOtaTopic[MqttTopics::getSenderTopicBufSize() + MqttBase::getSubtopicSize() + sizeof(canOtaSuffix)]{};    // "iot/dtos/<mac>/<subtopic>/ota" + null.
+  char canButtonTopic[MqttTopics::getSenderTopicBufSize() + MqttBase::getSubtopicSize() + sizeof(canButtonSuffix)]{}; // "iot/dtos/<mac>/<subtopic>/button" + null.
   char canSwVersion[18]{};        // CAN device sw version string:     "65535 (ffffffff)" + null.
   char canDeviceId[48]{};         // CAN device unique identifier:     "<clientName>_<subtopic>" (max 31+1+15+1=48).
   char canDeviceName[MqttBase::getSubtopicSize() + 7U]{};  // UPPERCASE(subtopic)(max 15) + ' ' + MAC6 + null.
   bool canTopicsBuilt = false;    // True after buildCanTopics() completes successfully.
-
-  static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";  // Hardware version string for CAN sub-devices.
 
   [[nodiscard]] const char* getCanAvailTopic()  const { return canAvailTopic; }
   [[nodiscard]] const char* getCanInfoTopic()   const { return canInfoTopic; }
