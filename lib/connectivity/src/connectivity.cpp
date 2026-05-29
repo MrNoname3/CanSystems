@@ -68,7 +68,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     Logger::get().printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
     char dateTimeStr[dateTimeStrBufSize] = {'\0'};
-    const bool dateTimeValid = getIsoTimeString(dateTimeStr);
+    const bool dateTimeValid = Time::getIsoUtcString(dateTimeStr, sizeof(dateTimeStr));
     if(dateTimeValid) {
       Logger::get().printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
     } else {
@@ -309,15 +309,6 @@ bool Connectivity::syncNtpTime() {
     yield();
   }
   return true;
-}
-
-bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) {
-  const time_t currentTime = time(nullptr);
-  if(currentTime == -1) { return false; }           // Check if time retrieval failed.
-  const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
-  if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
-  const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
-  return (formattedSize > 0U && formattedSize < sizeof(dateTimeBuffer));
 }
 
 bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {

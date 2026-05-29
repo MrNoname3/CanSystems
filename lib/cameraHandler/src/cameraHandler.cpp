@@ -134,8 +134,16 @@ void CameraHandler::captureAndQueue() {
     Logger::get().printf_P(PSTR("[CAM] Frame capture failed!\r\n"));
     return;
   }
+  // Phone-style UTC filename (e.g. IMG_20260522_121115Z.jpg). The clock is NTP-synced during
+  // connectivity init, so it is valid here; fall back to the boot-relative counter just in case.
   char name[uploadNameSize] = {'\0'};
-  (void)snprintf_P(name, sizeof(name), PSTR("%08x.jpg"), frameSequence++);
+  char stamp[Time::utcFileStampSize] = {'\0'};
+  if(Time::getUtcFileStamp(stamp, sizeof(stamp))) {
+    (void)snprintf_P(name, sizeof(name), PSTR("IMG_%s.jpg"), stamp);
+  } else {
+    (void)snprintf_P(name, sizeof(name), PSTR("%08x.jpg"), frameSequence);
+  }
+  frameSequence++;
   // Hand the PSRAM frame buffer to the uploader; it is returned via releaseFrame() when done.
   const bool queued = uploader.enqueue(name, fb->buf, fb->len, releaseFrame, fb);
   if(!queued) {

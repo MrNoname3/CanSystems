@@ -150,11 +150,6 @@ private:
   /// @return `true` if synchronisation completed within the timeout; `false` if it timed out.
   [[nodiscard]] bool syncNtpTime();
 
-  /// @brief Retrieves the current time as an ISO8601 string.
-  /// @param dateTimeBuffer Buffer to store the ISO8601 string.
-  /// @return `true` if the time is retrieved successfully; otherwise, `false`.
-  [[nodiscard]] static bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]);
-
   /// @brief Resets the watchdog timer.
   void resetWatchdogTimer() const {
     if(resetWdt != nullptr) {

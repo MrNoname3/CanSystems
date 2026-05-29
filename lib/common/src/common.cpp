@@ -3,9 +3,33 @@
 #include <avr/boot.h>                                               /// Reading fuses.
 #elif defined(ESP8266) || defined(ESP32)
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include <time.h>                                                   /// UTC time retrieval/formatting (NTP-backed clock).
 #endif
 
 #if defined(ESP8266) || defined(ESP32)
+namespace {
+/// @brief Returns the current time as a validated UTC `tm`, or nullptr if the clock is unset.
+const tm* utcNow() {
+  const time_t currentTime = time(nullptr);
+  if(currentTime == -1) { return nullptr; }           // Clock not set yet (NTP not synced).
+  return gmtime(&currentTime);                        // Always UTC, independent of any TZ setting.
+}
+}  // namespace
+
+bool Time::getIsoUtcString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+  const tm* utc = utcNow();
+  if(utc == nullptr) { return false; }
+  const size_t formattedSize = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%SZ", utc);
+  return (formattedSize > 0U && formattedSize < bufSize);
+}
+
+bool Time::getUtcFileStamp(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+  const tm* utc = utcNow();
+  if(utc == nullptr) { return false; }
+  const size_t formattedSize = strftime(buf, bufSize, "%Y%m%d_%H%M%SZ", utc);
+  return (formattedSize > 0U && formattedSize < bufSize);
+}
+
 bool FileName::isValidFileName(const char* fileName) {
   static constexpr const char* const allowedLocations[] = {
     otaFwLocation,

@@ -15,7 +15,7 @@
 class CameraHandler final {
 private:
   static constexpr uint32_t xclkFreqHz       = 20000000U;           // Camera master clock frequency.
-  static constexpr uint8_t  uploadNameSize   = 24U;                 // Buffer size for the generated upload name.
+  static constexpr uint8_t  uploadNameSize   = 28U;                 // Buffer size for the upload name ("IMG_<utc-stamp>.jpg").
 
   // Capture task configuration.
   static constexpr uint32_t taskStackSize    = 4096U;               // Capture task stack size in bytes (ESP-IDF xTaskCreate uses bytes).
