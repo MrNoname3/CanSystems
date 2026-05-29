@@ -20,7 +20,10 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 #ifdef ESP8266
   serverCert{},
 #endif
-  haDiscovery(mqttClient,
+  haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
+                return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
+              },
+              this,
               mqttCredentials.clientName,
               mqttCredentials.senderTopic,
               mqttCredentials.receiverTopic,
@@ -318,8 +321,14 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 }
 
 bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
-  LockGuard guard(mqttMutex);                                       // HADiscovery publishes via the same PubSubClient.
+  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
   return haDiscovery.publishEntity(subtopic, config);
+}
+
+bool Connectivity::publishRaw(const char* topic, const char* payload, bool retained) {
+  if(topic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Sole PubSubClient owner serializes every publish.
+  return mqttClient.publish(topic, payload, retained);
 }
 
 bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
@@ -336,7 +345,7 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
                                                     const HADiscovery::EntityConfig& config,
                                                     const HADiscovery::CanDeviceConfig& canDevConfig) {
-  LockGuard guard(mqttMutex);                                       // HADiscovery publishes via the same PubSubClient.
+  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
 

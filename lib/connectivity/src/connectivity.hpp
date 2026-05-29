@@ -92,6 +92,15 @@ public:
   /// @return `true` if published successfully; otherwise, `false`.
   [[nodiscard]] bool publishRetained(const char* subSubTopic, const char* payload);
 
+  /// @brief Publishes to an absolute MQTT topic (no sender-topic prefix), under the MQTT mutex.
+  /// Connectivity is the sole owner of the PubSubClient; HADiscovery publishes its
+  /// `homeassistant/...` discovery topics through this so every publish is serialized.
+  /// @param topic    Absolute MQTT topic.
+  /// @param payload  The message payload.
+  /// @param retained Whether the broker should retain the message.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool publishRaw(const char* topic, const char* payload, bool retained);
+
   /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
   /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
   void shutdownMqtt();
