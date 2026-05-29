@@ -3,6 +3,7 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <LittleFS.h>                                               /// Use FLASH filesystem (file-sourced uploads).
 #include <MD5Builder.h>                                             /// Utility for calculating MD5 checksums.
+#include "sync.hpp"                                                 /// RecursiveMutex/LockGuard (no-op off-ESP32).
 
 /// @brief Client -> server file upload engine: the mirror image of `DataTransfer`.
 /// @details `DataTransfer` receives a file from the server in base64 pieces; this class sends one
@@ -170,4 +171,5 @@ private:
   File sourceFile;                                                  // Open file handle (FILE source only).
   MD5Builder md5;                                                   // MD5 calculator.
   ErrorState<DataUploaderError, DataUploaderErrorType> errState;    // Error state manager.
+  RecursiveMutex mutex;                                            // Serializes the public API across producer (enqueue) and consumer (run) tasks; no-op off-ESP32.
 };

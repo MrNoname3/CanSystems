@@ -21,6 +21,7 @@ DataUploader::~DataUploader() {
 }
 
 bool DataUploader::enqueue(const char* name, const uint8_t* data, uint32_t size, ReleaseCb release, void* ctx) {
+  LockGuard guard(mutex);                                          // Producer task: serialize against the consumer.
   if((name == nullptr) || (strnlen(name, nameSize) == 0U)) {
     errState.setError(DataUploaderError::NAME_INVALID);
     return false;
@@ -44,6 +45,7 @@ bool DataUploader::enqueue(const char* name, const uint8_t* data, uint32_t size,
 }
 
 bool DataUploader::enqueueFile(const char* name, const char* path) {
+  LockGuard guard(mutex);                                          // Producer task: serialize against the consumer.
   if((name == nullptr) || (strnlen(name, nameSize) == 0U) ||
      (path == nullptr) || (strnlen(path, nameSize) == 0U)) {
     errState.setError(DataUploaderError::NAME_INVALID);
@@ -153,6 +155,7 @@ bool DataUploader::readChunk(uint8_t* buffer, uint16_t& readLength) {
 }
 
 size_t DataUploader::prepareMessage(char* out, size_t outSize) {
+  LockGuard guard(mutex);                                          // Consumer task.
   if((out == nullptr) || (outSize == 0U)) { return 0U; }
 
   switch(uploadState) {
@@ -197,6 +200,7 @@ size_t DataUploader::prepareMessage(char* out, size_t outSize) {
 }
 
 void DataUploader::notifyAck(bool ok) {
+  LockGuard guard(mutex);                                          // Consumer task (called from the MQTT RX callback).
   if(!ok) {
     Logger::get().printf_P(PSTR("[UP] Server NACK for: %s\r\n"), current.name);
     errState.setError(DataUploaderError::SERVER_NACK);
@@ -219,6 +223,7 @@ void DataUploader::notifyAck(bool ok) {
 }
 
 void DataUploader::run() {
+  LockGuard guard(mutex);                                          // Consumer task.
   // Enforce the ACK timeout while waiting for the server.
   if((uploadState == UploadState::WAIT_BEGIN_ACK) || (uploadState == UploadState::WAIT_PIECE_ACK)) {
     if(Time::hasElapsed(millis(), ackTimer, ackTimeoutTime)) {
@@ -270,6 +275,7 @@ void DataUploader::releaseCurrent() {
 }
 
 DataUploader::DataUploaderErrorType DataUploader::getErrorCode() {
+  LockGuard guard(mutex);                                          // Consumer task.
   const DataUploaderErrorType code = errState.getRawErrorState();
   errState.clearAllErrors();
   return code;
