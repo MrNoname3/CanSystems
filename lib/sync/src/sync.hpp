@@ -19,19 +19,19 @@
 /// @brief Recursive mutex backed by a FreeRTOS recursive mutex (ESP32).
 class RecursiveMutex final {
 public:
-  RecursiveMutex() : handle(xSemaphoreCreateRecursiveMutex()) {}
+  RecursiveMutex() = default;
 
   ~RecursiveMutex() {
     if(handle != nullptr) { vSemaphoreDelete(handle); }
   }
 
   /// @brief Acquires the mutex, blocking until available (recursive: same task may re-enter).
-  void lock() {
+  void lock() {  // NOLINT(readability-convert-member-functions-to-static) instance owns the mutex handle
     if(handle != nullptr) { (void)xSemaphoreTakeRecursive(handle, portMAX_DELAY); }
   }
 
   /// @brief Releases one level of the recursive lock.
-  void unlock() {
+  void unlock() {  // NOLINT(readability-convert-member-functions-to-static) instance owns the mutex handle
     if(handle != nullptr) { (void)xSemaphoreGiveRecursive(handle); }
   }
 
@@ -41,7 +41,7 @@ public:
   RecursiveMutex& operator=(RecursiveMutex&&) = delete;             // Define move assignment operator.
 
 private:
-  SemaphoreHandle_t handle;                                         // FreeRTOS recursive mutex handle.
+  SemaphoreHandle_t handle = xSemaphoreCreateRecursiveMutex();      // FreeRTOS recursive mutex handle.
 };
 
 #else  // Single-threaded platforms: no-op primitives that compile away.

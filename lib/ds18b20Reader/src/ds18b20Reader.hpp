@@ -26,8 +26,7 @@ public:
   explicit Ds18b20Reader(uint8_t oneWirePin, uint8_t resolutionBits = 12U) :
     oneWire(oneWirePin),
     sensors(&oneWire),
-    resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits)),
-    addresses{}
+    resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits))
   {}
 
   /// @brief Scans the bus and caches sensor addresses.
@@ -87,7 +86,7 @@ private:
   DallasTemperature sensors;                                        // DS18B20 driver bound to the bus.
   uint8_t resolutionBits;                                           // Conversion resolution (9..12).
   uint8_t sensorCount = 0U;                                         // Number of sensors discovered on the bus.
-  DeviceAddress addresses[MaxSensors];                              // Cached 8-byte ROM addresses.
+  DeviceAddress addresses[MaxSensors] = {};                         // Cached 8-byte ROM addresses.
 };
 
 #endif  // defined(ESP8266) || defined(ESP32)

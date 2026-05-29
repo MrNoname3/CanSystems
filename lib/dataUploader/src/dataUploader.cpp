@@ -99,7 +99,7 @@ bool DataUploader::startNextJob() {
   return true;
 }
 
-bool DataUploader::computeMd5() {
+bool DataUploader::computeMd5() {  // NOLINT(readability-make-member-function-const) mutates md5/currentMd5/errState
   md5.begin();
   // MD5Builder::add() takes a uint16_t length on ESP platforms, so feed the source in chunks
   // (a camera JPEG easily exceeds 65535 bytes).
@@ -136,7 +136,7 @@ bool DataUploader::computeMd5() {
   return true;
 }
 
-bool DataUploader::readChunk(uint8_t* buffer, uint16_t& readLength) {
+bool DataUploader::readChunk(uint8_t* buffer, uint16_t& readLength) {  // NOLINT(readability-make-member-function-const,readability-non-const-parameter) writes buffer + errState
   const uint32_t remaining = current.size - offset;
   readLength = (remaining >= rawChunkSize) ? rawChunkSize : static_cast<uint16_t>(remaining);
   if(current.source == Source::RAM) {
@@ -148,11 +148,11 @@ bool DataUploader::readChunk(uint8_t* buffer, uint16_t& readLength) {
     return false;
   }
   const int32_t bytesRead = sourceFile.read(buffer, readLength);
-  if(bytesRead != static_cast<int32_t>(readLength)) {
+  const bool readOk = (bytesRead == static_cast<int32_t>(readLength));
+  if(!readOk) {
     errState.setError(DataUploaderError::READ_ERROR);
-    return false;
   }
-  return true;
+  return readOk;
 }
 
 size_t DataUploader::prepareMessage(char* out, size_t outSize) {
@@ -275,7 +275,7 @@ void DataUploader::releaseCurrent() {
   current.data = nullptr;
 }
 
-DataUploader::DataUploaderErrorType DataUploader::getErrorCode() {
+DataUploader::DataUploaderErrorType DataUploader::getErrorCode() {  // NOLINT(readability-convert-member-functions-to-static) clears errState
   LockGuard guard(mutex);                                          // Consumer task.
   const DataUploaderErrorType code = errState.getRawErrorState();
   errState.clearAllErrors();

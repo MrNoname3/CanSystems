@@ -1,4 +1,5 @@
 #include "haDiscovery.hpp"
+#include <PubSubClient.h>   // HADiscovery no longer pulls it in; the test drives a real PubSubClient.
 #include "BDDTest.h"
 #include "IPAddress.h"
 #include <string.h>
@@ -57,7 +58,7 @@ public:
   }
   void flush() override {}
   void stop() override { _connected = false; }
-  uint8_t connected() override { return _connected ? 1U : 0U; }
+  uint8_t connected() override { return _connected ? 1U : 0U; }  // NOLINT(readability-make-member-function-const) overrides non-const Client::connected()
   operator bool() override { return true; }
 
   void loadConnack() {
@@ -125,14 +126,19 @@ static const char    kSenderTopic[]  = "iot/dtos/AABBCCDDEEFF/";
 static const char    kRecvTopic[]    = "iot/stod/AABBCCDDEEFF/#";
 static const char    kAvailTopic[]   = "iot/dtos/AABBCCDDEEFF/availability";
 
+// Raw-publish callback bridging HADiscovery to the captured PubSubClient (mirrors Connectivity::publishRaw).
+static bool fixturePublish(void* ctx, const char* topic, const char* payload, bool retained) {
+  return static_cast<PubSubClient*>(ctx)->publish(topic, payload, retained);
+}
+
 struct Fixture {
   CapturingClient cap;
   PubSubClient    mqtt;
   HADiscovery     had;
 
-  Fixture() :
+  Fixture() :  // NOLINT(modernize-use-equals-default) non-trivial: connects the mock and primes the CONNACK
     mqtt(IPAddress(kServerIp), 1883U, cap),
-    had(mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic)
+    had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic)
   {
     cap.loadConnack();
     (void)mqtt.connect("test");
@@ -449,7 +455,7 @@ bool test_publishEntity_returns_false_when_disconnected() {
   IT("publishEntity returns false when the MQTT client is not connected");
   CapturingClient cap;
   PubSubClient mqtt(IPAddress(kServerIp), 1883U, cap);
-  HADiscovery had(mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic);
+  HADiscovery had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic);
   // cap never connects → mqtt is in DISCONNECTED state
 
   const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");

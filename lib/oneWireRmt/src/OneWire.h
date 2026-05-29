@@ -55,36 +55,36 @@ public:
 
   /// @brief Issues a 1-Wire reset and samples for a presence pulse.
   /// @return 1 if at least one device responded, 0 otherwise.
-  uint8_t reset(void);
+  uint8_t reset() const;  // NOLINT(modernize-use-nodiscard) drives the bus (observable side effect)
 
   /// @brief Issues a ROM-select command (0x55) followed by the 8-byte ROM address.
-  void select(const uint8_t rom[8]);
+  void select(const uint8_t rom[8]) const;
 
   /// @brief Issues a skip-ROM command (0xCC).
-  void skip(void);
+  void skip() const;
 
   /// @brief Writes a byte, LSB first.
   /// @param v Byte to write.
   /// @param power Unused on RMT (kept for API compatibility); the external pull-up powers the bus.
-  void write(uint8_t v, uint8_t power = 0);
+  void write(uint8_t v, uint8_t power = 0) const;
 
   /// @brief Writes a buffer of bytes.
-  void write_bytes(const uint8_t* buf, uint16_t count, bool power = 0);
+  void write_bytes(const uint8_t* buf, uint16_t count, bool power = false) const;
 
   /// @brief Reads a byte, LSB first.
-  uint8_t read(void);
+  uint8_t read() const;  // NOLINT(modernize-use-nodiscard) drives the bus (observable side effect)
 
   /// @brief Reads a buffer of bytes.
-  void read_bytes(uint8_t* buf, uint16_t count);
+  void read_bytes(uint8_t* buf, uint16_t count) const;
 
   /// @brief Writes a single bit.
-  void write_bit(uint8_t v);
+  void write_bit(uint8_t v) const;
 
   /// @brief Reads a single bit.
-  uint8_t read_bit(void);
+  uint8_t read_bit() const;  // NOLINT(modernize-use-nodiscard) drives the bus (observable side effect)
 
   /// @brief No-op on RMT (no strong pull-up to release); kept for API compatibility.
-  void depower(void);
+  void depower() const;
 
 #if ONEWIRE_SEARCH
   /// @brief Resets the search state so the next search() starts from the first device.
@@ -122,12 +122,12 @@ private:
   /// @brief Sends a batch of RMT TX items in one transaction and waits for completion.
   /// @param items Pointer to the items (one per 1-Wire bit slot).
   /// @param count Number of items (1..8).
-  void txItems(const rmt_item32_t* items, int count);
+  void txItems(const rmt_item32_t* items, int count) const;
 
   /// @brief Drives `count` read time-slots in one RMT transaction and decodes the sampled bits.
   /// @param outBits Output buffer receiving `count` bits (1 or 0); defaults to 1 on missing data.
   /// @param count Number of slots/bits to read (1..8).
-  void readSlots(uint8_t* outBits, uint8_t count);
+  void readSlots(uint8_t* outBits, uint8_t count) const;
 
   gpio_num_t busPin = GPIO_NUM_NC;                                  // 1-Wire data pin.
   bool initialized = false;                                         // Whether begin() succeeded.

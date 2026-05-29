@@ -89,19 +89,19 @@ OneWire::~OneWire() {
   }
 }
 
-void OneWire::txItems(const rmt_item32_t* items, int count) {
+void OneWire::txItems(const rmt_item32_t* items, int count) const {
   if(!initialized) { return; }
   (void)rmt_write_items(txChannel, items, count, true);  // true => block until the items have been sent.
   (void)rmt_wait_tx_done(txChannel, pdMS_TO_TICKS(rxTimeoutMs));
 }
 
-void OneWire::write_bit(uint8_t v) {
+void OneWire::write_bit(uint8_t v) const {  // NOLINT(readability-convert-member-functions-to-static) by-design instance bus method
   const rmt_item32_t item = v ? makeItem(0U, write1LowUs, 1U, write1HighUs)
                               : makeItem(0U, write0LowUs, 1U, write0HighUs);
   txItems(&item, 1);
 }
 
-void OneWire::readSlots(uint8_t* outBits, uint8_t count) {
+void OneWire::readSlots(uint8_t* outBits, uint8_t count) const {
   for(uint8_t i = 0U; i < count; ++i) { outBits[i] = 1U; }  // Default: line stayed high => logical 1.
   if(!initialized || (count == 0U) || (count > 8U)) { return; }
   RingbufHandle_t rb = nullptr;
@@ -132,13 +132,13 @@ void OneWire::readSlots(uint8_t* outBits, uint8_t count) {
   (void)rmt_rx_stop(rxChannel);
 }
 
-uint8_t OneWire::read_bit(void) {
+uint8_t OneWire::read_bit() const {
   uint8_t bit = 1U;
   readSlots(&bit, 1U);
   return bit;
 }
 
-uint8_t OneWire::reset(void) {
+uint8_t OneWire::reset() const {
   if(!initialized) { return 0U; }
   RingbufHandle_t rb = nullptr;
   if(rmt_get_ringbuf_handle(rxChannel, &rb) != ESP_OK || rb == nullptr) { return 0U; }
@@ -174,7 +174,7 @@ uint8_t OneWire::reset(void) {
   return presence;
 }
 
-void OneWire::write(uint8_t v, uint8_t power) {
+void OneWire::write(uint8_t v, uint8_t power) const {  // NOLINT(readability-convert-member-functions-to-static) by-design instance bus method
   (void)power;  // RMT cannot assert a strong pull-up; rely on the external resistor.
   // Batch all 8 bit slots into a single RMT transaction (LSB first) to cut per-bit driver overhead.
   rmt_item32_t items[8];
@@ -186,14 +186,14 @@ void OneWire::write(uint8_t v, uint8_t power) {
   txItems(items, 8);
 }
 
-void OneWire::write_bytes(const uint8_t* buf, uint16_t count, bool power) {
+void OneWire::write_bytes(const uint8_t* buf, uint16_t count, bool power) const {
   (void)power;
   for(uint16_t i = 0U; i < count; ++i) {
     write(buf[i]);
   }
 }
 
-uint8_t OneWire::read(void) {
+uint8_t OneWire::read() const {
   // Read all 8 bit slots in a single RMT transaction (LSB first).
   uint8_t bits[8];
   readSlots(bits, 8U);
@@ -204,24 +204,24 @@ uint8_t OneWire::read(void) {
   return r;
 }
 
-void OneWire::read_bytes(uint8_t* buf, uint16_t count) {
+void OneWire::read_bytes(uint8_t* buf, uint16_t count) const {
   for(uint16_t i = 0U; i < count; ++i) {
     buf[i] = read();
   }
 }
 
-void OneWire::select(const uint8_t rom[8]) {
+void OneWire::select(const uint8_t rom[8]) const {
   write(0x55U);  // Match ROM.
   for(uint8_t i = 0U; i < 8U; ++i) {
     write(rom[i]);
   }
 }
 
-void OneWire::skip(void) {
+void OneWire::skip() const {
   write(0xCCU);  // Skip ROM.
 }
 
-void OneWire::depower(void) {
+void OneWire::depower() const {
   // No strong pull-up to release on the RMT driver; nothing to do.
 }
 
@@ -245,19 +245,12 @@ void OneWire::target_search(uint8_t family_code) {
   LastDeviceFlag = false;
 }
 
-uint8_t OneWire::search(uint8_t* newAddr, bool search_mode) {
+uint8_t OneWire::search(uint8_t* newAddr, bool search_mode) {  // NOLINT(readability-function-cognitive-complexity) canonical Maxim ROM-search algorithm
   // Standard Maxim ROM search algorithm (same as paulstoffregen/OneWire).
-  uint8_t id_bit_number = 1U;
-  uint8_t last_zero = 0U;
-  uint8_t rom_byte_number = 0U;
-  uint8_t rom_byte_mask = 1U;
   uint8_t search_result = 0U;
-  uint8_t id_bit = 0U;
-  uint8_t cmp_id_bit = 0U;
-  uint8_t search_direction = 0U;
 
   if(!LastDeviceFlag) {
-    if(!reset()) {
+    if(reset() == 0U) {
       LastDiscrepancy = 0U;
       LastFamilyDiscrepancy = 0U;
       LastDeviceFlag = false;
@@ -265,13 +258,20 @@ uint8_t OneWire::search(uint8_t* newAddr, bool search_mode) {
     }
     write(search_mode ? 0xF0U : 0xECU);
 
+    uint8_t id_bit_number = 1U;
+    uint8_t last_zero = 0U;
+    uint8_t rom_byte_number = 0U;
+    uint8_t rom_byte_mask = 1U;
     do {
-      id_bit = read_bit();
-      cmp_id_bit = read_bit();
+      const uint8_t id_bit = read_bit();
+      const uint8_t cmp_id_bit = read_bit();
 
+      // cppcheck-suppress knownConditionTrueFalse  // read_bit() return is bus-dependent (not modellable)
       if((id_bit == 1U) && (cmp_id_bit == 1U)) {
         break;  // No devices on the bus.
       }
+      uint8_t search_direction;
+      // cppcheck-suppress knownConditionTrueFalse  // read_bit() return is bus-dependent (not modellable)
       if(id_bit != cmp_id_bit) {
         search_direction = id_bit;  // All devices agree on this bit.
       } else {
