@@ -22,6 +22,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "mqttTopics.hpp"                                           /// MQTT topic format strings and derived buffer sizes.
 #include "haDiscovery.hpp"                                          /// Home Assistant MQTT auto-discovery handler.
+#include "sync.hpp"                                                 /// RecursiveMutex/LockGuard (no-op off-ESP32).
 
 class MqttBase;                                                     // Forward declaration.
 
@@ -160,6 +161,7 @@ private:
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
+  RecursiveMutex mqttMutex;                                         // Serializes all PubSubClient access across tasks (no-op off-ESP32).
   MqttCredentials mqttCredentials;                                  // MQTT connection credentials.
   bool networkState;                                                // Indicates the network connection state.
   PubSubClient::State mqttState;                                    // MQTT connection state.

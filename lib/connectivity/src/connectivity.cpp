@@ -169,6 +169,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
+    LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
     char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
@@ -184,6 +185,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 }
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   const bool mqttConResult = mqttClient.connect(
     mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
     mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
@@ -223,6 +225,7 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
 }
 
 bool Connectivity::run() {
+  LockGuard guard(mqttMutex);                                       // Serializes loop()/reconnect against publishes from other tasks.
   const uint32_t actualTime = millis();
   const bool actualNetworkState = networkManager.isNetworkAvailable();
   if(actualNetworkState != networkState) {
@@ -268,12 +271,14 @@ bool Connectivity::run() {
 }
 
 void Connectivity::shutdownMqtt() {
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
   mqttClient.disconnect();
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
   static constexpr uint8_t topicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
   char actualTopic[topicBufSize] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
@@ -313,11 +318,13 @@ bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) 
 }
 
 bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
+  LockGuard guard(mqttMutex);                                       // HADiscovery publishes via the same PubSubClient.
   return haDiscovery.publishEntity(subtopic, config);
 }
 
 bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
   if(subSubTopic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
   static constexpr uint8_t retainedTopicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
   char actualTopic[retainedTopicBufSize] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
@@ -329,6 +336,7 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
                                                     const HADiscovery::EntityConfig& config,
                                                     const HADiscovery::CanDeviceConfig& canDevConfig) {
+  LockGuard guard(mqttMutex);                                       // HADiscovery publishes via the same PubSubClient.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
 
