@@ -11,11 +11,15 @@
 #include "mqttCommon.hpp"       /// Basic server <-> client interaction (commands, inbound file transfer).
 #include "mqttUploader.hpp"     /// Outbound (client -> server) file upload handler.
 #include "cameraHandler.hpp"    /// Periodic camera capture -> upload queue.
+#include "mqttThermometer.hpp"  /// DS18B20 multi-sensor temperature reporting.
 
 //--- Constants ---//
 // clang-format off
 static constexpr uint8_t  LED_PIN              = 33U;               // On-board (red) status LED on the ESP32-CAM.
 static constexpr uint32_t CAPTURE_INTERVAL_MS  = Time::minToMs(1U); // Time between captures (skeleton default: 1 minute).
+static constexpr uint8_t  DS18B20_PIN          = 13U;              // 1-Wire data pin (free GPIO on the ESP32-CAM; needs a 4.7k pull-up).
+static constexpr uint8_t  MAX_THERMOMETERS     = 4U;               // Compile-time cap on DS18B20 sensors.
+static constexpr uint32_t TEMP_INTERVAL_MS     = Time::secToMs(30U); // Time between temperature measurements.
 // clang-format on
 
 //--- Functions ---//
@@ -40,9 +44,10 @@ MqttUploader mqttUploader(iotConn, "upload");
 
 //--- Application objects ---//
 CameraHandler camera(mqttUploader, CAPTURE_INTERVAL_MS);
+MqttThermometer<MAX_THERMOMETERS> thermometer(iotConn, "temp", DS18B20_PIN, TEMP_INTERVAL_MS);
 
 //--- Handling tasks ---//
-Task* task[] = { &iotConn, &performance, &mqttCommon, &mqttUploader, &camera };
+Task* task[] = { &iotConn, &performance, &mqttCommon, &mqttUploader, &camera, &thermometer };
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
