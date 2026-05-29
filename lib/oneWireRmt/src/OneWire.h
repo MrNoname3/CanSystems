@@ -119,11 +119,15 @@ public:
   OneWire& operator=(OneWire&&) = delete;                           // Define move assignment operator.
 
 private:
-  /// @brief Sends one RMT TX item and waits for completion.
-  void txItem(const rmt_item32_t& item);
+  /// @brief Sends a batch of RMT TX items in one transaction and waits for completion.
+  /// @param items Pointer to the items (one per 1-Wire bit slot).
+  /// @param count Number of items (1..8).
+  void txItems(const rmt_item32_t* items, int count);
 
-  /// @brief Drives a read time-slot and decodes the sampled bus level into a bit.
-  uint8_t readSlot();
+  /// @brief Drives `count` read time-slots in one RMT transaction and decodes the sampled bits.
+  /// @param outBits Output buffer receiving `count` bits (1 or 0); defaults to 1 on missing data.
+  /// @param count Number of slots/bits to read (1..8).
+  void readSlots(uint8_t* outBits, uint8_t count);
 
   gpio_num_t busPin = GPIO_NUM_NC;                                  // 1-Wire data pin.
   bool initialized = false;                                         // Whether begin() succeeded.

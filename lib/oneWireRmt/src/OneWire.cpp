@@ -88,47 +88,53 @@ OneWire::~OneWire() {
   }
 }
 
-void OneWire::txItem(const rmt_item32_t& item) {
+void OneWire::txItems(const rmt_item32_t* items, int count) {
   if(!initialized) { return; }
-  (void)rmt_write_items(txChannel, &item, 1, true);  // true => block until the item has been sent.
+  (void)rmt_write_items(txChannel, items, count, true);  // true => block until the items have been sent.
   (void)rmt_wait_tx_done(txChannel, pdMS_TO_TICKS(rxTimeoutMs));
 }
 
 void OneWire::write_bit(uint8_t v) {
   const rmt_item32_t item = v ? makeItem(0U, write1LowUs, 1U, write1HighUs)
                               : makeItem(0U, write0LowUs, 1U, write0HighUs);
-  txItem(item);
+  txItems(&item, 1);
 }
 
-uint8_t OneWire::readSlot() {
-  if(!initialized) { return 1U; }
+void OneWire::readSlots(uint8_t* outBits, uint8_t count) {
+  for(uint8_t i = 0U; i < count; ++i) { outBits[i] = 1U; }  // Default: line stayed high => logical 1.
+  if(!initialized || (count == 0U) || (count > 8U)) { return; }
   RingbufHandle_t rb = nullptr;
-  if(rmt_get_ringbuf_handle(rxChannel, &rb) != ESP_OK || rb == nullptr) { return 1U; }
+  if(rmt_get_ringbuf_handle(rxChannel, &rb) != ESP_OK || rb == nullptr) { return; }
 
+  // Drive all read slots in a single RMT transaction; the slave releases (bit 1) or holds the line
+  // low (bit 0) within each slot, and the RX channel captures one low->high item per slot.
+  rmt_item32_t stim[8];
+  for(uint8_t i = 0U; i < count; ++i) { stim[i] = makeItem(0U, readLowUs, 1U, readHighUs); }
   (void)rmt_rx_start(rxChannel, true);                 // true => reset the RX memory/pointer.
-  const rmt_item32_t stimulus = makeItem(0U, readLowUs, 1U, readHighUs);
-  (void)rmt_write_items(txChannel, &stimulus, 1, true);
+  (void)rmt_write_items(txChannel, stim, count, true);
   (void)rmt_wait_tx_done(txChannel, pdMS_TO_TICKS(rxTimeoutMs));
 
-  uint8_t bit = 1U;                                    // Default: line stayed high => logical 1.
   size_t rxSize = 0U;
   void* raw = xRingbufferReceive(rb, &rxSize, pdMS_TO_TICKS(rxTimeoutMs));
   if(raw != nullptr) {
     const rmt_item32_t* items = static_cast<rmt_item32_t*>(raw);
-    if(rxSize >= sizeof(rmt_item32_t)) {
-      // The slot starts with the master's low pulse; if the slave drives a 0 it holds the line low
-      // well past the master's ~6us, so a long initial low decodes as bit 0.
-      const uint16_t lowDur = (items[0].level0 == 0U) ? items[0].duration0 : items[0].duration1;
-      bit = (lowDur <= readThreshUs) ? 1U : 0U;
+    const size_t itemCount = rxSize / sizeof(rmt_item32_t);
+    const uint8_t decodeCount = (itemCount < count) ? static_cast<uint8_t>(itemCount) : count;
+    for(uint8_t i = 0U; i < decodeCount; ++i) {
+      // Each slot starts with the master's low pulse; a slave 0 holds the line low past the master's
+      // ~6us, so a long initial low decodes as bit 0.
+      const uint16_t lowDur = (items[i].level0 == 0U) ? items[i].duration0 : items[i].duration1;
+      outBits[i] = (lowDur <= readThreshUs) ? 1U : 0U;
     }
     vRingbufferReturnItem(rb, raw);
   }
   (void)rmt_rx_stop(rxChannel);
-  return bit;
 }
 
 uint8_t OneWire::read_bit(void) {
-  return readSlot();
+  uint8_t bit = 1U;
+  readSlots(&bit, 1U);
+  return bit;
 }
 
 uint8_t OneWire::reset(void) {
@@ -169,9 +175,14 @@ uint8_t OneWire::reset(void) {
 
 void OneWire::write(uint8_t v, uint8_t power) {
   (void)power;  // RMT cannot assert a strong pull-up; rely on the external resistor.
+  // Batch all 8 bit slots into a single RMT transaction (LSB first) to cut per-bit driver overhead.
+  rmt_item32_t items[8];
+  uint8_t idx = 0U;
   for(uint8_t bitMask = 0x01U; bitMask != 0U; bitMask <<= 1U) {
-    write_bit((v & bitMask) ? 1U : 0U);
+    items[idx++] = (v & bitMask) ? makeItem(0U, write1LowUs, 1U, write1HighUs)
+                                 : makeItem(0U, write0LowUs, 1U, write0HighUs);
   }
+  txItems(items, 8);
 }
 
 void OneWire::write_bytes(const uint8_t* buf, uint16_t count, bool power) {
@@ -182,9 +193,12 @@ void OneWire::write_bytes(const uint8_t* buf, uint16_t count, bool power) {
 }
 
 uint8_t OneWire::read(void) {
+  // Read all 8 bit slots in a single RMT transaction (LSB first).
+  uint8_t bits[8];
+  readSlots(bits, 8U);
   uint8_t r = 0U;
-  for(uint8_t bitMask = 0x01U; bitMask != 0U; bitMask <<= 1U) {
-    if(read_bit()) { r |= bitMask; }
+  for(uint8_t i = 0U; i < 8U; ++i) {
+    if(bits[i] != 0U) { r |= static_cast<uint8_t>(1U << i); }
   }
   return r;
 }
