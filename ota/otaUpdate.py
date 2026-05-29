@@ -42,6 +42,14 @@ class TransferState(enum.Enum):
     ERROR = 6
 
 
+class ReceiveState(enum.Enum):
+    """States for the inbound (device -> server) file receive process."""
+    IDLE = 0          # Listening for a transfer to begin.
+    RECEIVING = 1     # A begin message was accepted; collecting pieces.
+    DONE = 2          # The listener stopped (idle timeout / interrupt).
+    ERROR = 3         # An unrecoverable error occurred.
+
+
 @dataclass
 class MQTTConfig:
     """Configuration data for MQTT connection"""
@@ -144,21 +152,25 @@ class ActionResult:
     device: DeviceEntry
     file: Optional[FileEntry] = None        # Set when a file transfer was selected.
     command: Optional[CommandEntry] = None  # Set when a command was selected.
+    receive: bool = False                   # Set when the "receive upload" listener was selected.
 
 
 @dataclass
 class DeviceConfig:
-    """Configuration data for the target device (used by OTAUpdater and FileTransfer)"""
+    """Configuration data for the target device (used by OTAUpdater, FileTransfer, FileReceiver)"""
     mac_address: str
     project_name: str
+    subtopic: str = "common"      # MQTT subtopic; senders use "common", the upload listener uses "upload".
 
     @property
     def send_topic(self) -> str:
-        return f'iot/stod/{self.mac_address}/common'
+        # Topic the server publishes on (the device subscribes to iot/stod/<mac>/#).
+        return f'iot/stod/{self.mac_address}/{self.subtopic}'
 
     @property
     def receive_topic(self) -> str:
-        return f'iot/dtos/{self.mac_address}/common'
+        # Topic the server subscribes to (the device publishes on iot/dtos/<mac>/<subtopic>).
+        return f'iot/dtos/{self.mac_address}/{self.subtopic}'
 
 
 # ---------------------------------------------------------------------------
@@ -924,11 +936,221 @@ class CommandSender(_BaseTransfer):
 
 
 # ---------------------------------------------------------------------------
+# File receiver (device -> server upload listener)
+# ---------------------------------------------------------------------------
+
+class FileReceiver:
+    """Receives a file pushed by the device (device -> server) over MQTT.
+
+    The mirror image of FileTransfer: the device publishes a begin message and
+    base64 pieces on iot/dtos/<mac>/<subtopic>, and this listener acknowledges each
+    message on iot/stod/<mac>/<subtopic>. The final piece is acknowledged only once
+    the MD5 of the assembled file matches, so a corrupt upload is rejected
+    end-to-end (the device then aborts on the NACK).
+
+    The listener keeps running and stores every uploaded file until no new transfer
+    starts within `idle_timeout` seconds (or it is interrupted with Ctrl-C)."""
+
+    _ACK = json.dumps({"type": 1})
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig,
+                 output_dir: Path, idle_timeout: int = 300, piece_timeout: int = 30):
+        self.device_config = device_config
+        self.mqtt_client = MQTTClient(mqtt_config)
+        self.output_dir = Path(output_dir)
+        self.idle_timeout = idle_timeout
+        self.piece_timeout = piece_timeout
+
+        self.state = ReceiveState.IDLE
+        self._pending: List[Dict[str, Any]] = []
+        self.received_files = 0
+        self.timer_start = 0.0
+
+        # Per-transfer fields (reset between files).
+        self.file_name: Optional[str] = None
+        self.file_size = 0
+        self.expected_md5 = ""
+        self.expected_piece = 0
+        self.buffer = bytearray()
+        self.progress_bar: Optional[tqdm] = None
+
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    # --- MQTT callbacks -------------------------------------------------------
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            logging.info("Successfully connected to MQTT broker")
+            client.subscribe(self.device_config.receive_topic)
+            logging.info(f"Listening for uploads on: {self.device_config.receive_topic}")
+            self.timer_start = time.time()
+        else:
+            logging.error(f"Failed to connect to MQTT broker. Result code: {reason_code}")
+            self.state = ReceiveState.ERROR
+
+    def _on_message(self, client, userdata, msg):
+        """Queue incoming messages for processing in the main loop."""
+        try:
+            self._pending.append(json.loads(msg.payload.decode()))
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse MQTT message: {e}")
+
+    # --- ACK / NACK -----------------------------------------------------------
+
+    def _ack(self):
+        self.mqtt_client.publish(self.device_config.send_topic, self._ACK)
+
+    def _nack(self, err: int = 1):
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({"type": 0, "err": err}))
+
+    # --- Message handling -----------------------------------------------------
+
+    def _handle_begin(self, message: Dict[str, Any]):
+        # Path(...).name guards against directory traversal in the device-supplied name.
+        self.file_name = Path(str(message["name"])).name
+        self.file_size = int(message["fileSize"])
+        self.expected_md5 = str(message["md5"]).lower()
+        self.expected_piece = 0
+        self.buffer = bytearray()
+        self._close_progress_bar()
+        self.progress_bar = tqdm(total=self.file_size, desc=f"Receiving {self.file_name}", unit="B", unit_scale=True)
+        logging.info(f"Upload started: {self.file_name} ({self.file_size} bytes, md5 {self.expected_md5})")
+        self.state = ReceiveState.RECEIVING
+        self.timer_start = time.time()
+        self._ack()
+
+    def _handle_piece(self, message: Dict[str, Any]):
+        piece = int(message["piece"])
+        if piece != self.expected_piece:
+            logging.error(f"Out-of-order piece: got {piece}, expected {self.expected_piece}")
+            self._nack()
+            self._abort_transfer()
+            return
+        try:
+            chunk = base64.b64decode(message["data"])
+        except ValueError as e:  # binascii.Error is a subclass of ValueError.
+            logging.error(f"Base64 decode failed: {e}")
+            self._nack()
+            self._abort_transfer()
+            return
+        self.buffer.extend(chunk)
+        self.expected_piece += 1
+        if self.progress_bar:
+            self.progress_bar.update(len(chunk))
+        self.timer_start = time.time()
+
+        if len(self.buffer) < self.file_size:
+            self._ack()
+        else:
+            self._finalize()  # Final piece: verify before acknowledging.
+
+    def _finalize(self):
+        self._close_progress_bar()
+        if len(self.buffer) != self.file_size:
+            logging.error(f"Size mismatch: got {len(self.buffer)}, expected {self.file_size}")
+            self._nack()
+            self._reset_transfer()
+            return
+        actual_md5 = hashlib.md5(self.buffer).hexdigest().lower()
+        if actual_md5 != self.expected_md5:
+            logging.error(f"MD5 mismatch: got {actual_md5}, expected {self.expected_md5}")
+            self._nack()
+            self._reset_transfer()
+            return
+        self._save_file()
+        self._ack()
+        self.received_files += 1
+        self._reset_transfer()
+
+    def _save_file(self):
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.output_dir / self.file_name
+        dest.write_bytes(bytes(self.buffer))
+        logging.info(f"File saved: {dest} ({len(self.buffer)} bytes)")
+
+    def _abort_transfer(self):
+        self._close_progress_bar()
+        self._reset_transfer()
+
+    def _reset_transfer(self):
+        self.state = ReceiveState.IDLE
+        self.expected_piece = 0
+        self.buffer = bytearray()
+        self.file_name = None
+        self.file_size = 0
+        self.expected_md5 = ""
+        self.timer_start = time.time()
+
+    def _close_progress_bar(self):
+        if self.progress_bar:
+            self.progress_bar.close()
+            self.progress_bar = None
+
+    # --- Main loop ------------------------------------------------------------
+
+    def _process_state(self):
+        for message in self._pending:
+            if all(k in message for k in ("name", "fileSize", "md5")):
+                self._handle_begin(message)
+            elif "piece" in message and "data" in message:
+                if self.state == ReceiveState.RECEIVING:
+                    self._handle_piece(message)
+                else:
+                    logging.warning("Received a piece without an active transfer; ignoring")
+            else:
+                logging.warning(f"Unknown message: {message}")
+        self._pending.clear()
+
+        timeout = self.piece_timeout if self.state == ReceiveState.RECEIVING else self.idle_timeout
+        if time.time() - self.timer_start > timeout:
+            if self.state == ReceiveState.RECEIVING:
+                logging.error("Timeout while receiving a file; aborting transfer")
+                self._abort_transfer()
+            else:
+                logging.info("No upload received within the idle timeout; stopping listener")
+                self.state = ReceiveState.DONE
+
+    def _cleanup(self):
+        self._close_progress_bar()
+        self.mqtt_client.disconnect()
+
+    def run(self) -> bool:
+        """Listen for uploads until the idle timeout elapses or the user interrupts."""
+        if not self.mqtt_client.connect():
+            return False
+
+        self.timer_start = time.time()
+        try:
+            while self.state not in {ReceiveState.DONE, ReceiveState.ERROR}:
+                self.mqtt_client.loop(timeout=0.1)
+                self._process_state()
+
+            logging.info(f"Listener stopped; {self.received_files} file(s) received")
+            return self.received_files > 0
+
+        except KeyboardInterrupt:
+            logging.info("Listener interrupted by user")
+            return self.received_files > 0
+        except Exception as e:
+            logging.error(f"Unexpected error during receive: {e}")
+            return False
+        finally:
+            self._cleanup()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 # Sentinel used in the action menu to identify the firmware upload option.
 _FW_OPTION = "Firmware upload"
+
+# Sentinel used in the action menu to identify the "receive upload" listener.
+_RECEIVE_OPTION = "Receive upload (listen)"
+
+# MQTT subtopic the device publishes camera/file uploads on.
+_UPLOAD_SUBTOPIC = "upload"
 
 
 def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
@@ -967,7 +1189,7 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
                 # Order: firmware upload → file transfers → commands.
                 file_map    = {f.name: f for f in selected_device.files}
                 command_map = {c.display_name: c for c in selected_project.commands}
-                action_options = [_FW_OPTION] + list(file_map) + list(command_map)
+                action_options = [_FW_OPTION, _RECEIVE_OPTION] + list(file_map) + list(command_map)
 
                 choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
@@ -978,6 +1200,8 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
                 if choice == _FW_OPTION:
                     return ActionResult(project=selected_project, device=selected_device)
+                if choice == _RECEIVE_OPTION:
+                    return ActionResult(project=selected_project, device=selected_device, receive=True)
                 if choice in file_map:
                     return ActionResult(project=selected_project, device=selected_device, file=file_map[choice])
                 if choice in command_map:
@@ -985,8 +1209,22 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
 
 def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig):
-    """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender)."""
+    """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender / FileReceiver)."""
     device_config = DeviceConfig(mac_address=result.device.mac, project_name=result.project.pio_project)
+
+    if result.receive:
+        # Listen on the device's upload subtopic and store incoming files.
+        receive_config = DeviceConfig(
+            mac_address=result.device.mac,
+            project_name=result.project.pio_project,
+            subtopic=_UPLOAD_SUBTOPIC,
+        )
+        output_dir = config_manager.script_dir / 'files' / 'uploads' / result.device.mac
+        print(f"  Action:      Receive upload (listen)")
+        print(f"  Subtopic:    {_UPLOAD_SUBTOPIC}")
+        print(f"  Output dir:  {output_dir}")
+        print()
+        return FileReceiver(receive_config, mqtt_config, output_dir)
 
     if result.command is not None:
         print(f"  Action:      {result.command.display_name}")
