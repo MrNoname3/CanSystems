@@ -51,7 +51,8 @@ public:
     measurePeriod(measurePeriodMs),
     eventTimer(0U),
     convTimer(0U),
-    state(State::IDLE)
+    state(State::IDLE),
+    publishIndex(0U)
   {}
 
   /// @brief Default destructor.
@@ -82,12 +83,20 @@ public:
       } break;
       case State::CONVERTING: {
         if(Time::hasElapsed(now, convTimer, reader.conversionDelayMs())) {
+          publishIndex = 0U;
           state = State::PUBLISH;
         }
       } break;
       case State::PUBLISH: {
-        publishReadings();
-        state = State::IDLE;
+        // Publish one sensor per loop iteration so a multi-sensor batch never blocks the loop for
+        // more than a single sensor's worth of (blocking) 1-Wire transactions (~12-13ms each).
+        if(publishIndex < reader.count()) {
+          publishOne(publishIndex);
+          publishIndex++;
+        }
+        if(publishIndex >= reader.count()) {
+          state = State::IDLE;
+        }
       } break;
     }
     return true;
@@ -112,24 +121,23 @@ public:
   MqttThermometer& operator=(MqttThermometer&&) = delete;           // Define move assignment operator.
 
 private:
-  /// @brief Publishes the current reading of every sensor on its sub-sub topic.
-  void publishReadings() {
-    for(uint8_t i = 0U; i < reader.count(); ++i) {
-      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
-      if(!reader.romHex(i, rom, sizeof(rom))) { continue; }
-      const float tempC = reader.readTempC(i);
-      if(tempC < -55.0F) {                                          // Below DS18B20 range -> invalid/disconnected.
-        Logger::get().printf_P(PSTR("[TEMP] Sensor %s disconnected\r\n"), rom);
-        continue;
-      }
-      char subSub[subSubTopicSize] = {'\0'};
-      char payload[payloadSize] = {'\0'};
-      const int32_t subLen = snprintf_P(subSub, sizeof(subSub), subSubFmt, getSubtopic(), rom);
-      const int32_t payLen = snprintf_P(payload, sizeof(payload), payloadFmt, static_cast<double>(tempC));
-      if((subLen <= 0) || (subLen >= static_cast<int32_t>(sizeof(subSub))) ||
-         (payLen <= 0) || (payLen >= static_cast<int32_t>(sizeof(payload)))) { continue; }
-      (void)sendSubtopicMessage(subSub, payload);
+  /// @brief Reads one sensor (by its cached ROM) and publishes it on its sub-sub topic.
+  /// @param index Sensor index (0..count()-1).
+  void publishOne(uint8_t index) {
+    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+    if(!reader.romHex(index, rom, sizeof(rom))) { return; }
+    const float tempC = reader.readTempC(index);
+    if(tempC < -55.0F) {                                            // Below DS18B20 range -> invalid/disconnected.
+      Logger::get().printf_P(PSTR("[TEMP] Sensor %s disconnected\r\n"), rom);
+      return;
     }
+    char subSub[subSubTopicSize] = {'\0'};
+    char payload[payloadSize] = {'\0'};
+    const int32_t subLen = snprintf_P(subSub, sizeof(subSub), subSubFmt, getSubtopic(), rom);
+    const int32_t payLen = snprintf_P(payload, sizeof(payload), payloadFmt, static_cast<double>(tempC));
+    if((subLen <= 0) || (subLen >= static_cast<int32_t>(sizeof(subSub))) ||
+       (payLen <= 0) || (payLen >= static_cast<int32_t>(sizeof(payload)))) { return; }
+    (void)sendSubtopicMessage(subSub, payload);
   }
 
   /// @brief Publishes HA discovery for one sensor as a standalone HA device identified by its ROM.
@@ -165,4 +173,5 @@ private:
   uint32_t eventTimer;                                              // Timer for the measurement period.
   uint32_t convTimer;                                               // Timer for the conversion wait.
   State state;                                                      // Current measurement state.
+  uint8_t publishIndex;                                             // Next sensor to publish during the PUBLISH state.
 };
