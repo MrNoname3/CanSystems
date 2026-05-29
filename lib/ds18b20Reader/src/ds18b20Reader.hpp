@@ -1,4 +1,6 @@
 #pragma once
+// ESP-only (OneWire + DallasTemperature). Guarded so non-ESP builds / native static analysis skip it.
+#if defined(ESP8266) || defined(ESP32)
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <OneWire.h>                                                /// 1-Wire bus driver.
 #include <DallasTemperature.h>                                      /// DS18B20 temperature sensor driver.
@@ -25,7 +27,6 @@ public:
     oneWire(oneWirePin),
     sensors(&oneWire),
     resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits)),
-    sensorCount(0U),
     addresses{}
   {}
 
@@ -85,6 +86,8 @@ private:
   OneWire oneWire;                                                  // 1-Wire bus instance.
   DallasTemperature sensors;                                        // DS18B20 driver bound to the bus.
   uint8_t resolutionBits;                                           // Conversion resolution (9..12).
-  uint8_t sensorCount;                                              // Number of sensors discovered on the bus.
+  uint8_t sensorCount = 0U;                                         // Number of sensors discovered on the bus.
   DeviceAddress addresses[MaxSensors];                              // Cached 8-byte ROM addresses.
 };
+
+#endif  // defined(ESP8266) || defined(ESP32)

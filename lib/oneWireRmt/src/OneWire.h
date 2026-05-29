@@ -15,11 +15,11 @@
 // STATUS: compiles and is structured after the proven esp32-owb (owb_rmt) timing; the on-wire timing
 // constants and RX decode thresholds still need validation against real DS18B20 hardware + a scope.
 //
+// The entire driver is ESP32/RMT-specific. Guarded so non-ESP32 builds and native static analysis
+// see an empty header (no hard #error, nothing to lint) instead of failing on the RMT peripheral.
+#if defined(ESP32)
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Arduino.h>                                                /// Arduino types (used by the OneWire API).
-#if !defined(ESP32)
-#error "oneWireRmt is ESP32-only (uses the RMT peripheral)."
-#endif
 #include "driver/rmt.h"                                             /// Legacy RMT driver (IDF 4.4).
 
 // Feature switches kept for source compatibility with the original OneWire library.
@@ -139,3 +139,5 @@ private:
   bool LastDeviceFlag = false;                                      // Set once the last device was returned.
 #endif
 };
+
+#endif  // defined(ESP32)

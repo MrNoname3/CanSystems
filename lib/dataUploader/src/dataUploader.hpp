@@ -1,4 +1,6 @@
 #pragma once
+// ESP-only (LittleFS + MD5Builder). Guarded so non-ESP builds / native static analysis skip it.
+#if defined(ESP8266) || defined(ESP32)
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include <LittleFS.h>                                               /// Use FLASH filesystem (file-sourced uploads).
@@ -173,3 +175,5 @@ private:
   ErrorState<DataUploaderError, DataUploaderErrorType> errState;    // Error state manager.
   RecursiveMutex mutex;                                            // Serializes the public API across producer (enqueue) and consumer (run) tasks; no-op off-ESP32.
 };
+
+#endif  // defined(ESP8266) || defined(ESP32)

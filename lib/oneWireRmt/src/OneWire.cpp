@@ -1,4 +1,5 @@
 #include "OneWire.h"
+#if defined(ESP32)  // ESP32/RMT-only; empty translation unit elsewhere (e.g. native static analysis).
 #include "driver/gpio.h"                                            /// GPIO direction / pull configuration.
 #include "esp_rom_gpio.h"                                           /// esp_rom_gpio_connect_*_signal (ROM GPIO matrix, IDF 4.4+).
 #include "soc/gpio_sig_map.h"                                       /// RMT_SIG_OUT0_IDX / RMT_SIG_IN0_IDX signal indices.
@@ -365,3 +366,5 @@ bool OneWire::check_crc16(const uint8_t* input, uint16_t len, const uint8_t* inv
 }
 #endif  // ONEWIRE_CRC16
 #endif  // ONEWIRE_CRC
+
+#endif  // defined(ESP32)

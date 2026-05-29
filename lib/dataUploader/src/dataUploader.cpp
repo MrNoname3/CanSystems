@@ -1,4 +1,5 @@
 #include "dataUploader.hpp"
+#if defined(ESP8266) || defined(ESP32)  // ESP-only; empty translation unit elsewhere.
 #include "base64.hpp"                                               /// Base64 encoding utilities.
 
 DataUploader::DataUploader(void (*completeCb)(bool ok)) :
@@ -280,3 +281,5 @@ DataUploader::DataUploaderErrorType DataUploader::getErrorCode() {
   errState.clearAllErrors();
   return code;
 }
+
+#endif  // defined(ESP8266) || defined(ESP32)

@@ -1,4 +1,5 @@
 #include "mqttUploader.hpp"
+#if defined(ESP8266) || defined(ESP32)  // ESP-only; empty translation unit elsewhere.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "common.hpp"                                               /// Common definitions and functions.
 
@@ -48,3 +49,5 @@ void MqttUploader::uploadCompleteCb(bool ok) {
   isUploadDone = true;
   isUploadOk = ok;
 }
+
+#endif  // defined(ESP8266) || defined(ESP32)

@@ -1,4 +1,6 @@
 #pragma once
+// ESP-only (Connectivity/PubSubClient). Guarded so non-ESP builds / native static analysis skip it.
+#if defined(ESP8266) || defined(ESP32)
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "dataUploader.hpp"                                         /// Client -> server file upload engine.
@@ -64,3 +66,5 @@ private:
 
   DataUploader dataUploader;                         // Upload engine driven by this handler.
 };
+
+#endif  // defined(ESP8266) || defined(ESP32)
