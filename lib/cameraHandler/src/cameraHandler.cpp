@@ -1,4 +1,11 @@
 #include "cameraHandler.hpp"
+#include "configHandler.hpp"                                        /// Loads the optional camera configuration file.
+#include <ArduinoJson.h>                                            /// JSON document for the camera config.
+
+namespace {
+constexpr char PROGMEM camConfigPath[] = "/config/cam.json";       // Optional camera configuration file.
+}  // namespace
+
 #if defined(ESP32)
 #include "esp_camera.h"                                             /// ESP32 camera driver (bundled with arduino-esp32).
 
@@ -28,10 +35,29 @@ CameraHandler::CameraHandler(MqttUploader& uploader, uint32_t captureIntervalMs)
   captureIntervalMs(captureIntervalMs),
   captureTimer(0U),
   frameSequence(0U),
+  frameSize(defaultFrameSize),
+  jpegQuality(defaultJpegQuality),
+  fbCount(defaultFbCount),
   cameraReady(false)
 {}
 
+void CameraHandler::loadConfig() {
+  JsonDocument doc;
+  if(ConfigHandler::loadJsonFile(camConfigPath, doc) != ConfigHandler::JsonLoadResult::Ok) {
+    Logger::get().printf_P(PSTR("[CAM] No camera config; using defaults.\r\n"));
+    return;
+  }
+  const uint32_t intervalSec = doc[F("intervalSec")] | (captureIntervalMs / 1000U);
+  if(intervalSec > 0U) { captureIntervalMs = Time::secToMs(static_cast<uint16_t>(intervalSec)); }
+  frameSize   = doc[F("framesize")]   | frameSize;
+  jpegQuality = doc[F("jpegQuality")] | jpegQuality;
+  fbCount     = doc[F("fbCount")]     | fbCount;
+  Logger::get().printf_P(PSTR("[CAM] Config loaded: interval=%us framesize=%hhu quality=%hhu fb=%hhu\r\n"),
+                         (captureIntervalMs / 1000U), frameSize, jpegQuality, fbCount);
+}
+
 bool CameraHandler::init() {
+  loadConfig();
 #if defined(ESP32)
   camera_config_t config = {};
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -57,15 +83,16 @@ bool CameraHandler::init() {
   config.jpeg_quality = jpegQuality;
   config.grab_mode    = CAMERA_GRAB_LATEST;
 
-  // Prefer PSRAM for a larger frame and double buffering; fall back to a smaller DRAM frame.
+  // Prefer PSRAM for the configured frame and buffering; fall back to a small DRAM frame otherwise.
   if(psramFound()) {
-    config.frame_size  = FRAMESIZE_SVGA;
+    config.frame_size  = static_cast<framesize_t>(frameSize);
     config.fb_location = CAMERA_FB_IN_PSRAM;
-    config.fb_count    = 2U;
+    config.fb_count    = fbCount;
   } else {
-    config.frame_size  = FRAMESIZE_QVGA;
+    config.frame_size  = static_cast<framesize_t>(fallbackFrameSize);
     config.fb_location = CAMERA_FB_IN_DRAM;
     config.fb_count    = 1U;
+    Logger::get().printf_P(PSTR("[CAM] No PSRAM; forcing QVGA single-buffer.\r\n"));
   }
 
   const esp_err_t err = esp_camera_init(&config);

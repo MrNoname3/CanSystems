@@ -14,13 +14,18 @@
 class CameraHandler final : public Task {
 private:
   static constexpr uint32_t xclkFreqHz       = 20000000U;           // Camera master clock frequency.
-  static constexpr uint8_t  jpegQuality      = 12U;                 // JPEG quality (lower = better quality, larger file).
   static constexpr uint8_t  uploadNameSize   = 24U;                 // Buffer size for the generated upload name.
+
+  // Defaults applied when /config/cam.json is missing or a key is absent.
+  static constexpr uint8_t  defaultFrameSize   = 9U;                // esp_camera framesize_t index (9 = FRAMESIZE_SVGA).
+  static constexpr uint8_t  defaultJpegQuality = 12U;               // JPEG quality (lower = better quality, larger file).
+  static constexpr uint8_t  defaultFbCount     = 2U;                // Frame buffers (double-buffered when PSRAM is available).
+  static constexpr uint8_t  fallbackFrameSize  = 5U;                // esp_camera framesize_t index (5 = FRAMESIZE_QVGA) when no PSRAM.
 
 public:
   /// @brief Constructs a CameraHandler.
   /// @param uploader Upload handler that captured frames are queued into.
-  /// @param captureIntervalMs Interval between captures, in milliseconds.
+  /// @param captureIntervalMs Default interval between captures (overridable via /config/cam.json).
   CameraHandler(MqttUploader& uploader, uint32_t captureIntervalMs);
 
   /// @brief Default destructor.
@@ -41,6 +46,10 @@ public:
   CameraHandler& operator=(CameraHandler&&) = delete;               // Define move assignment operator.
 
 private:
+  /// @brief Loads capture parameters from /config/cam.json, keeping current values as defaults.
+  /// Missing file or missing keys leave the corresponding defaults untouched.
+  void loadConfig();
+
   /// @brief Captures a single frame and queues it for upload.
   void captureAndQueue();
 
@@ -49,8 +58,11 @@ private:
   static void releaseFrame(void* ctx);
 
   MqttUploader& uploader;                                           // Upload handler frames are queued into.
-  uint32_t captureIntervalMs;                                       // Interval between captures.
+  uint32_t captureIntervalMs;                                       // Interval between captures (config-overridable).
   uint32_t captureTimer;                                            // Timestamp of the last capture attempt.
   uint32_t frameSequence;                                           // Monotonic counter used in upload names.
+  uint8_t frameSize;                                                // esp_camera framesize_t index (config-overridable).
+  uint8_t jpegQuality;                                              // JPEG quality (config-overridable).
+  uint8_t fbCount;                                                  // Number of frame buffers (config-overridable).
   bool cameraReady;                                                 // Whether the camera initialized successfully.
 };

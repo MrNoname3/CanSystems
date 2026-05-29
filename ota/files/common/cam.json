@@ -1,0 +1,6 @@
+{
+  "intervalSec": 60,
+  "framesize": 9,
+  "jpegQuality": 12,
+  "fbCount": 2
+}
