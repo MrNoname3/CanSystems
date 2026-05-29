@@ -2,14 +2,21 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "ds18b20Reader.hpp"                                        /// DS18B20 multi-sensor reader.
+#include "freertos/FreeRTOS.h"                                      /// FreeRTOS base.
+#include "freertos/task.h"                                          /// Bus task creation / vTaskDelay.
+#include "freertos/queue.h"                                         /// Readings hand-off queue.
 
 /// @brief MQTT wrapper that periodically publishes DS18B20 readings, one sub-sub topic per sensor.
-/// @details Sits on top of a `Ds18b20Reader` and, on a timer, runs a non-blocking
-/// request -> wait -> publish cycle. Each sensor's reading is published as JSON on a sub-sub topic
-/// keyed by the sensor's 64-bit ROM id (e.g. "temp/28ffaabbccddee01" -> {"tempC":23.50}); the ROM is
-/// a stable, globally unique identifier, so topics and Home Assistant entities survive reordering on
-/// the bus. Each sensor is exposed as its own HA device (via `publishCanDeviceEntity`), so no shared
-/// HADiscovery code needs changing.
+/// @details The blocking 1-Wire bus work runs in its own FreeRTOS task: it requests a conversion,
+/// sleeps the conversion time with vTaskDelay, reads every sensor, and pushes the values into a
+/// FreeRTOS queue — then sleeps `measurePeriodMs` until the next cycle. The publish side runs in the
+/// cooperative loop (`run()`), draining the queue and publishing each reading; this keeps all MQTT
+/// access on the network task (sole PubSubClient owner) while the bus blocking is isolated.
+///
+/// Each reading is published as JSON on a sub-sub topic keyed by the sensor's 64-bit ROM id (e.g.
+/// "temp/28ffaabbccddee01" -> {"tempC":23.50}); the ROM is a stable, globally unique identifier, so
+/// topics and Home Assistant entities survive bus reordering. Each sensor is exposed as its own HA
+/// device (via publishCanDeviceEntity), so no shared HADiscovery code needs changing.
 /// @tparam MaxSensors Compile-time upper bound on the number of sensors.
 template <uint8_t MaxSensors>
 class MqttThermometer final : public MqttBase {
@@ -19,6 +26,12 @@ private:
   static constexpr uint8_t deviceIdSize    = 56U;                  // clientName + '_' + 16 hex + null.
   static constexpr uint8_t deviceNameSize  = 32U;                  // "DS18B20 " + 16 hex + null.
   static constexpr uint8_t swVersionSize   = 24U;                  // "65535 (deadbeef)" + margin.
+  static constexpr float   minValidTempC   = -55.0F;               // Below the DS18B20 range -> invalid/disconnected.
+
+  // Bus task configuration.
+  static constexpr uint32_t taskStackSize  = 4096U;                // Stack bytes for the bus task.
+  static constexpr uint8_t  taskPriority   = 1U;                   // Same as the Arduino loop task.
+  static constexpr uint8_t  taskCore       = 1U;                   // APP_CPU (the Arduino loop core); the task mostly sleeps.
 
   static constexpr const char PROGMEM entityName[]   = "Temperature";
   static constexpr const char PROGMEM entitySub[]    = "temperature";
@@ -32,11 +45,10 @@ private:
   static constexpr const char PROGMEM deviceNameFmt[] = "DS18B20 %s";        // DS18B20 <rom>.
   static constexpr const char PROGMEM swVersionFmt[] = "%hu (%08x)";
 
-  /// @brief Non-blocking measurement state.
-  enum class State : uint8_t {
-    IDLE = 0U,            // Waiting for the next measurement period.
-    CONVERTING,           // Conversion requested; waiting for it to finish.
-    PUBLISH               // Conversion done; publish all readings.
+  /// @brief One sensor reading handed from the bus task to the publish side.
+  struct Reading {
+    uint8_t index;     // Sensor index into the reader's cached ROM list.
+    float   tempC;     // Temperature in degrees Celsius (already range-checked).
   };
 
 public:
@@ -49,55 +61,40 @@ public:
     MqttBase(connectivity, subtopic),
     reader(oneWirePin),
     measurePeriod(measurePeriodMs),
-    eventTimer(0U),
-    convTimer(0U),
-    state(State::IDLE),
-    publishIndex(0U)
+    readingsQueue(nullptr),
+    busTaskHandle(nullptr)
   {}
 
   /// @brief Default destructor.
   ~MqttThermometer() override = default;
 
-  /// @brief Scans the 1-Wire bus.
-  /// @return `true` always; a bus with no sensors is logged but does not block device boot.
+  /// @brief Scans the 1-Wire bus and spawns the bus task if any sensor was found.
+  /// @return `true` always; an empty bus is logged but does not block device boot.
   bool init() override {
-    const bool found = reader.begin();
+    (void)reader.begin();
     Logger::get().printf_P(PSTR("[TEMP] DS18B20 sensors found: %hhu\r\n"), reader.count());
-    (void)found;
-    eventTimer = millis();
+    if(reader.count() == 0U) { return true; }
+
+    readingsQueue = xQueueCreate(MaxSensors, sizeof(Reading));
+    if(readingsQueue == nullptr) {
+      Logger::get().printf_P(PSTR("[TEMP] Readings queue creation failed!\r\n"));
+      return true;
+    }
+    const BaseType_t created = xTaskCreatePinnedToCore(
+      busTask, "owBus", taskStackSize, this, taskPriority, &busTaskHandle, taskCore);
+    if(created != pdPASS) {
+      Logger::get().printf_P(PSTR("[TEMP] Bus task creation failed!\r\n"));
+    }
     return true;
   }
 
-  /// @brief Drives the non-blocking measure/publish cycle.
+  /// @brief Publish side (cooperative loop): drains queued readings and publishes them.
   /// @return `true`.
   bool run() override {
-    const uint32_t now = millis();
-    switch(state) {
-      case State::IDLE: {
-        if((reader.count() > 0U) && Time::hasElapsed(now, eventTimer, measurePeriod)) {
-          eventTimer = now;
-          reader.requestConversion();
-          convTimer = now;
-          state = State::CONVERTING;
-        }
-      } break;
-      case State::CONVERTING: {
-        if(Time::hasElapsed(now, convTimer, reader.conversionDelayMs())) {
-          publishIndex = 0U;
-          state = State::PUBLISH;
-        }
-      } break;
-      case State::PUBLISH: {
-        // Publish one sensor per loop iteration so a multi-sensor batch never blocks the loop for
-        // more than a single sensor's worth of (blocking) 1-Wire transactions (~12-13ms each).
-        if(publishIndex < reader.count()) {
-          publishOne(publishIndex);
-          publishIndex++;
-        }
-        if(publishIndex >= reader.count()) {
-          state = State::IDLE;
-        }
-      } break;
+    if(readingsQueue == nullptr) { return true; }
+    Reading reading{};
+    while(xQueueReceive(readingsQueue, &reading, 0) == pdTRUE) {
+      publishOne(reading.index, reading.tempC);
     }
     return true;
   }
@@ -121,16 +118,32 @@ public:
   MqttThermometer& operator=(MqttThermometer&&) = delete;           // Define move assignment operator.
 
 private:
-  /// @brief Reads one sensor (by its cached ROM) and publishes it on its sub-sub topic.
-  /// @param index Sensor index (0..count()-1).
-  void publishOne(uint8_t index) {
-    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
-    if(!reader.romHex(index, rom, sizeof(rom))) { return; }
-    const float tempC = reader.readTempC(index);
-    if(tempC < -55.0F) {                                            // Below DS18B20 range -> invalid/disconnected.
-      Logger::get().printf_P(PSTR("[TEMP] Sensor %s disconnected\r\n"), rom);
-      return;
+  /// @brief Bus task: convert -> wait -> read all sensors -> enqueue valid readings -> sleep, forever.
+  /// Owns all blocking 1-Wire I/O; the publish side only reads the (immutable-after-scan) ROM list.
+  static void busTask(void* arg) {
+    MqttThermometer* const self = static_cast<MqttThermometer*>(arg);
+    for(;;) {
+      self->reader.requestConversion();
+      vTaskDelay(pdMS_TO_TICKS(self->reader.conversionDelayMs()));
+      const uint8_t count = self->reader.count();
+      for(uint8_t i = 0U; i < count; ++i) {
+        const float tempC = self->reader.readTempC(i);
+        if(tempC < minValidTempC) {
+          Logger::get().printf_P(PSTR("[TEMP] Sensor %hhu disconnected\r\n"), i);
+          continue;
+        }
+        const Reading reading{i, tempC};
+        (void)xQueueSend(self->readingsQueue, &reading, 0);  // Drop if the publish side is behind; next cycle resends.
+      }
+      vTaskDelay(pdMS_TO_TICKS(self->measurePeriod));        // Sleep until the next cycle (no CPU used).
     }
+  }
+
+  /// @brief Publishes one reading on its sub-sub topic. Runs on the network/loop task.
+  /// @param index Sensor index (for the cached ROM); @param tempC Temperature from the bus task.
+  void publishOne(uint8_t index, float tempC) {
+    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+    if(!reader.romHex(index, rom, sizeof(rom))) { return; }      // romHex reads the immutable ROM cache (safe).
     char subSub[subSubTopicSize] = {'\0'};
     char payload[payloadSize] = {'\0'};
     const int32_t subLen = snprintf_P(subSub, sizeof(subSub), subSubFmt, getSubtopic(), rom);
@@ -168,10 +181,8 @@ private:
     return doPublishCanDeviceEntityDiscovery(entitySub, config, devConfig);
   }
 
-  Ds18b20Reader<MaxSensors> reader;                                 // The underlying multi-sensor reader.
+  Ds18b20Reader<MaxSensors> reader;                                 // The underlying multi-sensor reader (bus task owns the I/O).
   uint32_t measurePeriod;                                           // Interval between measurement cycles.
-  uint32_t eventTimer;                                              // Timer for the measurement period.
-  uint32_t convTimer;                                               // Timer for the conversion wait.
-  State state;                                                      // Current measurement state.
-  uint8_t publishIndex;                                             // Next sensor to publish during the PUBLISH state.
+  QueueHandle_t readingsQueue;                                      // Bus task -> publish side hand-off.
+  TaskHandle_t busTaskHandle;                                       // Handle of the spawned bus task.
 };

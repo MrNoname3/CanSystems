@@ -47,7 +47,10 @@ CameraHandler camera(mqttUploader, CAPTURE_INTERVAL_MS);
 MqttThermometer<MAX_THERMOMETERS> thermometer(iotConn, "temp", DS18B20_PIN, TEMP_INTERVAL_MS);
 
 //--- Handling tasks ---//
-Task* task[] = { &iotConn, &performance, &mqttCommon, &mqttUploader, &camera, &thermometer };
+// The camera runs its own FreeRTOS capture task (started via camera.begin()), so it is not part of
+// the cooperative loop. The thermometer stays here: its run() drains readings from its bus task and
+// publishes them (the bus task itself is spawned in MqttThermometer::init()).
+Task* task[] = { &iotConn, &performance, &mqttCommon, &mqttUploader, &thermometer };
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 
@@ -72,6 +75,9 @@ void setup() {
     Logger::get().println(initResult, BIN);
     ResetHandler::restartMCU();
   }
+
+  // Start the camera capture task (own FreeRTOS task; never blocks the loop).
+  (void)camera.begin();
 
   Logger::get().printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
   Logger::get().printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());

@@ -33,12 +33,12 @@ constexpr int8_t PIN_PCLK  = 22;
 CameraHandler::CameraHandler(MqttUploader& uploader, uint32_t captureIntervalMs) :
   uploader(uploader),
   captureIntervalMs(captureIntervalMs),
-  captureTimer(0U),
   frameSequence(0U),
   frameSize(defaultFrameSize),
   jpegQuality(defaultJpegQuality),
   fbCount(defaultFbCount),
-  cameraReady(false)
+  cameraReady(false),
+  taskHandle(nullptr)
 {}
 
 void CameraHandler::loadConfig() {
@@ -56,7 +56,7 @@ void CameraHandler::loadConfig() {
                          (captureIntervalMs / 1000U), frameSize, jpegQuality, fbCount);
 }
 
-bool CameraHandler::init() {
+bool CameraHandler::begin() {
   loadConfig();
 #if defined(ESP32)
   camera_config_t config = {};
@@ -100,24 +100,31 @@ bool CameraHandler::init() {
   Logger::get().printf_P(PSTR("[CAM] Camera init: %s\r\n"), Str::getStateStr(cameraReady));
   if(!cameraReady) {
     Logger::get().printf_P(PSTR("  esp_camera_init error: 0x%x\r\n"), err);
+  } else {
+    // Spawn the capture task: it owns all blocking camera I/O and only touches the upload queue.
+    const BaseType_t created = xTaskCreatePinnedToCore(
+      captureTask, "camCapture", taskStackSize, this, taskPriority, &taskHandle, taskCore);
+    if(created != pdPASS) {
+      Logger::get().printf_P(PSTR("[CAM] Capture task creation failed!\r\n"));
+      cameraReady = false;
+    }
   }
 #else
   Logger::get().printf_P(PSTR("[CAM] Camera unsupported on this platform.\r\n"));
 #endif
-  captureTimer = millis();
   return true;  // Never block device boot on a camera failure.
 }
 
-bool CameraHandler::run() {
-  if(!cameraReady) { return true; }
-  if(!Time::hasElapsed(millis(), captureTimer, captureIntervalMs)) { return true; }
-  captureTimer = millis();
-  if(!uploader.hasFreeSlot()) {
-    Logger::get().printf_P(PSTR("[CAM] Upload queue full; skipping capture.\r\n"));
-    return true;
+void CameraHandler::captureTask(void* arg) {
+  CameraHandler* const self = static_cast<CameraHandler*>(arg);
+  for(;;) {
+    if(self->uploader.hasFreeSlot()) {
+      self->captureAndQueue();
+    } else {
+      Logger::get().printf_P(PSTR("[CAM] Upload queue full; skipping capture.\r\n"));
+    }
+    vTaskDelay(pdMS_TO_TICKS(self->captureIntervalMs));  // Sleep until the next capture (no CPU used).
   }
-  captureAndQueue();
-  return true;
 }
 
 void CameraHandler::captureAndQueue() {

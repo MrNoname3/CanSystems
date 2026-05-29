@@ -1,20 +1,26 @@
 #pragma once
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include "taskHandler.hpp"                                          /// Task base class for periodic execution.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "mqttUploader.hpp"                                         /// Upload handler the captured frames are queued into.
+#include "freertos/FreeRTOS.h"                                      /// FreeRTOS base (task handle).
+#include "freertos/task.h"                                          /// Task creation / vTaskDelay.
 
 /// @brief Periodically captures a JPEG frame from an ESP32-CAM and queues it for upload.
-/// @details The frame is captured straight into the camera's PSRAM frame buffer (no SD card); the
-/// borrowed buffer is handed to `MqttUploader` and returned to the driver only once the upload
-/// completes. If PSRAM is unavailable the camera driver falls back to a smaller, DRAM-backed frame.
-///
-/// This is a skeleton: pin map and capture parameters target the AI-Thinker ESP32-CAM and will be
-/// refined later (configurable resolution/quality, optional flash-backed buffering, RTC-time names).
-class CameraHandler final : public Task {
+/// @details Runs the capture in its own FreeRTOS task: capturing blocks for tens of milliseconds
+/// (sensor exposure + JPEG + DMA), which would otherwise stall the cooperative loop. The task
+/// sleeps between captures with vTaskDelay (no CPU spent while idle). The frame is captured straight
+/// into the camera's PSRAM frame buffer (no SD card); the borrowed buffer is handed to MqttUploader
+/// and returned to the driver only once the upload completes. Falls back to a smaller DRAM frame if
+/// no PSRAM. The producer side only touches the (mutex-protected) upload queue, never the MQTT client.
+class CameraHandler final {
 private:
   static constexpr uint32_t xclkFreqHz       = 20000000U;           // Camera master clock frequency.
   static constexpr uint8_t  uploadNameSize   = 24U;                 // Buffer size for the generated upload name.
+
+  // Capture task configuration.
+  static constexpr uint32_t taskStackSize    = 4096U;               // Capture task stack size in bytes (ESP-IDF xTaskCreate uses bytes).
+  static constexpr uint8_t  taskPriority     = 1U;                  // Same as the Arduino loop task.
+  static constexpr uint8_t  taskCore         = 1U;                  // APP_CPU (the Arduino loop core); workers mostly sleep.
 
   // Defaults applied when /config/cam.json is missing or a key is absent.
   static constexpr uint8_t  defaultFrameSize   = 9U;                // esp_camera framesize_t index (9 = FRAMESIZE_SVGA).
@@ -29,16 +35,12 @@ public:
   CameraHandler(MqttUploader& uploader, uint32_t captureIntervalMs);
 
   /// @brief Default destructor.
-  ~CameraHandler() override = default;
+  ~CameraHandler() = default;
 
-  /// @brief Initializes the camera driver.
-  /// @return `true` always; a camera init failure is logged and captures are skipped so the rest
+  /// @brief Initializes the camera driver and spawns the capture task.
+  /// @return `true` always; a camera init failure is logged and the task is not spawned so the rest
   ///         of the device (networking, OTA) still boots.
-  bool init() override;
-
-  /// @brief Captures and queues a frame when the interval elapses and the uploader has a free slot.
-  /// @return `true` on success.
-  bool run() override;
+  bool begin();
 
   CameraHandler(const CameraHandler&) = delete;                     // Define copy constructor.
   CameraHandler& operator=(const CameraHandler&) = delete;          // Define copy assignment operator.
@@ -47,8 +49,11 @@ public:
 
 private:
   /// @brief Loads capture parameters from /config/cam.json, keeping current values as defaults.
-  /// Missing file or missing keys leave the corresponding defaults untouched.
   void loadConfig();
+
+  /// @brief FreeRTOS task entry: capture -> enqueue -> vTaskDelay(interval), forever.
+  /// @param arg The owning CameraHandler instance.
+  static void captureTask(void* arg);
 
   /// @brief Captures a single frame and queues it for upload.
   void captureAndQueue();
@@ -59,10 +64,10 @@ private:
 
   MqttUploader& uploader;                                           // Upload handler frames are queued into.
   uint32_t captureIntervalMs;                                       // Interval between captures (config-overridable).
-  uint32_t captureTimer;                                            // Timestamp of the last capture attempt.
   uint32_t frameSequence;                                           // Monotonic counter used in upload names.
   uint8_t frameSize;                                                // esp_camera framesize_t index (config-overridable).
   uint8_t jpegQuality;                                              // JPEG quality (config-overridable).
   uint8_t fbCount;                                                  // Number of frame buffers (config-overridable).
   bool cameraReady;                                                 // Whether the camera initialized successfully.
+  TaskHandle_t taskHandle;                                          // Handle of the spawned capture task.
 };
