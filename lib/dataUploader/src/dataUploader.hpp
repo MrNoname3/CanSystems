@@ -6,6 +6,7 @@
 #include <LittleFS.h>                                               /// Use FLASH filesystem (file-sourced uploads).
 #include <MD5Builder.h>                                             /// Utility for calculating MD5 checksums.
 #include "sync.hpp"                                                 /// RecursiveMutex/LockGuard (no-op off-ESP32).
+#include "CircularBuffer.hpp"                                       /// Ring buffer holding the pending upload jobs.
 
 /// @brief Client -> server file upload engine: the mirror image of `DataTransfer`.
 /// @details `DataTransfer` receives a file from the server in base64 pieces; this class sends one
@@ -111,10 +112,10 @@ public:
   [[nodiscard]] bool isBusy() const { return uploadState != UploadState::IDLE; }
 
   /// @brief Number of jobs waiting in the queue (excluding the one in progress).
-  [[nodiscard]] uint8_t pending() const { return queueCount; }
+  [[nodiscard]] uint8_t pending() const { return static_cast<uint8_t>(queue.getSize()); }
 
   /// @brief Whether the queue has room for another job.
-  [[nodiscard]] bool hasFreeSlot() const { return queueCount < queueCapacity; }
+  [[nodiscard]] bool hasFreeSlot() const { return !queue.isFull(); }
 
   /// @brief Returns the logical name of the job currently being uploaded.
   [[nodiscard]] const char* getCurrentName() const { return current.name; }
@@ -161,9 +162,7 @@ private:
   bool pushJob(const UploadJob& job);
 
   void (*completeCb)(bool ok);                                      // Job-completion callback.
-  UploadJob queue[queueCapacity];                                   // Ring buffer of pending jobs.
-  uint8_t queueHead;                                                // Index of the next job to pop.
-  uint8_t queueCount;                                               // Number of jobs currently queued.
+  CircularBuffer<UploadJob, queueCapacity> queue;                  // Ring buffer of pending jobs.
   UploadJob current;                                                // Job currently being uploaded.
   char currentMd5[md5Size];                                         // MD5 hex string of the current job.
   uint32_t offset;                                                  // Byte offset of the next piece to send.

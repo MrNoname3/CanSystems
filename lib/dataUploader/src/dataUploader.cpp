@@ -4,9 +4,7 @@
 
 DataUploader::DataUploader(void (*completeCb)(bool ok)) :
   completeCb(completeCb),
-  queue{},
-  queueHead(0U),
-  queueCount(0U),
+  queue(),
   current{},
   currentMd5{'\0'},
   offset(0U),
@@ -63,22 +61,19 @@ bool DataUploader::enqueueFile(const char* name, const char* path) {
   return pushJob(job);
 }
 
-bool DataUploader::pushJob(const UploadJob& job) {
-  if(queueCount >= queueCapacity) {
-    errState.setError(DataUploaderError::QUEUE_FULL);
-    return false;
+bool DataUploader::pushJob(const UploadJob& job) {  // NOLINT(readability-convert-member-functions-to-static) mutates queue/errState
+  const bool hasRoom = !queue.isFull();
+  if(hasRoom) {
+    queue.put(job);                              // Stores a copy of the job.
+  } else {
+    errState.setError(DataUploaderError::QUEUE_FULL);  // Reject rather than overwrite the oldest pending job.
   }
-  const uint8_t tail = static_cast<uint8_t>((queueHead + queueCount) % queueCapacity);
-  queue[tail] = job;
-  queueCount++;
-  return true;
+  return hasRoom;
 }
 
 bool DataUploader::startNextJob() {
-  if(queueCount == 0U) { return false; }
-  current = queue[queueHead];
-  queueHead = static_cast<uint8_t>((queueHead + 1U) % queueCapacity);
-  queueCount--;
+  if(queue.isEmpty()) { return false; }
+  current = queue.pop();
   offset = 0U;
   pieceIndex = 0U;
   memset(currentMd5, '\0', sizeof(currentMd5));
@@ -236,7 +231,7 @@ void DataUploader::run() {
 
   switch(uploadState) {
     case UploadState::IDLE: {
-      if(queueCount > 0U) {
+      if(!queue.isEmpty()) {
         uploadState = startNextJob() ? UploadState::COMPUTE : UploadState::CLEANUP;
       }
     } break;
