@@ -224,7 +224,8 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   bool haEnabled = false;
   (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
   haDiscovery.setDiscoveryEnabled(haEnabled);
-  Logger::get().printf_P(PSTR("[HA] Discovery: %s\r\n"), Str::getStateStr(haEnabled));
+  // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
+  Logger::get().printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
 
   (void)haDiscovery.publishConnectivity();
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
