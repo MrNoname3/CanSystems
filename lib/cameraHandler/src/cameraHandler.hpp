@@ -27,6 +27,14 @@ private:
   static constexpr uint8_t  defaultJpegQuality = 12U;               // JPEG quality (lower = better quality, larger file).
   static constexpr uint8_t  defaultFbCount     = 2U;                // Frame buffers (double-buffered when PSRAM is available).
   static constexpr uint8_t  fallbackFrameSize  = 5U;                // esp_camera framesize_t index (5 = FRAMESIZE_QVGA) when no PSRAM.
+  static constexpr bool     defaultFlashEnabled    = true;          // Fire the on-board flash LED for each capture by default.
+  static constexpr uint8_t  defaultFlashBrightness = 128U;          // Default flash PWM duty (0..255), config-overridable.
+
+  // Flash LED: AI-Thinker on-board high-power white LED on GPIO 4, driven by LEDC PWM on its own channel.
+  static constexpr uint8_t  flashLedcChannel    = 4U;               // Avoids the camera XCLK channel (LEDC_CHANNEL_0 / timer 0).
+  static constexpr uint32_t flashLedcFreqHz     = 5000U;            // PWM frequency.
+  static constexpr uint8_t  flashLedcResolution = 8U;               // 8-bit duty -> brightness range 0..255.
+  static constexpr uint32_t flashSettleMs       = 150U;             // Let exposure (AEC/AGC) adapt before grabbing the lit frame.
 
 public:
   /// @brief Constructs a CameraHandler.
@@ -68,6 +76,8 @@ private:
   uint8_t frameSize;                                                // esp_camera framesize_t index (config-overridable).
   uint8_t jpegQuality;                                              // JPEG quality (config-overridable).
   uint8_t fbCount;                                                  // Number of frame buffers (config-overridable).
+  bool flashEnabled;                                                // Whether to fire the flash for each capture (config-overridable).
+  uint8_t flashBrightness;                                          // Flash PWM duty 0..255 when enabled (config-overridable).
   bool cameraReady;                                                 // Whether the camera initialized successfully.
   TaskHandle_t taskHandle;                                          // Handle of the spawned capture task.
 };

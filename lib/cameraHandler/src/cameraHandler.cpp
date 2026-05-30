@@ -27,6 +27,7 @@ constexpr int8_t PIN_Y2    = 5;
 constexpr int8_t PIN_VSYNC = 25;
 constexpr int8_t PIN_HREF  = 23;
 constexpr int8_t PIN_PCLK  = 22;
+constexpr int8_t PIN_FLASH = 4;                                    // On-board high-power flash LED.
 }  // namespace
 #endif
 
@@ -37,6 +38,8 @@ CameraHandler::CameraHandler(MqttUploader& uploader, uint32_t captureIntervalMs)
   frameSize(defaultFrameSize),
   jpegQuality(defaultJpegQuality),
   fbCount(defaultFbCount),
+  flashEnabled(defaultFlashEnabled),
+  flashBrightness(defaultFlashBrightness),
   cameraReady(false),
   taskHandle(nullptr)
 {}
@@ -52,8 +55,11 @@ void CameraHandler::loadConfig() {
   frameSize   = doc[F("framesize")]   | frameSize;
   jpegQuality = doc[F("jpegQuality")] | jpegQuality;
   fbCount     = doc[F("fbCount")]     | fbCount;
-  Logger::get().printf_P(PSTR("[CAM] Config loaded: interval=%us framesize=%hhu quality=%hhu fb=%hhu\r\n"),
-                         (captureIntervalMs / 1000U), frameSize, jpegQuality, fbCount);
+  flashEnabled    = doc[F("flashEnabled")]    | flashEnabled;
+  flashBrightness = doc[F("flashBrightness")] | flashBrightness;
+  Logger::get().printf_P(PSTR("[CAM] Config loaded: interval=%us framesize=%hhu quality=%hhu fb=%hhu flash=%hhu@%hhu\r\n"),
+                         (captureIntervalMs / 1000U), frameSize, jpegQuality, fbCount,
+                         static_cast<uint8_t>(flashEnabled), flashBrightness);
 }
 
 bool CameraHandler::begin() {
@@ -101,6 +107,12 @@ bool CameraHandler::begin() {
   if(!cameraReady) {
     Logger::get().printf_P(PSTR("  esp_camera_init error: 0x%x\r\n"), err);
   } else {
+    if(flashEnabled) {
+      // Drive the flash LED with PWM on its own LEDC channel (off until a capture fires it).
+      ledcSetup(flashLedcChannel, flashLedcFreqHz, flashLedcResolution);
+      ledcAttachPin(PIN_FLASH, flashLedcChannel);
+      ledcWrite(flashLedcChannel, 0U);
+    }
     // Spawn the capture task: it owns all blocking camera I/O and only touches the upload queue.
     const BaseType_t created = xTaskCreatePinnedToCore(
       captureTask, "camCapture", taskStackSize, this, taskPriority, &taskHandle, taskCore);
@@ -129,7 +141,14 @@ void CameraHandler::captureTask(void* arg) {
 
 void CameraHandler::captureAndQueue() {
 #if defined(ESP32)
+  if(flashEnabled) {
+    ledcWrite(flashLedcChannel, flashBrightness);      // Fire the flash...
+    vTaskDelay(pdMS_TO_TICKS(flashSettleMs));          // ...and let exposure adapt so GRAB_LATEST returns a lit frame.
+  }
   camera_fb_t* fb = esp_camera_fb_get();
+  if(flashEnabled) {
+    ledcWrite(flashLedcChannel, 0U);                   // Flash off right after the grab.
+  }
   if(fb == nullptr) {
     Logger::get().printf_P(PSTR("[CAM] Frame capture failed!\r\n"));
     return;
