@@ -89,5 +89,5 @@ projects:
             local_path: files/common/server.json
             device_path: /config/server.json
           - name: "Camera configuration upload"
-            local_path: files/common/cam.json
+            local_path: files/aabbccddeeff/cam.json
             device_path: /config/cam.json
