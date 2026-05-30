@@ -39,7 +39,7 @@ private:
   static constexpr uint8_t  queueCapacity   = 4U;                   // Maximum number of pending upload jobs.
   static constexpr uint16_t rawChunkSize    = 336U;                 // Raw bytes per piece (mirrors DataTransfer::maxFilePieceLength).
   static constexpr uint16_t encodedChunkSize = 4U * ((rawChunkSize + 2U) / 3U); // Base64 length of one raw chunk (no null).
-  static constexpr uint32_t ackTimeoutTime  = Time::secToMs(30U);   // Time to wait for a server ACK before aborting.
+  static constexpr uint32_t ackTimeoutTime  = Time::secToMs(10U);   // Time to wait for a server ACK before aborting.
   using DataUploaderErrorType = uint16_t;                           // Type used for error codes.
 
   /// @brief Error codes for upload operations.
