@@ -118,6 +118,13 @@ public:
   /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
   [[nodiscard]] bool publishConnectivity();
 
+  /// @brief Enables or disables discovery publishing.
+  /// @details When disabled, the publish* methods send an empty retained payload to each entity's
+  /// discovery topic instead of the config JSON, which retracts the entity from Home Assistant.
+  /// The owner still calls the same publish* methods, so toggling this off retracts exactly the
+  /// entities the device would otherwise create — no separate registry or clear path is needed.
+  void setDiscoveryEnabled(bool enabled) { discoveryEnabled = enabled; }
+
 private:
   static constexpr uint8_t  discoveryTopicBufSize      = 96U;  // "homeassistant/<type>/<uid>/config" topic buffer.
   static constexpr uint16_t discoveryPayloadBufSize    = 656U; // HA MQTT discovery JSON payload buffer.
@@ -187,5 +194,6 @@ private:
   const char*  senderTopic;
   const char*  receiverTopic;
   const char*  availabilityTopic;
+  bool         discoveryEnabled = true;                            // false → publish* retracts entities (empty retained payload).
 };
 #endif // HADISCOVERY_HPP

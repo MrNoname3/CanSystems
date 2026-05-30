@@ -133,6 +133,8 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
       haType, canDevConfig.deviceId, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
+  // Discovery disabled: retract the entity by clearing its retained config topic.
+  if(!discoveryEnabled) { return publishFn(publishCtx, discTopic, "", true); }
 
   char topicBase[MqttTopics::getReceiverTopicBufSize()] = { '\0' };
   if(config.isCommandTopic) {
@@ -197,6 +199,8 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
       haType, clientName, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
+  // Discovery disabled: retract the entity by clearing its retained config topic.
+  if(!discoveryEnabled) { return publishFn(publishCtx, discTopic, "", true); }
   // Build topic base: senderTopic for state_topic, receiverTopic (trimmed) for command_topic.
   char topicBase[MqttTopics::getReceiverTopicBufSize()] = { '\0' };
   if(config.isCommandTopic) {

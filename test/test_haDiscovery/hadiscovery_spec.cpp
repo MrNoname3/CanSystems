@@ -463,6 +463,50 @@ bool test_publishEntity_returns_false_when_disconnected() {
   END_IT
 }
 
+bool test_publishEntity_disabled_retracts_with_empty_payload() {
+  IT("publishEntity sends an empty retained payload to the discovery topic when discovery is disabled");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.setDiscoveryEnabled(false);
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
+  IS_TRUE(f.had.publishEntity("temperature", cfg));  // Still "succeeds" — it publishes the retraction.
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  // Same discovery topic as the publish case, but with an empty payload (HA removes the entity).
+  IS_EQUAL(strcmp(rec.topic,
+    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.payload, ""), 0);
+  IS_TRUE(rec.retained);
+  END_IT
+}
+
+bool test_publishCanDeviceEntity_disabled_retracts_with_empty_payload() {
+  IT("publishCanDeviceEntity sends an empty retained payload when discovery is disabled");
+  Fixture f;
+  f.had.setDiscoveryEnabled(false);
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
+  HADiscovery::CanDeviceConfig dev{};
+  dev.deviceId        = "esp32_can_AABBCCDDEEFF_alert1";
+  dev.deviceName      = "ALERT1 DDEEFF";
+  dev.swVersion       = "1 (deadbeef)";
+  dev.extraAvailTopic = "iot/dtos/AABBCCDDEEFF/alert1/availability";
+  dev.dataSubtopic    = "alert1";
+  dev.hwVersion       = "ATmega328P";
+  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  IS_EQUAL(strcmp(rec.topic,
+    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.payload, ""), 0);
+  IS_TRUE(rec.retained);
+  END_IT
+}
+
 int main() {
   SUITE("HADiscovery");
   test_buildDeviceName_appears_in_payload();
@@ -480,5 +524,7 @@ int main() {
   test_publishEntity_no_via_device();
   test_publishCanDeviceEntity_via_device_and_unique_id();
   test_publishEntity_returns_false_when_disconnected();
+  test_publishEntity_disabled_retracts_with_empty_payload();
+  test_publishCanDeviceEntity_disabled_retracts_with_empty_payload();
   FINISH
 }

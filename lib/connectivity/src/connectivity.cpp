@@ -218,6 +218,14 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttClient.disconnect();
     return false;
   }
+  // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
+  // publish* calls below retract any previously-created entities (empty retained payload) instead
+  // of creating them. Set "haDiscovery": true to publish the discovery config.
+  bool haEnabled = false;
+  (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
+  haDiscovery.setDiscoveryEnabled(haEnabled);
+  Logger::get().printf_P(PSTR("[HA] Discovery: %s\r\n"), Str::getStateStr(haEnabled));
+
   (void)haDiscovery.publishConnectivity();
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
     if(!h->publishDiscovery()) {
