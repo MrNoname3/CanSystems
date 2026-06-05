@@ -20,7 +20,10 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 #ifdef ESP8266
   serverCert{},
 #endif
-  haDiscovery(mqttClient,
+  haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
+                return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
+              },
+              this,
               mqttCredentials.clientName,
               mqttCredentials.senderTopic,
               mqttCredentials.receiverTopic,
@@ -65,7 +68,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     Logger::get().printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
     char dateTimeStr[dateTimeStrBufSize] = {'\0'};
-    const bool dateTimeValid = getIsoTimeString(dateTimeStr);
+    const bool dateTimeValid = Time::getIsoUtcString(dateTimeStr, sizeof(dateTimeStr));
     if(dateTimeValid) {
       Logger::get().printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
     } else {
@@ -169,6 +172,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
+    LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
     char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
@@ -184,6 +188,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 }
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   const bool mqttConResult = mqttClient.connect(
     mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
     mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
@@ -213,6 +218,15 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttClient.disconnect();
     return false;
   }
+  // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
+  // publish* calls below retract any previously-created entities (empty retained payload) instead
+  // of creating them. Set "haDiscovery": true to publish the discovery config.
+  bool haEnabled = false;
+  (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
+  haDiscovery.setDiscoveryEnabled(haEnabled);
+  // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
+  Logger::get().printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
+
   (void)haDiscovery.publishConnectivity();
   for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
     if(!h->publishDiscovery()) {
@@ -223,6 +237,7 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
 }
 
 bool Connectivity::run() {
+  LockGuard guard(mqttMutex);                                       // Serializes loop()/reconnect against publishes from other tasks.
   const uint32_t actualTime = millis();
   const bool actualNetworkState = networkManager.isNetworkAvailable();
   if(actualNetworkState != networkState) {
@@ -268,12 +283,14 @@ bool Connectivity::run() {
 }
 
 void Connectivity::shutdownMqtt() {
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
   mqttClient.disconnect();
 }
 
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
   static constexpr uint8_t topicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
   char actualTopic[topicBufSize] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
@@ -303,21 +320,20 @@ bool Connectivity::syncNtpTime() {
   return true;
 }
 
-bool Connectivity::getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]) {
-  const time_t currentTime = time(nullptr);
-  if(currentTime == -1) { return false; }           // Check if time retrieval failed.
-  const tm* utcTimeInfo = gmtime(&currentTime);     // Convert time to UTC time structure.
-  if(utcTimeInfo == nullptr) { return false; }      // Check if time conversion failed.
-  const size_t formattedSize = strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%dT%H:%M:%SZ", utcTimeInfo);
-  return (formattedSize > 0U && formattedSize < sizeof(dateTimeBuffer));
+bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
+  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
+  return haDiscovery.publishEntity(subtopic, config);
 }
 
-bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
-  return haDiscovery.publishEntity(subtopic, config);
+bool Connectivity::publishRaw(const char* topic, const char* payload, bool retained) {
+  if(topic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Sole PubSubClient owner serializes every publish.
+  return mqttClient.publish(topic, payload, retained);
 }
 
 bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
   if(subSubTopic == nullptr || payload == nullptr) { return false; }
+  LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
   static constexpr uint8_t retainedTopicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
   char actualTopic[retainedTopicBufSize] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
@@ -329,6 +345,7 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
                                                     const HADiscovery::EntityConfig& config,
                                                     const HADiscovery::CanDeviceConfig& canDevConfig) {
+  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
 
