@@ -1,4 +1,5 @@
 #include "haDiscovery.hpp"
+#include <PubSubClient.h>   // HADiscovery no longer pulls it in; the test drives a real PubSubClient.
 #include "BDDTest.h"
 #include "IPAddress.h"
 #include <string.h>
@@ -57,7 +58,7 @@ public:
   }
   void flush() override {}
   void stop() override { _connected = false; }
-  uint8_t connected() override { return _connected ? 1U : 0U; }
+  uint8_t connected() override { return _connected ? 1U : 0U; }  // NOLINT(readability-make-member-function-const) overrides non-const Client::connected()
   operator bool() override { return true; }
 
   void loadConnack() {
@@ -125,14 +126,19 @@ static const char    kSenderTopic[]  = "iot/dtos/AABBCCDDEEFF/";
 static const char    kRecvTopic[]    = "iot/stod/AABBCCDDEEFF/#";
 static const char    kAvailTopic[]   = "iot/dtos/AABBCCDDEEFF/availability";
 
+// Raw-publish callback bridging HADiscovery to the captured PubSubClient (mirrors Connectivity::publishRaw).
+static bool fixturePublish(void* ctx, const char* topic, const char* payload, bool retained) {
+  return static_cast<PubSubClient*>(ctx)->publish(topic, payload, retained);
+}
+
 struct Fixture {
   CapturingClient cap;
   PubSubClient    mqtt;
   HADiscovery     had;
 
-  Fixture() :
+  Fixture() :  // NOLINT(modernize-use-equals-default) non-trivial: connects the mock and primes the CONNACK
     mqtt(IPAddress(kServerIp), 1883U, cap),
-    had(mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic)
+    had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic)
   {
     cap.loadConnack();
     (void)mqtt.connect("test");
@@ -449,11 +455,55 @@ bool test_publishEntity_returns_false_when_disconnected() {
   IT("publishEntity returns false when the MQTT client is not connected");
   CapturingClient cap;
   PubSubClient mqtt(IPAddress(kServerIp), 1883U, cap);
-  HADiscovery had(mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic);
+  HADiscovery had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic);
   // cap never connects → mqtt is in DISCONNECTED state
 
   const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
   IS_FALSE(had.publishEntity("data", cfg));
+  END_IT
+}
+
+bool test_publishEntity_disabled_retracts_with_empty_payload() {
+  IT("publishEntity sends an empty retained payload to the discovery topic when discovery is disabled");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.setDiscoveryEnabled(false);
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
+  IS_TRUE(f.had.publishEntity("temperature", cfg));  // Still "succeeds" — it publishes the retraction.
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  // Same discovery topic as the publish case, but with an empty payload (HA removes the entity).
+  IS_EQUAL(strcmp(rec.topic,
+    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.payload, ""), 0);
+  IS_TRUE(rec.retained);
+  END_IT
+}
+
+bool test_publishCanDeviceEntity_disabled_retracts_with_empty_payload() {
+  IT("publishCanDeviceEntity sends an empty retained payload when discovery is disabled");
+  Fixture f;
+  f.had.setDiscoveryEnabled(false);
+
+  const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
+  HADiscovery::CanDeviceConfig dev{};
+  dev.deviceId        = "esp32_can_AABBCCDDEEFF_alert1";
+  dev.deviceName      = "ALERT1 DDEEFF";
+  dev.swVersion       = "1 (deadbeef)";
+  dev.extraAvailTopic = "iot/dtos/AABBCCDDEEFF/alert1/availability";
+  dev.dataSubtopic    = "alert1";
+  dev.hwVersion       = "ATmega328P";
+  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  IS_EQUAL(strcmp(rec.topic,
+    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.payload, ""), 0);
+  IS_TRUE(rec.retained);
   END_IT
 }
 
@@ -474,5 +524,7 @@ int main() {
   test_publishEntity_no_via_device();
   test_publishCanDeviceEntity_via_device_and_unique_id();
   test_publishEntity_returns_false_when_disconnected();
+  test_publishEntity_disabled_retracts_with_empty_payload();
+  test_publishCanDeviceEntity_disabled_retracts_with_empty_payload();
   FINISH
 }

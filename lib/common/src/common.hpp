@@ -53,6 +53,22 @@ public:
     return (currentTime - eventTimer) > duration;
   }
 
+#if defined(ESP8266) || defined(ESP32)
+  static constexpr uint8_t utcFileStampSize = 17U;   // "20260522_121115Z" + null terminator.
+
+  /// @brief Writes the current UTC time as an ISO 8601 extended string ("2026-05-22T12:11:15Z").
+  /// @param buf Destination buffer.
+  /// @param bufSize Size of the destination buffer.
+  /// @return `true` on success; `false` if the system clock is unset or formatting failed.
+  [[nodiscard]] static bool getIsoUtcString(char* buf, size_t bufSize);
+
+  /// @brief Writes the current UTC time as a filename-safe, phone-style stamp ("20260522_121115Z").
+  /// @param buf Destination buffer (>= utcFileStampSize bytes).
+  /// @param bufSize Size of the destination buffer.
+  /// @return `true` on success; `false` if the system clock is unset or formatting failed.
+  [[nodiscard]] static bool getUtcFileStamp(char* buf, size_t bufSize);
+#endif
+
   Time() = delete;                                   // Delete constructor.
   ~Time() = delete;                                  // Delete destructor.
   Time(const Time&) = delete;                       // Define copy constructor.

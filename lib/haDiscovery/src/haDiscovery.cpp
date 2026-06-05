@@ -39,12 +39,13 @@ namespace {
   constexpr const char PROGMEM fmtAvailSingle[]   = R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])";
 } // namespace
 
-HADiscovery::HADiscovery(PubSubClient& mqttClient,
+HADiscovery::HADiscovery(PublishFn publishFn, void* publishCtx,
                          const char* clientName,
                          const char* senderTopic,
                          const char* receiverTopic,
                          const char* availabilityTopic) :
-  mqttClient(mqttClient),
+  publishFn(publishFn),
+  publishCtx(publishCtx),
   clientName(clientName),
   senderTopic(senderTopic),
   receiverTopic(receiverTopic),
@@ -132,6 +133,8 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
       haType, canDevConfig.deviceId, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
+  // Discovery disabled: retract the entity by clearing its retained config topic.
+  if(!discoveryEnabled) { return publishFn(publishCtx, discTopic, "", true); }
 
   char topicBase[MqttTopics::getReceiverTopicBufSize()] = { '\0' };
   if(config.isCommandTopic) {
@@ -172,7 +175,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
     canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
 
   if(!pw.ok()) { return false; }
-  return mqttClient.publish(discTopic, payload, true);
+  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
 }
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
@@ -196,6 +199,8 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
       haType, clientName, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
+  // Discovery disabled: retract the entity by clearing its retained config topic.
+  if(!discoveryEnabled) { return publishFn(publishCtx, discTopic, "", true); }
   // Build topic base: senderTopic for state_topic, receiverTopic (trimmed) for command_topic.
   char topicBase[MqttTopics::getReceiverTopicBufSize()] = { '\0' };
   if(config.isCommandTopic) {
@@ -231,5 +236,5 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }
-  return mqttClient.publish(discTopic, payload, true);
+  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
 }

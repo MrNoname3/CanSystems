@@ -3,13 +3,19 @@
 
 #include <stdint.h>
 #include <pgmspace.h>
-#include <PubSubClient.h>
 #include "mqttTopics.hpp"
 
 /// @brief Handles Home Assistant MQTT auto-discovery.
 /// All HA-specific strings, enums, and publish logic live here; handlers provide only typed data.
+/// HADiscovery never touches the PubSubClient directly: it builds topic+payload and hands them to a
+/// raw-publish callback supplied by the owner (Connectivity), which is the sole PubSubClient owner and
+/// publishes under its mutex. A plain function pointer (not a Connectivity reference) keeps this
+/// library free of any dependency back on connectivity.
 class HADiscovery {
 public:
+  /// @brief Raw-publish callback signature: publishes `payload` to an absolute `topic`.
+  using PublishFn = bool (*)(void* ctx, const char* topic, const char* payload, bool retained);
+
   /// @brief Supported Home Assistant MQTT component types.
   enum class EntityType  : uint8_t { sensor, binary_sensor, button };
   /// @brief Supported HA `state_class` values.
@@ -74,12 +80,13 @@ public:
   /// @brief Constructs the HADiscovery instance with references to the MQTT client and topic strings.
   /// The topic string pointers must remain valid for the lifetime of this object and will be
   /// read-only after construction; they are populated by Connectivity before first publish.
-  /// @param mqttClient Reference to the MQTT client used for publishing discovery messages.
+  /// @param publishFn Raw-publish callback (supplied by Connectivity); publishes under its mutex.
+  /// @param publishCtx Opaque context passed back to `publishFn` (the Connectivity instance).
   /// @param clientName Pointer to the MQTT client name buffer.
   /// @param senderTopic Pointer to the MQTT sender topic buffer.
   /// @param receiverTopic Pointer to the MQTT receiver topic buffer.
   /// @param availabilityTopic Pointer to the MQTT availability topic buffer.
-  HADiscovery(PubSubClient& mqttClient,
+  HADiscovery(PublishFn publishFn, void* publishCtx,
               const char* clientName,
               const char* senderTopic,
               const char* receiverTopic,
@@ -110,6 +117,13 @@ public:
 
   /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
   [[nodiscard]] bool publishConnectivity();
+
+  /// @brief Enables or disables discovery publishing.
+  /// @details When disabled, the publish* methods send an empty retained payload to each entity's
+  /// discovery topic instead of the config JSON, which retracts the entity from Home Assistant.
+  /// The owner still calls the same publish* methods, so toggling this off retracts exactly the
+  /// entities the device would otherwise create — no separate registry or clear path is needed.
+  void setDiscoveryEnabled(bool enabled) { discoveryEnabled = enabled; }
 
 private:
   static constexpr uint8_t  discoveryTopicBufSize      = 96U;  // "homeassistant/<type>/<uid>/config" topic buffer.
@@ -174,10 +188,12 @@ private:
   static void getSwVersionStr(char (&buf)[swVersionBufSize]);
 
   char         deviceName[deviceNameBufSize]{};
-  PubSubClient& mqttClient;
+  PublishFn    publishFn;                                          // Owner-supplied raw-publish callback (publishes under Connectivity's mutex).
+  void*        publishCtx;                                         // Context for publishFn (the Connectivity instance).
   const char*  clientName;
   const char*  senderTopic;
   const char*  receiverTopic;
   const char*  availabilityTopic;
+  bool         discoveryEnabled = true;                            // false → publish* retracts entities (empty retained payload).
 };
 #endif // HADISCOVERY_HPP

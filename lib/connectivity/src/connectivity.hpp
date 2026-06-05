@@ -22,6 +22,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "mqttTopics.hpp"                                           /// MQTT topic format strings and derived buffer sizes.
 #include "haDiscovery.hpp"                                          /// Home Assistant MQTT auto-discovery handler.
+#include "sync.hpp"                                                 /// RecursiveMutex/LockGuard (no-op off-ESP32).
 
 class MqttBase;                                                     // Forward declaration.
 
@@ -91,6 +92,15 @@ public:
   /// @return `true` if published successfully; otherwise, `false`.
   [[nodiscard]] bool publishRetained(const char* subSubTopic, const char* payload);
 
+  /// @brief Publishes to an absolute MQTT topic (no sender-topic prefix), under the MQTT mutex.
+  /// Connectivity is the sole owner of the PubSubClient; HADiscovery publishes its
+  /// `homeassistant/...` discovery topics through this so every publish is serialized.
+  /// @param topic    Absolute MQTT topic.
+  /// @param payload  The message payload.
+  /// @param retained Whether the broker should retain the message.
+  /// @return `true` if published successfully; otherwise, `false`.
+  [[nodiscard]] bool publishRaw(const char* topic, const char* payload, bool retained);
+
   /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
   /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
   void shutdownMqtt();
@@ -140,11 +150,6 @@ private:
   /// @return `true` if synchronisation completed within the timeout; `false` if it timed out.
   [[nodiscard]] bool syncNtpTime();
 
-  /// @brief Retrieves the current time as an ISO8601 string.
-  /// @param dateTimeBuffer Buffer to store the ISO8601 string.
-  /// @return `true` if the time is retrieved successfully; otherwise, `false`.
-  [[nodiscard]] static bool getIsoTimeString(char (&dateTimeBuffer)[dateTimeStrBufSize]);
-
   /// @brief Resets the watchdog timer.
   void resetWatchdogTimer() const {
     if(resetWdt != nullptr) {
@@ -160,6 +165,7 @@ private:
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
+  RecursiveMutex mqttMutex;                                         // Serializes all PubSubClient access across tasks (no-op off-ESP32).
   MqttCredentials mqttCredentials;                                  // MQTT connection credentials.
   bool networkState;                                                // Indicates the network connection state.
   PubSubClient::State mqttState;                                    // MQTT connection state.
