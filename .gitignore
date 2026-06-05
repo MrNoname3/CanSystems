@@ -29,3 +29,6 @@ ota/files/**/*.crt
 ota/files/**/*.bak
 ota/files/**/server.json
 ota/files/**/wifi.json
+
+# Firmware backups (raw flash dumps)
+backups/*.bin
