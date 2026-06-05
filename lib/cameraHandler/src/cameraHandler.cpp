@@ -101,7 +101,18 @@ bool CameraHandler::begin() {
     Logger::get().printf_P(PSTR("[CAM] No PSRAM; forcing QVGA single-buffer.\r\n"));
   }
 
-  const esp_err_t err = esp_camera_init(&config);
+  // The OV2640 occasionally fails its first SCCB probe right after power-up (or with a marginal
+  // ribbon-cable contact), returning ESP_ERR_NOT_FOUND. Retry a few times with a de-init and a
+  // short delay before giving up — this rides over transient probe failures (not a loose connector).
+  esp_err_t err = ESP_FAIL;
+  for(uint8_t attempt = 1U; attempt <= cameraInitAttempts; ++attempt) {
+    err = esp_camera_init(&config);
+    if(err == ESP_OK) { break; }
+    Logger::get().printf_P(PSTR("[CAM] Camera init attempt %hhu/%hhu failed: 0x%x\r\n"),
+                           attempt, cameraInitAttempts, err);
+    (void)esp_camera_deinit();
+    vTaskDelay(pdMS_TO_TICKS(cameraInitRetryDelayMs));
+  }
   cameraReady = (err == ESP_OK);
   Logger::get().printf_P(PSTR("[CAM] Camera init: %s\r\n"), Str::getStateStr(cameraReady));
   if(!cameraReady) {
