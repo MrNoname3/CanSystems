@@ -79,8 +79,8 @@ projects:
     pio_project: project_esp32_cam
     devices:
       # Placeholder device — replace the MAC with the real ESP32-CAM MAC.
-      - mac: aabbccddeeff
-        friendly_name: "ESP32-CAM (edit MAC)"
+      - mac: 7c9ebd063064
+        friendly_name: "ESP32-CAM"
         files:
           - name: "CA certificate upload"
             local_path: files/common/mosq-ca.crt
@@ -89,5 +89,5 @@ projects:
             local_path: files/common/server.json
             device_path: /config/server.json
           - name: "Camera configuration upload"
-            local_path: files/aabbccddeeff/cam.json
+            local_path: files/7c9ebd063064/cam.json
             device_path: /config/cam.json
