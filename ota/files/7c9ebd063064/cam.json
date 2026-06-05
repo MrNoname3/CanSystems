@@ -3,6 +3,6 @@
   "framesize": 9,
   "jpegQuality": 12,
   "fbCount": 2,
-  "flashEnabled": true,
+  "flashEnabled": false,
   "flashBrightness": 128
 }

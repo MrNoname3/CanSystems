@@ -29,7 +29,7 @@ private:
   static constexpr uint8_t  defaultJpegQuality = 12U;               // JPEG quality (lower = better quality, larger file).
   static constexpr uint8_t  defaultFbCount     = 2U;                // Frame buffers (double-buffered when PSRAM is available).
   static constexpr uint8_t  fallbackFrameSize  = 5U;                // esp_camera framesize_t index (5 = FRAMESIZE_QVGA) when no PSRAM.
-  static constexpr bool     defaultFlashEnabled    = true;          // Fire the on-board flash LED for each capture by default.
+  static constexpr bool     defaultFlashEnabled    = false;         // Fire the on-board flash LED for each capture by default.
   static constexpr uint8_t  defaultFlashBrightness = 128U;          // Default flash PWM duty (0..255), config-overridable.
 
   // Flash LED: AI-Thinker on-board high-power white LED on GPIO 4, driven by LEDC PWM on its own channel.

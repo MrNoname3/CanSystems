@@ -182,6 +182,10 @@ void CameraHandler::captureAndQueue() {
     return;
   }
   Logger::get().printf_P(PSTR("[CAM] Frame queued: %s (%u bytes)\r\n"), name, fb->len);
+  // Diagnostic: watch internal DRAM (free + largest contiguous block + low watermark) and PSRAM.
+  // A shrinking largest-block alongside the upload/reconnect failures points to DRAM fragmentation.
+  Logger::get().printf_P(PSTR("[MEM] heap free=%u maxblk=%u min=%u | psram free=%u\r\n"),
+                         ESP.getFreeHeap(), ESP.getMaxAllocHeap(), ESP.getMinFreeHeap(), ESP.getFreePsram());
 #endif
 }
 
