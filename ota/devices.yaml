@@ -79,7 +79,7 @@ projects:
     pio_project: project_esp8266_thermo
     devices:
       - mac: bcddc2b622c9
-        friendly_name: "Test1"
+        friendly_name: "Home BP"
         files:
           - name: "CA certificate upload"
             local_path: files/common/mosq-ca.crt
