@@ -74,3 +74,16 @@ projects:
           - name: "CAN alert firmware upload"
             local_path: ../.pio/build/nanoatmega328_alert/firmware.bin
             device_path: /canAlertFw.bin
+
+  - name: "Thermometer"
+    pio_project: project_esp8266_thermo
+    devices:
+      - mac: bcddc2b622c9
+        friendly_name: "Home BP"
+        files:
+          - name: "CA certificate upload"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration upload"
+            local_path: files/bcddc2b622c9/server.json
+            device_path: /config/server.json
