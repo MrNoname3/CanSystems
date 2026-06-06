@@ -37,6 +37,10 @@ public:
     sensors.setWaitForConversion(false);                           // Non-blocking: owner polls conversionDelayMs().
     const uint8_t found = sensors.getDeviceCount();
     sensorCount = (found > MaxSensors) ? MaxSensors : found;
+    if(found > MaxSensors) {
+      Logger::get().printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"),
+                             found, static_cast<uint8_t>(MaxSensors));
+    }
     for(uint8_t i = 0U; i < sensorCount; ++i) {
       // cppcheck-suppress useStlAlgorithm
       sensors.getAddress(addresses[i], i);
