@@ -232,7 +232,7 @@ private:
 /// @brief Utility class for managing predefined file names in the file system.
 class FileName final {
 public:
-#if defined(ESP8266) || defined(ESP32)
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   /// @brief Retrieves the temporary file location.
   /// @return Constant string representing the path to the temporary file.
   static constexpr const char* getTempFileLocation() { return tempFileLocation; }
@@ -257,10 +257,12 @@ public:
   /// @return Constant string representing the path to the tube config file.
   static constexpr const char* getTubeConfigLocation() { return tubeConfigLocation; }
 
+#if defined(ESP8266) || defined(ESP32)
   /// @brief Checks if a given file name is accepted by this device.
   /// @param fileName The file name to validate (must not be nullptr).
   /// @return True if the file name is in the list of accepted locations, false otherwise.
   static bool isValidFileName(const char* fileName);
+#endif
 #endif
 
   FileName() = delete;                                   // Delete constructor.
@@ -271,7 +273,7 @@ public:
   FileName& operator=(FileName&&) = delete;                 // Define move assignment operator.
 
 private:
-#if defined(ESP8266) || defined(ESP32)
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
   static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";           // File location for the OTA firmware.
   static constexpr const char PROGMEM canAlertFwLocation[]     = "/canAlertFw.bin";       // File location for CAN alert device OTA firmware.

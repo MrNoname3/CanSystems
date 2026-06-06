@@ -42,6 +42,12 @@ void     resetGpioState();
 #ifndef PROGMEM
 #define PROGMEM
 #endif
+#ifndef F
+#define F(x) (x)
+#endif
+#ifndef FPSTR
+#define FPSTR(x) (x)
+#endif
 #ifndef pgm_read_byte_near
 #define pgm_read_byte_near(x) *(x)
 #endif
