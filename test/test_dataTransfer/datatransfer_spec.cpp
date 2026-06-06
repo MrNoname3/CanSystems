@@ -27,7 +27,10 @@ namespace Err {
   constexpr uint32_t FW_END_FAILED      = 1UL << 23U;
 }
 
-static const char* kMd5 = "0123456789abcdef0123456789abcdef";
+static const char* kMd5        = "0123456789abcdef0123456789abcdef";  // 32 chars; for begin() validation
+static const char* kMd5_abc    = "900150983cd24fb0d6963f7d28e17f72";  // MD5("abc")
+static const char* kMd5_abcdef = "e80b5017098950fc58aad83c8c14978e";  // MD5("abcdef")
+static const char* kMd5_empty  = "d41d8cd98f00b204e9800998ecf8427e";  // MD5("")
 
 // ---- checkOk callback capture ----
 static int  g_cbCount;
@@ -37,7 +40,6 @@ static void onCheckOk(bool valid) { g_lastValid = valid; ++g_cbCount; }
 static void resetEnv() {
   LittleFS.reset();
   Update.reset();
-  md5shim::forcedResult.clear();
   g_cbCount = 0;
   g_lastValid = false;
 }
@@ -173,12 +175,11 @@ bool test_store_unaligned_base64_fails() {
 // ---- happy path (file transfer) ----
 
 bool test_full_file_transfer_succeeds() {
-  IT("a full file transfer writes, verifies MD5 and renames the temp file into place");
+  IT("a full file transfer writes, verifies the real MD5 and renames the temp file into place");
   resetEnv();
-  const std::string raw = "Hello DataTransfer!";   // 19 bytes, one piece
-  md5shim::setResult(kMd5);                         // MD5 check will match
+  const std::string raw = "abc";                    // MD5 verified against the real digest
   DataTransfer dt(onCheckOk);
-  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5_abc, fileName()));
   IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));    // completes -> CHECK state
   dt.runValidityCheck();                            // read + hash
   dt.runValidityCheck();                            // compare + rename
@@ -195,9 +196,8 @@ bool test_multi_piece_transfer_succeeds() {
   resetEnv();
   const std::string part0 = "abc";                  // 3 bytes -> 4 b64 chars
   const std::string part1 = "def";
-  md5shim::setResult(kMd5);
   DataTransfer dt(onCheckOk);
-  IS_TRUE(dt.begin(6U, kMd5, fileName()));
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fileName()));
   IS_TRUE(dt.storeBase64(0U, b64(part0).c_str()));
   IS_TRUE(dt.storeBase64(1U, b64(part1).c_str()));  // completes
   dt.runValidityCheck();
@@ -210,10 +210,9 @@ bool test_multi_piece_transfer_succeeds() {
 bool test_md5_mismatch_fails_and_keeps_no_file() {
   IT("an MD5 mismatch reports FILE_MD5_ERROR and does not publish the file");
   resetEnv();
-  const std::string raw = "payload-bytes";
-  md5shim::setResult("ffffffffffffffffffffffffffffffff");  // != kMd5
+  const std::string raw = "abc";
   DataTransfer dt(onCheckOk);
-  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));  // kMd5 != MD5("abc")
   IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));
   dt.runValidityCheck();                            // read + hash
   dt.runValidityCheck();                            // compare -> mismatch -> CLEANUP
@@ -228,11 +227,11 @@ bool test_md5_mismatch_fails_and_keeps_no_file() {
 // ---- firmware (Update) path ----
 
 bool test_firmware_transfer_succeeds() {
-  IT("a firmware transfer streams to Update and finishes on the last piece");
+  IT("a firmware transfer streams to Update, which verifies size and MD5 on the last piece");
   resetEnv();
-  const std::string raw = "FIRMWAREBLOB";
+  const std::string raw = "abc";                    // Update.end() checks the real MD5 against setMD5()
   DataTransfer dt(onCheckOk);
-  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fwName()));
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5_abc, fwName()));
   IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));    // completes via Update.end()
   IS_EQUAL(g_cbCount, 1);
   IS_TRUE(g_lastValid);
@@ -274,8 +273,36 @@ bool test_firmware_end_failure() {
   END_IT
 }
 
+bool test_firmware_md5_mismatch_rejected() {
+  IT("firmware whose bytes do not match setMD5() is rejected by Update.end()");
+  resetEnv();
+  const std::string raw = "abc";
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fwName()));  // kMd5 != MD5("abc")
+  IS_FALSE(dt.storeBase64(0U, b64(raw).c_str()));  // completes -> Update.end() MD5 check fails
+  IS_EQUAL(dt.getErrorCode(), Err::FW_END_FAILED);
+  END_IT
+}
+
+// ---- MD5 shim self-check ----
+
+bool test_md5_builder_matches_known_vectors() {
+  IT("the MD5 shim reproduces RFC 1321 test vectors");
+  MD5Builder empty;
+  empty.begin();
+  empty.calculate();
+  IS_TRUE(empty.toString() == std::string(kMd5_empty));
+  MD5Builder abc;
+  abc.begin();
+  abc.add(reinterpret_cast<const uint8_t*>("abc"), 3U);
+  abc.calculate();
+  IS_TRUE(abc.toString() == std::string(kMd5_abc));
+  END_IT
+}
+
 int main() {
   SUITE("DataTransfer");
+  test_md5_builder_matches_known_vectors();
   test_begin_rejects_zero_size();
   test_begin_rejects_null_md5();
   test_begin_rejects_empty_md5();
@@ -295,5 +322,6 @@ int main() {
   test_firmware_begin_failure();
   test_firmware_write_failure();
   test_firmware_end_failure();
+  test_firmware_md5_mismatch_rejected();
   FINISH
 }
