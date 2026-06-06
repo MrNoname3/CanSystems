@@ -29,7 +29,11 @@ bool Time::getUtcFileStamp(char* buf, size_t bufSize) {  // NOLINT(readability-c
   const size_t formattedSize = strftime(buf, bufSize, "%Y%m%d_%H%M%SZ", utc);
   return (formattedSize > 0U && formattedSize < bufSize);
 }
+#endif
 
+// Single implementation shared by the ESP and native-test builds: strcmp_P collapses to strcmp
+// off-target (see the pgmspace shim), so there is only one copy to keep in sync with the list.
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
 bool FileName::isValidFileName(const char* fileName) {
   static constexpr const char* const allowedLocations[] = {
     otaFwLocation,
@@ -38,7 +42,10 @@ bool FileName::isValidFileName(const char* fileName) {
     canAlertFwLocation,
     tubeConfigLocation
   };
-  for(const char* const location : allowedLocations) {
+  // The fixed allow-list is clearer as a raw loop; any_of would not shrink it. (strcmp_P keeps
+  // clang-tidy quiet on ESP, but the host build sees plain strcmp, hence the explicit suppressions.)
+  // cppcheck-suppress useStlAlgorithm
+  for(const char* const location : allowedLocations) {  // NOLINT(readability-use-anyofallof)
     // cppcheck-suppress useStlAlgorithm
     if(strcmp_P(fileName, location) == 0) { return true; }
   }

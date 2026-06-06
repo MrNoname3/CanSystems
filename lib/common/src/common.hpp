@@ -2,8 +2,8 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
-#if defined(ESP8266) || defined(ESP32)
-#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
+#include <pgmspace.h>                                               /// Provides PROGMEM support (real on ESP, shim natively for strcmp_P etc.).
 #endif
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
@@ -257,12 +257,10 @@ public:
   /// @return Constant string representing the path to the tube config file.
   static constexpr const char* getTubeConfigLocation() { return tubeConfigLocation; }
 
-#if defined(ESP8266) || defined(ESP32)
   /// @brief Checks if a given file name is accepted by this device.
   /// @param fileName The file name to validate (must not be nullptr).
   /// @return True if the file name is in the list of accepted locations, false otherwise.
   static bool isValidFileName(const char* fileName);
-#endif
 #endif
 
   FileName() = delete;                                   // Delete constructor.
