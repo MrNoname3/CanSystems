@@ -10,7 +10,7 @@ using byte = uint8_t;
 using boolean = uint8_t;
 
 enum : uint8_t { LOW = 0U, HIGH = 1U };
-enum : uint8_t { INPUT = 0U, OUTPUT = 1U, FALLING = 2U };
+enum : uint8_t { INPUT = 0U, OUTPUT = 1U, INPUT_PULLUP = 2U, FALLING = 3U };
 #define IRAM_ATTR
 
 extern "C" {
@@ -24,6 +24,7 @@ void     pinMode(uint8_t pin, uint8_t mode);
 void     digitalWrite(uint8_t pin, uint8_t val);
 int      digitalRead(uint8_t pin);
 uint16_t analogRead(uint8_t pin);
+void     analogWrite(uint8_t pin, int val);
 void     attachInterrupt(uint8_t pin, void (*fn)(), uint8_t mode);
 void     detachInterrupt(uint8_t pin);
 uint8_t  digitalPinToInterrupt(uint8_t pin);
