@@ -60,6 +60,12 @@ public:
   bool init() override {
     (void)reader.begin();
     Logger::get().printf_P(PSTR("[TEMP] DS18B20 sensors found: %hhu\r\n"), reader.count());
+    for(uint8_t i = 0U; i < reader.count(); ++i) {
+      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+      if(reader.romHex(i, rom, sizeof(rom))) {
+        Logger::get().printf_P(PSTR("  %s\r\n"), rom);
+      }
+    }
     return true;
   }
 
@@ -117,7 +123,9 @@ private:
   void readAndPublishOne(uint8_t index) {
     const float tempC = reader.readTempC(index);
     if(tempC < minValidTempC) {
-      Logger::get().printf_P(PSTR("[TEMP] Sensor %hhu disconnected\r\n"), index);
+      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+      (void)reader.romHex(index, rom, sizeof(rom));
+      Logger::get().printf_P(PSTR("[TEMP] Sensor %hhu (%s) disconnected\r\n"), index, rom);
       return;
     }
     publishOne(index, tempC);
