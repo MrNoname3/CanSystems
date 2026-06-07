@@ -31,6 +31,7 @@ void     pinMode(uint8_t pin, uint8_t mode)       { pinModes[pin]  = mode; }
 void     digitalWrite(uint8_t pin, uint8_t val)   { pinValues[pin] = val; }
 int      digitalRead(uint8_t pin)                 { return pinValues[pin]; }
 uint16_t analogRead(uint8_t /*pin*/)              { return analogReadValue; }
+void     analogWrite(uint8_t pin, int val)        { pinValues[pin] = static_cast<uint8_t>(val); }
 void     attachInterrupt(uint8_t /*pin*/, void (* /*fn*/)(), uint8_t /*mode*/) {}
 void     detachInterrupt(uint8_t /*pin*/) {}
 uint8_t  digitalPinToInterrupt(uint8_t pin)       { return pin; }

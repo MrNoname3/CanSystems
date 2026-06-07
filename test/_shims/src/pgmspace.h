@@ -16,3 +16,12 @@
 #define pgm_read_word(x) (*(x))
 #endif
 #define snprintf_P snprintf
+#ifndef strcmp_P
+#define strcmp_P strcmp
+#endif
+#ifndef strncmp_P
+#define strncmp_P strncmp
+#endif
+#ifndef strncpy_P
+#define strncpy_P strncpy
+#endif

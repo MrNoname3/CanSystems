@@ -75,15 +75,6 @@ public:
     /// @brief Default constructor initializing the `extId` and `data` fields to zero.
     CanFrame() : extId(0U), data{0U} {}
 
-    /// @brief Constructor to initialize a CAN frame using an extended CAN ID and data payload.
-    /// @param extId The 32-bit extended CAN ID.
-    /// @param canData The 8-byte array containing the payload.
-    CanFrame(uint16_t extId, const uint8_t (&canData)[8]) :
-      extId(static_cast<uint32_t>(extId))
-    {
-      memcpy(data, canData, sizeof(data));
-    }
-
     /// @brief Constructor to initialize a CAN frame using individual ID components and a data payload.
     /// @param to The receiver address (10 bits).
     /// @param cmd The command identifier (9 bits).

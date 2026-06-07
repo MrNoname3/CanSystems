@@ -2,8 +2,8 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <HardwareSerial.h>                                         /// Hardware serial driver for communication with peripheral devices.
-#if defined(ESP8266) || defined(ESP32)
-#include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
+#include <pgmspace.h>                                               /// Provides PROGMEM support (real on ESP, shim natively for strcmp_P etc.).
 #endif
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
@@ -232,7 +232,7 @@ private:
 /// @brief Utility class for managing predefined file names in the file system.
 class FileName final {
 public:
-#if defined(ESP8266) || defined(ESP32)
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   /// @brief Retrieves the temporary file location.
   /// @return Constant string representing the path to the temporary file.
   static constexpr const char* getTempFileLocation() { return tempFileLocation; }
@@ -271,7 +271,7 @@ public:
   FileName& operator=(FileName&&) = delete;                 // Define move assignment operator.
 
 private:
-#if defined(ESP8266) || defined(ESP32)
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
   static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";           // File location for the OTA firmware.
   static constexpr const char PROGMEM canAlertFwLocation[]     = "/canAlertFw.bin";       // File location for CAN alert device OTA firmware.

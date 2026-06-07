@@ -4,6 +4,8 @@
 #include <Updater.h>                                                /// ESP8266-specific firmware update functionality.
 #elif defined ESP32
 #include <Update.h>                                                 /// ESP32-specific firmware update functionality.
+#else
+#include <Update.h>                                                 /// Native unit-test shim (test/_shims).
 #endif
 
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
@@ -85,6 +87,8 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     const uint32_t freeSpace = fsInfo.totalBytes - fsInfo.usedBytes;
 #elif defined ESP32
     const uint32_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+#else
+    const uint32_t freeSpace = static_cast<uint32_t>(LittleFS.totalBytes() - LittleFS.usedBytes());
 #endif
     const bool isEnoughFreeSpace = freeSpace > fileSizeLocal;
     if(!isEnoughFreeSpace) {
