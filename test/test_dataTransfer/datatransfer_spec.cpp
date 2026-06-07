@@ -21,8 +21,12 @@ namespace Err {
   constexpr uint32_t WRONG_PIECE_NUMBER = 1UL << 8U;
   constexpr uint32_t DATA_NULLPTR       = 1UL << 10U;
   constexpr uint32_t B64_SIZE_ERROR     = 1UL << 11U;
+  constexpr uint32_t TEMP_OPEN_ERROR    = 1UL << 15U;
+  constexpr uint32_t TEMP_WRITE_ERROR   = 1UL << 16U;
   constexpr uint32_t FILE_MD5_ERROR     = 1UL << 18U;
+  constexpr uint32_t TEMP_RENAME_ERROR  = 1UL << 19U;
   constexpr uint32_t FW_BEGIN_FAILED    = 1UL << 20U;
+  constexpr uint32_t FW_SET_MD5_FAILED  = 1UL << 21U;
   constexpr uint32_t FW_WRITE_FAILED    = 1UL << 22U;
   constexpr uint32_t FW_END_FAILED      = 1UL << 23U;
 }
@@ -311,6 +315,53 @@ bool test_firmware_md5_mismatch_rejected() {
   END_IT
 }
 
+// ---- file-system failure modes ----
+
+bool test_temp_open_failure() {
+  IT("begin() reports TEMP_FILE_OPENING_ERROR when the temp file cannot be opened");
+  resetEnv();
+  LittleFS.setFailWriteOpen(true);
+  DataTransfer dt(onCheckOk);
+  IS_FALSE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_EQUAL(dt.getErrorCode(), Err::TEMP_OPEN_ERROR);
+  END_IT
+}
+
+bool test_temp_write_failure() {
+  IT("storeBase64() reports TEMP_FILE_WRITING_ERROR on a short write");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  LittleFS.setFailWrite(true);
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
+  IS_EQUAL(dt.getErrorCode(), Err::TEMP_WRITE_ERROR);
+  END_IT
+}
+
+bool test_rename_failure() {
+  IT("a verified file that cannot be renamed reports TEMP_FILE_RENAMING_ERROR");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));  // -> CHECK
+  LittleFS.setFailRename(true);
+  dt.runValidityCheck();                            // read + hash
+  dt.runValidityCheck();                            // MD5 ok -> rename fails
+  IS_EQUAL(dt.getErrorCode(), Err::TEMP_RENAME_ERROR);
+  IS_FALSE(LittleFS.exists(fileName()));
+  END_IT
+}
+
+bool test_fw_set_md5_failure() {
+  IT("begin() reports FW_UPGRADE_SET_MD5_FAILED when Update.setMD5 fails");
+  resetEnv();
+  Update.setSetMd5Result(false);
+  DataTransfer dt(onCheckOk);
+  IS_FALSE(dt.begin(16U, kMd5, fwName()));
+  IS_EQUAL(dt.getErrorCode(), Err::FW_SET_MD5_FAILED);
+  END_IT
+}
+
 // ---- MD5 shim self-check ----
 
 bool test_md5_builder_matches_known_vectors() {
@@ -352,5 +403,9 @@ int main() {
   test_firmware_write_failure();
   test_firmware_end_failure();
   test_firmware_md5_mismatch_rejected();
+  test_temp_open_failure();
+  test_temp_write_failure();
+  test_rename_failure();
+  test_fw_set_md5_failure();
   FINISH
 }

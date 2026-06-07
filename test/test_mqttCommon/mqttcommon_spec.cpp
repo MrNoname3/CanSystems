@@ -147,8 +147,53 @@ bool test_end_to_end_file_routes_to_ota_target() {
   END_IT
 }
 
+// ---- lifecycle / discovery / failure logging ----
+
+bool test_init_returns_true() {
+  IT("init() returns true");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  IS_TRUE(mc.init());
+  END_IT
+}
+
+bool test_publish_discovery_returns_true() {
+  IT("publishDiscovery() builds the reboot-button entity and returns true");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  IS_TRUE(mc.publishDiscovery());
+  END_IT
+}
+
+bool test_response_send_failure_is_handled() {
+  IT("a failed response send is handled (still counts the attempt)");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  MqttBase::sendResult = false;            // force the underlying send to fail
+  deliver(mc, R"({"cmd":"nope"})");        // unknown cmd -> NACK attempt fails
+  IS_EQUAL(MqttBase::responseCount, 1);
+  END_IT
+}
+
+bool test_file_piece_without_begin_is_nacked() {
+  IT("a file piece with no preceding begin is NACKed");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  deliver(mc, R"({"piece":0,"data":"YWJj"})");  // no begin -> storeBase64 fails
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  END_IT
+}
+
 int main() {
   SUITE("MqttCommon");
+  test_init_returns_true();
+  test_publish_discovery_returns_true();
+  test_response_send_failure_is_handled();
+  test_file_piece_without_begin_is_nacked();
   test_cmd_reboot();
   test_cmd_unknown();
   test_file_begin_valid();

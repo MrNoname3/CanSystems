@@ -41,9 +41,12 @@ public:
   }
 
   size_t write(const uint8_t* src, size_t length) {  // Arduino raw write (dataTransfer)
+    if(sWriteShouldFail) { return 0U; }              // injected disk-write failure
     buf_.append(reinterpret_cast<const char*>(src), length);
     return length;
   }
+
+  static inline bool sWriteShouldFail = false;       // test hook: make write() report a short write
 
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static) flushes write buffer to the store
   void close() {
@@ -63,16 +66,22 @@ class LittleFsShim {
 public:
   [[nodiscard]] bool begin() const { return beginResult_; }
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) looks up / creates entries in files_
+  // Hands out a mutable alias to files_, so it cannot be const/static despite clang-tidy's hints.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
   [[nodiscard]] File open(const char* path, const char* mode) {
-    if((mode != nullptr) && (mode[0] == 'w')) { return File(&files_, path); }
+    if((mode != nullptr) && (mode[0] == 'w')) {
+      if(failWriteOpen_) { return {}; }          // injected open-for-write failure
+      return File(&files_, path);
+    }
     const auto it = files_.find(path);
     if(it == files_.end()) { return {}; }
     return File(it->second);
   }
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) moves an entry within files_
+  // Mutates files_; clang-tidy's const/static hints here are false positives.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
   bool rename(const char* from, const char* to) {
+    if(failRename_) { return false; }            // injected rename failure
     const auto it = files_.find(from);
     const bool found = (it != files_.end());
     if(found) {
@@ -99,12 +108,22 @@ public:
   }
   void setBeginResult(bool result) { beginResult_ = result; }
   void setCapacity(size_t capacity) { capacity_ = capacity; }
-  void reset() { files_.clear(); beginResult_ = true; capacity_ = defaultCapacity; }
+  void setFailWriteOpen(bool fail) { failWriteOpen_ = fail; }
+  void setFailWrite(bool fail) { File::sWriteShouldFail = fail; }      // NOLINT(readability-convert-member-functions-to-static)
+  void setFailRename(bool fail) { failRename_ = fail; }
+  void reset() {
+    files_.clear();
+    beginResult_ = true; failWriteOpen_ = false; failRename_ = false;
+    File::sWriteShouldFail = false;
+    capacity_ = defaultCapacity;
+  }
 
 private:
   static constexpr size_t defaultCapacity = 2024U * 1024U;  // mirrors the 2 MB LittleFS partition
   std::map<std::string, std::string> files_;
   bool   beginResult_ = true;
+  bool   failWriteOpen_ = false;
+  bool   failRename_ = false;
   size_t capacity_ = defaultCapacity;
 };
 
