@@ -172,6 +172,33 @@ bool test_store_unaligned_base64_fails() {
   END_IT
 }
 
+bool test_store_oversized_piece_fails() {
+  IT("storeBase64() rejects a piece whose decoded size exceeds the maximum");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(512U, kMd5, fileName()));
+  // 339 raw bytes -> 452 base64 chars -> piece size 340 > 337 (maxFilePieceLength).
+  const std::string oversized = b64(std::string(339U, 'x'));
+  IS_FALSE(dt.storeBase64(0U, oversized.c_str()));
+  IS_EQUAL(dt.getErrorCode(), 1UL << 12U);  // FILE_PIECE_SIZE_OVEFLOW
+  END_IT
+}
+
+bool test_transfer_timeout_aborts() {
+  IT("an idle transfer is aborted after the transfer timeout elapses");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));     // STORING, timer = 0
+  setFakeMillis(16U * 60U * 1000U);                // > 15 min transfer timeout
+  dt.runValidityCheck();                           // timeout -> CLEANUP -> IDLE
+  // Transfer is gone: a piece is now rejected as if begin() was never called.
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
+  IS_EQUAL(dt.getErrorCode(), 1UL << 7U);          // BEGIN_NOT_CALLED
+  clearFakeMillis();
+  END_IT
+}
+
 // ---- happy path (file transfer) ----
 
 bool test_full_file_transfer_succeeds() {
@@ -315,6 +342,8 @@ int main() {
   test_store_wrong_piece_number_fails();
   test_store_null_data_fails();
   test_store_unaligned_base64_fails();
+  test_store_oversized_piece_fails();
+  test_transfer_timeout_aborts();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
   test_md5_mismatch_fails_and_keeps_no_file();
