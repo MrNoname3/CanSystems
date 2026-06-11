@@ -76,6 +76,10 @@ void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLIN
         (void)CanBase::sendCanFrame((colorsOffset == 0U) ? CanCmd::RGB_LED : CanCmd::PLAY_MP3, canData);
       }
     }
+  } else if((colorsOffset == 3U) && colorsJsonVar.isNull()) {
+    // "Colors" omitted entirely: play the sound with the LEDs left dark (color bytes stay 0).
+    // A present but malformed "Colors" (wrong type/size/element) still drops the whole message.
+    (void)CanBase::sendCanFrame(CanCmd::PLAY_MP3, canData);
   }
 }
 
