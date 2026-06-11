@@ -53,7 +53,12 @@ bool DFPlayer::run() {
     } break;
     case PlayingStates::SET_VOLUME: {
       DFPlayerMiniFast::volume(playingQueue.peek().volume);       // Set volume trough base class.
-      rgbLed.setColor(playingQueue.peek().red, playingQueue.peek().green, playingQueue.peek().blue, false);
+      // An all-zero color means a sound-only request: leave the LEDs unchanged during playback
+      // instead of forcing them dark. The unconditional loadColor() in TURN_OFF stays harmless,
+      // it just re-applies the already-active saved color.
+      if((playingQueue.peek().red | playingQueue.peek().green | playingQueue.peek().blue) != 0U) {
+        rgbLed.setColor(playingQueue.peek().red, playingQueue.peek().green, playingQueue.peek().blue, false);
+      }
       eventTimer = actualTime;
       playingState = PlayingStates::WAIT_FOR_CMD;
     } break;
