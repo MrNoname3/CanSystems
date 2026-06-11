@@ -41,7 +41,8 @@ private:
     FW_UPGRADE_BEGIN_FAILED   = 1 << 20U,               // Firmware upgrade initialization failed.
     FW_UPGRADE_SET_MD5_FAILED = 1 << 21U,               // Firmware upgrade MD5 configuration failed.
     FW_UPGRADE_WRITE_FAILED   = 1 << 22U,               // Firmware upgrade chunk write failed.
-    FW_UPGRADE_END_FAILED     = 1 << 23U                // Firmware upgrade finalization failed.
+    FW_UPGRADE_END_FAILED     = 1 << 23U,               // Firmware upgrade finalization failed.
+    RECEIVED_DATA_OVERRUN     = 1 << 24U                // More data received than the declared file size.
   };
 
 public:

@@ -83,7 +83,12 @@ void Radiation::counter() { // NOLINT(readability-convert-member-functions-to-st
 }
 
 void Radiation::measure() { // NOLINT(readability-convert-member-functions-to-static)
+  // The pin ISR can preempt this Ticker callback; without masking, a pulse landing between the
+  // snapshot and the clear would be wiped. A pulse during the masked window stays latched in the
+  // interrupt controller and is counted right after, in the next measurement period.
+  noInterrupts();
   cpmToSend = cpm;
   cpm = 0U;
+  interrupts();
   measureDone = true;
 }

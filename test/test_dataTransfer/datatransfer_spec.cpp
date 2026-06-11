@@ -29,6 +29,7 @@ namespace Err {
   constexpr uint32_t FW_SET_MD5_FAILED  = 1UL << 21U;
   constexpr uint32_t FW_WRITE_FAILED    = 1UL << 22U;
   constexpr uint32_t FW_END_FAILED      = 1UL << 23U;
+  constexpr uint32_t DATA_OVERRUN       = 1UL << 24U;
 }
 
 static const char* kMd5        = "0123456789abcdef0123456789abcdef";  // 32 chars; for begin() validation
@@ -185,6 +186,20 @@ bool test_store_oversized_piece_fails() {
   const std::string oversized = b64(std::string(339U, 'x'));
   IS_FALSE(dt.storeBase64(0U, oversized.c_str()));
   IS_EQUAL(dt.getErrorCode(), 1UL << 12U);  // FILE_PIECE_SIZE_OVEFLOW
+  END_IT
+}
+
+bool test_store_data_overrun_aborts() {
+  IT("storeBase64() rejects a piece that exceeds the declared file size and aborts the transfer");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));          // 3 declared bytes
+  IS_FALSE(dt.storeBase64(0U, b64("abcdef").c_str()));  // 6 decoded bytes > 3 remaining
+  IS_EQUAL(dt.getErrorCode(), Err::DATA_OVERRUN);
+  // The transfer is aborted: the next piece is rejected as if begin() was never called.
+  dt.runValidityCheck();                                // CLEANUP -> IDLE
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
+  IS_EQUAL(dt.getErrorCode(), Err::BEGIN_NOT_CALLED);
   END_IT
 }
 
@@ -394,6 +409,7 @@ int main() {
   test_store_null_data_fails();
   test_store_unaligned_base64_fails();
   test_store_oversized_piece_fails();
+  test_store_data_overrun_aborts();
   test_transfer_timeout_aborts();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();

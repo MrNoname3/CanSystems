@@ -149,6 +149,17 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::B64_DECODED_SIZE_ERROR);
     return false;
   }
+  // Without this check the unsigned subtraction below would wrap on an oversized last piece,
+  // leaving the transfer stuck (a huge "remaining" count) until the timeout fires.
+  if(decodedPostSize > remainingFileSizeLocal) {
+    Logger::get().printf_P(PSTR("[FT] Received more data than the declared file size!\r\n"));
+    dataTransferErrState.setError(DataTransferError::RECEIVED_DATA_OVERRUN);
+    if(isFwTransfer) {
+      Update.end(false);
+    }
+    transferState = TransferState::CLEANUP;
+    return false;
+  }
   if(isFwTransfer) {
     const uint32_t writtenBytes = Update.write(decodedData, decodedPostSize);
     if(writtenBytes != decodedPostSize) {

@@ -111,11 +111,15 @@ bool CanHandlerEsp32::run() {
     CanFrame frameOut;
     if(xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE) {
       const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
-      if(!beginPacketResult) { return false; }
-      const bool packetWriteResult = CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U;
-      if(!packetWriteResult) { return false; }
-      const bool endPacketResult = CAN.endPacket() != 0U;
-      if(!endPacketResult) { return false; }
+      const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U);
+      const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
+      if(!endPacketResult) {
+        // The frame is already consumed from the queue, so a TX failure would otherwise vanish
+        // silently (the mains discard the runTasks() failure mask).
+        Logger::get().printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"),
+          static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
+        return false;
+      }
       // Logger::get().printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
     }
   }
