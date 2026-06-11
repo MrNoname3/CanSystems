@@ -68,7 +68,17 @@ void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLIN
 void CanOta::runOta() {
   const uint32_t actualTime = millis();
   if(Time::hasElapsed(actualTime, otaTimeoutTimer, otaTimeoutTime)) {
-    transferState = TransferState::IDLE;
+    // Route an in-progress timeout through INVALID so the existing cleanup runs: the file gets
+    // closed, the counters reset, and the {"OTA":"[ERR]"} status reaches the server. Jumping
+    // straight to IDLE used to skip all of that. VALID/INVALID are excluded: they are processed
+    // within the same pass, and a timeout must not overwrite an already-arrived final ACK.
+    const bool otaInProgress = (transferState == TransferState::START) ||
+                               (transferState == TransferState::STORE) ||
+                               (transferState == TransferState::WAIT_FOR_ACK);
+    if(otaInProgress) {
+      Logger::get().printf_P(PSTR("[CAN] OTA timeout for \"%s\"!\r\n"), canMqttGateway.getSubtopic());
+      transferState = TransferState::INVALID;
+    }
   }
 
   switch(transferState) {
