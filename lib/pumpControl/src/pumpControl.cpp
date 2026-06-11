@@ -1,7 +1,30 @@
 #include "pumpControl.hpp"
 #include <Arduino.h>
+#if defined(ARDUINO_ARCH_AVR)
+#include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
+#endif
 
 volatile uint16_t PumpControl::flowCounter = 0U;
+
+uint16_t PumpControl::readFlowCounter() {
+#if defined(ARDUINO_ARCH_AVR)
+  // 16-bit access is two 8-bit operations on AVR; guard against tearing by the flow ISR.
+  uint16_t value = 0U;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { value = flowCounter; }
+  return value;
+#else
+  return flowCounter;
+#endif
+}
+
+void PumpControl::clearFlowCounter() {
+#if defined(ARDUINO_ARCH_AVR)
+  // 16-bit store is two 8-bit operations on AVR; guard against a flow ISR between the two bytes.
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { flowCounter = 0U; }
+#else
+  flowCounter = 0U;
+#endif
+}
 
 PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin, uint8_t intPin, uint8_t currentSensePin, void (*reportError)(uint8_t errCode)) :
   pcf(pcf8574),
@@ -51,7 +74,8 @@ void PumpControl::handleIdle(uint32_t actualTime) {
       analogWrite(pwmPin, irrigationQueue.peek().pwmValue);
       eventTimer = actualTime;
       errorCheckTimer = actualTime;
-      prevFlowCounter = flowCounter = 0U;
+      clearFlowCounter();
+      prevFlowCounter = 0U;
       resetSafetyIrrigationTimer(irrigationQueue.peek().channel);
       rgbLed.setColor(irrStartColors[0], irrStartColors[1], irrStartColors[2], false);
       irrigationState = IrrigationState::RUN;
@@ -61,7 +85,7 @@ void PumpControl::handleIdle(uint32_t actualTime) {
     }
   } else {
     checkSafetyIrrigations();
-    if(flowCounter > 0U) {
+    if(readFlowCounter() > 0U) {
       pumpControlErrState.setError(PumpControlError::FLOW_OVERRUN);
       irrigationState = IrrigationState::ERROR;
     }
@@ -80,15 +104,17 @@ void PumpControl::handleRun(uint32_t actualTime) {
   const uint8_t actualCh = irrigationQueue.peek().channel;
   const bool limitSwitchReached = (limitSwitches[actualCh] != nullptr) ? limitSwitches[actualCh]() : false;
   if(Time::hasElapsed(actualTime, eventTimer, Time::minToMs(irrigationQueue.peek().duration)) || limitSwitchReached) {
-    prevFlowCounter = flowCounter = 0U;
+    clearFlowCounter();
+    prevFlowCounter = 0U;
     irrigationState = IrrigationState::STOP;
   } else {
     if(Time::hasElapsed(actualTime, errorCheckTimer, errorCheckTime)) {
       errorCheckTimer = actualTime;
       if(static_cast<bool>(irrigationQueue.peek().checkFlow)) {
-        const bool flowCheckSuccess = flowCounter > prevFlowCounter;
+        const uint16_t actualFlowCounter = readFlowCounter();
+        const bool flowCheckSuccess = actualFlowCounter > prevFlowCounter;
         if(flowCheckSuccess) {
-          prevFlowCounter = flowCounter;
+          prevFlowCounter = actualFlowCounter;
         } else {
           pumpControlErrState.setError(PumpControlError::FLOW_STUCK);
           irrigationState = IrrigationState::ERROR;

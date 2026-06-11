@@ -16,7 +16,8 @@ bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   flash.chipErase();                                              // Attempt to erase the FLASH block.
   this->fwSize = fwSize;                                          // Save FW size.
   this->fwCrc = fwCrc;                                            // Store FW CRC.
-  flashBlockBeginAddress = flashBlockNumber * flashBlockTobytes;
+  // 32-bit multiply: with AVR's 16-bit int the product would wrap for flashBlockNumber >= 2.
+  flashBlockBeginAddress = static_cast<uint32_t>(flashBlockNumber) * flashBlockTobytes;
   flashPointer = 0;                                               // Reset flash pointer.
   otaState = OtaState::START;
   return true;                                                    // Return success.

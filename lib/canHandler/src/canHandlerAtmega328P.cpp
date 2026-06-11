@@ -3,6 +3,7 @@
 #include "CAN.h"                                                    /// CAN controller library.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
 
 namespace {
   constexpr const char PROGMEM storingStr[] = "Storing: ";
@@ -77,7 +78,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
 }
 
 bool CanHandlerAtmega328P::handleRxFrame() {
-  intCount--;
+  // The decrement is a non-atomic read-modify-write; an rxInterrupt between the load and the
+  // store would lose its increment (and with edge-triggered INT, the pending frame with it).
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount--; }
   const uint8_t canDataDlc = CAN.parsePacket();
   CanFrame canFrame;
   canFrame.extId = CAN.packetId();

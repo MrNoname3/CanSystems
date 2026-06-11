@@ -182,6 +182,13 @@ private:
   /// @brief Interrupt handler to update flow count when flow sensor is triggered.
   static void irqHandler();
 
+  /// @brief Reads the ISR-updated flow counter atomically (16-bit access is not atomic on AVR).
+  /// @return The current flow counter value.
+  [[nodiscard]] static uint16_t readFlowCounter();
+
+  /// @brief Clears the ISR-updated flow counter atomically (16-bit access is not atomic on AVR).
+  static void clearFlowCounter();
+
   /// @brief Selects an irrigation channel for use.
   /// @param channel The channel to select.
   /// @return True if the channel was successfully selected, false otherwise.
