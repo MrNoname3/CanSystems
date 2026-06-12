@@ -85,7 +85,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `lib/`           | Feature libraries (task scheduler, MQTT/CAN stacks, drivers, OTA, …) |
 | `test/`          | Native test suites + `test/_shims/` (Arduino/LittleFS/Update/PubSubClient fakes) |
 | `ota/`           | Server-side OTA/file-transfer tool (Python venv: `paho-mqtt`, `pyyaml`, `tqdm`) |
-| `scripts/`       | Build helpers: git version injection, ELF→BIN, library patching, size compare |
+| `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
 | `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
 | `audio/`         | MP3 set for the alert node's DFPlayer SD card |
@@ -104,6 +104,25 @@ pio check                                # cppcheck + clang-tidy on all environm
 The whole build is warning-clean under `-Wall -Wextra -Werror`; keep it that way.
 Firmware version comes from the git commit count, so commit before flashing release builds
 (the `dirty` flag is published in the info topic).
+
+### Release gate
+
+`scripts/release_check.py` chains the three commands above fail-fast: build all environments,
+run the native test suite, then static analysis — where a **single defect of any severity**
+(`--fail-on-defect low/medium/high`) fails the gate, unlike a bare `pio check`, which reports
+SUCCESS even with findings. Step 0 checks the git tree with the same rule the firmware uses for
+its `GIT_DIRTY` flag.
+
+```sh
+python3 scripts/release_check.py            # build + test + check; dirty tree is a warning
+python3 scripts/release_check.py --strict   # release mode: a dirty tree fails immediately
+```
+
+Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
+human sees exactly what standalone runs would print. The run ends machine-friendly: a summary
+table, the last 50 lines of the failed step (ANSI-stripped), and a final
+`RELEASE CHECK: PASS|FAIL (step: <name>)` marker line — `tail` is enough to know everything.
+Exit code is 0 only on a fully clean run (~5 minutes).
 
 ## Gotchas
 
