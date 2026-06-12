@@ -11,16 +11,8 @@ projects:
       - name: Clear config
         description: Deletes the stored configuration file
         cmd: "clearConfig"
-    devices:
-      - mac: bcddc2b622c9
-        friendly_name: "Test1"
-        files:
-          - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
-            device_path: /config/mosq-ca.crt
-          - name: "Server configuration upload"
-            local_path: files/bcddc2b622c9/server.json
-            device_path: /config/server.json
+    devices: []   # No hardware deployed yet; the project entry is kept on purpose.
+
   - name: "Radiation detector"
     pio_project: project_esp8266_rad
     devices:
