@@ -68,13 +68,17 @@ public:
     disableWatchdog();
   }
 
-  /// @brief Enables the watchdog timer on ESP8266.
-  /// @details Disables the software watchdog and enables the hardware watchdog (~8400ms timeout).
+  /// @brief Arms this firmware's watchdog policy on ESP8266.
+  /// @details Counter-intuitively calls wdt_disable(): it turns OFF the short (~3.2 s) software
+  /// WDT so only the hardware WDT (~8.4 s, cannot be disabled) guards the device — long
+  /// operations like the TLS handshake need the bigger budget. Named for cross-platform symmetry.
   static inline void enableWatchdog() {
     wdt_disable();
   }
 
-  /// @brief Disables the hardware watchdog timer on ESP8266.
+  /// @brief Restores the default short (~3.2 s) software WDT on ESP8266.
+  /// @details The hardware WDT cannot be turned off on this platform; "disable" here means
+  /// reverting this firmware's relaxed watchdog policy. Named for cross-platform symmetry.
   static inline void disableWatchdog() {
     wdt_enable(0U);
   }
