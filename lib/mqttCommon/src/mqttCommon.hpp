@@ -74,6 +74,8 @@ private:
 
   static const CmdEntry cmdTable[];                             // Lookup table mapping command strings to handlers.
 
+  // Static because DataTransfer's callback is a plain function pointer with no context argument.
+  // This makes the class single-instance: a second MqttCommon would share and overwrite these flags.
   static inline bool isFileCheckDone = false;       // Flag indicating that a file validity check is completed.
   static inline bool isFileValid = false;           // Flag indicating the result of the file validity check.
 
