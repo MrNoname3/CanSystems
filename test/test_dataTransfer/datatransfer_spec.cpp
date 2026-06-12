@@ -182,10 +182,22 @@ bool test_store_oversized_piece_fails() {
   resetEnv();
   DataTransfer dt(onCheckOk);
   IS_TRUE(dt.begin(512U, kMd5, fileName()));
-  // 339 raw bytes -> 452 base64 chars -> piece size 340 > 337 (maxFilePieceLength).
-  const std::string oversized = b64(std::string(339U, 'x'));
+  // 132 raw bytes -> 176 base64 chars -> piece size 133 > 127 (maxFilePieceLength).
+  const std::string oversized = b64(std::string(132U, 'x'));
   IS_FALSE(dt.storeBase64(0U, oversized.c_str()));
   IS_EQUAL(dt.getErrorCode(), 1UL << 12U);  // FILE_PIECE_SIZE_OVEFLOW
+  END_IT
+}
+
+bool test_store_max_size_piece_succeeds() {
+  IT("storeBase64() accepts a piece at the 126-byte raw size cap");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(512U, kMd5, fileName()));
+  // 126 raw bytes -> 168 base64 chars (no padding) -> piece size 127 == maxFilePieceLength.
+  const std::string maxPiece = b64(std::string(126U, 'x'));
+  IS_TRUE(dt.storeBase64(0U, maxPiece.c_str()));
+  IS_EQUAL(dt.getErrorCode(), 0U);
   END_IT
 }
 
@@ -409,6 +421,7 @@ int main() {
   test_store_null_data_fails();
   test_store_unaligned_base64_fails();
   test_store_oversized_piece_fails();
+  test_store_max_size_piece_succeeds();
   test_store_data_overrun_aborts();
   test_transfer_timeout_aborts();
   test_full_file_transfer_succeeds();

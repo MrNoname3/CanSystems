@@ -12,7 +12,10 @@ private:
   static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);   // Timeout period for the transfer process.
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
   static constexpr uint32_t invalidFilePieceNumber = 0xFFFFFFFFU;       // Indicator for an invalid file piece number.
-  static constexpr uint16_t maxFilePieceLength = 336U + 1U;             // Maximum allowed length for a file piece.
+  // Piece-size cap: 126 is the closest multiple of 3 to 128, so a full piece encodes to whole
+  // base64 groups with no padding. Comfortably above the tuned 100-byte sender pieces (larger
+  // pieces measured slower, see ota/otaUpdate.py); the 1024-byte MQTT packet could carry 336.
+  static constexpr uint16_t maxFilePieceLength = 126U + 1U;             // Maximum allowed length for a file piece.
   using DataTransferErrorType = uint32_t;                               // Type used for error codes.
 
   /// @brief Error codes for file transfer operations.
