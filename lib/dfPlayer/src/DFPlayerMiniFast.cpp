@@ -478,7 +478,7 @@ void DFPlayerMiniFast<Debug>::sendData() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::flush() { // NOLINT(readability-convert-member-functions-to-static)
-  while(serial->available()) {
+  while(serial->available() != 0) {
     serial->read();
   }
 }
@@ -642,7 +642,7 @@ typename DFPlayerMiniFast<Debug>::ParseResult DFPlayerMiniFast<Debug>::processSt
 template<bool Debug>
 bool DFPlayerMiniFast<Debug>::parseFeedback() {
   while(true) {
-    if(serial->available()) {
+    if(serial->available() != 0) {
       const uint8_t recChar = static_cast<uint8_t>(serial->read());
       const ParseResult result = processState(recChar);
       if(result == ParseResult::SUCCESS) { return true; }

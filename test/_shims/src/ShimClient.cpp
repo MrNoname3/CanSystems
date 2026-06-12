@@ -10,16 +10,24 @@ static bool     fakeMillisActive = false;
 static uint8_t  pinModes[256]  = {};
 static uint8_t  pinValues[256] = {};
 static uint16_t analogReadValue = 0U;
+static void (*isrTable[256])() = {};                 // Handlers stored by attachInterrupt().
+
+uint8_t EIFR = 0U;                                   // AVR external interrupt flag register stand-in.
 
 void setFakeMillis(uint32_t t)     { fakeMillisValue = t; fakeMillisActive = true; }
 void clearFakeMillis()             { fakeMillisActive = false; }
 void setAnalogReadValue(uint16_t v){ analogReadValue = v; }
 uint8_t getDigitalWriteValue(uint8_t pin) { return pinValues[pin]; }
 uint8_t getPinMode(uint8_t pin)    { return pinModes[pin]; }
+void triggerInterrupt(uint8_t pin) {
+  if (isrTable[pin] != nullptr) { isrTable[pin](); }
+}
 void resetGpioState() {
   memset(pinModes,  0, sizeof(pinModes));
   memset(pinValues, 0, sizeof(pinValues));
+  memset(isrTable,  0, sizeof(isrTable));
   analogReadValue = 0U;
+  EIFR = 0U;
 }
 
 extern "C" {
@@ -32,8 +40,8 @@ void     digitalWrite(uint8_t pin, uint8_t val)   { pinValues[pin] = val; }
 int      digitalRead(uint8_t pin)                 { return pinValues[pin]; }
 uint16_t analogRead(uint8_t /*pin*/)              { return analogReadValue; }
 void     analogWrite(uint8_t pin, int val)        { pinValues[pin] = static_cast<uint8_t>(val); }
-void     attachInterrupt(uint8_t /*pin*/, void (* /*fn*/)(), uint8_t /*mode*/) {}
-void     detachInterrupt(uint8_t /*pin*/) {}
+void     attachInterrupt(uint8_t pin, void (*fn)(), uint8_t /*mode*/) { isrTable[pin] = fn; }
+void     detachInterrupt(uint8_t pin) { isrTable[pin] = nullptr; }
 uint8_t  digitalPinToInterrupt(uint8_t pin)       { return pin; }
 void     cli() {}
 void     sei() {}
