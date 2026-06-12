@@ -9,6 +9,10 @@
 #include <cstddef>
 #include <utility>
 
+#define FILE_READ "r"                                // Arduino fs open-mode macro (canMqttGateway).
+
+enum SeekMode : uint8_t { SeekSet = 0U, SeekCur = 1U, SeekEnd = 2U };  // Mirrors fs::SeekMode.
+
 class File {
 public:
   File() = default;
@@ -38,6 +42,16 @@ public:
 
   size_t read(uint8_t* dst, size_t length) {         // Arduino raw read (dataTransfer)
     return readBytes(reinterpret_cast<char*>(dst), length);
+  }
+
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) mutates pos_; mirrors fs::File
+  bool seek(size_t position, SeekMode mode = SeekSet) {
+    size_t target = position;
+    if(mode == SeekCur) { target = pos_ + position; }
+    else if(mode == SeekEnd) { target = buf_.size() + position; }
+    if(target > buf_.size()) { return false; }
+    pos_ = target;
+    return true;
   }
 
   size_t write(const uint8_t* src, size_t length) {  // Arduino raw write (dataTransfer)

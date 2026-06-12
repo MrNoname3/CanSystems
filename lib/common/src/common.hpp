@@ -140,7 +140,7 @@ public:
   /// @return `"[OK]"` if `state` is `true`, otherwise `"[ERR]"`.
   static constexpr const char* getStateStr(bool state) { return state ? getOkStr() : getErrStr(); }
 
-#if defined(ESP8266) || defined(ESP32)
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   /// @brief Retrieves the section separator string.
   /// @return Constant string used to separate sections in logs or messages, stored in program memory.
   static constexpr const char* getSectionSeparator() { return sectionSeparator; }
@@ -162,7 +162,8 @@ private:
   static constexpr const char* okStr            = "[OK]";     // Status string for "OK" on AVR platforms.
   static constexpr const char* errStr           = "[ERR]";    // Status string for "Error" on AVR platforms.
   static constexpr const char* spacerStr        = "|";        // A string used as a spacer in formatting.
-#elif defined(ESP8266) || defined(ESP32)
+#elif defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
+  // PROGMEM is real on ESP and a no-op in the native pgmspace shim, so the test build shares this branch.
   static constexpr const char PROGMEM okStr[]             = "[OK]";  // Status string for "OK" stored in program memory for ESP platforms.
   static constexpr const char PROGMEM errStr[]            = "[ERR]"; // Status string for "Error" stored in program memory for ESP platforms.
   static constexpr const char PROGMEM sectionSeparator[]  = "*************************************************"; // Section separator string.
