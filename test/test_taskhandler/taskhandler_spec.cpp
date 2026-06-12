@@ -177,6 +177,37 @@ bool test_32_tasks_highest_bit_bitmask() {
   END_IT
 }
 
+bool test_single_nullptr_task_safe() {
+  IT("a single-task handler with a nullptr entry inits and runs safely");
+  Task* list[] = { nullptr };
+  TaskHandler<1, false> handler(list);
+  IS_EQUAL(handler.initTasks(), 0U);
+  IS_EQUAL(handler.runTasks(), 0U);
+  END_IT
+}
+
+bool test_single_task_failed_run_bitmask() {
+  IT("single task - failed run returns bitmask 1");
+  TrackingTask task(true, false);
+  Task* list[] = { &task };
+  TaskHandler<1, true> handler(list);
+  IS_EQUAL(handler.runTasks(), 1U);
+  END_IT
+}
+
+bool test_partial_round_robin_null_first_task() {
+  IT("partial round-robin skips a nullptr first task and still rotates the rest");
+  TrackingTask taskOne(true, true);
+  TrackingTask taskTwo(true, true);
+  Task* list[] = { nullptr, &taskOne, &taskTwo };
+  TaskHandler<3, false> handler(list);
+  IS_EQUAL(handler.runTasks(), 0U);
+  IS_EQUAL(handler.runTasks(), 0U);
+  IS_EQUAL(taskOne.runCount, 1U);
+  IS_EQUAL(taskTwo.runCount, 1U);
+  END_IT
+}
+
 int main() {
   SUITE("TaskHandler");
   test_single_task_init_success();
@@ -189,5 +220,8 @@ int main() {
   test_nullptr_task_skipped();
   test_run_failure_sets_bitmask();
   test_32_tasks_highest_bit_bitmask();
+  test_single_nullptr_task_safe();
+  test_single_task_failed_run_bitmask();
+  test_partial_round_robin_null_first_task();
   FINISH
 }

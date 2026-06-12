@@ -21,6 +21,8 @@ namespace Err {
   constexpr uint32_t WRONG_PIECE_NUMBER = 1UL << 8U;
   constexpr uint32_t DATA_NULLPTR       = 1UL << 10U;
   constexpr uint32_t B64_SIZE_ERROR     = 1UL << 11U;
+  constexpr uint32_t PIECE_SIZE_ERROR   = 1UL << 13U;
+  constexpr uint32_t B64_DECODED_ERROR  = 1UL << 14U;
   constexpr uint32_t TEMP_OPEN_ERROR    = 1UL << 15U;
   constexpr uint32_t TEMP_WRITE_ERROR   = 1UL << 16U;
   constexpr uint32_t FILE_MD5_ERROR     = 1UL << 18U;
@@ -212,6 +214,58 @@ bool test_store_data_overrun_aborts() {
   dt.runValidityCheck();                                // CLEANUP -> IDLE
   IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
   IS_EQUAL(dt.getErrorCode(), Err::BEGIN_NOT_CALLED);
+  END_IT
+}
+
+bool test_store_all_padding_piece_fails() {
+  IT("storeBase64() rejects a piece that decodes to zero bytes (all-padding base64)");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(8U, kMd5, fileName()));
+  IS_FALSE(dt.storeBase64(0U, "A==="));
+  IS_EQUAL(dt.getErrorCode(), Err::PIECE_SIZE_ERROR);
+  END_IT
+}
+
+bool test_store_invalid_base64_chars_fails() {
+  IT("storeBase64() rejects a piece containing invalid base64 characters");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(8U, kMd5, fileName()));
+  IS_FALSE(dt.storeBase64(0U, "!!!!"));
+  IS_EQUAL(dt.getErrorCode(), Err::B64_DECODED_ERROR);
+  END_IT
+}
+
+bool test_rebegin_replaces_open_transfer() {
+  IT("begin() during an unfinished transfer closes the old file and starts cleanly");
+  resetEnv();
+  const std::string raw = "abc";
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));   // partial: temp file stays open
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5_abc, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));     // new transfer completes
+  dt.runValidityCheck();                             // read + hash
+  dt.runValidityCheck();                             // compare + rename
+  IS_TRUE(g_lastValid);
+  IS_TRUE(LittleFS.fileContent(fileName()) == raw);
+  END_IT
+}
+
+bool test_check_phase_timeout_aborts() {
+  IT("a transfer stuck in the MD5-check phase is aborted by the transfer timeout");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));   // completes -> CHECK state
+  setFakeMillis(16U * 60U * 1000U);                  // > 15 min transfer timeout
+  dt.runValidityCheck();                             // timeout -> CLEANUP -> IDLE
+  IS_FALSE(LittleFS.exists(fileName()));             // never verified, never renamed
+  IS_FALSE(dt.storeBase64(1U, b64("def").c_str()));
+  IS_EQUAL(dt.getErrorCode(), Err::BEGIN_NOT_CALLED);
+  clearFakeMillis();
   END_IT
 }
 
@@ -423,6 +477,10 @@ int main() {
   test_store_oversized_piece_fails();
   test_store_max_size_piece_succeeds();
   test_store_data_overrun_aborts();
+  test_store_all_padding_piece_fails();
+  test_store_invalid_base64_chars_fails();
+  test_rebegin_replaces_open_transfer();
+  test_check_phase_timeout_aborts();
   test_transfer_timeout_aborts();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();

@@ -19,7 +19,20 @@ template <typename TFeature, typename TMethod>
 class NeoPixelBus final {
 public:
   NeoPixelBus(uint16_t /*countPixels*/, uint8_t /*pin*/) {}
-  void Begin() {}                          // NOLINT(readability-convert-member-functions-to-static)
-  void Show() {}                           // NOLINT(readability-convert-member-functions-to-static)
-  void ClearTo(RgbColor /*color*/) {}      // NOLINT(readability-convert-member-functions-to-static)
+  void Begin() { ++beginCount; }           // NOLINT(readability-convert-member-functions-to-static)
+  void Show() { ++showCount; }             // NOLINT(readability-convert-member-functions-to-static)
+  void ClearTo(RgbColor color) {           // NOLINT(readability-convert-member-functions-to-static)
+    lastColor = color;
+    ++clearToCount;
+  }
+
+  // ---- test inspection (static so tests can read them without a handle) ----
+  static inline RgbColor lastColor{0U, 0U, 0U};
+  static inline int beginCount   = 0;
+  static inline int showCount    = 0;
+  static inline int clearToCount = 0;
+  static void resetState() {
+    lastColor = RgbColor(0U, 0U, 0U);
+    beginCount = 0; showCount = 0; clearToCount = 0;
+  }
 };

@@ -507,6 +507,40 @@ bool test_publishCanDeviceEntity_disabled_retracts_with_empty_payload() {
   END_IT
 }
 
+bool test_publishEntity_overflow_returns_false() {
+  IT("publishEntity returns false and publishes nothing when the payload overflows its buffer");
+  Fixture f;
+  static char hugeTemplate[700];
+  memset(hugeTemplate, 'x', sizeof(hugeTemplate) - 1U);
+  hugeTemplate[sizeof(hugeTemplate) - 1U] = '\0';
+  const auto cfg = HADiscovery::EntityConfig::sensor(
+    "Temperature", "{{ value_json.t }}", nullptr,
+    HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+    nullptr, hugeTemplate);
+  IS_FALSE(f.had.publishEntity("temperature", cfg));
+  IS_EQUAL(f.cap.capLen, 0U);
+  END_IT
+}
+
+bool test_publishCanDeviceEntity_overflow_returns_false() {
+  IT("publishCanDeviceEntity returns false and publishes nothing on payload overflow");
+  Fixture f;
+  static char hugeTemplate[800];
+  memset(hugeTemplate, 'x', sizeof(hugeTemplate) - 1U);
+  hugeTemplate[sizeof(hugeTemplate) - 1U] = '\0';
+  const auto cfg = HADiscovery::EntityConfig::sensor(
+    "Temperature", "{{ value_json.t }}", nullptr,
+    HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+    nullptr, hugeTemplate);
+  const HADiscovery::CanDeviceConfig dev = {
+    "esp32_can_AABBCCDDEEFF_alert1", "ALERT1 DDEEFF", "1 (deadbeef)",
+    "iot/dtos/AABBCCDDEEFF/alert1/availability", "alert1", "ATmega328P"
+  };
+  IS_FALSE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+  IS_EQUAL(f.cap.capLen, 0U);
+  END_IT
+}
+
 int main() {
   SUITE("HADiscovery");
   test_buildDeviceName_appears_in_payload();
@@ -526,5 +560,7 @@ int main() {
   test_publishEntity_returns_false_when_disconnected();
   test_publishEntity_disabled_retracts_with_empty_payload();
   test_publishCanDeviceEntity_disabled_retracts_with_empty_payload();
+  test_publishEntity_overflow_returns_false();
+  test_publishCanDeviceEntity_overflow_returns_false();
   FINISH
 }
