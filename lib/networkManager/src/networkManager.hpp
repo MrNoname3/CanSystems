@@ -98,7 +98,7 @@ private:
   /// @return A string representation of the Wi-Fi status.
   [[nodiscard]] static const char* getIntStatusStr(wl_status_t status);
 
-  /// @brief Builds a unique hostname from the PIO env name (without "project_" prefix) and the last 4 MAC bytes.
+  /// @brief Builds a unique hostname from the PIO env name (without "project_" prefix) and the last 3 MAC bytes.
   /// Must be called after mac[] is populated. Result is stored in hostnameBuffer.
   void buildHostname();
 #ifdef ESP32
@@ -129,6 +129,6 @@ private:
   Interface networkInterface;                                       // Current network interface.
   wl_status_t interfaceStatus;                                      // Current network interface status.
   uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.
-  char hostnameBuffer[hostnameLen]{};                               // Unique hostname: env (no prefix) + "_" + last 4 MAC bytes.
+  char hostnameBuffer[hostnameLen]{};                               // Unique hostname: env (no prefix) + "_" + last 3 MAC bytes.
 };
 #endif // NETWORK_MANAGER_HPP
