@@ -21,16 +21,6 @@ projects:
           - name: "Server configuration upload"
             local_path: files/bcddc2b622c9/server.json
             device_path: /config/server.json
-      - mac: 40f52033765d
-        friendly_name: "Test2"
-        files:
-          - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
-            device_path: /config/mosq-ca.crt
-          - name: "Server configuration upload"
-            local_path: files/40f52033765d/server.json
-            device_path: /config/server.json
-
   - name: "Radiation detector"
     pio_project: project_esp8266_rad
     devices:
@@ -86,4 +76,13 @@ projects:
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
             local_path: files/bcddc2b622c9/server.json
+            device_path: /config/server.json
+      - mac: 40f52033765d
+        friendly_name: "Test2"
+        files:
+          - name: "CA certificate upload"
+            local_path: files/common/mosq-ca.crt
+            device_path: /config/mosq-ca.crt
+          - name: "Server configuration upload"
+            local_path: files/40f52033765d/server.json
             device_path: /config/server.json
