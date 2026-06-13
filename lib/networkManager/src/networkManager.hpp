@@ -27,10 +27,10 @@ private:
       + macSuffixBytes * 2U            // 2 hex digits per MAC byte
       + 1U);                           // null terminator
 #ifdef ESP32
-  static constexpr uint8_t ethPhyAddress = 1U;                      // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
+  static constexpr uint8_t ethPhyAddress = 1U;                      // SMI/MDIO address of the Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
   static constexpr int32_t ethPhyPower = 17;                        // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
-  static constexpr int32_t ethPhyMdcPin = 23;                       // Pin# of the I²C clock signal for the Ethernet PHY
-  static constexpr int32_t ethPhyMdioPin = 18;                      // Pin# of the I²C IO signal for the Ethernet PHY
+  static constexpr int32_t ethPhyMdcPin = 23;                       // Pin# of the MDC (management data clock) signal for the Ethernet PHY
+  static constexpr int32_t ethPhyMdioPin = 18;                      // Pin# of the MDIO (management data I/O) signal for the Ethernet PHY
   static constexpr eth_phy_type_t ethPhyType = ETH_PHY_LAN8720;     // Type of the Ethernet PHY (LAN8720 or TLK110)
   static constexpr eth_clock_mode_t ethClockMode = ETH_CLOCK_GPIO0_IN;
   // ETH_CLOCK_GPIO0_IN   - default: external clock from crystal oscillator

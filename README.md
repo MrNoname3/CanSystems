@@ -97,7 +97,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 pio run                                  # build all environments
 pio run -e project_esp8266_thermo -t upload      # serial flash one target
 pio run -t uploadfs -e <env>             # flash the LittleFS image (data/)
-pio test -e native_test                  # native test suite (~15 s, 361 cases)
+pio test -e native_test                  # native test suite (~30 s, 442 cases)
 pio check                                # cppcheck + clang-tidy on all environments
 ```
 

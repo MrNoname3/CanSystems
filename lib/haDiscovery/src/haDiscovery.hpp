@@ -63,7 +63,7 @@ public:
   /// @brief Discovery configuration for a CAN sub-device (all pointers are RAM strings, not PROGMEM).
   struct CanDeviceConfig {
     const char* deviceId;        // RAM: unique device identifier  (e.g. "esp32_can_aabbccddeeff_alert1").
-    const char* deviceName;      // RAM: human-readable device name (e.g. "ALERT1 DDEEFF").
+    const char* deviceName;      // RAM: human-readable device name (e.g. "ALERT1 ddeeff").
     const char* swVersion;       // RAM: sw version string         (e.g. "1234 (deadbeef)").
     const char* extraAvailTopic; // RAM: full CAN availability topic for dual-availability block.
     const char* dataSubtopic;    // RAM: driver's MQTT subtopic for state_topic (e.g. "alert2").

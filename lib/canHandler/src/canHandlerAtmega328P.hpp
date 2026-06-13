@@ -11,10 +11,10 @@
 class CanHandlerAtmega328P final : public CanHandlerBase {
 private:
   static constexpr uint16_t pingTime = Time::secToMs(2U);           // Ping timeout in milliseconds.
-  static constexpr uint16_t flashJedecId = 0xEF40U;                 // JEDEC ID for Windbond 64Mbit flash.
+  static constexpr uint16_t flashJedecId = 0xEF40U;                 // JEDEC ID for Winbond 64Mbit flash.
 
 public:
-  using CanHandlerBase::send;                                       // Bring the send methods of the base class to scoop.
+  using CanHandlerBase::send;                                       // Bring the send methods of the base class into scope.
 
   /// @brief Constructor for the CAN handler.
   /// @param debugLed Reference to a `DebugLedHandler` object for debug feedback.
@@ -73,7 +73,7 @@ private:
 
   static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
 
-  DebugLedHandler& debugLed;                                                // Reference to debug LED handler objec
+  DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
   SPIFlash flash;                                                           // SPI flash module driver object.
   OTA ota;                                                                  // OTA update handler.
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
