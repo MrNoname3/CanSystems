@@ -37,7 +37,9 @@ bool RfHandler::run() {
     // Filter repeated data.
     if((lastRfData.data != actualRfData.data) || (lastRfData.bitLength != actualRfData.bitLength) || (lastRfData.protocol != actualRfData.protocol)) {
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), rfMessageFrame, actualRfData.data, actualRfData.bitLength, actualRfData.protocol, actualRfData.pulseLength);
+      // %llu expects unsigned long long; uint64_t is that on ESP but only unsigned long on the
+      // LP64 host, so the cast keeps the format and the argument in agreement on every platform.
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), rfMessageFrame, static_cast<unsigned long long>(actualRfData.data), actualRfData.bitLength, actualRfData.protocol, actualRfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       if(!MqttBase::sendMessage(dataOut)) { return false; }
