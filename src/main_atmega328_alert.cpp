@@ -76,7 +76,7 @@ void setup() {
   const bool initSuccess = (initResult == 0U);
   Logger::get()->print(F("Init: "));
   Logger::get()->println(Str::getStateStr(initSuccess));
-  if (!initSuccess) {
+  if(!initSuccess) {
     Logger::get()->print(F("Code: "));
     Logger::get()->println(initResult, BIN);
     ResetHandler::restartMCU();
@@ -92,7 +92,7 @@ void loop() {
 }
 
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
-  switch (command) {
+  switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
       rgbLed.setColor(data[0], data[1], data[2], true);
       canHandler.send(command);
@@ -108,7 +108,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   Logger::get()->print(F("Btn: "));
   Logger::get()->println(static_cast<uint8_t>(btnEvent));
-  switch (btnEvent) {
+  switch(btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       static bool rgbLedState = false;
       rgbLedState = !rgbLedState;

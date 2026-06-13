@@ -54,7 +54,7 @@ void setup() {
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
   Logger::get()->printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));
-  if (!initSuccess) {
+  if(!initSuccess) {
     Logger::get()->printf_P(PSTR("  Code: "));
     Logger::get()->println(initResult, BIN);
     ResetHandler::restartMCU();
