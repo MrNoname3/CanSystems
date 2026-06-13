@@ -59,11 +59,11 @@ public:
   /// @return `true` always; an empty bus is logged but does not block device boot.
   bool init() override {
     (void)reader.begin();
-    Logger::get().printf_P(PSTR("[TEMP] DS18B20 sensors found: %hhu\r\n"), reader.count());
+    Logger::get()->printf_P(PSTR("[TEMP] DS18B20 sensors found: %hhu\r\n"), reader.count());
     for(uint8_t i = 0U; i < reader.count(); ++i) {
       char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
       if(reader.romHex(i, rom, sizeof(rom))) {
-        Logger::get().printf_P(PSTR("  %s\r\n"), rom);
+        Logger::get()->printf_P(PSTR("  %s\r\n"), rom);
       }
     }
     return true;
@@ -125,7 +125,7 @@ private:
     if(tempC < minValidTempC) {
       char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
       (void)reader.romHex(index, rom, sizeof(rom));
-      Logger::get().printf_P(PSTR("[TEMP] Sensor %hhu (%s) disconnected\r\n"), index, rom);
+      Logger::get()->printf_P(PSTR("[TEMP] Sensor %hhu (%s) disconnected\r\n"), index, rom);
       return;
     }
     publishOne(index, tempC);

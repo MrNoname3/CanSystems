@@ -1,0 +1,8 @@
+{
+  "name": "common",
+  "description": "Shared utilities (Time, Str, Build, FileName, ErrorState, Logger).",
+  "dependencies": {
+    "sync": "*"
+  },
+  "comment": "Explicit dependency on the local sync library: common.hpp's Logger lock uses sync.hpp's RecursiveMutex/LockGuard. The LDF (chain mode) otherwise attaches sync only under connectivity's subtree, so translation units that include common.hpp but not connectivity (e.g. resetHandler on ESP8266/ESP32) fail to find sync.hpp. Declaring it here propagates the dependency to every common user, on every environment."
+}

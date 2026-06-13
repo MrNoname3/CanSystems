@@ -65,7 +65,7 @@ void setup() {
   canHandler.addCanCallback(canMessageArrived);
   Analog::config();
   delay(1U);
-  Logger::get().println(F("\r\n********\r\nStarting..."));
+  Logger::get()->println(F("\r\n********\r\nStarting..."));
   Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
@@ -74,15 +74,15 @@ void setup() {
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Logger::get().print(F("Init: "));
-  Logger::get().println(Str::getStateStr(initSuccess));
+  Logger::get()->print(F("Init: "));
+  Logger::get()->println(Str::getStateStr(initSuccess));
   if (!initSuccess) {
-    Logger::get().print(F("Code: "));
-    Logger::get().println(initResult, BIN);
+    Logger::get()->print(F("Code: "));
+    Logger::get()->println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
-  Logger::get().println(F("********\r\nLooping..."));
+  Logger::get()->println(F("********\r\nLooping..."));
   DebugLedHandler::ledOff();
 }
 
@@ -106,8 +106,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
-  Logger::get().print(F("Btn: "));
-  Logger::get().println(static_cast<uint8_t>(btnEvent));
+  Logger::get()->print(F("Btn: "));
+  Logger::get()->println(static_cast<uint8_t>(btnEvent));
   switch (btnEvent) {
     case PushButtonHandler::BtnEvent::LONG_PRESS: {
       static bool rgbLedState = false;
@@ -120,8 +120,8 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get().print(F("Max loop time: "));
-  Logger::get().println(maxLoopTime);
+  Logger::get()->print(F("Max loop time: "));
+  Logger::get()->println(maxLoopTime);
   const uint8_t loopTimeBytes[8] = {
     static_cast<uint8_t>(maxLoopTime & 0xFFU),
     static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFFU),

@@ -76,7 +76,7 @@ void CanOta::runOta() {
                                (transferState == TransferState::STORE) ||
                                (transferState == TransferState::WAIT_FOR_ACK);
     if(otaInProgress) {
-      Logger::get().printf_P(PSTR("[CAN] OTA timeout for \"%s\"!\r\n"), canMqttGateway.getSubtopic());
+      Logger::get()->printf_P(PSTR("[CAN] OTA timeout for \"%s\"!\r\n"), canMqttGateway.getSubtopic());
       transferState = TransferState::INVALID;
     }
   }
@@ -126,7 +126,7 @@ void CanOta::runOta() {
     case TransferState::INVALID: {
       {
         const bool otaStatus = (transferState == TransferState::VALID);
-        Logger::get().printf_P(PSTR("[CAN] File transfer to \"%s\": %s\r\n"),
+        Logger::get()->printf_P(PSTR("[CAN] File transfer to \"%s\": %s\r\n"),
           canMqttGateway.getSubtopic(), Str::getStateStr(otaStatus));
         char dataOut[otaFrameBufSize] = {'\0'};
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), otaFrame, Str::getStateStr(otaStatus));
@@ -165,10 +165,10 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
 bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-convert-member-functions-to-static)
   const uint8_t otaStartResultCode = canOta.startOta(fileName);
   const bool fileTransferStartResult = (otaStartResultCode == 0U);
-  Logger::get().printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
+  Logger::get()->printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
     MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
   if(!fileTransferStartResult) {
-    Logger::get().printf_P(Str::getErrCodeFmt(), otaStartResultCode);
+    Logger::get()->printf_P(Str::getErrCodeFmt(), otaStartResultCode);
   }
   return fileTransferStartResult;
 }
@@ -246,7 +246,7 @@ void CanMqttGateway::handlePing() {
   const bool clientOnlineActual = !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
-    Logger::get().printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
+    Logger::get()->printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
       Str::getOnlineStateStr(clientOnline));
     const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
     (void)MqttBase::sendRetainedSubtopic(availSubtopic,

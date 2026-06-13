@@ -69,7 +69,7 @@ bool Mq135Handler::startCalibration() { // NOLINT(readability-convert-member-fun
   const float calcR0 = mq135.calibrate(ratioMQ135CleanAir);
   mq135.setR0(calcR0);
   const bool calSuccess = (!isinf(calcR0)) && (calcR0 > 0);
-  Logger::get().println(calcR0);
+  Logger::get()->println(calcR0);
   return calSuccess;
 }
 

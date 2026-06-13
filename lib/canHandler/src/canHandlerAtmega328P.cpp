@@ -35,38 +35,38 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   // Save new CAN IDs.
   static constexpr uint16_t newMasterCanId = static_cast<uint16_t>(MASTER_CAN_ADDRESS);
   static constexpr uint16_t newLocalCanId = static_cast<uint16_t>(NEW_CAN_ADDRESS);
-  Logger::get().print(F("[CAN] New master ID: "));
-  Logger::get().println(newMasterCanId);
-  Logger::get().print(F("[CAN] New local ID: "));
-  Logger::get().println(newLocalCanId);
-  Logger::get().print(F("[CAN] Saving: "));
+  Logger::get()->print(F("[CAN] New master ID: "));
+  Logger::get()->println(newMasterCanId);
+  Logger::get()->print(F("[CAN] New local ID: "));
+  Logger::get()->println(newLocalCanId);
+  Logger::get()->print(F("[CAN] Saving: "));
   const bool canIdsSavingResult = saveCanIds(newMasterCanId, newLocalCanId);
-  Logger::get().println(Str::getStateStr(canIdsSavingResult));
+  Logger::get()->println(Str::getStateStr(canIdsSavingResult));
   if(!canIdsSavingResult) { return false; }
 #endif
   // Load CAN ID's.
-  Logger::get().print(F("CAN IDs: "));
+  Logger::get()->print(F("CAN IDs: "));
   if(loadCanIds()) {
-    Logger::get().print(getMasterCanId());
-    Logger::get().print(Str::getSpacerStr());
-    Logger::get().println(getLocalCanId());
+    Logger::get()->print(getMasterCanId());
+    Logger::get()->print(Str::getSpacerStr());
+    Logger::get()->println(getLocalCanId());
   } else {
-    Logger::get().println(Str::getErrStr());
+    Logger::get()->println(Str::getErrStr());
     return false;
   }
   { // Initialise SPI CAN shield.
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
     const bool canBeginResult = CAN.begin(canBaud) == 1U;
-    Logger::get().print(F("CAN: "));
-    Logger::get().println(Str::getStateStr(canBeginResult));
+    Logger::get()->print(F("CAN: "));
+    Logger::get()->println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
-    Logger::get().print(F("Filter: "));
+    Logger::get()->print(F("Filter: "));
     const bool setFilterResult = CAN.filterExtended(
       CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
-    Logger::get().println(Str::getStateStr(setFilterResult));
+    Logger::get()->println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
   { // Send startup info.
@@ -74,9 +74,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     if(!sendResult) { return false; }
   }
   { // Check SPI FLASH modul.
-    Logger::get().print(F("FLASH: "));
+    Logger::get()->print(F("FLASH: "));
     const bool flashInitResult = flash.initialize();
-    Logger::get().println(Str::getStateStr(flashInitResult));
+    Logger::get()->println(Str::getStateStr(flashInitResult));
     if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
@@ -100,15 +100,15 @@ bool CanHandlerAtmega328P::handleRxFrame() {
     case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
     case static_cast<uint16_t>(CanCmd::OTA_START): {
       const OtaCanFrame::StartFrame startFrame = OtaCanFrame::unpackStart(canFrame.data);
-      Logger::get().print(F("OTA start: "));
+      Logger::get()->print(F("OTA start: "));
       const bool otaStartResult = ota.start(startFrame.storageNumber, startFrame.fwSize, startFrame.fwCrc);
-      Logger::get().println(Str::getStateStr(otaStartResult));
+      Logger::get()->println(Str::getStateStr(otaStartResult));
       if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
       const OtaCanFrame::SendFrame sendFrame = OtaCanFrame::unpackSend(canFrame.data);
       const bool otaStoreResult = ota.storeNextData(sendFrame.dataAddress, sendFrame.data);
-      if(!otaStoreResult) { Logger::get().println(F("OTA storing failed!")); }
+      if(!otaStoreResult) { Logger::get()->println(F("OTA storing failed!")); }
       CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {} break;
@@ -136,13 +136,13 @@ bool CanHandlerAtmega328P::run() {
     } break;
     case OtaCanResponse::Action::ACK_END: {
       CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
-      Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
-      Logger::get().println(Str::getOkStr());
+      Logger::get()->print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
+      Logger::get()->println(Str::getOkStr());
     } break;
     case OtaCanResponse::Action::NACK_END: {
       CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
-      Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
-      Logger::get().println(Str::getErrStr());
+      Logger::get()->print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
+      Logger::get()->println(Str::getErrStr());
     } break;
     case OtaCanResponse::Action::NONE: {} break;
   }

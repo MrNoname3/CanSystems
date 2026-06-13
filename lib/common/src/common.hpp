@@ -5,6 +5,7 @@
 #if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
 #include <pgmspace.h>                                               /// Provides PROGMEM support (real on ESP, shim natively for strcmp_P etc.).
 #endif
+#include "sync.hpp"                                                 /// Cross-platform mutex/lock-guard (no-op off ESP32) for the Logger lock.
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
 class Time final {
@@ -353,16 +354,54 @@ private:
   ~Logger() = default;
 
 public:
+  /// @brief RAII proxy returned by `get()`: forwards member access to the underlying
+  /// HardwareSerial via `operator->`. On ESP32 it also holds the logger mutex for the duration of
+  /// one full statement, so each `Logger::get()->...` call is atomic with respect to other tasks
+  /// (mirroring how Connectivity guards the PubSubClient). On single-threaded platforms
+  /// (AVR / ESP8266 / native) there is no mutex member at all, so the proxy is a bare serial
+  /// pointer that the optimizer collapses to the original reference — zero flash and RAM cost.
+  class LockedSerial final {
+  public:
+#if defined(ESP32)
+    LockedSerial(HardwareSerial& serialPort, RecursiveMutex& mutex) noexcept
+      : serial(&serialPort), guard(mutex) {}
+#else
+    explicit LockedSerial(HardwareSerial& serialPort) noexcept
+      : serial(&serialPort) {}
+#endif
+
+    /// @brief Forwards `Logger::get()->...` to the underlying serial while the lock is held.
+    HardwareSerial* operator->() const noexcept { return serial; }
+
+    LockedSerial(const LockedSerial&) = delete;            // Define copy constructor.
+    LockedSerial& operator=(const LockedSerial&) = delete; // Define copy assignment operator.
+    LockedSerial(LockedSerial&&) = delete;                 // Define move constructor.
+    LockedSerial& operator=(LockedSerial&&) = delete;      // Define move assignment operator.
+
+  private:
+    HardwareSerial* serial;   // Underlying hardware serial (not owned).
+#if defined(ESP32)
+    LockGuard       guard;    // Holds the logger mutex for the proxy's lifetime (ESP32 only).
+#endif
+  };
+
   /// @brief Initialize the logger with a hardware serial instance.
   /// @param serialPort The hardware serial instance (e.g., `Serial`, `Serial1`).
   static inline void begin(HardwareSerial &serialPort) noexcept {
     serial = &serialPort;
   }
 
-  /// @brief Get the current hardware serial instance.
-  /// @return Reference to the hardware serial instance.
-  static inline HardwareSerial &get() noexcept {
-    return *serial;
+  /// @brief Get a locked handle to the current hardware serial instance.
+  /// @details Use as `Logger::get()->print(...)`. On ESP32 the logger mutex is held for the full
+  /// statement, so a single log call cannot interleave with another task's output; off ESP32 the
+  /// proxy is optimized away to the bare serial pointer.
+  /// @return RAII proxy forwarding to HardwareSerial via `operator->` (holds the logger lock on ESP32).
+  static inline LockedSerial get() noexcept {
+#if defined(ESP32)
+    return LockedSerial(*serial, mutex);
+#else
+    return LockedSerial(*serial);
+#endif
   }
 
   Logger(const Logger&) = delete;                       // Define copy constructor.
@@ -372,6 +411,9 @@ public:
 
 private:
   static inline HardwareSerial *serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
+#if defined(ESP32)
+  static inline RecursiveMutex  mutex;              // Serializes log output across concurrent tasks (ESP32 only).
+#endif
 };
 
 /// @brief Returns the number of elements in a fixed-size array.

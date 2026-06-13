@@ -33,7 +33,7 @@ Radiation::TubeType Radiation::loadTubeType() {
     case TubeType::M4011:
       return t;
     default:
-      Logger::get().printf_P(PSTR("[RAD] Unknown tube value: %hhu\r\n"), tubeValue);
+      Logger::get()->printf_P(PSTR("[RAD] Unknown tube value: %hhu\r\n"), tubeValue);
       return TubeType::Unknown;
   }
 }
@@ -43,7 +43,7 @@ bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-stati
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
   tubeType = loadTubeType();
-  Logger::get().printf_P(PSTR("[RAD] Tube type: %hhu\r\n"), static_cast<uint8_t>(tubeType));
+  Logger::get()->printf_P(PSTR("[RAD] Tube type: %hhu\r\n"), static_cast<uint8_t>(tubeType));
   return true;
 }
 

@@ -24,7 +24,7 @@ bool MqttCommon::run() {
     const uint32_t errCode = dataTransfer.getErrorCode();
     sendResponse(isFileValid, errCode);
     if(!isFileValid) {
-      Logger::get().printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
+      Logger::get()->printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
     } else {
       if(isRestartRequired) {
         reboot();
@@ -45,7 +45,7 @@ void MqttCommon::fileValidCb(bool isValid) {
 bool MqttCommon::sendResponse(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
   const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U, errCode);
   if(!sendingResult) {
-    Logger::get().printf_P(PSTR("[COMMON] Failed to send response '%hu'\r\n"), static_cast<uint8_t>(result));
+    Logger::get()->printf_P(PSTR("[COMMON] Failed to send response '%hu'\r\n"), static_cast<uint8_t>(result));
   }
   return sendingResult;
 }
@@ -76,7 +76,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     if(binIdPresented) {
       const char* binId = binIdJsonVar.as<const char*>();
       if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
-        Logger::get().printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
+        Logger::get()->printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
         sendResponse(false);
         return;
       }
@@ -91,7 +91,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t beginErrCode = dataTransfer.getErrorCode();
     sendResponse(transferBeginResult, beginErrCode);
     if(!transferBeginResult) {
-      Logger::get().printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileName, beginErrCode);
+      Logger::get()->printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileName, beginErrCode);
     }
   } else if(filePiecePresented && fileDataPresented) {
     const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
@@ -100,10 +100,10 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const uint32_t storingErrCode = dataTransfer.getErrorCode();
     sendResponse(storingResult, storingErrCode);
     if(!storingResult) {
-      Logger::get().printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
+      Logger::get()->printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
     }
   } else {
-    Logger::get().printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));
+    Logger::get()->printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));
   }
 }
 
@@ -125,12 +125,12 @@ void MqttCommon::dispatchCommand(const char* cmd) {
       return;
     }
   }
-  Logger::get().printf_P(PSTR("[COMMON] Unknown cmd: '%s'\r\n"), cmd);
+  Logger::get()->printf_P(PSTR("[COMMON] Unknown cmd: '%s'\r\n"), cmd);
   sendResponse(false);
 }
 
 void MqttCommon::handleReboot() {
-  Logger::get().printf_P(PSTR("[COMMON] Reboot command received.\r\n"));
+  Logger::get()->printf_P(PSTR("[COMMON] Reboot command received.\r\n"));
   sendResponse(true);
   reboot();
 }

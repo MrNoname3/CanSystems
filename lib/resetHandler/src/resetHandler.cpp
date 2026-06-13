@@ -13,12 +13,12 @@
 
 void ResetHandler::restartMCU() {
 #if defined(__AVR_ATmega328P__)
-  Logger::get().println(F("Restarting..."));
-  Logger::get().flush();                              // Sends out data from the serial buffer before reset.
+  Logger::get()->println(F("Restarting..."));
+  Logger::get()->flush();                              // Sends out data from the serial buffer before reset.
   wdt_enable(WDTO_15MS);                              // Configures the watchdog timer for a 15-ms timeout.
 #elif defined(ESP32) || defined(ESP8266)
-  Logger::get().printf_P(PSTR("Restarting...\r\n"));
-  Logger::get().flush();
+  Logger::get()->printf_P(PSTR("Restarting...\r\n"));
+  Logger::get()->flush();
   ESP.restart();
 #endif
   while(true) {}

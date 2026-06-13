@@ -70,7 +70,7 @@ void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
   const uint8_t prefixLen = static_cast<uint8_t>(strnlen(deviceName, deviceNameBufSize));
   deviceName[prefixLen] = ' ';
   (void)snprintf_P(deviceName + prefixLen + 1U, 7U, PSTR("%02x%02x%02x"), mac[3], mac[4], mac[5]);
-  Logger::get().printf_P(PSTR("[HA] Device name: %s\r\n"), deviceName);
+  Logger::get()->printf_P(PSTR("[HA] Device name: %s\r\n"), deviceName);
 }
 
 HADiscovery::EntityConfig
@@ -184,7 +184,7 @@ bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-f
   config.skipAvailability = true;
   // "availability" is the literal suffix of the availability topic (after the sender topic base).
   const bool result = publishEntity(PSTR("availability"), config);
-  Logger::get().printf_P(PSTR("[HA] Connection discovery: %s\r\n"), Str::getStateStr(result));
+  Logger::get()->printf_P(PSTR("[HA] Connection discovery: %s\r\n"), Str::getStateStr(result));
   return result;
 }
 

@@ -50,36 +50,36 @@ void setup() {
   Serial.begin(MONITOR_BAUD);
   debugLed.startTicker(500U);
   delay(1U);
-  Logger::get().printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
+  Logger::get()->printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
   Build::printBuildInfo();
   if (!wdtEnabled) {
-    Logger::get().printf_P(PSTR("WDT enable failed!\r\n"));
+    Logger::get()->printf_P(PSTR("WDT enable failed!\r\n"));
     ResetHandler::restartMCU();
   }
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
-  Logger::get().printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));
+  Logger::get()->printf_P(PSTR("Init:%s\r\n"), Str::getStateStr(initSuccess));
   if (!initSuccess) {
-    Logger::get().printf_P(PSTR("  Code: "));
-    Logger::get().println(initResult, BIN);
+    Logger::get()->printf_P(PSTR("  Code: "));
+    Logger::get()->println(initResult, BIN);
     ResetHandler::restartMCU();
   }
 
-  Logger::get().printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
-  Logger::get().printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+  Logger::get()->printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
+  Logger::get()->printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
   debugLed.stopTicker();
   performance.resetTimer();
 }
 
 void loop() {
   if (!WdtHandler::resetWatchdog()) {
-    Logger::get().printf_P(PSTR("WDT reset failed!\r\n"));
+    Logger::get()->printf_P(PSTR("WDT reset failed!\r\n"));
   }
   (void)taskHandler.runTasks();
   taskYIELD();
 }
 
 void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get().printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
+  Logger::get()->printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
 }

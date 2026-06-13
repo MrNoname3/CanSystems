@@ -49,15 +49,15 @@ void NetworkManager::buildHostname() {
 NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { // NOLINT(readability-function-cognitive-complexity)
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   static constexpr uint32_t connectTimeoutMs = Time::secToMs(30U);
-  Logger::get().printf_P(PSTR("[NETWORK] Network interface: "));
+  Logger::get()->printf_P(PSTR("[NETWORK] Network interface: "));
   switch(networkInterface) {
     case Interface::WIFI: {
-      Logger::get().printf_P(PSTR("[Wi-Fi]\r\n"));
+      Logger::get()->printf_P(PSTR("[Wi-Fi]\r\n"));
       WiFi.disconnect(true);                           // Wipe cached BSSID/FT state from SDK flash before each connect attempt.
       WiFi.macAddress(mac);
       buildHostname();
       const bool wifiInit = WiFi.mode(WIFI_STA);
-      Logger::get().printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
+      Logger::get()->printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
       if(!wifiInit) {
         networkErrState.setError(NetworkError::WIFI_INIT_FAILED);
         return networkErrState.getRawErrorState();
@@ -68,9 +68,9 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
       const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
       const bool wifiConfigOk = (wifiConfigResult == 0U);
-      Logger::get().printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
+      Logger::get()->printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
       if(!wifiConfigOk) {
-        Logger::get().printf_P(Str::getErrCodeFmt(), wifiConfigResult);
+        Logger::get()->printf_P(Str::getErrCodeFmt(), wifiConfigResult);
         networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
         return networkErrState.getRawErrorState();
       }
@@ -80,7 +80,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       WiFi.setHostname(hostnameBuffer);
 #endif
       WiFi.begin(ssid, password);
-      Logger::get().printf_P(logConnecting);
+      Logger::get()->printf_P(logConnecting);
       const uint32_t wifiConnectStartMs = millis();
       while(WiFi.status() != WL_CONNECTED) {
         if(Time::hasElapsed(millis(), wifiConnectStartMs, connectTimeoutMs)) {
@@ -90,13 +90,13 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
         if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
-      Logger::get().printf_P(logIp, WiFi.localIP().toString().c_str());
-      Logger::get().printf_P(logGw, WiFi.gatewayIP().toString().c_str());
-      Logger::get().printf_P(logSnm, WiFi.subnetMask().toString().c_str());
+      Logger::get()->printf_P(logIp, WiFi.localIP().toString().c_str());
+      Logger::get()->printf_P(logGw, WiFi.gatewayIP().toString().c_str());
+      Logger::get()->printf_P(logSnm, WiFi.subnetMask().toString().c_str());
     } break;
 #ifdef ESP8266
     case Interface::ENC28J60: {
-      Logger::get().printf_P(PSTR("[ENC28J60]\r\n"));
+      Logger::get()->printf_P(PSTR("[ENC28J60]\r\n"));
       if(!ethernetEnc28j60.has_value()) {
         networkErrState.setError(NetworkError::ENC28J60_NO_DRIVER);
         return networkErrState.getRawErrorState();
@@ -106,7 +106,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       WiFi.mode(WIFI_OFF);
       ethernetEnc28j60.value().setDefault();         // default route set through this interface
       const bool ethInit = ethernetEnc28j60.value().begin(mac);
-      Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
+      Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
         return networkErrState.getRawErrorState();
@@ -118,7 +118,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       for(netif* intf = netif_list; intf != nullptr; intf = intf->next) {
         intf->hostname = hostnameBuffer;
       }
-      Logger::get().printf_P(logConnecting);
+      Logger::get()->printf_P(logConnecting);
       const uint32_t enc28ConnectStartMs = millis();
       while(!ethernetEnc28j60.value().connected()) {
         if(Time::hasElapsed(millis(), enc28ConnectStartMs, connectTimeoutMs)) {
@@ -128,17 +128,17 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
         if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
-      Logger::get().printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
-      Logger::get().printf_P(logGw, ethernetEnc28j60.value().gatewayIP().toString().c_str());
-      Logger::get().printf_P(logSnm, ethernetEnc28j60.value().subnetMask().toString().c_str());
+      Logger::get()->printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
+      Logger::get()->printf_P(logGw, ethernetEnc28j60.value().gatewayIP().toString().c_str());
+      Logger::get()->printf_P(logSnm, ethernetEnc28j60.value().subnetMask().toString().c_str());
     } break;
 #elif defined ESP32
     case Interface::LAN8720: {
-      Logger::get().printf_P(PSTR("[LAN8720]\r\n"));
+      Logger::get()->printf_P(PSTR("[LAN8720]\r\n"));
       WiFi.mode(WIFI_OFF);
       WiFi.onEvent(NetworkManager::WiFiEvent);
       const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
-      Logger::get().printf_P(logEthInit, Str::getStateStr(ethInit));
+      Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
       if(!ethInit) {
         networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
         return networkErrState.getRawErrorState();
@@ -146,7 +146,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       ETH.macAddress(mac);
       buildHostname();
       ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
-      Logger::get().printf_P(logConnecting);
+      Logger::get()->printf_P(logConnecting);
       const uint32_t lan8720ConnectStartMs = millis();
       while(!ethConnected) {
         if(Time::hasElapsed(millis(), lan8720ConnectStartMs, connectTimeoutMs)) {
@@ -156,21 +156,21 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
         if(resetWdt != nullptr) { resetWdt(); }
         yield();
       }
-      Logger::get().printf_P(logIp, ETH.localIP().toString().c_str());
-      Logger::get().printf_P(logGw, ETH.gatewayIP().toString().c_str());
-      Logger::get().printf_P(logSnm, ETH.subnetMask().toString().c_str());
+      Logger::get()->printf_P(logIp, ETH.localIP().toString().c_str());
+      Logger::get()->printf_P(logGw, ETH.gatewayIP().toString().c_str());
+      Logger::get()->printf_P(logSnm, ETH.subnetMask().toString().c_str());
     } break;
 #endif
     default: {
-      Logger::get().printf_P(PSTR("[INVALID]\r\n"));
+      Logger::get()->printf_P(PSTR("[INVALID]\r\n"));
       networkErrState.setError(NetworkError::INVALID_INTERFACE);
       return networkErrState.getRawErrorState();
     }
   }
-  Logger::get().printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Logger::get()->printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   const bool macValid = (memcmp(mac, "\0\0\0\0\0\0", sizeof(mac)) != 0);
   if(!macValid) {
-    Logger::get().printf_P(PSTR("[NETWORK] MAC address invalid!\r\n"));
+    Logger::get()->printf_P(PSTR("[NETWORK] MAC address invalid!\r\n"));
     networkErrState.setError(NetworkError::MAC_ADDRESS_INVALID);
     return networkErrState.getRawErrorState();
   }
@@ -200,7 +200,7 @@ bool NetworkManager::isNetworkAvailable() {
     }
   }
   if(interfaceStatus != actualInterfaceStatus) {
-    Logger::get().printf_P(PSTR("[NETWORK] Status changed: %s -> %s\r\n"), getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
+    Logger::get()->printf_P(PSTR("[NETWORK] Status changed: %s -> %s\r\n"), getIntStatusStr(interfaceStatus), getIntStatusStr(actualInterfaceStatus));
     interfaceStatus = actualInterfaceStatus;
   }
   return (interfaceStatus == WL_CONNECTED);
