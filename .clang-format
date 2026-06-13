@@ -3,7 +3,18 @@ Language: Cpp
 BasedOnStyle: Google
 ColumnLimit: 0
 SortIncludes: Never
-AllowShortFunctionsOnASingleLine: Empty
 AccessModifierOffset: -2
-AlignTrailingComments: true
+PointerAlignment: Left
 Cpp11BracedListStyle: false
+SpaceBeforeParens: Never
+SpaceAfterTemplateKeyword: false
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+NamespaceIndentation: All
+BreakConstructorInitializers: AfterColon
+ConstructorInitializerIndentWidth: 2
+PackConstructorInitializers: Never
+AlignTrailingComments:
+  Kind: Leave
+  OverEmptyLines: 0
