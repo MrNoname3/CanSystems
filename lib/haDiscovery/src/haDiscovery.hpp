@@ -130,7 +130,7 @@ private:
   static constexpr uint16_t discoveryPayloadBufSize    = 656U; // HA MQTT discovery JSON payload buffer.
   static constexpr uint16_t canDiscoveryPayloadBufSize = 752U; // CAN entity payload: dual avail + via_device.
   static constexpr uint8_t  swVersionBufSize        = 24U;   // "65535 (ffffffff)" sw version string buffer.
-  static constexpr uint8_t  deviceNameBufSize       = 32U;   // "CAN A1B2C3" device name buffer.
+  static constexpr uint8_t  deviceNameBufSize       = 32U;   // "CAN a1b2c3" device name buffer.
 #if defined(ESP8266)
   static constexpr const char PROGMEM hwVersionStr[] = "ESP8266";
 #elif defined(ESP32)

@@ -165,8 +165,8 @@ bool test_buildDeviceName_appears_in_payload() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  // Device name must be uppercase with spaces: "SMOKE AABBCC".
-  IS_TRUE(strstr(rec.payload, "\"name\":\"SMOKE AABBCC\"") != nullptr);
+  // Device name: uppercased prefix + space + lowercase MAC (system-wide lowercase MAC convention).
+  IS_TRUE(strstr(rec.payload, "\"name\":\"SMOKE aabbcc\"") != nullptr);
   END_IT
 }
 

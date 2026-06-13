@@ -69,7 +69,7 @@ void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
   }
   const uint8_t prefixLen = static_cast<uint8_t>(strnlen(deviceName, deviceNameBufSize));
   deviceName[prefixLen] = ' ';
-  (void)snprintf_P(deviceName + prefixLen + 1U, 7U, PSTR("%02X%02X%02X"), mac[3], mac[4], mac[5]);
+  (void)snprintf_P(deviceName + prefixLen + 1U, 7U, PSTR("%02x%02x%02x"), mac[3], mac[4], mac[5]);
   Logger::get().printf_P(PSTR("[HA] Device name: %s\r\n"), deviceName);
 }
 
