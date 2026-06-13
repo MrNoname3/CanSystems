@@ -2,6 +2,7 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "canHandler.hpp"                                           /// CAN handler library.
+#include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "crc16.hpp"                                                /// CRC16 calculator class.
 #include <LittleFS.h>                                               /// Use FLASH file system.
@@ -15,7 +16,7 @@ class CanOta final {
 private:
   static constexpr uint32_t otaTimeoutTime = Time::minToMs(5U);         // Timeout for OTA operations in milliseconds.
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
-  static constexpr uint8_t filePieceSize = 4U;                          // Size of file pieces sent over CAN.
+  static constexpr uint8_t filePieceSize = OtaCanFrame::dataPieceSize;  // Size of file pieces sent over CAN.
   static constexpr const uint8_t otaFrameBufSize = 16U;                 // Buffer size for OTA status messages.
   using OtaStartErrorType = uint8_t;                                    // Type for representing OTA start errors.
 

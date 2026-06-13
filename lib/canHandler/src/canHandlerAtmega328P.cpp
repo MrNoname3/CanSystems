@@ -3,7 +3,12 @@
 #include "CAN.h"                                                    /// CAN controller library.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
 #include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
+
+// The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
+// otherwise unpackSend() would hand storeNextData() a wrongly-sized array.
+static_assert(OtaCanFrame::dataPieceSize == OTA::fwPieceSize, "OTA CAN piece size must equal OTA::fwPieceSize");
 
 namespace {
   constexpr const char PROGMEM storingStr[] = "Storing: ";
@@ -93,35 +98,15 @@ bool CanHandlerAtmega328P::handleRxFrame() {
     case static_cast<uint16_t>(CanCmd::RESTART): { ResetHandler::restartMCU(); } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): { sendFwVersion(); } break;
     case static_cast<uint16_t>(CanCmd::OTA_START): {
-      const uint16_t otaFlashBegin =
-        static_cast<uint16_t>(canFrame.data[0]) |
-        (static_cast<uint16_t>(canFrame.data[1]) << 8U);
-      const uint32_t fwSize =
-        static_cast<uint32_t>(canFrame.data[2]) |
-        (static_cast<uint32_t>(canFrame.data[3]) << 8U) |
-        (static_cast<uint32_t>(canFrame.data[4]) << 16U) |
-        (static_cast<uint32_t>(canFrame.data[5]) << 24U);
-      const uint16_t fwCrc =
-        static_cast<uint16_t>(canFrame.data[6]) |
-        (static_cast<uint16_t>(canFrame.data[7]) << 8U);
+      const OtaCanFrame::StartFrame startFrame = OtaCanFrame::unpackStart(canFrame.data);
       Logger::get().print(F("OTA start: "));
-      const bool otaStartResult = ota.start(otaFlashBegin, fwSize, fwCrc);
+      const bool otaStartResult = ota.start(startFrame.storageNumber, startFrame.fwSize, startFrame.fwCrc);
       Logger::get().println(Str::getStateStr(otaStartResult));
       if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
-      const uint8_t fwData[OTA::fwPieceSize] = {
-        canFrame.data[0],
-        canFrame.data[1],
-        canFrame.data[2],
-        canFrame.data[3]
-      };
-      const uint32_t dataAddress =
-        static_cast<uint32_t>(canFrame.data[4]) |
-        (static_cast<uint32_t>(canFrame.data[5]) << 8U) |
-        (static_cast<uint32_t>(canFrame.data[6]) << 16U) |
-        (static_cast<uint32_t>(canFrame.data[7]) << 24U);
-      const bool otaStoreResult = ota.storeNextData(dataAddress, fwData);
+      const OtaCanFrame::SendFrame sendFrame = OtaCanFrame::unpackSend(canFrame.data);
+      const bool otaStoreResult = ota.storeNextData(sendFrame.dataAddress, sendFrame.data);
       if(!otaStoreResult) { Logger::get().println(F("OTA storing failed!")); }
       CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
     } break;

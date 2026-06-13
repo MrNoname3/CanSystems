@@ -1,4 +1,5 @@
 #include "canMqttGateway.hpp"
+#include "ota.hpp"
 #include "Arduino.h"
 #include "LittleFS.h"
 #include "BDDTest.h"
@@ -403,6 +404,60 @@ bool test_ota_rejects_empty_file() {
   END_IT
 }
 
+// Crosses the boundary the gateway and the device storage are otherwise only tested against in
+// isolation: the frames the gateway actually emits are unpacked (via the shared OtaCanFrame, exactly
+// as canHandlerAtmega328P does) into a real OTA storage object. It validates only if the gateway's
+// CRC matches the device's recomputed CRC, the byte offsets line up, and the partial last piece
+// agrees -- i.e. if the two hand-maintained sides of the wire format still agree.
+bool test_ota_contract_gateway_to_device_storage() {
+  IT("frames the gateway emits reconstruct on a real OTA storage object and validate");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  const std::string content = "OTA-CONTRACT!!";       // 14 bytes -> 4 pieces, last one partial (2 bytes)
+  LittleFS.setFile(kFwFile, content);
+
+  SPIFlash flash(0U);
+  OTA ota(flash);
+
+  IS_TRUE(gateway.startOta(kFwFile));
+
+  // OTA_START: feed the gateway's own start frame into the device storage.
+  IS_TRUE(pumpUntilFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_START), 1U));
+  const CanHandler::CanFrame* startFrame = lastFrame(static_cast<uint16_t>(CanCmd::OTA_START));
+  IS_TRUE(startFrame != nullptr);
+  const OtaCanFrame::StartFrame parsedStart = OtaCanFrame::unpackStart(startFrame->data);
+  IS_TRUE(ota.start(parsedStart.storageNumber, parsedStart.fwSize, parsedStart.fwCrc));
+  injectAck(gateway, CanCmd::OTA_START);
+
+  // OTA_SEND: stream every emitted piece into storage, ACKing each as the real device would.
+  for(int guard = 0; guard < 64; guard++) {
+    const size_t before = countFrames(static_cast<uint16_t>(CanCmd::OTA_SEND));
+    (void)runOnce(gateway);
+    if(countFrames(static_cast<uint16_t>(CanCmd::OTA_SEND)) == before) { break; }  // no new piece -> all sent
+    const CanHandler::CanFrame* piece = lastFrame(static_cast<uint16_t>(CanCmd::OTA_SEND));
+    IS_TRUE(piece != nullptr);
+    const OtaCanFrame::SendFrame parsedSend = OtaCanFrame::unpackSend(piece->data);
+    IS_TRUE(ota.storeNextData(parsedSend.dataAddress, parsedSend.data));
+    injectAck(gateway, CanCmd::OTA_SEND);
+  }
+
+  // The storage validates against the CRC the gateway computed: the cross-side agreement check.
+  OTA::OtaState deviceState = OTA::OtaState::IDLE;
+  for(int i = 0; i < 256; i++) {
+    deviceState = ota.run();
+    if(deviceState == OTA::OtaState::VALID || deviceState == OTA::OtaState::INVALID) { break; }
+  }
+  IS_EQUAL(deviceState, OTA::OtaState::VALID);
+  for(size_t i = 0U; i < content.size(); i++) {
+    IS_EQUAL(flash.readByte(static_cast<uint32_t>(i)), static_cast<uint8_t>(content[i]));
+  }
+  END_IT
+}
+
 int main() {
   SUITE("CanMqttGateway");
   test_init_builds_topics_and_publishes_offline();
@@ -420,5 +475,6 @@ int main() {
   test_ota_timeout_reports_error();
   test_ota_start_rejects_bad_input();
   test_ota_rejects_empty_file();
+  test_ota_contract_gateway_to_device_storage();
   FINISH
 }
