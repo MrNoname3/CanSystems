@@ -4,6 +4,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
+#include "otaCanResponse.hpp"                                       /// Host-testable OTA state -> CAN response decision.
 #include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
 
 // The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
@@ -128,20 +129,24 @@ bool CanHandlerAtmega328P::run() {
     if(!handleRxFrame()) { return false; }
   }
   const OTA::OtaState otaState = ota.run();
-  if(lastOtaState == OTA::OtaState::START && otaState == OTA::OtaState::STORE) {
-    CanHandlerBase::send(CanCmd::OTA_START, Response::ACK);
+  const OtaCanResponse::Decision otaDecision = OtaCanResponse::decide(lastOtaState, otaState, ota.isOwnFw());
+  switch(otaDecision.action) {
+    case OtaCanResponse::Action::ACK_START: {
+      CanHandlerBase::send(CanCmd::OTA_START, Response::ACK);
+    } break;
+    case OtaCanResponse::Action::ACK_END: {
+      CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
+      Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
+      Logger::get().println(Str::getOkStr());
+    } break;
+    case OtaCanResponse::Action::NACK_END: {
+      CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
+      Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
+      Logger::get().println(Str::getErrStr());
+    } break;
+    case OtaCanResponse::Action::NONE: {} break;
   }
-  if(otaState == OTA::OtaState::VALID) {
-    CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
-    Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
-    Logger::get().println(Str::getOkStr());
-    if(ota.isOwnFw()) { ResetHandler::restartMCU(); }
-  }
-  if(otaState == OTA::OtaState::INVALID) {
-    CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
-    Logger::get().print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
-    Logger::get().println(Str::getErrStr());
-  }
+  if(otaDecision.reboot) { ResetHandler::restartMCU(); }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
     DebugLedHandler::ledOn();

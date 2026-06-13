@@ -1,4 +1,5 @@
 #include "otaCanFrame.hpp"
+#include "otaCanResponse.hpp"
 #include "ota.hpp"
 #include "crc16.hpp"
 #include "BDDTest.h"
@@ -176,6 +177,66 @@ bool test_device_parse_rejects_wrong_offset() {
   END_IT
 }
 
+// ---- device-side OTA response decision (OtaCanResponse::decide) ----
+// The decision the AVR run() loop makes on each OTA storage transition: which CAN response to send
+// back to the gateway and whether to reboot. The loop itself is AVR-only; this pins the logic.
+
+bool test_decide_ack_start_on_store_entry() {
+  IT("entering STORE from START requests an OTA_START ACK and no reboot");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::START, OTA::OtaState::STORE, true);
+  IS_TRUE(decision.action == OtaCanResponse::Action::ACK_START);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_ack_end_and_reboot_for_own_fw() {
+  IT("a VALID update that targets this device ACKs OTA_END and reboots");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::CHECK, OTA::OtaState::VALID, true);
+  IS_TRUE(decision.action == OtaCanResponse::Action::ACK_END);
+  IS_TRUE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_ack_end_no_reboot_for_other_fw() {
+  IT("a VALID update for another device ACKs OTA_END but does NOT reboot this one");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::CHECK, OTA::OtaState::VALID, false);
+  IS_TRUE(decision.action == OtaCanResponse::Action::ACK_END);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_nack_end_on_invalid() {
+  IT("an INVALID outcome NACKs OTA_END and never reboots");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::CHECK, OTA::OtaState::INVALID, true);
+  IS_TRUE(decision.action == OtaCanResponse::Action::NACK_END);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_none_mid_transfer() {
+  IT("staying in STORE mid-transfer emits no response");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::STORE, OTA::OtaState::STORE, true);
+  IS_TRUE(decision.action == OtaCanResponse::Action::NONE);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_none_while_flash_busy() {
+  IT("staying in START while the flash is still busy emits no response");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::START, OTA::OtaState::START, true);
+  IS_TRUE(decision.action == OtaCanResponse::Action::NONE);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
+bool test_decide_none_when_idle() {
+  IT("an idle state machine emits no response");
+  const OtaCanResponse::Decision decision = OtaCanResponse::decide(OTA::OtaState::IDLE, OTA::OtaState::IDLE, false);
+  IS_TRUE(decision.action == OtaCanResponse::Action::NONE);
+  IS_FALSE(decision.reboot);
+  END_IT
+}
+
 int main() {
   SUITE("OtaCanFrame");
   test_start_frame_byte_layout();
@@ -185,5 +246,12 @@ int main() {
   test_device_parse_reconstructs_firmware();
   test_device_parse_crc_mismatch_is_invalid();
   test_device_parse_rejects_wrong_offset();
+  test_decide_ack_start_on_store_entry();
+  test_decide_ack_end_and_reboot_for_own_fw();
+  test_decide_ack_end_no_reboot_for_other_fw();
+  test_decide_nack_end_on_invalid();
+  test_decide_none_mid_transfer();
+  test_decide_none_while_flash_busy();
+  test_decide_none_when_idle();
   FINISH
 }
