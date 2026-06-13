@@ -34,6 +34,8 @@ void     detachInterrupt(uint8_t pin);
 uint8_t  digitalPinToInterrupt(uint8_t pin);
 void     cli();
 void     sei();
+void     noInterrupts();
+void     interrupts();
 }
 
 void     setFakeMillis(uint32_t t);

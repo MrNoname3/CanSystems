@@ -45,6 +45,8 @@ void     detachInterrupt(uint8_t pin) { isrTable[pin] = nullptr; }
 uint8_t  digitalPinToInterrupt(uint8_t pin)       { return pin; }
 void     cli() {}
 void     sei() {}
+void     noInterrupts() {}
+void     interrupts() {}
 }
 
 ShimClient::ShimClient() {
