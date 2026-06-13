@@ -67,7 +67,10 @@ public:
       for(uint8_t i = 0U; i < taskNum; ++i) {
         if(taskList[i] != nullptr) {
           if(!taskList[i]->init()) {
-            failureMask |= (1U << i);
+            // static_cast<uint32_t>: AVR `int` is 16-bit, so a plain `1U << i` would be undefined
+            // for i >= 16; a 32-bit operand keeps the shift well-defined up to bit 31 (taskNum <= 32)
+            // on every target. uint32_t never promotes down to int, so no narrowing on AVR either.
+            failureMask |= (static_cast<uint32_t>(1) << i);
           }
         }
       }
@@ -113,7 +116,7 @@ private:
     uint32_t failureMask = 0U;
     if(taskList[currentTask] != nullptr) {
       if(!taskList[currentTask]->run()) {
-        failureMask |= (1U << currentTask);
+        failureMask |= (static_cast<uint32_t>(1) << currentTask);  // 32-bit operand: AVR int is 16-bit (see initTasks)
       }
     }
     if(++currentTask >= taskNum) { currentTask = 0U; }
@@ -132,7 +135,7 @@ private:
     if(++currentTask >= taskNum) { currentTask = 1U; }
     if(taskList[currentTask] != nullptr) {
       if(!taskList[currentTask]->run()) {
-        failureMask |= (1U << currentTask);
+        failureMask |= (static_cast<uint32_t>(1) << currentTask);  // 32-bit operand: AVR int is 16-bit (see initTasks)
       }
     }
     return failureMask;

@@ -158,6 +158,9 @@ bool test_run_failure_sets_bitmask() {
 
 bool test_32_tasks_highest_bit_bitmask() {
   IT("32 tasks: failure at index 31 sets bit 31 in the bitmask");
+  // Native int is >= 32-bit, so this cannot by itself prove the AVR case (16-bit int): there the
+  // mask is correct only because TaskHandler shifts a uint32_t operand. This pins the contract;
+  // the 32-bit operand is what makes it hold on the 16-bit-int AVR target too.
   SimpleTask t00(true);  SimpleTask t01(true);  SimpleTask t02(true);  SimpleTask t03(true);
   SimpleTask t04(true);  SimpleTask t05(true);  SimpleTask t06(true);  SimpleTask t07(true);
   SimpleTask t08(true);  SimpleTask t09(true);  SimpleTask t10(true);  SimpleTask t11(true);
