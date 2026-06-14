@@ -51,8 +51,7 @@ bool Mq135Handler::run() {
     } break;
     case GasReadState::SEND: {
       char dataOut[dataOutBufSize] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
-                                             gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame, gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       if(!MqttBase::sendMessage(dataOut)) { return false; }

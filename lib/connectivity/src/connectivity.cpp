@@ -148,8 +148,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
         JsonDocument payloadJson;
         DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
         if(parsingError != DeserializationError::Code::Ok) {
-          Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
-                                  currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+          Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
           return;
         }
         currentMessageHandler->messageArrivedCallback(payloadJson);
@@ -171,8 +170,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
     char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(),
-                                               Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
+    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
     const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
     if(!infoTopicValid || !infoPayloadValid) { return false; }
@@ -337,9 +335,7 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
   return mqttClient.publish(actualTopic, payload, true);
 }
 
-bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
-                                                   const HADiscovery::EntityConfig& config,
-                                                   const HADiscovery::CanDeviceConfig& canDevConfig) {
+bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config, const HADiscovery::CanDeviceConfig& canDevConfig) {
   // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }

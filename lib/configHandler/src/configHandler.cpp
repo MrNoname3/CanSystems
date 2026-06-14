@@ -65,10 +65,7 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   return wifiConfErrState.getRawErrorState();
 }
 
-ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],
-                                                                       char (&mqttPassword)[maxMqttPasswordSize],
-                                                                       char (&mqttServerUrl)[maxMqttServerUrlSize],
-                                                                       uint16_t& mqttServerPort) {
+ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t& mqttServerPort) {
   ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
   const char* const credPath = FileName::getMqttServerCredentialsLocation();
 

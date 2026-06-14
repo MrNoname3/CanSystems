@@ -37,8 +37,7 @@ public:
     const uint8_t found = sensors.getDeviceCount();
     sensorCount = (found > MaxSensors) ? MaxSensors : found;
     if(found > MaxSensors) {
-      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"),
-                              found, static_cast<uint8_t>(MaxSensors));
+      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, static_cast<uint8_t>(MaxSensors));
     }
     for(uint8_t i = 0U; i < sensorCount; ++i) {
       // cppcheck-suppress useStlAlgorithm
@@ -74,8 +73,7 @@ public:
   [[nodiscard]] bool romHex(uint8_t index, char* buf, size_t bufSize) const {
     if((index >= sensorCount) || (buf == nullptr) || (bufSize < romHexSize)) { return false; }
     const uint8_t* a = addresses[index];
-    const int32_t n = snprintf_P(buf, bufSize, PSTR("%02x%02x%02x%02x%02x%02x%02x%02x"),
-                                 a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+    const int32_t n = snprintf_P(buf, bufSize, PSTR("%02x%02x%02x%02x%02x%02x%02x%02x"), a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
     return n == 16;
   }
 

@@ -71,9 +71,7 @@ void CanOta::runOta() {
     // closed, the counters reset, and the {"OTA":"[ERR]"} status reaches the server. Jumping
     // straight to IDLE used to skip all of that. VALID/INVALID are excluded: they are processed
     // within the same pass, and a timeout must not overwrite an already-arrived final ACK.
-    const bool otaInProgress = (transferState == TransferState::START) ||
-                               (transferState == TransferState::STORE) ||
-                               (transferState == TransferState::WAIT_FOR_ACK);
+    const bool otaInProgress = (transferState == TransferState::START) || (transferState == TransferState::STORE) || (transferState == TransferState::WAIT_FOR_ACK);
     if(otaInProgress) {
       Logger::get()->printf_P(PSTR("[CAN] OTA timeout for \"%s\"!\r\n"), canMqttGateway.getSubtopic());
       transferState = TransferState::INVALID;
@@ -124,8 +122,7 @@ void CanOta::runOta() {
     case TransferState::INVALID: {
       {
         const bool otaStatus = (transferState == TransferState::VALID);
-        Logger::get()->printf_P(PSTR("[CAN] File transfer to \"%s\": %s\r\n"),
-                                canMqttGateway.getSubtopic(), Str::getStateStr(otaStatus));
+        Logger::get()->printf_P(PSTR("[CAN] File transfer to \"%s\": %s\r\n"), canMqttGateway.getSubtopic(), Str::getStateStr(otaStatus));
         char dataOut[otaFrameBufSize] = { '\0' };
         const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), otaFrame, Str::getStateStr(otaStatus));
         const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));

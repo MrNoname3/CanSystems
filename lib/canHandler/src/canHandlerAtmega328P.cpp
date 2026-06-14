@@ -63,8 +63,7 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   }
   { // Set up the CAN filtering.
     Logger::get()->print(F("Filter: "));
-    const bool setFilterResult = CAN.filterExtended(
-                                     CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
+    const bool setFilterResult = CAN.filterExtended(CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
     Logger::get()->println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }

@@ -114,8 +114,7 @@ public:
   /// @param mqttServerUrl Buffer to store the MQTT server URL.
   /// @param mqttServerPort Variable to store the MQTT server port number.
   /// @return Error state, where `0` means success.
-  [[nodiscard]] static ServerCredErrorType getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
-                                                                char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t& mqttServerPort);
+  [[nodiscard]] static ServerCredErrorType getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t& mqttServerPort);
 
   ConfigHandler() = delete;                                           // Delete constructor.
   ~ConfigHandler() = delete;                                          // Delete destructor.
