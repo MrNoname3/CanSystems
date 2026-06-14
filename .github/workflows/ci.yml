@@ -1,0 +1,51 @@
+name: CI
+
+# Mirrors the local release gate (scripts/release_check.py), in the same order:
+#   0. git working-tree check  (warning unless --strict)
+#   1. pio run                 (build every default environment)
+#   2. pio test -e native_test (native unit-test suite)
+#   3. pio check --fail-on-defect (cppcheck + clang-tidy; any defect fails)
+
+on:
+  push:
+    branches: ['**']        # every branch (not tags): immediate feedback on feature branches
+  workflow_dispatch:        # allow manual runs from the Actions tab
+
+concurrency:                # a newer push to the same ref cancels the in-flight run
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    # GitHub-only on purpose: the Gitea runner is a low-power local box, not enabled yet.
+    # Gitea also scans .github/workflows, so this guard makes the job skip there — the gate
+    # runs only on github.com. (If Gitea is enabled later via .gitea/workflows/ci.yml, the
+    # same guard also keeps the gate from running twice.)
+    if: ${{ github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # git_utils.py runs `git rev-list --count HEAD`; a shallow clone reports 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO toolchains and pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Release gate (build all envs + native tests + static analysis)
+        run: python scripts/release_check.py
