@@ -14,8 +14,7 @@ AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t 
   lastSentLight(UINT16_MAX),
   eventTimer(0U),
   sendThrottleTimer(0U),
-  event(Event::IDLE)
-{}
+  event(Event::IDLE) {}
 
 bool AmbientSensor::init() {
   const bool si7021BeginResult = si7021.init();
@@ -24,7 +23,7 @@ bool AmbientSensor::init() {
     si7021.setPrecision(SI7021::Precision::T11RH11);
   }
   const uint32_t now = millis();
-  eventTimer        = now;
+  eventTimer = now;
   sendThrottleTimer = now;
   return si7021BeginResult;
 }
@@ -54,7 +53,7 @@ bool AmbientSensor::run() {
       event = (changed || Time::hasElapsed(actualTime, sendThrottleTimer, kSendMaxPeriod)) ? Event::SEND_VALUES : Event::IDLE;
     } break;
     case Event::SEND_VALUES: {
-      canHandler.send(CanCmd::READ_HUM_TEMP_LDR, (const uint8_t[8]){
+      const uint8_t payload[8] = {
         static_cast<uint8_t>(temperature & 0xFF),
         static_cast<uint8_t>((temperature >> 8U) & 0xFF),
         static_cast<uint8_t>(humidity & 0xFF),
@@ -63,11 +62,12 @@ bool AmbientSensor::run() {
         static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
         0U,
         0U
-      });
+      };
+      canHandler.send(CanCmd::READ_HUM_TEMP_LDR, payload);
       lastSentTemperature = temperature;
-      lastSentHumidity    = humidity;
-      lastSentLight       = lightValue;
-      sendThrottleTimer   = actualTime;
+      lastSentHumidity = humidity;
+      lastSentLight = lightValue;
+      sendThrottleTimer = actualTime;
       event = Event::IDLE;
     } break;
     case Event::SENSOR_ERROR: {
