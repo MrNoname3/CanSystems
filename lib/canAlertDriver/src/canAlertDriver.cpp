@@ -1,10 +1,8 @@
 #include "canAlertDriver.hpp"
 
-CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId,
-  Connectivity& connectivity, const char* subTopic, float tempOffset) :
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
   CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
-  tempOffset(tempOffset)
-{}
+  tempOffset(tempOffset) {}
 
 bool CanAlertDriver::publishDiscovery() {
   using HA = HADiscovery;
@@ -20,24 +18,24 @@ bool CanAlertDriver::publishDiscovery() {
   };
 
   const HA::EntityConfig tempConfig = HA::EntityConfig::sensor(
-    entityNameTemp, valTplTemp, unitDegC,
-    HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
+      entityNameTemp, valTplTemp, unitDegC,
+      HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
   bool result = doPublishCanDeviceEntityDiscovery(entitySubTemp, tempConfig, canDevConfig);
 
   const HA::EntityConfig humConfig = HA::EntityConfig::sensor(
-    entityNameHum, valTplHum, unitPct,
-    HA::StateClass::measurement, HA::DeviceClass::humidity, iconWater);
+      entityNameHum, valTplHum, unitPct,
+      HA::StateClass::measurement, HA::DeviceClass::humidity, iconWater);
   result = doPublishCanDeviceEntityDiscovery(entitySubHum, humConfig, canDevConfig) && result;
 
   const HA::EntityConfig lightConfig = HA::EntityConfig::sensor(
-    entityNameLight, valTplLight, unitLux,
-    HA::StateClass::measurement, HA::DeviceClass::illuminance, iconBright);
+      entityNameLight, valTplLight, unitLux,
+      HA::StateClass::measurement, HA::DeviceClass::illuminance, iconBright);
   result = doPublishCanDeviceEntityDiscovery(entitySubLight, lightConfig, canDevConfig) && result;
 
   HA::EntityConfig connConfig = HA::EntityConfig::binarySensor(
-    HA::connName, HA::connValueTpl, HA::connPayloadOn, HA::connPayloadOff, HA::DeviceClass::connectivity);
+      HA::connName, HA::connValueTpl, HA::connPayloadOn, HA::connPayloadOff, HA::DeviceClass::connectivity);
   HA::CanDeviceConfig connDevConfig = canDevConfig;
-  connDevConfig.dataSubtopic    = getCanAvailTopic() + (MqttTopics::getSenderTopicBufSize() - 1U);
+  connDevConfig.dataSubtopic = getCanAvailTopic() + (MqttTopics::getSenderTopicBufSize() - 1U);
   connDevConfig.skipCanAvailability = true;
   result = doPublishCanDeviceEntityDiscovery(entitySubConn, connConfig, connDevConfig) && result;
 
@@ -49,7 +47,7 @@ void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLIN
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];
   uint8_t colorsOffset = 0U;
-  uint8_t canData[8] = {0U};
+  uint8_t canData[8] = { 0U };
 
   if(soundJsonVar.is<uint16_t>() && volumeJsonVar.is<uint8_t>()) {
     const uint16_t sound = soundJsonVar.as<uint16_t>();
@@ -89,12 +87,13 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
       const float temperature = static_cast<float>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U)) / 100.0F + tempOffset;
       const uint16_t humidity = static_cast<uint16_t>(canFrame.data[2]) | (static_cast<uint16_t>(canFrame.data[3]) << 8U);
       const uint16_t light = static_cast<uint16_t>(canFrame.data[4]) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
-      char dataOut[dataOutBufSize] = {'\0'};
+      char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), humTempLdrFrame, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return; }
       (void)MqttBase::sendMessage(dataOut);
     } break;
-    default: {} break;
+    default: {
+    } break;
   }
 }

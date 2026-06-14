@@ -25,11 +25,13 @@ private:
 
   /// @brief Error codes for the start of OTA operations.
   enum class OtaStartError : OtaStartErrorType {
+    // clang-format off
     NONE                  = 0U,                   // No error.
     FILE_NAME_NULLPTR     = 1 << 0U,              // Null pointer for the file name.
     FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location (must start with '/').
     FILE_OPEN_FAILED      = 1 << 2U,              // Unable to open the file.
     FILE_EMPTY            = 1 << 3U               // File is empty.
+    // clang-format on
   };
 
 public:
@@ -135,8 +137,7 @@ protected:
   /// @param connectivity Reference to the MQTT connectivity handler.
   /// @param subTopic Subtopic for MQTT communication.
   /// @param fwFileName PROGMEM pointer to the firmware file name for OTA triggering (nullptr = no auto OTA).
-  CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId,
-    Connectivity& connectivity, const char* subTopic, const char* fwFileName = nullptr);
+  CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, const char* fwFileName = nullptr);
 
   /// @brief Virtual destructor of the object.
   ~CanMqttGateway() override = default;
@@ -179,13 +180,13 @@ protected:
   /// @brief Builds CAN topic and device metadata buffers from senderTopic, clientName, and subtopic.
   /// Idempotent: if already built (canTopicsBuilt == true), returns immediately.
   void buildCanTopics();
-
-  static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";  // Hardware version string for CAN sub-devices.
+  // clang-format off
+  static constexpr const char PROGMEM canHwVersionStr[] = "ATmega328P";   // Hardware version string for CAN sub-devices.
   static constexpr const char PROGMEM canOtaSuffix[]    = "ota";          // Suffix for the OTA status sub-topic.
   static constexpr const char PROGMEM canButtonSuffix[] = "button";       // Suffix for the button event sub-topic.
-
+  // clang-format on
   char canAvailTopic[MqttTopics::getAvailTopicBufSize() + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/availability" + null.
-  char canInfoTopic[MqttTopics::getInfoTopicBufSize()  + MqttBase::getSubtopicSize()]{};  // "iot/dtos/<mac>/<subtopic>/info" + null.
+  char canInfoTopic[MqttTopics::getInfoTopicBufSize() + MqttBase::getSubtopicSize()]{};    // "iot/dtos/<mac>/<subtopic>/info" + null.
   char canOtaTopic[MqttTopics::getSenderTopicBufSize() + MqttBase::getSubtopicSize() + sizeof(canOtaSuffix)]{};    // "iot/dtos/<mac>/<subtopic>/ota" + null.
   char canButtonTopic[MqttTopics::getSenderTopicBufSize() + MqttBase::getSubtopicSize() + sizeof(canButtonSuffix)]{}; // "iot/dtos/<mac>/<subtopic>/button" + null.
   char canSwVersion[18]{};        // CAN device sw version string:     "65535 (ffffffff)" + null.
@@ -193,9 +194,9 @@ protected:
   char canDeviceName[MqttBase::getSubtopicSize() + 7U]{};  // UPPERCASE(subtopic)(max 15) + ' ' + MAC6 + null.
   bool canTopicsBuilt = false;    // True after buildCanTopics() completes successfully.
 
-  [[nodiscard]] const char* getCanAvailTopic()  const { return canAvailTopic; }
-  [[nodiscard]] const char* getCanInfoTopic()   const { return canInfoTopic; }
-  [[nodiscard]] const char* getCanSwVersion()   const { return canSwVersion; }
-  [[nodiscard]] const char* getCanDeviceId()    const { return canDeviceId; }
-  [[nodiscard]] const char* getCanDeviceName()  const { return canDeviceName; }
+  [[nodiscard]] const char* getCanAvailTopic() const { return canAvailTopic; }
+  [[nodiscard]] const char* getCanInfoTopic() const { return canInfoTopic; }
+  [[nodiscard]] const char* getCanSwVersion() const { return canSwVersion; }
+  [[nodiscard]] const char* getCanDeviceId() const { return canDeviceId; }
+  [[nodiscard]] const char* getCanDeviceName() const { return canDeviceName; }
 };

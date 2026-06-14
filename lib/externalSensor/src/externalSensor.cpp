@@ -2,8 +2,7 @@
 #include <Arduino.h>
 
 ExternalSensor::ExternalSensor(const uint8_t sensorEnablePin) :
-  sensorEnPin(sensorEnablePin)
-{
+  sensorEnPin(sensorEnablePin) {
   pinMode(sensorEnPin, OUTPUT);
 }
 

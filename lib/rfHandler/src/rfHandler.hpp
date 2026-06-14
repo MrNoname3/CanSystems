@@ -62,8 +62,7 @@ private:
       data(0U),
       bitLength(0U),
       protocol(0U),
-      pulseLength(0U)
-    {}
+      pulseLength(0U) {}
 
     /// @brief Constructor initializing RF data with specified values.
     /// @param data RF signal data.
@@ -74,8 +73,7 @@ private:
       data(data),
       bitLength(bitLength),
       protocol(protocol),
-      pulseLength(pulseLength)
-    {}
+      pulseLength(pulseLength) {}
   };
 
   RCSwitch rfTransceiver;                                     // RF driver object for sending and receiving RF signals.

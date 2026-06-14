@@ -17,16 +17,31 @@ public:
   using PublishFn = bool (*)(void* ctx, const char* topic, const char* payload, bool retained);
 
   /// @brief Supported Home Assistant MQTT component types.
-  enum class EntityType  : uint8_t { sensor, binary_sensor, button };
+  enum class EntityType : uint8_t {
+    sensor,
+    binary_sensor,
+    button
+  };
   /// @brief Supported HA `state_class` values.
-  enum class StateClass  : uint8_t { none, measurement, total_increasing };
+  enum class StateClass : uint8_t {
+    none,
+    measurement,
+    total_increasing
+  };
   /// @brief Supported HA `device_class` values.
-  enum class DeviceClass : uint8_t { none, connectivity, restart,
-                                     temperature, humidity, illuminance };
+  enum class DeviceClass : uint8_t {
+    none,
+    connectivity,
+    restart,
+    temperature,
+    humidity,
+    illuminance
+  };
 
   /// @brief Typed discovery configuration for a single entity.
   /// Construct via the factory methods: `EntityConfig::sensor()`, `::button()`, `::binarySensor()`.
   struct EntityConfig {
+    // clang-format off
     EntityType   type               = EntityType::sensor;
     const char*  name               = nullptr;  // PROGMEM: human-readable entity name.
     const char*  valueTemplate      = nullptr;  // PROGMEM: Jinja2 template to extract state value.
@@ -40,7 +55,7 @@ public:
     const char*  attributesTemplate = nullptr;  // PROGMEM: Jinja2 template for JSON attributes.
     bool         isCommandTopic     = false;    // true → command_topic; false → state_topic.
     bool         skipAvailability   = false;    // true → omit availability block and json_attributes_topic (use for the availability entity itself).
-
+    // clang-format on
     /// @brief Creates config for a sensor entity.
     static EntityConfig sensor(const char* name, const char* valueTemplate,
                                const char* unit = nullptr,
@@ -72,10 +87,10 @@ public:
   };
 
   /// HA MQTT binary sensor protocol strings for the connectivity entity — shared with CAN device drivers.
-  static constexpr const char PROGMEM connName[]      = "Connection";
-  static constexpr const char PROGMEM connValueTpl[]  = "{{ value_json.state }}";
+  static constexpr const char PROGMEM connName[] = "Connection";
+  static constexpr const char PROGMEM connValueTpl[] = "{{ value_json.state }}";
   static constexpr const char PROGMEM connPayloadOn[] = "online";
-  static constexpr const char PROGMEM connPayloadOff[]= "offline";
+  static constexpr const char PROGMEM connPayloadOff[] = "offline";
 
   /// @brief Constructs the HADiscovery instance with references to the MQTT client and topic strings.
   /// The topic string pointers must remain valid for the lifetime of this object and will be
@@ -91,7 +106,7 @@ public:
               const char* senderTopic,
               const char* receiverTopic,
               const char* availabilityTopic);
-  HADiscovery(const HADiscovery&)            = delete;
+  HADiscovery(const HADiscovery&) = delete;
   HADiscovery& operator=(const HADiscovery&) = delete;
 
   /// @brief Builds the human-readable device name from the deviceId and MAC address.
@@ -126,11 +141,11 @@ public:
   void setDiscoveryEnabled(bool enabled) { discoveryEnabled = enabled; }
 
 private:
-  static constexpr uint8_t  discoveryTopicBufSize      = 96U;  // "homeassistant/<type>/<uid>/config" topic buffer.
-  static constexpr uint16_t discoveryPayloadBufSize    = 656U; // HA MQTT discovery JSON payload buffer.
+  static constexpr uint8_t discoveryTopicBufSize = 96U;     // "homeassistant/<type>/<uid>/config" topic buffer.
+  static constexpr uint16_t discoveryPayloadBufSize = 656U; // HA MQTT discovery JSON payload buffer.
   static constexpr uint16_t canDiscoveryPayloadBufSize = 752U; // CAN entity payload: dual avail + via_device.
-  static constexpr uint8_t  swVersionBufSize        = 24U;   // "65535 (ffffffff)" sw version string buffer.
-  static constexpr uint8_t  deviceNameBufSize       = 32U;   // "CAN a1b2c3" device name buffer.
+  static constexpr uint8_t swVersionBufSize = 24U;    // "65535 (ffffffff)" sw version string buffer.
+  static constexpr uint8_t deviceNameBufSize = 32U;   // "CAN a1b2c3" device name buffer.
 #if defined(ESP8266)
   static constexpr const char PROGMEM hwVersionStr[] = "ESP8266";
 #elif defined(ESP32)
@@ -140,60 +155,60 @@ private:
 #endif
 
   // HA component type strings (PROGMEM).
-  static constexpr const char PROGMEM typeStrSensor[]          = "sensor";
-  static constexpr const char PROGMEM typeStrBinarySensor[]    = "binary_sensor";
-  static constexpr const char PROGMEM typeStrButton[]          = "button";
+  static constexpr const char PROGMEM typeStrSensor[] = "sensor";
+  static constexpr const char PROGMEM typeStrBinarySensor[] = "binary_sensor";
+  static constexpr const char PROGMEM typeStrButton[] = "button";
   // HA state_class strings (PROGMEM).
-  static constexpr const char PROGMEM stateClassMeasurement[]  = "measurement";
-  static constexpr const char PROGMEM stateClassTotalIncr[]    = "total_increasing";
+  static constexpr const char PROGMEM stateClassMeasurement[] = "measurement";
+  static constexpr const char PROGMEM stateClassTotalIncr[] = "total_increasing";
   // HA device_class strings (PROGMEM).
-  static constexpr const char PROGMEM deviceClassConn[]         = "connectivity";
-  static constexpr const char PROGMEM deviceClassRestart[]      = "restart";
-  static constexpr const char PROGMEM deviceClassTemperature[]  = "temperature";
-  static constexpr const char PROGMEM deviceClassHumidity[]     = "humidity";
-  static constexpr const char PROGMEM deviceClassIlluminance[]  = "illuminance";
+  static constexpr const char PROGMEM deviceClassConn[] = "connectivity";
+  static constexpr const char PROGMEM deviceClassRestart[] = "restart";
+  static constexpr const char PROGMEM deviceClassTemperature[] = "temperature";
+  static constexpr const char PROGMEM deviceClassHumidity[] = "humidity";
+  static constexpr const char PROGMEM deviceClassIlluminance[] = "illuminance";
   // HA topic field name strings (PROGMEM).
-  static constexpr const char PROGMEM topicFieldState[]        = "state_topic";
-  static constexpr const char PROGMEM topicFieldCmd[]          = "command_topic";
+  static constexpr const char PROGMEM topicFieldState[] = "state_topic";
+  static constexpr const char PROGMEM topicFieldCmd[] = "command_topic";
   // HA discovery topic format string (PROGMEM).
-  static constexpr const char PROGMEM mqttDiscoveryTopic[]     = "homeassistant/%s/%s_%s/config";
+  static constexpr const char PROGMEM mqttDiscoveryTopic[] = "homeassistant/%s/%s_%s/config";
 
   static constexpr const char* getTypeStr(EntityType t) {
     switch(t) {
-      case EntityType::sensor:        return typeStrSensor;
+      case EntityType::sensor: return typeStrSensor;
       case EntityType::binary_sensor: return typeStrBinarySensor;
-      case EntityType::button:        return typeStrButton;
-      default:                        return nullptr;
+      case EntityType::button: return typeStrButton;
+      default: return nullptr;
     }
   }
   static constexpr const char* getStateClassStr(StateClass sc) {
     switch(sc) {
-      case StateClass::measurement:      return stateClassMeasurement;
+      case StateClass::measurement: return stateClassMeasurement;
       case StateClass::total_increasing: return stateClassTotalIncr;
-      default:                           return nullptr;
+      default: return nullptr;
     }
   }
   static constexpr const char* getDeviceClassStr(DeviceClass dc) {
     switch(dc) {
-      case DeviceClass::connectivity:  return deviceClassConn;
-      case DeviceClass::restart:       return deviceClassRestart;
-      case DeviceClass::temperature:   return deviceClassTemperature;
-      case DeviceClass::humidity:      return deviceClassHumidity;
-      case DeviceClass::illuminance:   return deviceClassIlluminance;
-      default:                         return nullptr;
+      case DeviceClass::connectivity: return deviceClassConn;
+      case DeviceClass::restart: return deviceClassRestart;
+      case DeviceClass::temperature: return deviceClassTemperature;
+      case DeviceClass::humidity: return deviceClassHumidity;
+      case DeviceClass::illuminance: return deviceClassIlluminance;
+      default: return nullptr;
     }
   }
 
   /// @brief Formats the firmware version string used in HA `device.sw_version`.
   static void getSwVersionStr(char (&buf)[swVersionBufSize]);
 
-  char         deviceName[deviceNameBufSize]{};
-  PublishFn    publishFn;                                          // Owner-supplied raw-publish callback (publishes under Connectivity's mutex).
-  void*        publishCtx;                                         // Context for publishFn (the Connectivity instance).
-  const char*  clientName;
-  const char*  senderTopic;
-  const char*  receiverTopic;
-  const char*  availabilityTopic;
-  bool         discoveryEnabled = true;                            // false → publish* retracts entities (empty retained payload).
+  char deviceName[deviceNameBufSize]{};
+  PublishFn publishFn;                                      // Owner-supplied raw-publish callback (publishes under Connectivity's mutex).
+  void* publishCtx;                                         // Context for publishFn (the Connectivity instance).
+  const char* clientName;
+  const char* senderTopic;
+  const char* receiverTopic;
+  const char* availabilityTopic;
+  bool discoveryEnabled = true;                             // false → publish* retracts entities (empty retained payload).
 };
 #endif // HADISCOVERY_HPP

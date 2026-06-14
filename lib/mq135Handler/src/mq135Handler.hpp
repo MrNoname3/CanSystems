@@ -37,18 +37,18 @@ private:
   static constexpr float sensorVoltage = 5.0F;
   static constexpr uint8_t adcResolution = 12U;
   static constexpr uint8_t adcPin = 255U;
-  static constexpr float ratioMQ135CleanAir =  3.6F;      // RS/R0 = 3.6 ppm.
+  static constexpr float ratioMQ135CleanAir = 3.6F;      // RS/R0 = 3.6 ppm.
   static constexpr float rlValue = 1.0F;
   static constexpr float r0Value = 22.47F;
 
   // Exponential regression:
   static constexpr float gasEquationValues[][2] = {
-    {605.18F, -3.937F},  // CO
-    {77.255F, -3.180F},  // Alcohol
-    {110.47F, -2.862F},  // CO2
-    {44.947F, -3.445F},  // Toluene
-    {102.20F, -2.473F},  // NH4
-    {34.668F, -3.369F}   // Acetone
+    { 605.18F, -3.937F },  // CO
+    { 77.255F, -3.180F },  // Alcohol
+    { 110.47F, -2.862F },  // CO2
+    { 44.947F, -3.445F },  // Toluene
+    { 102.20F, -2.473F },  // NH4
+    { 34.668F, -3.369F }   // Acetone
   };
 
   // Number of rows (number of gases).

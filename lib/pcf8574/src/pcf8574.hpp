@@ -14,7 +14,7 @@ public:
   /// @param timeoutUs Timeout in microseconds for I2C communication.
   /// @param address The I2C address of the PCF8574 device.
   /// @param wire The `TwoWire` instance representing the I2C bus (defaults to `Wire`).
-  PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire &wire = Wire);
+  PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire& wire = Wire);
 
   /// @brief Destructor of the PCF8574 object.
   ~PCF8574() override = default;
@@ -35,7 +35,7 @@ public:
   /// @brief Reads a byte from the PCF8574 register.
   /// @param value Reference to a byte variable to store the read value.
   /// @return `true` if the read operation was successful, `false` otherwise.
-  [[nodiscard]] bool read(uint8_t &value) const;
+  [[nodiscard]] bool read(uint8_t& value) const;
 
   /// @brief Retrieves the current value of the PCF8574 register.
   /// @return The last known value written to or read from the PCF8574 register.
@@ -71,7 +71,7 @@ private:
   static constexpr uint32_t clockSpeed = 100000U; // Default I2C clock speed in Hz.
 
   const uint8_t address;                          // I2C address of the PCF8574 device.
-  TwoWire &wire;                                  // Reference to the I2C bus used for communication.
+  TwoWire& wire;                                  // Reference to the I2C bus used for communication.
   uint8_t registerValue;                          // Cached register value to track the current pin states.
   bool deviceExists;                              // Indicates if the device is present on the I2C bus.
 };

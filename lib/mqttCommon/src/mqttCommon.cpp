@@ -5,8 +5,7 @@
 
 MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
   MqttBase(connectivity, subtopic),
-  dataTransfer(fileValidCb)
-{}
+  dataTransfer(fileValidCb) {}
 
 bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-static)
   return true;

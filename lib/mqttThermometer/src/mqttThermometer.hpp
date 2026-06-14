@@ -15,30 +15,36 @@
 /// topics and Home Assistant entities survive bus reordering. Each sensor is exposed as its own HA
 /// device (via publishCanDeviceEntity), so no shared HADiscovery code needs changing.
 /// @tparam MaxSensors Compile-time upper bound on the number of sensors.
-template <uint8_t MaxSensors>
+template<uint8_t MaxSensors>
 class MqttThermometer final : public MqttBase {
 private:
+  // clang-format off
   static constexpr uint8_t subSubTopicSize = 34U;                  // <subtopic up to 15> + '/' + 16 hex + null.
   static constexpr uint8_t payloadSize     = 24U;                  // {"tempC":-55.00} + margin.
   static constexpr uint8_t deviceIdSize    = 56U;                  // clientName + '_' + 16 hex + null.
   static constexpr uint8_t deviceNameSize  = 32U;                  // "DS18B20 " + 16 hex + null.
   static constexpr uint8_t swVersionSize   = 24U;                  // "65535 (deadbeef)" + margin.
   static constexpr float   minValidTempC   = -55.0F;               // Below the DS18B20 range -> invalid/disconnected.
-
-  static constexpr const char PROGMEM entityName[]    = "Temperature";
-  static constexpr const char PROGMEM entitySub[]     = "temperature";
+  // clang-format on
+  static constexpr const char PROGMEM entityName[] = "Temperature";
+  static constexpr const char PROGMEM entitySub[] = "temperature";
   static constexpr const char PROGMEM valueTemplate[] = "{{ value_json.tempC }}";
-  static constexpr const char PROGMEM unitDegC[]      = "\xc2\xb0\x43";       // UTF-8 "°C".
-  static constexpr const char PROGMEM iconTherm[]     = "mdi:thermometer";
-  static constexpr const char PROGMEM hwVersion[]     = "DS18B20";
-  static constexpr const char PROGMEM payloadFmt[]    = R"({"tempC":%.2f})";
-  static constexpr const char PROGMEM subSubFmt[]     = "%s/%s";             // <subtopic>/<rom>.
-  static constexpr const char PROGMEM deviceIdFmt[]   = "%s_%s";             // <clientName>_<rom>.
+  static constexpr const char PROGMEM unitDegC[] = "\xc2\xb0\x43";       // UTF-8 "°C".
+  static constexpr const char PROGMEM iconTherm[] = "mdi:thermometer";
+  static constexpr const char PROGMEM hwVersion[] = "DS18B20";
+  static constexpr const char PROGMEM payloadFmt[] = R"({"tempC":%.2f})";
+  static constexpr const char PROGMEM subSubFmt[] = "%s/%s";             // <subtopic>/<rom>.
+  static constexpr const char PROGMEM deviceIdFmt[] = "%s_%s";             // <clientName>_<rom>.
   static constexpr const char PROGMEM deviceNameFmt[] = "DS18B20 %s";        // DS18B20 <rom>.
-  static constexpr const char PROGMEM swVersionFmt[]  = "%hu (%08x)";
+  static constexpr const char PROGMEM swVersionFmt[] = "%hu (%08x)";
 
   /// @brief Cooperative measurement cycle: request -> wait conversion -> read each -> wait period.
-  enum class State : uint8_t { Idle, Converting, Reading, Waiting };
+  enum class State : uint8_t {
+    Idle,
+    Converting,
+    Reading,
+    Waiting
+  };
 
 public:
   /// @brief Constructs the thermometer handler.
@@ -49,8 +55,7 @@ public:
   MqttThermometer(Connectivity& connectivity, const char* subtopic, uint8_t oneWirePin, uint32_t measurePeriodMs) :
     MqttBase(connectivity, subtopic),
     reader(oneWirePin),
-    measurePeriod(measurePeriodMs)
-  {}
+    measurePeriod(measurePeriodMs) {}
 
   /// @brief Default destructor.
   ~MqttThermometer() override = default;
@@ -61,7 +66,7 @@ public:
     (void)reader.begin();
     Logger::get()->printf_P(PSTR("[TEMP] DS18B20 sensors found: %hhu\r\n"), reader.count());
     for(uint8_t i = 0U; i < reader.count(); ++i) {
-      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = { '\0' };
       if(reader.romHex(i, rom, sizeof(rom))) {
         Logger::get()->printf_P(PSTR("  %s\r\n"), rom);
       }
@@ -123,7 +128,7 @@ private:
   void readAndPublishOne(uint8_t index) {
     const float tempC = reader.readTempC(index);
     if(tempC < minValidTempC) {
-      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+      char rom[Ds18b20Reader<MaxSensors>::romHexSize] = { '\0' };
       (void)reader.romHex(index, rom, sizeof(rom));
       Logger::get()->printf_P(PSTR("[TEMP] Sensor %hhu (%s) disconnected\r\n"), index, rom);
       return;
@@ -134,10 +139,10 @@ private:
   /// @brief Publishes one reading on its sub-sub topic.
   /// @param index Sensor index (for the cached ROM); @param tempC Temperature in degrees Celsius.
   void publishOne(uint8_t index, float tempC) {
-    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = { '\0' };
     if(!reader.romHex(index, rom, sizeof(rom))) { return; }
-    char subSub[subSubTopicSize] = {'\0'};
-    char payload[payloadSize] = {'\0'};
+    char subSub[subSubTopicSize] = { '\0' };
+    char payload[payloadSize] = { '\0' };
     const int32_t subLen = snprintf_P(subSub, sizeof(subSub), subSubFmt, getSubtopic(), rom);
     const int32_t payLen = snprintf_P(payload, sizeof(payload), payloadFmt, static_cast<double>(tempC));
     if((subLen <= 0) || (subLen >= static_cast<int32_t>(sizeof(subSub))) ||
@@ -147,35 +152,35 @@ private:
 
   /// @brief Publishes HA discovery for one sensor as a standalone HA device identified by its ROM.
   bool publishSensorDiscovery(uint8_t index) {
-    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = {'\0'};
+    char rom[Ds18b20Reader<MaxSensors>::romHexSize] = { '\0' };
     if(!reader.romHex(index, rom, sizeof(rom))) { return false; }
 
-    char dataSub[subSubTopicSize]   = {'\0'};
-    char deviceId[deviceIdSize]     = {'\0'};
-    char deviceName[deviceNameSize] = {'\0'};
-    char swVersion[swVersionSize]   = {'\0'};
-    (void)snprintf_P(dataSub,    sizeof(dataSub),    subSubFmt,     getSubtopic(), rom);
-    (void)snprintf_P(deviceId,   sizeof(deviceId),   deviceIdFmt,   getClientNameStr(), rom);
+    char dataSub[subSubTopicSize] = { '\0' };
+    char deviceId[deviceIdSize] = { '\0' };
+    char deviceName[deviceNameSize] = { '\0' };
+    char swVersion[swVersionSize] = { '\0' };
+    (void)snprintf_P(dataSub, sizeof(dataSub), subSubFmt, getSubtopic(), rom);
+    (void)snprintf_P(deviceId, sizeof(deviceId), deviceIdFmt, getClientNameStr(), rom);
     (void)snprintf_P(deviceName, sizeof(deviceName), deviceNameFmt, rom);
-    (void)snprintf_P(swVersion,  sizeof(swVersion),  swVersionFmt,  Build::getFwVersion(), Build::getGitHash());
+    (void)snprintf_P(swVersion, sizeof(swVersion), swVersionFmt, Build::getFwVersion(), Build::getGitHash());
 
     using HA = Connectivity::HADiscovery;
     const HA::EntityConfig config = HA::EntityConfig::sensor(
-      entityName, valueTemplate, unitDegC, HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
+        entityName, valueTemplate, unitDegC, HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
     HA::CanDeviceConfig devConfig{};
-    devConfig.deviceId            = deviceId;
-    devConfig.deviceName          = deviceName;
-    devConfig.swVersion           = swVersion;
-    devConfig.extraAvailTopic     = dataSub;          // Unused when skipCanAvailability is true; must be non-null.
-    devConfig.dataSubtopic        = dataSub;
-    devConfig.hwVersion           = hwVersion;
+    devConfig.deviceId = deviceId;
+    devConfig.deviceName = deviceName;
+    devConfig.swVersion = swVersion;
+    devConfig.extraAvailTopic = dataSub;          // Unused when skipCanAvailability is true; must be non-null.
+    devConfig.dataSubtopic = dataSub;
+    devConfig.hwVersion = hwVersion;
     devConfig.skipCanAvailability = true;             // Follow the ESP node's availability (no per-probe LWT).
     return doPublishCanDeviceEntityDiscovery(entitySub, config, devConfig);
   }
 
   Ds18b20Reader<MaxSensors> reader;                                 // The underlying multi-sensor reader.
   uint32_t measurePeriod;                                           // Interval between measurement cycles.
-  State    state     = State::Idle;                                 // Cooperative cycle state.
-  uint32_t timer     = 0U;                                          // Shared timer for conversion / period waits.
-  uint8_t  readIndex = 0U;                                          // Next sensor index to read in the Reading state.
+  State state = State::Idle;                                 // Cooperative cycle state.
+  uint32_t timer = 0U;                                          // Shared timer for conversion / period waits.
+  uint8_t readIndex = 0U;                                          // Next sensor index to read in the Reading state.
 };

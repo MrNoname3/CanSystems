@@ -5,8 +5,7 @@ PushButtonHandler::PushButtonHandler(const CanHandler& canHandler, bool (*button
   canHandler(canHandler),
   readButtonValue(buttonReader),
   button(deadTime, longPressTime, debounceTime, buttonPolarity),
-  btnCallback(nullptr)
-{}
+  btnCallback(nullptr) {}
 
 bool PushButtonHandler::run() {
   const uint8_t event = readButtonValue == nullptr ? 0U : button.buttonCheck(millis(), readButtonValue());

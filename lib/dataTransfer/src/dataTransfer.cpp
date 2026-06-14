@@ -11,16 +11,15 @@
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   checkOkCallback(checkOkCallback),
   fileSizeLocal(0U),
-  fileMd5Local{'\0'},
+  fileMd5Local{ '\0' },
   nextFilePieceNumberLocal(invalidFilePieceNumber),
   remainingFileSizeLocal(0U),
-  fileNameLocal{'\0'},
+  fileNameLocal{ '\0' },
   isFwTransfer(false),
   transferState(TransferState::IDLE),
   transferTimeoutTimer(0U),
   receivedFile(),
-  md5()
-{}
+  md5() {}
 
 DataTransfer::~DataTransfer() {
   if(receivedFile) {
@@ -230,11 +229,12 @@ void DataTransfer::runValidityCheck() {
     case TransferState::IDLE: {
       transferTimeoutTimer = actualTime;
     } break;
-    case TransferState::STORING: {} break;
+    case TransferState::STORING: {
+    } break;
     case TransferState::CHECK: {
       const uint32_t remainingBytes = receivedFile.available();
       if(remainingBytes > 0U) {
-        uint8_t readBuffer[readBufferSize] = {0U};
+        uint8_t readBuffer[readBufferSize] = { 0U };
         const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : static_cast<uint8_t>(remainingBytes);
         receivedFile.read(readBuffer, readLength);
         md5.add(readBuffer, readLength);

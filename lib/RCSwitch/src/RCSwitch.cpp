@@ -91,38 +91,38 @@
  */
 
 #if defined(ESP8266) || defined(ESP32)
-  static constexpr RCSwitch::Protocol proto[] = {
+static constexpr RCSwitch::Protocol proto[] = {
 #else
-  static const RCSwitch::Protocol PROGMEM proto[] = {
+static const RCSwitch::Protocol PROGMEM proto[] = {
 #endif
-  { 350,  0, { 0, 0 }, 1, {  1, 31 }, { 1,  3 }, { 3, 1 }, false,  0 },  // 01 (Princeton, PT-2240)
+  { 350, 0, { 0, 0 }, 1, { 1, 31 }, { 1, 3 }, { 3, 1 }, false, 0 },  // 01 (Princeton, PT-2240)
 };
 
 enum {
   numProto = sizeof(proto) / sizeof(proto[0])
 };
 
-#if not defined( RCSwitchDisableReceiving )
-  volatile unsigned long long RCSwitch::nReceivedValue = 0;
-  volatile unsigned long long RCSwitch::nReceiveProtocolMask;
-  volatile unsigned int RCSwitch::nReceivedBitlength = 0;
-  volatile unsigned int RCSwitch::nReceivedDelay = 0;
-  volatile unsigned int RCSwitch::nReceivedProtocol = 0;
-  int RCSwitch::nReceiveTolerance = 60;
-  unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
-  unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
-  unsigned int RCSwitch::buftimings[4];
+#if not defined(RCSwitchDisableReceiving)
+volatile unsigned long long RCSwitch::nReceivedValue = 0;
+volatile unsigned long long RCSwitch::nReceiveProtocolMask;
+volatile unsigned int RCSwitch::nReceivedBitlength = 0;
+volatile unsigned int RCSwitch::nReceivedDelay = 0;
+volatile unsigned int RCSwitch::nReceivedProtocol = 0;
+int RCSwitch::nReceiveTolerance = 60;
+unsigned int RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
+unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
+unsigned int RCSwitch::buftimings[4];
 #endif
 
 RCSwitch::RCSwitch() {
   this->nTransmitterPin = -1;
   this->setRepeatTransmit(5);
   this->setProtocol(1);
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   this->nReceiverInterrupt = -1;
   this->setReceiveTolerance(60);
   RCSwitch::nReceivedValue = 0;
-  RCSwitch::nReceiveProtocolMask = (1ULL << numProto)-1ULL;  //pow(2,numProto)-1;
+  RCSwitch::nReceiveProtocolMask = (1ULL << numProto) - 1ULL;  // pow(2,numProto)-1;
 #endif
 }
 
@@ -131,38 +131,37 @@ uint8_t RCSwitch::getNumProtos() { // NOLINT(readability-convert-member-function
 }
 
 /**
-  * Sets the protocol to send.
-  */
+ * Sets the protocol to send.
+ */
 void RCSwitch::setProtocol(Protocol protocol) {
   this->protocol = protocol;
 }
 
 /**
-  * Sets the protocol to send, from a list of predefined protocols
-  */
+ * Sets the protocol to send, from a list of predefined protocols
+ */
 void RCSwitch::setProtocol(int nProtocol) { // NOLINT(readability-convert-member-functions-to-static)
-  if (nProtocol < 1 || nProtocol > numProto) {
+  if(nProtocol < 1 || nProtocol > numProto) {
     nProtocol = 1;  // TODO: trigger an error, e.g. "bad protocol" ???
   }
 #if defined(ESP8266) || defined(ESP32)
-  this->protocol = proto[nProtocol-1];
+  this->protocol = proto[nProtocol - 1];
 #else
-  memcpy_P(&this->protocol, &proto[nProtocol-1], sizeof(Protocol));
+  memcpy_P(&this->protocol, &proto[nProtocol - 1], sizeof(Protocol));
 #endif
 }
 
 /**
-  * Sets the protocol to send with pulse length in microseconds.
-  */
+ * Sets the protocol to send with pulse length in microseconds.
+ */
 void RCSwitch::setProtocol(int nProtocol, int nPulseLength) {
   setProtocol(nProtocol);
   this->setPulseLength(nPulseLength);
 }
 
-
 /**
-  * Sets pulse length in microseconds
-  */
+ * Sets pulse length in microseconds
+ */
 void RCSwitch::setPulseLength(int nPulseLength) {
   this->protocol.pulseLength = nPulseLength;
 }
@@ -177,7 +176,7 @@ void RCSwitch::setRepeatTransmit(int nRepeatTransmit) {
 /**
  * Set Receiving Tolerance
  */
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
 void RCSwitch::setReceiveTolerance(int nPercent) { // NOLINT(readability-convert-member-functions-to-static)
   RCSwitch::nReceiveTolerance = nPercent;
 }
@@ -192,10 +191,10 @@ bool RCSwitch::updateSeparationLimit() { // NOLINT(readability-convert-member-fu
   unsigned int shortestPulseTime = 0;
 
   unsigned long long thisMask = 1;
-  for (const RCSwitch::Protocol& p : proto) {
-    if ((RCSwitch::nReceiveProtocolMask & thisMask) != 0ULL) {
+  for(const RCSwitch::Protocol& p : proto) {
+    if((RCSwitch::nReceiveProtocolMask & thisMask) != 0ULL) {
       const unsigned int headerShortPulseCount = std::min(p.Header.high, p.Header.low);
-      const unsigned int headerLongPulseCount  = std::max(p.Header.high, p.Header.low);
+      const unsigned int headerLongPulseCount = std::max(p.Header.high, p.Header.low);
 
       // nSeparationLimit must be <= this to detect the beginning of a transmission.
       const unsigned int headerLongPulseTime = p.pulseLength * headerLongPulseCount;
@@ -209,13 +208,13 @@ bool RCSwitch::updateSeparationLimit() { // NOLINT(readability-convert-member-fu
 
       const unsigned int longestDataPulseTime = p.pulseLength * longestDataPulseCount;
 
-      longestPulseTime  = std::min(longestPulseTime,  headerLongPulseTime);
+      longestPulseTime = std::min(longestPulseTime, headerLongPulseTime);
       shortestPulseTime = std::max(shortestPulseTime, longestDataPulseTime);
     }
     thisMask <<= 1;
   }
 
-  if (longestPulseTime <= shortestPulseTime) {
+  if(longestPulseTime <= shortestPulseTime) {
     // incompatible protocols enabled, fall back to default value
     nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
     return false;
@@ -226,7 +225,6 @@ bool RCSwitch::updateSeparationLimit() { // NOLINT(readability-convert-member-fu
   return true;
 }
 #endif
-
 
 /**
  * Enable transmissions
@@ -239,8 +237,8 @@ void RCSwitch::enableTransmit(int nTransmitterPin) {
 }
 
 /**
-  * Disable transmissions
-  */
+ * Disable transmissions
+ */
 void RCSwitch::disableTransmit() {
   this->nTransmitterPin = -1;
 }
@@ -252,7 +250,7 @@ void RCSwitch::disableTransmit() {
  * @param nDevice       Number of the switch itself (1..3)
  */
 void RCSwitch::switchOn(char sGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordD(sGroup, nDevice, true) );
+  this->sendTriState(this->getCodeWordD(sGroup, nDevice, true));
 }
 
 /**
@@ -262,7 +260,7 @@ void RCSwitch::switchOn(char sGroup, int nDevice) {
  * @param nDevice       Number of the switch itself (1..3)
  */
 void RCSwitch::switchOff(char sGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordD(sGroup, nDevice, false) );
+  this->sendTriState(this->getCodeWordD(sGroup, nDevice, false));
 }
 
 /**
@@ -271,9 +269,9 @@ void RCSwitch::switchOff(char sGroup, int nDevice) {
  * @param sFamily  Familycode (a..f)
  * @param nGroup   Number of group (1..4)
  * @param nDevice  Number of device (1..4)
-  */
+ */
 void RCSwitch::switchOn(char sFamily, int nGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordC(sFamily, nGroup, nDevice, true) );
+  this->sendTriState(this->getCodeWordC(sFamily, nGroup, nDevice, true));
 }
 
 /**
@@ -284,7 +282,7 @@ void RCSwitch::switchOn(char sFamily, int nGroup, int nDevice) {
  * @param nDevice  Number of device (1..4)
  */
 void RCSwitch::switchOff(char sFamily, int nGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordC(sFamily, nGroup, nDevice, false) );
+  this->sendTriState(this->getCodeWordC(sFamily, nGroup, nDevice, false));
 }
 
 /**
@@ -294,7 +292,7 @@ void RCSwitch::switchOff(char sFamily, int nGroup, int nDevice) {
  * @param nChannelCode  Number of the switch itself (1..4)
  */
 void RCSwitch::switchOn(int nAddressCode, int nChannelCode) {
-  this->sendTriState( this->getCodeWordB(nAddressCode, nChannelCode, true) );
+  this->sendTriState(this->getCodeWordB(nAddressCode, nChannelCode, true));
 }
 
 /**
@@ -304,7 +302,7 @@ void RCSwitch::switchOn(int nAddressCode, int nChannelCode) {
  * @param nChannelCode  Number of the switch itself (1..4)
  */
 void RCSwitch::switchOff(int nAddressCode, int nChannelCode) {
-  this->sendTriState( this->getCodeWordB(nAddressCode, nChannelCode, false) );
+  this->sendTriState(this->getCodeWordB(nAddressCode, nChannelCode, false));
 }
 
 /**
@@ -338,7 +336,7 @@ void RCSwitch::switchOff(const char* sGroup, int nChannel) {
  * @param sDevice       Code of the switch device (refers to DIP switches 6..10 (A..E) where "1" = on and "0" = off, if all DIP switches are on it's "11111")
  */
 void RCSwitch::switchOn(const char* sGroup, const char* sDevice) {
-  this->sendTriState( this->getCodeWordA(sGroup, sDevice, true) );
+  this->sendTriState(this->getCodeWordA(sGroup, sDevice, true));
 }
 
 /**
@@ -348,9 +346,8 @@ void RCSwitch::switchOn(const char* sGroup, const char* sDevice) {
  * @param sDevice       Code of the switch device (refers to DIP switches 6..10 (A..E) where "1" = on and "0" = off, if all DIP switches are on it's "11111")
  */
 void RCSwitch::switchOff(const char* sGroup, const char* sDevice) {
-  this->sendTriState( this->getCodeWordA(sGroup, sDevice, false) );
+  this->sendTriState(this->getCodeWordA(sGroup, sDevice, false));
 }
-
 
 /**
  * Returns a char[13], representing the code word to be send.
@@ -360,11 +357,11 @@ const char* RCSwitch::getCodeWordA(const char* sGroup, const char* sDevice, bool
   static char sReturn[13];
   int nReturnPos = 0;
 
-  for (int i = 0; i < 5; i++) {
+  for(int i = 0; i < 5; i++) {
     sReturn[nReturnPos++] = (sGroup[i] == '0') ? 'F' : '0';
   }
 
-  for (int i = 0; i < 5; i++) {
+  for(int i = 0; i < 5; i++) {
     sReturn[nReturnPos++] = (sDevice[i] == '0') ? 'F' : '0';
   }
 
@@ -396,15 +393,15 @@ const char* RCSwitch::getCodeWordB(int nAddressCode, int nChannelCode, bool bSta
   static char sReturn[13];
   int nReturnPos = 0;
 
-  if (nAddressCode < 1 || nAddressCode > 4 || nChannelCode < 1 || nChannelCode > 4) {
+  if(nAddressCode < 1 || nAddressCode > 4 || nChannelCode < 1 || nChannelCode > 4) {
     return nullptr;
   }
 
-  for (int i = 1; i <= 4; i++) {
+  for(int i = 1; i <= 4; i++) {
     sReturn[nReturnPos++] = (nAddressCode == i) ? '0' : 'F';
   }
 
-  for (int i = 1; i <= 4; i++) {
+  for(int i = 1; i <= 4; i++) {
     sReturn[nReturnPos++] = (nChannelCode == i) ? '0' : 'F';
   }
 
@@ -426,7 +423,7 @@ const char* RCSwitch::getCodeWordC(char sFamily, int nGroup, int nDevice, bool b
   int nReturnPos = 0;
 
   int nFamily = (int)sFamily - 'a';
-  if ( nFamily < 0 || nFamily > 15 || nGroup < 1 || nGroup > 4 || nDevice < 1 || nDevice > 4) {
+  if(nFamily < 0 || nFamily > 15 || nGroup < 1 || nGroup > 4 || nDevice < 1 || nDevice > 4) {
     return nullptr;
   }
 
@@ -437,10 +434,10 @@ const char* RCSwitch::getCodeWordC(char sFamily, int nGroup, int nDevice, bool b
   sReturn[nReturnPos++] = ((nFamily & 8U) != 0) ? 'F' : '0';
 
   // encode the device and group
-  sReturn[nReturnPos++] = (((nDevice-1) & 1U) != 0) ? 'F' : '0';
-  sReturn[nReturnPos++] = (((nDevice-1) & 2U) != 0) ? 'F' : '0';
-  sReturn[nReturnPos++] = (((nGroup-1) & 1U) != 0) ? 'F' : '0';
-  sReturn[nReturnPos++] = (((nGroup-1) & 2U) != 0) ? 'F' : '0';
+  sReturn[nReturnPos++] = (((nDevice - 1) & 1U) != 0) ? 'F' : '0';
+  sReturn[nReturnPos++] = (((nDevice - 1) & 2U) != 0) ? 'F' : '0';
+  sReturn[nReturnPos++] = (((nGroup - 1) & 1U) != 0) ? 'F' : '0';
+  sReturn[nReturnPos++] = (((nGroup - 1) & 2U) != 0) ? 'F' : '0';
 
   // encode the status code
   sReturn[nReturnPos++] = '0';
@@ -477,15 +474,15 @@ const char* RCSwitch::getCodeWordD(char sGroup, int nDevice, bool bStatus) { // 
 
   // sGroup must be one of the letters in "abcdABCD"
   int nGroup = (sGroup >= 'a') ? (int)sGroup - 'a' : (int)sGroup - 'A';
-  if ( nGroup < 0 || nGroup > 3 || nDevice < 1 || nDevice > 3) {
+  if(nGroup < 0 || nGroup > 3 || nDevice < 1 || nDevice > 3) {
     return nullptr;
   }
 
-  for (int i = 0; i < 4; i++) {
+  for(int i = 0; i < 4; i++) {
     sReturn[nReturnPos++] = (nGroup == i) ? '1' : 'F';
   }
 
-  for (int i = 1; i <= 3; i++) {
+  for(int i = 1; i <= 3; i++) {
     sReturn[nReturnPos++] = (nDevice == i) ? '1' : 'F';
   }
 
@@ -507,9 +504,9 @@ void RCSwitch::sendTriState(const char* sCodeWord) {
   // turn the tristate code word into the corresponding bit pattern, then send it
   unsigned long long code = 0;
   unsigned int length = 0;
-  for (const char* p = sCodeWord; *p != '\0'; p++) {
+  for(const char* p = sCodeWord; *p != '\0'; p++) {
     code <<= 2L;
-    switch (*p) {
+    switch(*p) {
       case '0': {
         // bit pattern 00
       } break;
@@ -532,14 +529,13 @@ void RCSwitch::sendTriState(const char* sCodeWord) {
  */
 static inline void safeDelayMicroseconds(unsigned long duration) {
 #if defined(ESP8266) || defined(ESP32)
-  if (duration > 10000) {
+  if(duration > 10000) {
     // if delay > 10 milliseconds, use yield() to avoid wdt reset
     unsigned long start = micros();
-    while ((micros() - start) < duration) { // NOLINT(bugprone-infinite-loop)
+    while((micros() - start) < duration) { // NOLINT(bugprone-infinite-loop)
       yield();
     }
-  }
-  else {
+  } else {
     delayMicroseconds(duration);
   }
 #else
@@ -554,9 +550,9 @@ void RCSwitch::send(const char* sCodeWord) {
   // turn the tristate code word into the corresponding bit pattern, then send it
   unsigned long long code = 0;
   unsigned int length = 0;
-  for (const char* p = sCodeWord; *p != '\0'; p++) {
+  for(const char* p = sCodeWord; *p != '\0'; p++) {
     code <<= 1ULL;
-    if (*p != '0') {
+    if(*p != '0') {
       code |= 1ULL;
     }
     length++;
@@ -570,38 +566,38 @@ void RCSwitch::send(const char* sCodeWord) {
  * then the bit at position length-2, and so on, till finally the bit at position 0.
  */
 void RCSwitch::send(unsigned long long code, unsigned int length) {
-  if (this->nTransmitterPin == -1) { return; }
+  if(this->nTransmitterPin == -1) { return; }
 
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   // make sure the receiver is disabled while we transmit
   int nReceiverInterrupt_backup = nReceiverInterrupt;
-  if (nReceiverInterrupt_backup != -1) {
+  if(nReceiverInterrupt_backup != -1) {
     this->disableReceive();
   }
 #endif
 
   // repeat sending the packet nRepeatTransmit times
-  for (int nRepeat = 0; nRepeat < nRepeatTransmit; nRepeat++) {
+  for(int nRepeat = 0; nRepeat < nRepeatTransmit; nRepeat++) {
     // send the preamble
-    for (int i = 0; i < ((protocol.PreambleFactor / 2) + (protocol.PreambleFactor %2 )); i++) {
-       this->transmit({protocol.Preamble.high, protocol.Preamble.low});
+    for(int i = 0; i < ((protocol.PreambleFactor / 2) + (protocol.PreambleFactor % 2)); i++) {
+      this->transmit({ protocol.Preamble.high, protocol.Preamble.low });
     }
     // send the header
-    if (protocol.HeaderFactor > 0) {
-      for (int i = 0; i < protocol.HeaderFactor; i++) {
+    if(protocol.HeaderFactor > 0) {
+      for(int i = 0; i < protocol.HeaderFactor; i++) {
         this->transmit(protocol.Header);
       }
     }
     // send the code
-    for (int i = static_cast<int>(length) - 1; i >= 0; i--) {
-      if ((code & (1ULL << i)) != 0ULL) {
+    for(int i = static_cast<int>(length) - 1; i >= 0; i--) {
+      if((code & (1ULL << i)) != 0ULL) {
         this->transmit(protocol.one);
       } else {
         this->transmit(protocol.zero);
       }
     }
     // Set the guard Time
-    if (protocol.Guard > 0) {
+    if(protocol.Guard > 0) {
       digitalWrite(this->nTransmitterPin, LOW);
       safeDelayMicroseconds(static_cast<unsigned long>(this->protocol.pulseLength) * protocol.Guard);
     }
@@ -610,9 +606,9 @@ void RCSwitch::send(unsigned long long code, unsigned int length) {
   // Disable transmit after sending (i.e., for inverted protocols)
   digitalWrite(this->nTransmitterPin, LOW);
 
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   // enable receiver again if we just disabled it
-  if (nReceiverInterrupt_backup != -1) {
+  if(nReceiverInterrupt_backup != -1) {
     this->enableReceive(nReceiverInterrupt_backup);
   }
 #endif
@@ -625,18 +621,17 @@ void RCSwitch::transmit(HighLow pulses) {
   uint8_t firstLogicLevel = (this->protocol.invertedSignal) ? LOW : HIGH;
   uint8_t secondLogicLevel = (this->protocol.invertedSignal) ? HIGH : LOW;
 
-  if (pulses.high > 0) {
+  if(pulses.high > 0) {
     digitalWrite(this->nTransmitterPin, firstLogicLevel);
-    delayMicroseconds( this->protocol.pulseLength * pulses.high);
+    delayMicroseconds(this->protocol.pulseLength * pulses.high);
   }
-  if (pulses.low > 0) {
+  if(pulses.low > 0) {
     digitalWrite(this->nTransmitterPin, secondLogicLevel);
-    delayMicroseconds( this->protocol.pulseLength * pulses.low);
+    delayMicroseconds(this->protocol.pulseLength * pulses.low);
   }
 }
 
-
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
 /**
  * Enable receiving data
  */
@@ -646,7 +641,7 @@ void RCSwitch::enableReceive(int interrupt) {
 }
 
 void RCSwitch::enableReceive() { // NOLINT(readability-make-member-function-const)
-  if (this->nReceiverInterrupt != -1) {
+  if(this->nReceiverInterrupt != -1) {
     RCSwitch::nReceivedValue = 0;
     RCSwitch::nReceivedBitlength = 0;
 #if defined(RaspberryPi) // Raspberry Pi
@@ -702,43 +697,43 @@ unsigned int RCSwitch::diff(int A, int B) {
 
 bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLINT(readability-convert-member-functions-to-static)
 #if defined(ESP8266) || defined(ESP32)
-    const Protocol &pro = proto[p-1];
+  const Protocol& pro = proto[p - 1];
 #else
-    Protocol pro;
-    memcpy_P(&pro, &proto[p-1], sizeof(Protocol));
+  Protocol pro;
+  memcpy_P(&pro, &proto[p - 1], sizeof(Protocol));
 #endif
 
-    unsigned long long code = 0;
-    unsigned int FirstTiming = 0;
-    if (pro.PreambleFactor > 0) {
-      FirstTiming = pro.PreambleFactor + 1;
-    }
-    unsigned int BeginData = 0;
-    if (pro.HeaderFactor > 0) {
-      BeginData = (pro.invertedSignal) ? (2) : (1);
+  unsigned long long code = 0;
+  unsigned int FirstTiming = 0;
+  if(pro.PreambleFactor > 0) {
+    FirstTiming = pro.PreambleFactor + 1;
+  }
+  unsigned int BeginData = 0;
+  if(pro.HeaderFactor > 0) {
+    BeginData = (pro.invertedSignal) ? (2) : (1);
       // Header pulse count correction for more than one
-      if (pro.HeaderFactor > 1) {
-        BeginData += (pro.HeaderFactor - 1) * 2;
-      }
+    if(pro.HeaderFactor > 1) {
+      BeginData += (pro.HeaderFactor - 1) * 2;
     }
-    //Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
-    // берем наибольшее значение из Header
-    const unsigned int syncLengthInPulses =  ((pro.Header.low) > (pro.Header.high)) ? (pro.Header.low) : (pro.Header.high);
+  }
+    // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
+    //  берем наибольшее значение из Header
+  const unsigned int syncLengthInPulses = ((pro.Header.low) > (pro.Header.high)) ? (pro.Header.low) : (pro.Header.high);
     // определяем длительность Te как длительность первого импульса header деленную на количество импульсов в нем
     // или как длительность импульса preamble деленную на количество Te в нем
-    unsigned int sdelay = 0;
-    if (syncLengthInPulses > 0) {
-      sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
-    } else if (pro.PreambleFactor > 0) {
-      sdelay = RCSwitch::timings[FirstTiming-2] / pro.PreambleFactor;
-    }
-    const unsigned int delay = sdelay;
-    if (delay == 0) {
-      return false;
-    }
+  unsigned int sdelay = 0;
+  if(syncLengthInPulses > 0) {
+    sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
+  } else if(pro.PreambleFactor > 0) {
+    sdelay = RCSwitch::timings[FirstTiming - 2] / pro.PreambleFactor;
+  }
+  const unsigned int delay = sdelay;
+  if(delay == 0) {
+    return false;
+  }
     // nReceiveTolerance = 60
     // допустимое отклонение длительностей импульсов на 60 %
-    const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
+  const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
 
     // 0 - sync перед preamble или data
     // BeginData - сдвиг на 1 или 2 от sync к preamble/data
@@ -747,55 +742,55 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
     // bitChangeCount - количество импульсов в data
 
     /* For protocols that start low, the sync period looks like
-     *               _________
-     * _____________|         |XXXXXXXXXXXX|
-     *
-     * |--1st dur--|-2nd dur-|-Start data-|
-     *
-     * The 3rd saved duration starts the data.
-     *
-     * For protocols that start high, the sync period looks like
-     *
-     *  ______________
-     * |              |____________|XXXXXXXXXXXXX|
-     *
-     * |-filtered out-|--1st dur--|--Start data--|
-     *
-     * The 2nd saved duration starts the data
-     */
+   *               _________
+   * _____________|         |XXXXXXXXXXXX|
+   *
+   * |--1st dur--|-2nd dur-|-Start data-|
+   *
+   * The 3rd saved duration starts the data.
+   *
+   * For protocols that start high, the sync period looks like
+   *
+   *  ______________
+   * |              |____________|XXXXXXXXXXXXX|
+   *
+   * |-filtered out-|--1st dur--|--Start data--|
+   *
+   * The 2nd saved duration starts the data
+   */
     // если invertedSignal=false, то сигнал начинается с 1 элемента массива (высокий уровень)
     // если invertedSignal=true, то сигнал начинается со 2 элемента массива (низкий уровень)
     // добавляем поправку на Преамбулу и Хедер
-    const unsigned int firstDataTiming = BeginData + FirstTiming;
-    unsigned int bitChangeCount = changeCount - firstDataTiming - 1U + static_cast<unsigned int>(pro.invertedSignal);
-    if (bitChangeCount > 128U) {
-      bitChangeCount = 128;
-    }
+  const unsigned int firstDataTiming = BeginData + FirstTiming;
+  unsigned int bitChangeCount = changeCount - firstDataTiming - 1U + static_cast<unsigned int>(pro.invertedSignal);
+  if(bitChangeCount > 128U) {
+    bitChangeCount = 128;
+  }
 
-    for (unsigned int i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 2) {
-        code <<= 1;
-        if (diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.zero.high)) < delayTolerance &&
-            diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.zero.low)) < delayTolerance) {
+  for(unsigned int i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 2) {
+    code <<= 1;
+    if(diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.zero.high)) < delayTolerance &&
+       diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.zero.low)) < delayTolerance) {
             // zero
-        } else if (diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.one.high)) < delayTolerance &&
-                   diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.one.low)) < delayTolerance) {
+    } else if(diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.one.high)) < delayTolerance &&
+              diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.one.low)) < delayTolerance) {
             // one
-            code |= 1;
-        } else {
+      code |= 1;
+    } else {
             // Failed
-            return false;
-        }
+      return false;
     }
+  }
 
-    if (bitChangeCount > 14) {    // ignore very short transmissions: no device sends them, so this must be noise
-        RCSwitch::nReceivedValue = code;
-        RCSwitch::nReceivedBitlength = bitChangeCount / 2;
-        RCSwitch::nReceivedDelay = delay;
-        RCSwitch::nReceivedProtocol = p;
-        return true;
-    }
+  if(bitChangeCount > 14) {    // ignore very short transmissions: no device sends them, so this must be noise
+    RCSwitch::nReceivedValue = code;
+    RCSwitch::nReceivedBitlength = bitChangeCount / 2;
+    RCSwitch::nReceivedDelay = delay;
+    RCSwitch::nReceivedProtocol = p;
+    return true;
+  }
 
-    return false;
+  return false;
 }
 
 void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-functions-to-static, readability-function-cognitive-complexity)
@@ -807,25 +802,25 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-function
   const long time = micros();
   const unsigned int duration = time - lastTime;
 
-  RCSwitch::buftimings[3]=RCSwitch::buftimings[2];
-  RCSwitch::buftimings[2]=RCSwitch::buftimings[1];
-  RCSwitch::buftimings[1]=RCSwitch::buftimings[0];
-  RCSwitch::buftimings[0]=duration;
+  RCSwitch::buftimings[3] = RCSwitch::buftimings[2];
+  RCSwitch::buftimings[2] = RCSwitch::buftimings[1];
+  RCSwitch::buftimings[1] = RCSwitch::buftimings[0];
+  RCSwitch::buftimings[0] = duration;
 
-  if (duration > RCSwitch::nSeparationLimit ||
-      changeCount == 156U ||
-      (diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::buftimings[2])) < 50U &&
-        diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::buftimings[1])) < 50U &&
-        changeCount > 25U)) {
+  if(duration > RCSwitch::nSeparationLimit ||
+     changeCount == 156U ||
+     (diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::buftimings[2])) < 50U &&
+      diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::buftimings[1])) < 50U &&
+      changeCount > 25U)) {
     // принят длинный импульс продолжительностью более nSeparationLimit (4300)
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
-    if (diff(static_cast<int>(duration), static_cast<int>(RCSwitch::timings[0])) < 400U ||
-        changeCount == 156U ||
-        (diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::timings[1])) < 50U &&
-          diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::timings[2])) < 50U &&
-          diff(static_cast<int>(RCSwitch::buftimings[1]), static_cast<int>(RCSwitch::timings[3])) < 50U &&
-          changeCount > 25U)) {
+    if(diff(static_cast<int>(duration), static_cast<int>(RCSwitch::timings[0])) < 400U ||
+       changeCount == 156U ||
+       (diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::timings[1])) < 50U &&
+        diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::timings[2])) < 50U &&
+        diff(static_cast<int>(RCSwitch::buftimings[1]), static_cast<int>(RCSwitch::timings[3])) < 50U &&
+        changeCount > 25U)) {
       // если его длительность отличается от первого импульса,
       // который приняли раньше, менее чем на +-200 (исходно 200)
       // то считаем это повторным пакетом и игнорируем его
@@ -838,11 +833,11 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-function
       // количество повторных пакетов
       repeatCount++;
       // при приеме второго повторного начинаем анализ принятого первым
-      if (repeatCount == 1) {
+      if(repeatCount == 1) {
         unsigned long long thismask = 1;
         for(unsigned int i = 1; i <= numProto; i++) {
-          if ((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
-            if (receiveProtocol(static_cast<int>(i), changeCount)) {
+          if((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
+            if(receiveProtocol(static_cast<int>(i), changeCount)) {
               // receive succeeded for protocol i
               break;
             }
@@ -856,24 +851,24 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-function
     // дительность отличается более чем на +-200 от первого
     // принятого ранее, очищаем счетчик для приема нового пакета
     changeCount = 0;
-    if (diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::buftimings[2])) < 50U &&
-        diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::buftimings[1])) < 50U) {
-      RCSwitch::timings[1]=RCSwitch::buftimings[3];
-      RCSwitch::timings[2]=RCSwitch::buftimings[2];
-      RCSwitch::timings[3]=RCSwitch::buftimings[1];
+    if(diff(static_cast<int>(RCSwitch::buftimings[3]), static_cast<int>(RCSwitch::buftimings[2])) < 50U &&
+       diff(static_cast<int>(RCSwitch::buftimings[2]), static_cast<int>(RCSwitch::buftimings[1])) < 50U) {
+      RCSwitch::timings[1] = RCSwitch::buftimings[3];
+      RCSwitch::timings[2] = RCSwitch::buftimings[2];
+      RCSwitch::timings[3] = RCSwitch::buftimings[1];
       changeCount = 4;
     }
   }
 
   // detect overflow
-  if (changeCount >= RCSWITCH_MAX_CHANGES) {
+  if(changeCount >= RCSWITCH_MAX_CHANGES) {
     changeCount = 0;
     repeatCount = 0;
   }
 
   // заносим в массив длительность очередного принятого импульса
-  if (changeCount > 0 && duration < 100) { // игнорируем шумовые всплески менее 100 мкс
-    RCSwitch::timings[changeCount-1] += duration;
+  if(changeCount > 0 && duration < 100) { // игнорируем шумовые всплески менее 100 мкс
+    RCSwitch::timings[changeCount - 1] += duration;
   } else {
     RCSwitch::timings[changeCount++] = duration;
   }

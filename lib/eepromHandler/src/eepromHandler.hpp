@@ -13,11 +13,13 @@ template<class T, uint16_t eepromAddress>
 class EEPROMHandler final {
 public:
   /// @brief Default constructor. Initializes the internal pointer to null.
-  EEPROMHandler() : data(nullptr) {}
+  EEPROMHandler() :
+    data(nullptr) {}
 
   /// @brief Constructor with a pointer to the data.
   /// @param data Pointer to the data to be stored or retrieved from EEPROM.
-  explicit EEPROMHandler(T* data) : data(data) {}
+  explicit EEPROMHandler(T* data) :
+    data(data) {}
 
   /// @brief Default destructor.
   ~EEPROMHandler() = default;

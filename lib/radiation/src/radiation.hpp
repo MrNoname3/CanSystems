@@ -13,10 +13,14 @@ class Radiation final : public MqttBase {
 public:
   /// @brief Supported Geiger-Müller tube types.
   /// Values must match the integer stored in /config/tube.json: { "tube": <value> }.
-  enum class TubeType : uint8_t { Unknown = 0U, J305 = 1U, M4011 = 2U };
+  enum class TubeType : uint8_t {
+    Unknown = 0U,
+    J305 = 1U,
+    M4011 = 2U
+  };
 
 private:
-  static constexpr uint8_t  dataOutBufSize = 64U;              // Buffer for outgoing MQTT data messages.
+  static constexpr uint8_t dataOutBufSize = 64U;              // Buffer for outgoing MQTT data messages.
   static constexpr uint32_t measureTime = Time::minToMs(1U);   // Measurement interval in milliseconds for calculating CPM.
 
   // Message frame; sievert and radian are 0 when tube type is unknown.
@@ -67,9 +71,9 @@ private:
   /// @brief Returns the CPM-to-µSv/h conversion factor for the given tube type; 0.0f if unknown.
   static constexpr float getTubeFactor(TubeType t) {
     switch(t) {
-      case TubeType::J305:  return 123.153F;
+      case TubeType::J305: return 123.153F;
       case TubeType::M4011: return 153.8F;
-      default:              return 0.0F;
+      default: return 0.0F;
     }
   }
 

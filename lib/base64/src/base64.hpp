@@ -72,7 +72,7 @@ private:
   /// @note Returns 255 for invalid characters.
   static uint8_t lookupTable(char c);
 
-  static bool processFullBlock(uint8_t (&A4)[4], uint8_t output[], uint32_t &decodedLength);
-  static bool processPartialBlock(uint8_t (&A4)[4], uint32_t count, uint8_t output[], uint32_t &decodedLength);
+  static bool processFullBlock(uint8_t (&A4)[4], uint8_t output[], uint32_t& decodedLength);
+  static bool processPartialBlock(uint8_t (&A4)[4], uint32_t count, uint8_t output[], uint32_t& decodedLength);
 };
 #endif // BASE64_HPP

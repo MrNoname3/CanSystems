@@ -3,6 +3,7 @@
 #include "MCP2515.h"
 
 namespace {
+  // clang-format off
   constexpr uint8_t regBfpCtrl   = 0x0CU;
   constexpr uint8_t regTxRtsCtrl = 0x0DU;
   constexpr uint8_t regCanCtrl   = 0x0FU;
@@ -18,6 +19,7 @@ namespace {
   constexpr uint8_t flagExide = 0x08U;
   constexpr uint8_t flagRxm0  = 0x20U;
   constexpr uint8_t flagRxm1  = 0x40U;
+  // clang-format on
 
   constexpr uint8_t flagRxnIe(uint8_t n) { return static_cast<uint8_t>(0x01U << n); }
   constexpr uint8_t flagRxnIf(uint8_t n) { return static_cast<uint8_t>(0x01U << n); }
@@ -38,9 +40,8 @@ namespace {
 
   constexpr uint8_t regRxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x60U + n * 0x10U); }
   constexpr uint8_t regRxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x61U + n * 0x10U); }
-  constexpr uint8_t regRxBnD0(uint8_t n)   { return static_cast<uint8_t>(0x66U + n * 0x10U); }
+  constexpr uint8_t regRxBnD0(uint8_t n) { return static_cast<uint8_t>(0x66U + n * 0x10U); }
 } // namespace
-
 
 uint8_t MCP2515::begin(uint32_t baudRate) {
   if(CANController::begin(baudRate) != 1) { return 0U; }
@@ -61,6 +62,7 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
   };
 
   static constexpr CnfEntry cnfMapper[] = {
+    // clang-format off
     {  8'000'000U, 1'000'000U, { 0x00U, 0x80U, 0x00U } },
     {  8'000'000U,   500'000U, { 0x00U, 0x90U, 0x02U } },
     {  8'000'000U,   250'000U, { 0x00U, 0xB1U, 0x05U } },
@@ -86,6 +88,7 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
     { 16'000'000U,    20'000U, { 0x0FU, 0xFFU, 0x87U } },
     { 16'000'000U,    10'000U, { 0x1FU, 0xFFU, 0x87U } },
     { 16'000'000U,     5'000U, { 0x3FU, 0xFFU, 0x87U } },
+    // clang-format on
   };
 
   const uint8_t* cnf = nullptr;
@@ -201,16 +204,16 @@ uint8_t MCP2515::parsePacket() {
   const uint8_t sidl = header[1];
   const uint8_t eid8 = header[2];
   const uint8_t eid0 = header[3];
-  const uint8_t dlc  = header[4];
+  const uint8_t dlc = header[4];
 
   rxExtended = (sidl & flagIde) != 0U;
 
   const uint32_t idA = static_cast<uint32_t>(((sidh << 3) & 0x07F8U) | ((sidl >> 5) & 0x07U));
   if(rxExtended) {
     const uint32_t idB =
-      (static_cast<uint32_t>(sidl & 0x03U) << 16U) |
-      (static_cast<uint32_t>(eid8) << 8U) |
-      static_cast<uint32_t>(eid0);
+        (static_cast<uint32_t>(sidl & 0x03U) << 16U) |
+        (static_cast<uint32_t>(eid8) << 8U) |
+        static_cast<uint32_t>(eid0);
 
     rxId = (idA << 18U) | idB;
     rxRtr = (dlc & flagRtr) != 0U;
@@ -235,7 +238,7 @@ uint8_t MCP2515::parsePacket() {
   return rxDlc;
 }
 
-void MCP2515::onReceive(void(*callback)(int)) {
+void MCP2515::onReceive(void (*callback)(int)) {
   CANController::onReceive(callback);
 
   pinMode(intPin, INPUT);

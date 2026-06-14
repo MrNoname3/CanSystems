@@ -8,12 +8,12 @@
 
 #if defined(ESP8266) || defined(ESP32)
 namespace {
-/// @brief Returns the current time as a validated UTC `tm`, or nullptr if the clock is unset.
-const tm* utcNow() {
-  const time_t currentTime = time(nullptr);
-  if(currentTime == -1) { return nullptr; }           // Clock not set yet (NTP not synced).
-  return gmtime(&currentTime);                        // Always UTC, independent of any TZ setting.
-}
+  /// @brief Returns the current time as a validated UTC `tm`, or nullptr if the clock is unset.
+  const tm* utcNow() {
+    const time_t currentTime = time(nullptr);
+    if(currentTime == -1) { return nullptr; }           // Clock not set yet (NTP not synced).
+    return gmtime(&currentTime);                        // Always UTC, independent of any TZ setting.
+  }
 }  // namespace
 
 bool Time::getIsoUtcString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)

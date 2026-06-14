@@ -8,7 +8,7 @@
 
 namespace {
   constexpr uint32_t regBase = 0x3FF6B000U;
-
+  // clang-format off
   constexpr uint8_t regMod   = 0x00U;
   constexpr uint8_t regCmr   = 0x01U;
   constexpr uint8_t regSr    = 0x02U;
@@ -23,7 +23,7 @@ namespace {
   constexpr uint8_t regSff   = 0x10U;
   constexpr uint8_t regEff   = 0x10U;
   constexpr uint8_t regCdr   = 0x1FU;
-
+  // clang-format off
   constexpr uint8_t regAcrN(uint8_t n) { return static_cast<uint8_t>(0x10U + n); }
   constexpr uint8_t regAmrN(uint8_t n) { return static_cast<uint8_t>(0x14U + n); }
 } // namespace

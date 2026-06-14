@@ -98,7 +98,7 @@ public:
   /// @param newValue The latest sensor value.
   /// @param oldValue The previous smoothed value.
   /// @return The updated smoothed value.
-  template <uint8_t alpha>
+  template<uint8_t alpha>
   static constexpr uint16_t complementaryFilter(uint16_t newValue, uint16_t oldValue) {
     return static_cast<uint16_t>((static_cast<uint32_t>(alpha) * newValue + static_cast<uint32_t>(255U - alpha) * oldValue) / 255U);
   }
@@ -160,20 +160,26 @@ public:
 
 private:
 #if defined(__AVR_ATmega328P__)
+  // clang-format off
   static constexpr const char* okStr            = "[OK]";     // Status string for "OK" on AVR platforms.
   static constexpr const char* errStr           = "[ERR]";    // Status string for "Error" on AVR platforms.
   static constexpr const char* spacerStr        = "|";        // A string used as a spacer in formatting.
+  // clang-format on
 #elif defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
   // PROGMEM is real on ESP and a no-op in the native pgmspace shim, so the test build shares this branch.
+  // clang-format off
   static constexpr const char PROGMEM okStr[]             = "[OK]";  // Status string for "OK" stored in program memory for ESP platforms.
   static constexpr const char PROGMEM errStr[]            = "[ERR]"; // Status string for "Error" stored in program memory for ESP platforms.
   static constexpr const char PROGMEM sectionSeparator[]  = "*************************************************"; // Section separator string.
   static constexpr const char PROGMEM onlineStr[]         = "ONLINE";
   static constexpr const char PROGMEM offlineStr[]        = "OFFLINE";
   static constexpr const char PROGMEM errCodeFmt[]        = "  Code: %hu\r\n";
+  // clang-format on
 #else
+  // clang-format off
   static constexpr const char* okStr  = "[OK]";               // Status string for "OK" on native/test platforms.
   static constexpr const char* errStr = "[ERR]";              // Status string for "Error" on native/test platforms.
+  // clang-format on
 #endif
 };
 
@@ -274,27 +280,29 @@ public:
 
 private:
 #if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
+  // clang-format off
   static constexpr const char PROGMEM tempFileLocation[]       = "/temp.tmp";             // Temporary file name used during file transfer.
   static constexpr const char PROGMEM otaFwLocation[]          = "espFirmware";           // File location for the OTA firmware.
   static constexpr const char PROGMEM canAlertFwLocation[]     = "/canAlertFw.bin";       // File location for CAN alert device OTA firmware.
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.
   static constexpr const char PROGMEM mqttServerCredLocation[] = "/config/server.json";   // File location for the MQTT server credentials.
   static constexpr const char PROGMEM tubeConfigLocation[]     = "/config/tube.json";     // File location for the radiation tube type configuration.
+  // clang-format off
 #endif
 };
 
 /// @brief Template class to manage error states using a bitmask.
 /// @tparam Enum An enumeration type representing individual error states.
 /// @tparam StorageType An integral type used to store the bitmask. Must be large enough to hold all Enum values.
-template <typename Enum, typename StorageType>
+template<typename Enum, typename StorageType>
 class ErrorState final {
   // Ensure that Enum is an enumeration type and StorageType is large enough to hold all Enum values.
   static_assert(sizeof(StorageType) * 8U >= sizeof(Enum) * 8U, "StorageType must be large enough to hold all Enum values!");
+
 public:
   /// @brief Constructs an `ErrorState` object with all error states cleared.
   ErrorState() :
-    errorState(0U)
-  {}
+    errorState(0U) {}
 
   /// @brief Default destructor.
   ~ErrorState() = default;
@@ -363,11 +371,12 @@ public:
   class LockedSerial final {
   public:
 #if defined(ESP32)
-    LockedSerial(HardwareSerial& serialPort, RecursiveMutex& mutex) noexcept
-      : serial(&serialPort), guard(mutex) {}
+    LockedSerial(HardwareSerial& serialPort, RecursiveMutex& mutex) noexcept :
+      serial(&serialPort),
+      guard(mutex) {}
 #else
-    explicit LockedSerial(HardwareSerial& serialPort) noexcept
-      : serial(&serialPort) {}
+    explicit LockedSerial(HardwareSerial& serialPort) noexcept :
+      serial(&serialPort) {}
 #endif
 
     /// @brief Forwards `Logger::get()->...` to the underlying serial while the lock is held.
@@ -381,13 +390,13 @@ public:
   private:
     HardwareSerial* serial;   // Underlying hardware serial (not owned).
 #if defined(ESP32)
-    LockGuard       guard;    // Holds the logger mutex for the proxy's lifetime (ESP32 only).
+    LockGuard guard;          // Holds the logger mutex for the proxy's lifetime (ESP32 only).
 #endif
   };
 
   /// @brief Initialize the logger with a hardware serial instance.
   /// @param serialPort The hardware serial instance (e.g., `Serial`, `Serial1`).
-  static inline void begin(HardwareSerial &serialPort) noexcept {
+  static inline void begin(HardwareSerial& serialPort) noexcept {
     serial = &serialPort;
   }
 
@@ -410,9 +419,9 @@ public:
   Logger& operator=(Logger&&) = delete;                 // Define move assignment operator.
 
 private:
-  static inline HardwareSerial *serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
+  static inline HardwareSerial* serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
 #if defined(ESP32)
-  static inline RecursiveMutex  mutex;              // Serializes log output across concurrent tasks (ESP32 only).
+  static inline RecursiveMutex mutex;               // Serializes log output across concurrent tasks (ESP32 only).
 #endif
 };
 
@@ -421,5 +430,8 @@ private:
 /// @tparam N Number of elements in the array.
 /// @param arr Reference to the fixed-size array.
 /// @return Number of elements as a compile-time constant.
-template <typename T, uint8_t N>
-constexpr uint8_t arraySize(T (&arr)[N]) { (void)arr; return N; }
+template<typename T, uint8_t N>
+constexpr uint8_t arraySize(T (&arr)[N]) {
+  (void)arr;
+  return N;
+}

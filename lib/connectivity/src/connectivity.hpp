@@ -36,7 +36,7 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(60U);     // Interval for MQTT reconnect retries and WDT-reset backoff.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
-
+  // clang-format off
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.
   static constexpr const char PROGMEM mqttConnectFailedStr[]          = "MQTT_CONNECT_FAILED";            // MQTT connection failed string.
@@ -48,7 +48,7 @@ private:
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
-
+  // clang-format on
 public:
   /// @brief Constructs a Connectivity instance.
   /// @param networkManager Reference to the network manager handling WiFi/Ethernet connections.
@@ -145,7 +145,6 @@ private:
   /// @return `true` if the connection was successfully established; otherwise, `false`.
   bool connectToMqttServer();
 
-
   /// @brief Synchronizes the system time using NTP.
   /// @return `true` if synchronisation completed within the timeout; `false` if it timed out.
   [[nodiscard]] bool syncNtpTime();
@@ -241,10 +240,8 @@ public:
   /// @return `true` if the response was sent successfully; otherwise, `false`.
   [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {
     char responseBuffer[responseBufferSize] = { '\0' };
-    const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer),
-      PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
-    const bool responseBufferValid = ((responseBufferActualSize >= 0) &&
-      (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
+    const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer), PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
+    const bool responseBufferValid = ((responseBufferActualSize >= 0) && (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
     if(!responseBufferValid) { return false; }
     return sendMessage(responseBuffer);
   }
@@ -318,8 +315,7 @@ protected:
   /// @param connectivity Reference to the connectivity object managing MQTT operations.
   /// @param subTopic Pointer to the subtopic string to be associated with the instance.
   MqttBase(Connectivity& connectivity, const char* subTopic) :
-    connectivity(connectivity)
-  {
+    connectivity(connectivity) {
     if(isSubtopicValid(subTopic)) {
       strlcpy(subtopic, subTopic, subtopicSize);
       this->connectivity.registerCallback(this);

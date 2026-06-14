@@ -5,9 +5,9 @@
 bool RfHandler::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
-    PSTR("RF Received"), PSTR("{{ value_json.RfReceived.Data }}"),
-    nullptr, HA::StateClass::none, HA::DeviceClass::none,
-    PSTR("mdi:remote"), PSTR("{{ value_json.RfReceived | tojson }}"));
+      PSTR("RF Received"), PSTR("{{ value_json.RfReceived.Data }}"),
+      nullptr, HA::StateClass::none, HA::DeviceClass::none,
+      PSTR("mdi:remote"), PSTR("{{ value_json.RfReceived | tojson }}"));
   return doPublishEntityDiscovery(config);
 }
 
@@ -15,8 +15,7 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t r
   MqttBase(connectivity, subtopic),
   rfRxPin(rfRxPin),
   rfTxPin(rfTxPin),
-  dataCheckTimer(0U)
-{
+  dataCheckTimer(0U) {
   pinMode(this->rfRxPin, INPUT_PULLUP);
   rfTransceiver.enableReceive(digitalPinToInterrupt(this->rfRxPin));
   rfTransceiver.enableTransmit(this->rfTxPin);
@@ -26,7 +25,7 @@ bool RfHandler::run() {
   const uint32_t actualTime = millis();
   if(rfTransceiver.available()) {
     RfData actualRfData(rfTransceiver.getReceivedValue(), rfTransceiver.getReceivedBitlength(),
-      rfTransceiver.getReceivedProtocol(), rfTransceiver.getReceivedDelay());
+                        rfTransceiver.getReceivedProtocol(), rfTransceiver.getReceivedDelay());
     rfTransceiver.resetAvailable();
 
     // If timer is expired, clear old data to pass the next filter.
@@ -55,8 +54,7 @@ void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) {
   JsonVariant bitsJsonVar = payloadJson[F("Bits")];
   JsonVariant protocolJsonVar = payloadJson[F("Protocol")];
   JsonVariant pulseJsonVar = payloadJson[F("Pulse")];
-  if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() &&
-    protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
+  if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() && protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
     const uint64_t rfOutData = dataJsonVar.as<uint64_t>();
     const uint32_t rfOutBitLength = bitsJsonVar.as<uint32_t>();
     const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();

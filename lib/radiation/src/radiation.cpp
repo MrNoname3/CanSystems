@@ -9,16 +9,15 @@ volatile uint32_t Radiation::cpmToSend = 0U;
 Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin) :
   MqttBase(connectivity, subtopic),
   measureTicker(),
-  sensorPin(sensorPin)
-{
+  sensorPin(sensorPin) {
   pinMode(sensorPin, INPUT);
 }
 
 bool Radiation::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
-    PSTR("Radiation"), PSTR("{{ value_json.tick }}"), PSTR("CPM"),
-    HA::StateClass::measurement, HA::DeviceClass::none, PSTR("mdi:radioactive"));
+      PSTR("Radiation"), PSTR("{{ value_json.tick }}"), PSTR("CPM"),
+      HA::StateClass::measurement, HA::DeviceClass::none, PSTR("mdi:radioactive"));
   return doPublishEntityDiscovery(config);
 }
 
@@ -63,13 +62,11 @@ bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static
     const float factor = getTubeFactor(tubeType);
     // Scale CPM/factor by 10000 for 4-decimal fixed-point; 0 when tube type is unknown.
     // radian = sievert * 100 shares the same integer (sievert*10000 / 100 = radian*100).
-    const uint32_t sX10k = (factor > 0.0F)
-      ? static_cast<uint32_t>(lroundf(static_cast<float>(cpmToSend) / factor * 10000.0F))
-      : 0U;
+    const uint32_t sX10k = (factor > 0.0F) ? static_cast<uint32_t>(lroundf(static_cast<float>(cpmToSend) / factor * 10000.0F)) : 0U;
     dataOutSize = snprintf_P(dataOut, sizeof(dataOut), fullMessageFrame,
-      cpmToSend,
-      sX10k / 10000U, sX10k % 10000U,   // sievert: whole + 4-digit frac
-      sX10k / 100U,   sX10k % 100U);    // radian:  whole + 2-digit frac
+                             cpmToSend,
+                             sX10k / 10000U, sX10k % 10000U,   // sievert: whole + 4-digit frac
+                             sX10k / 100U, sX10k % 100U);    // radian:  whole + 2-digit frac
 
     const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
     if(!dataOutValid) { return false; }

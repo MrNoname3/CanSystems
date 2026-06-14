@@ -28,6 +28,7 @@ public:
   CanAlertDriver& operator=(CanAlertDriver&&) = delete;                 // Define move assignment operator.
 
 private:
+  // clang-format off
   static constexpr const char PROGMEM entityNameTemp[]  = "Temperature";
   static constexpr const char PROGMEM entityNameHum[]   = "Humidity";
   static constexpr const char PROGMEM entityNameLight[] = "Light";
@@ -44,6 +45,7 @@ private:
   static constexpr const char PROGMEM entitySubHum[]    = "humidity";
   static constexpr const char PROGMEM entitySubLight[]  = "illuminance";
   static constexpr const char PROGMEM entitySubConn[]   = "connectivity";
+  // clang-format on
 
   /// @brief Publishes HA discovery configs for the three sensor entities (temperature, humidity, light).
   bool publishDiscovery() override;

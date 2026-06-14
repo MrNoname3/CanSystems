@@ -9,7 +9,7 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* subTopic, uint16_t 
   measureTime(measureTime),
   rdyPin(rdyPin),
   channel(0U),
-  adcValues{0},
+  adcValues{ 0 },
   measureState(MeasureStates::IDLE),
   measureTimer(0U),
   enableSending(false),
@@ -17,8 +17,7 @@ AdcReader::AdcReader(Connectivity& connectivity, const char* subTopic, uint16_t 
   mqttSendTimer(0U),
   adsReadWdTime(measureTime * analogChannels),
   adsReadWdTimer(0U),
-  valuesReady(false)
-{
+  valuesReady(false) {
   pinMode(rdyPin, INPUT_PULLUP);
   Wire.begin(sdaPin, sclPin);
 }
@@ -75,10 +74,12 @@ bool AdcReader::run() {
       if(Time::hasElapsed(actualTime, measureTimer, measureTime)) {
         if(valuesReady && enableSending && Time::hasElapsed(actualTime, mqttSendTimer, mqttSendTime)) {
           mqttSendTimer = actualTime;
-          char dataOut[dataOutBufSize] = {'\0'};
+          char dataOut[dataOutBufSize] = { '\0' };
+          // clang-format off
           const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
             adcValues[0], adcValues[1], adcValues[2], adcValues[3],
             ADS.toVoltage(adcValues[0]), ADS.toVoltage(adcValues[1]), ADS.toVoltage(adcValues[2]), ADS.toVoltage(adcValues[3]));
+          // clang-format on
           const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
           if(!dataOutValid) { return false; }
           if(!MqttBase::sendMessage(dataOut)) { return false; }

@@ -12,13 +12,13 @@
 /// non-blocking: call `requestConversion()`, wait `conversionDelayMs()` (polled by the owner), then
 /// read with `readTempC()`. Transport-agnostic and shareable across ESP8266/ESP32.
 /// @tparam MaxSensors Compile-time upper bound on the number of cached sensors.
-template <uint8_t MaxSensors>
+template<uint8_t MaxSensors>
 class Ds18b20Reader final {
   static_assert(MaxSensors > 0U && MaxSensors <= 16U, "MaxSensors must be between 1 and 16!");
 
 public:
   static constexpr uint8_t romHexSize = 17U;                       // 16 hex chars (8-byte ROM) + null terminator.
-  static constexpr float   invalidTempC = -127.0F;                 // Sentinel matching DEVICE_DISCONNECTED_C.
+  static constexpr float invalidTempC = -127.0F;                   // Sentinel matching DEVICE_DISCONNECTED_C.
 
   /// @brief Constructs a reader for the given 1-Wire pin.
   /// @param oneWirePin GPIO connected to the DS18B20 data line (with a 4.7k pull-up).
@@ -26,8 +26,7 @@ public:
   explicit Ds18b20Reader(uint8_t oneWirePin, uint8_t resolutionBits = 12U) :
     oneWire(oneWirePin),
     sensors(&oneWire),
-    resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits))
-  {}
+    resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits)) {}
 
   /// @brief Scans the bus and caches sensor addresses.
   /// @return `true` if at least one sensor was found.
@@ -39,7 +38,7 @@ public:
     sensorCount = (found > MaxSensors) ? MaxSensors : found;
     if(found > MaxSensors) {
       Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"),
-                             found, static_cast<uint8_t>(MaxSensors));
+                              found, static_cast<uint8_t>(MaxSensors));
     }
     for(uint8_t i = 0U; i < sensorCount; ++i) {
       // cppcheck-suppress useStlAlgorithm

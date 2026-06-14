@@ -56,7 +56,7 @@ private:
   static constexpr uint8_t channelNum = N;                                  // Number of multiplexer channels.
   static constexpr uint32_t sensorWakeupTime = Time::secToMs(10U);          // Sensor wake-up time in milliseconds.
   static constexpr uint32_t filteringTime = Time::secToMs(2U);              // Filtering duration for analog values in milliseconds.
-  static constexpr uint8_t readStartColors[3] = {5U, 3U, 0U};               // RGB LED color values when a read operation starts.
+  static constexpr uint8_t readStartColors[3] = { 5U, 3U, 0U };               // RGB LED color values when a read operation starts.
   static constexpr uint32_t readTimeOffset = sensorWakeupTime + channelNum * filteringTime; // Time offset to account for wake-up and filtering times.
 
   const Multiplexer& multiplexer;                                           // Reference to the analog multiplexer object.
@@ -77,8 +77,7 @@ MoistureReader<N>::MoistureReader(const Multiplexer& multiplexer, RgbLedWrapper&
   channels(channels),
   readTime(readTime),
   dataSender(dataSender),
-  readState(ReadState::IDLE)
-{}
+  readState(ReadState::IDLE) {}
 
 template<uint8_t N>
 bool MoistureReader<N>::init() {
@@ -115,7 +114,7 @@ bool MoistureReader<N>::run() {
         if(dataSender != nullptr) {
           const uint8_t moistureH = static_cast<uint8_t>(moistureValue & 0xFF);
           const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8U) & 0xFF);
-          dataSender({channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U});
+          dataSender({ channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U });
         }
         readIndex++;
         if(readIndex >= channelNum) {

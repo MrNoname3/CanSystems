@@ -4,8 +4,7 @@
 Multiplexer::Multiplexer(uint8_t readPin, uint8_t enablePin, const uint8_t (&chSelectPins)[numSelectPins]) :
   readPin(readPin),
   enablePin(enablePin),
-  chSelectPins(chSelectPins)
-{
+  chSelectPins(chSelectPins) {
   pinMode(enablePin, OUTPUT);
   digitalWrite(enablePin, HIGH);
   for(uint8_t pin : chSelectPins) {

@@ -3,11 +3,13 @@
 #include "configHandler.hpp"
 
 namespace {
+  // clang-format off
   constexpr const char PROGMEM logConnecting[] = "[NETWORK] Connecting to router...\r\n";
   constexpr const char PROGMEM logEthInit[]    = "[NETWORK] Initialising ethernet modul: %s\r\n";
   constexpr const char PROGMEM logIp[]         = "  IP: %s\r\n";
   constexpr const char PROGMEM logGw[]         = "  GW: %s\r\n";
   constexpr const char PROGMEM logSnm[]        = "  SNM: %s\r\n";
+  // clang-format on
 } // namespace
 
 #ifdef ESP32
@@ -20,8 +22,7 @@ NetworkManager::NetworkManager(Interface interface, uint8_t ethernetShieldCsPin)
 #endif
   networkInterface(Interface::UNKNOWN),
   interfaceStatus(WL_DISCONNECTED),
-  mac{0U}
-{
+  mac{ 0U } {
   setNetworkInterface(interface, ethernetShieldCsPin);
 }
 
@@ -42,8 +43,7 @@ void NetworkManager::buildHostname() {
   if(strncmp(envName, hostnamePrefix, prefixLen) == 0) {
     envName += prefixLen;
   }
-  snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x",
-    envName, mac[3], mac[4], mac[5]);
+  snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x", envName, mac[3], mac[4], mac[5]);
 }
 
 NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { // NOLINT(readability-function-cognitive-complexity)
@@ -64,8 +64,8 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       }
       WiFi.setAutoReconnect(true);
       WiFi.persistent(false);                           // Credentials stored in LittleFS; prevent redundant flash writes.
-      char ssid[ConfigHandler::getMaxWifiSsidSize()] = {'\0'};
-      char password[ConfigHandler::getMaxWifiPasswordSize()] = {'\0'};
+      char ssid[ConfigHandler::getMaxWifiSsidSize()] = { '\0' };
+      char password[ConfigHandler::getMaxWifiPasswordSize()] = { '\0' };
       const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
       const bool wifiConfigOk = (wifiConfigResult == 0U);
       Logger::get()->printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
@@ -213,30 +213,59 @@ bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
 
 const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(readability-convert-member-functions-to-static)
   switch(status) {
-    case WL_NO_SHIELD:       { return wlNoShieldStr; }
-    case WL_IDLE_STATUS:     { return wlIdleStatusStr; }
-    case WL_NO_SSID_AVAIL:   { return wlNoSsidAvailableStr; }
-    case WL_SCAN_COMPLETED:  { return wlScanCompletedStr; }
-    case WL_CONNECTED:       { return wlConnectedStr; }
-    case WL_CONNECT_FAILED:  { return wlConnectFailedStr; }
-    case WL_CONNECTION_LOST: { return wlConnectionLostStr; }
+    case WL_NO_SHIELD: {
+      return wlNoShieldStr;
+    }
+    case WL_IDLE_STATUS: {
+      return wlIdleStatusStr;
+    }
+    case WL_NO_SSID_AVAIL: {
+      return wlNoSsidAvailableStr;
+    }
+    case WL_SCAN_COMPLETED: {
+      return wlScanCompletedStr;
+    }
+    case WL_CONNECTED: {
+      return wlConnectedStr;
+    }
+    case WL_CONNECT_FAILED: {
+      return wlConnectFailedStr;
+    }
+    case WL_CONNECTION_LOST: {
+      return wlConnectionLostStr;
+    }
 #ifdef ESP8266
-    case WL_WRONG_PASSWORD:  { return wlWrongPasswordStr; }
+    case WL_WRONG_PASSWORD: {
+      return wlWrongPasswordStr;
+    }
 #endif
-    case WL_DISCONNECTED:    { return wlDisconnectedStr; }
-    default:                 { return wlUnknownStatusStr; }
+    case WL_DISCONNECTED: {
+      return wlDisconnectedStr;
+    }
+    default: {
+      return wlUnknownStatusStr;
+    }
   }
 }
 
 #ifdef ESP32
 void NetworkManager::WiFiEvent(WiFiEvent_t event) { // NOLINT(readability-convert-member-functions-to-static)
   switch(event) {
-    case ARDUINO_EVENT_ETH_START: {} break;
-    case ARDUINO_EVENT_ETH_CONNECTED: {} break;
-    case ARDUINO_EVENT_ETH_GOT_IP: { ethConnected = true; } break;
-    case ARDUINO_EVENT_ETH_DISCONNECTED: { ethConnected = false; } break;
-    case ARDUINO_EVENT_ETH_STOP: { ethConnected = false; } break;
-    default: {} break;
+    case ARDUINO_EVENT_ETH_START: {
+    } break;
+    case ARDUINO_EVENT_ETH_CONNECTED: {
+    } break;
+    case ARDUINO_EVENT_ETH_GOT_IP: {
+      ethConnected = true;
+    } break;
+    case ARDUINO_EVENT_ETH_DISCONNECTED: {
+      ethConnected = false;
+    } break;
+    case ARDUINO_EVENT_ETH_STOP: {
+      ethConnected = false;
+    } break;
+    default: {
+    } break;
   }
 }
 #endif

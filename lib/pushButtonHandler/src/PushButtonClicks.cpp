@@ -9,8 +9,7 @@ PushButton::PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounc
   pressedDuration(0U),
   lastEventTime(0U),
   longPressflag(false),
-  shortPressedCnt(2U)
-{}
+  shortPressedCnt(2U) {}
 
 uint8_t PushButton::buttonCheck(const uint32_t currentMillis, bool currentPinStatus) {
   uint8_t output = 0U;

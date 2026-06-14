@@ -110,7 +110,7 @@ public:
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] inline bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
-    return canHandler.send(CanHandler::CanFrame{getClientCanId(), command, canHandler.getLocalCanId(), data});
+    return canHandler.send(CanHandler::CanFrame{ getClientCanId(), command, canHandler.getLocalCanId(), data });
   }
 
   /// @brief Sends a CAN frame with a command and data payload, using a `CanCmd` enum for the command.
@@ -125,7 +125,7 @@ public:
   /// @param command 10-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] inline bool sendCanFrame(uint16_t command) const {
-    uint8_t data[8] = {0U};
+    uint8_t data[8] = { 0U };
     return sendCanFrame(command, data);
   }
 
@@ -141,7 +141,7 @@ public:
   /// @param response Boolean value indicating the response to the command (`true` or `false`).
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] bool sendCanResponse(uint16_t command, bool response) const {
-    const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
+    const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
     return sendCanFrame(command, data);
   }
 
@@ -171,8 +171,7 @@ protected:
   /// @param clientCanId Client CAN ID for the device.
   CanBase(CanHandler& canHandler, uint16_t clientCanId) :
     canHandler(canHandler),
-    clientCanId(clientCanId)
-  {
+    clientCanId(clientCanId) {
     if(isClientCanIdValid(this->clientCanId)) {
       this->canHandler.registerCallback(this);
     }

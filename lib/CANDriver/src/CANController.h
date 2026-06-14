@@ -51,7 +51,7 @@ public:
   virtual void flush();
 
   /// @brief Set the receive interrupt callback.
-  virtual void onReceive(void(*callback)(int));
+  virtual void onReceive(void (*callback)(int));
 
   [[nodiscard]] virtual uint8_t filter(uint16_t id) { return filter(id, 0x7FFU); }
   [[nodiscard]] virtual uint8_t filter(uint16_t id, uint16_t mask);

@@ -62,7 +62,8 @@ private:
 };
 
 template<class T, uint16_t buffSize>
-CircularBuffer<T, buffSize>::CircularBuffer() : buffer() {}
+CircularBuffer<T, buffSize>::CircularBuffer() :
+  buffer() {}
 
 template<class T, uint16_t buffSize>
 void CircularBuffer<T, buffSize>::put(T item) {

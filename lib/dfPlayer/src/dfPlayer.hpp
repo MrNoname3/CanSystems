@@ -23,7 +23,12 @@ private:
     uint8_t blue;                   // Blue LED color component.
 
     /// @brief Default constructor.
-    PlayQueueItem() : track(0U), volume(0U), red(0U), green(0U), blue(0U) {}
+    PlayQueueItem() :
+      track(0U),
+      volume(0U),
+      red(0U),
+      green(0U),
+      blue(0U) {}
 
     /// @brief Constructs a PlayQueueItem with specified parameters.
     /// @param track The track number to be played (1-9999). Values above 9999 will be capped.
@@ -32,8 +37,13 @@ private:
     /// @param green The green color component for the LED strip (0-255).
     /// @param blue The blue color component for the LED strip (0-255).
     PlayQueueItem(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) :
-      track(track), volume(volume), red(red), green(green), blue(blue) {}
+      track(track),
+      volume(volume),
+      red(red),
+      green(green),
+      blue(blue) {}
   };
+
 public:
   /// @brief Constructs the DFPlayer class.
   /// @param rgbLed Reference to the RGB LED controller.

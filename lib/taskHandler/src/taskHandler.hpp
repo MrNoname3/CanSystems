@@ -46,9 +46,8 @@ private:
 public:
   /// @brief Constructor for TaskHandler.
   /// @param taskListRef Reference to an array of pointers to `Task` objects.
-  TaskHandler(Task *(&taskListRef)[taskNum]) :
-    taskList(taskListRef)
-  {}
+  TaskHandler(Task* (&taskListRef)[taskNum]) :
+    taskList(taskListRef) {}
 
   /// @brief Default destructor.
   ~TaskHandler() = default;
@@ -141,7 +140,7 @@ private:
     return failureMask;
   }
 
-  Task *(&taskList)[taskNum];                                     // Reference to an array of task pointers.
+  Task* (&taskList)[taskNum];                                     // Reference to an array of task pointers.
   uint8_t currentTask = 0U;                                       // Index of the currently executing task.
 };
 #endif // TASK_HANDLER_HPP

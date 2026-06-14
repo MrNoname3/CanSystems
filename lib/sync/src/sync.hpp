@@ -64,7 +64,8 @@ public:
 /// @brief RAII lock guard: locks on construction, unlocks on destruction. No-op when the mutex is.
 class LockGuard final {
 public:
-  explicit LockGuard(RecursiveMutex& mutex) : mutex(mutex) { mutex.lock(); }
+  explicit LockGuard(RecursiveMutex& mutex) :
+    mutex(mutex) { mutex.lock(); }
   ~LockGuard() { mutex.unlock(); }
 
   LockGuard(const LockGuard&) = delete;                             // Define copy constructor.

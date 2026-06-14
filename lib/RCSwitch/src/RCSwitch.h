@@ -31,53 +31,53 @@
 #define RC_SWITCH_H
 
 #if defined(ARDUINO) && ARDUINO >= 100
-  #include "Arduino.h"
+#include "Arduino.h"
 #elif defined(ENERGIA) // LaunchPad, FraunchPad and StellarPad specific
-  #include "Energia.h"
+#include "Energia.h"
 #elif defined(RPI) // Raspberry Pi
-  #define RaspberryPi
+#define RaspberryPi
 
   // Include libraries for RPi:
-  #include <string.h> /* memcpy */
-  #include <stdlib.h> /* abs */
-  #include <wiringPi.h>
+#include <string.h> /* memcpy */
+#include <stdlib.h> /* abs */
+#include <wiringPi.h>
 #elif defined(SPARK)
-  #include "application.h"
+#include "application.h"
 #else
-  #include "WProgram.h"
+#include "WProgram.h"
 #endif
 #include <stdint.h>
 
 #ifdef RaspberryPi
   // PROGMEM and _P functions are for AVR based microprocessors,
   // so we must normalize these for the ARM processor:
-  #define PROGMEM
-  #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
+#define PROGMEM
+#define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
 #endif
 
 #if defined(ESP8266)
   // interrupt handler and related code must be in RAM on ESP8266,
   // according to issue #46.
-  #define RECEIVE_ATTR IRAM_ATTR
-  #define VAR_ISR_ATTR
+#define RECEIVE_ATTR IRAM_ATTR
+#define VAR_ISR_ATTR
 #elif defined(ESP32)
-  #define RECEIVE_ATTR IRAM_ATTR
-  #define VAR_ISR_ATTR DRAM_ATTR
+#define RECEIVE_ATTR IRAM_ATTR
+#define VAR_ISR_ATTR DRAM_ATTR
 #else
-  #define RECEIVE_ATTR
-  #define VAR_ISR_ATTR
+#define RECEIVE_ATTR
+#define VAR_ISR_ATTR
 #endif
 
 // At least for the ATTiny X4/X5, receiving has to be disabled due to
 // missing libm depencies (udivmodhi4)
-#if defined( __AVR_ATtinyX5__ ) or defined ( __AVR_ATtinyX4__ )
-  #define RCSwitchDisableReceiving
+#if defined(__AVR_ATtinyX5__) or defined(__AVR_ATtinyX4__)
+#define RCSwitchDisableReceiving
 #endif
 
 // Number of maximum high/Low changes per packet.
 // We can handle up to 36 bit * 2 H/L changes per bit + 2 for sync
 // Для keeloq нужно увеличить RCSWITCH_MAX_CHANGES до 23+1+66*2+1=157
-//#define RCSWITCH_MAX_CHANGES 75        // default 75 - longest protocol that requires this buffer size is 38/nexus
+// #define RCSWITCH_MAX_CHANGES 75        // default 75 - longest protocol that requires this buffer size is 38/nexus
 #define RCSWITCH_MAX_CHANGES 131        // default 75 - Supports 64 too
 
 // separationLimit: minimum microseconds between received codes, closer codes are ignored.
@@ -104,7 +104,7 @@ public:
   void send(unsigned long long code, unsigned int length);
   void send(const char* sCodeWord);
 
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   void enableReceive(int interrupt);
   void enableReceive();
   void disableReceive();
@@ -123,7 +123,7 @@ public:
   void disableTransmit();
   void setPulseLength(int nPulseLength);
   void setRepeatTransmit(int nRepeatTransmit);
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   void setReceiveTolerance(int nPercent);
   bool setReceiveProtocolMask(unsigned long long mask);
 #endif
@@ -185,7 +185,7 @@ private:
   const char* getCodeWordD(char group, int nDevice, bool bStatus);
   void transmit(HighLow pulses);
 
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
   inline static RECEIVE_ATTR bool receiveProtocol(int p, unsigned int changeCount) __attribute__((optimize("-O3")));
   static inline unsigned int diff(int A, int B) __attribute__((optimize("-O3")));
@@ -196,7 +196,7 @@ private:
   int nRepeatTransmit;
   Protocol protocol;
 
-#if not defined( RCSwitchDisableReceiving )
+#if not defined(RCSwitchDisableReceiving)
   static int nReceiveTolerance;
   volatile static unsigned long long nReceivedValue;
   volatile static unsigned long long nReceiveProtocolMask;
@@ -205,8 +205,8 @@ private:
   volatile static unsigned int nReceivedProtocol;
   static unsigned int nSeparationLimit;
   /*
-      * timings[0] contains sync timing, followed by a number of bits
-      */
+   * timings[0] contains sync timing, followed by a number of bits
+   */
   static unsigned int timings[RCSWITCH_MAX_CHANGES];
   // буфер длительностей последних четырех пакетов, [0] - последний
   static unsigned int buftimings[4];

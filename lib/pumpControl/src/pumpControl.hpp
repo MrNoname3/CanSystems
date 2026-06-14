@@ -102,7 +102,10 @@ private:
     uint8_t repeatNum;                      // Number of repetitions. Value: 0-255.
 
     /// @brief Default constructor initializes all values to zero.
-    IrrigationQueueElement() : irrigationInfo(0U), pwmValue(0U), repeatNum(0U) {}
+    IrrigationQueueElement() :
+      irrigationInfo(0U),
+      pwmValue(0U),
+      repeatNum(0U) {}
 
     /// @brief Constructor initializing with encoded irrigation info, PWM, and repeat count.
     /// @param irrigationInfo Encoded byte with irrigation information.
@@ -111,8 +114,7 @@ private:
     IrrigationQueueElement(uint8_t irrigationInfo, uint8_t pwmValue, uint8_t repeatNum) :
       irrigationInfo(irrigationInfo),
       pwmValue(pwmValue),
-      repeatNum(repeatNum)
-    {}
+      repeatNum(repeatNum) {}
 
     /// @brief Constructor initializing with individual irrigation parameters.
     /// @param channel Channel to irrigate. Value: (0-3).
@@ -127,8 +129,7 @@ private:
       checkFlow(static_cast<uint8_t>(checkFlow)),
       checkCurrent(static_cast<uint8_t>(checkCurrent)),
       pwmValue(pwmValue),
-      repeatNum(repeatNum)
-    {}
+      repeatNum(repeatNum) {}
   };
 
   /// @brief Structure to represent a safety irrigation element.
@@ -139,7 +140,9 @@ private:
     IrrigationQueueElement irrigation;      // Irrigation task details.
 
     /// @brief Default constructor initializes all values to zero.
-    SafetyIrrigationElement() : time(0U), timer(0U) {}
+    SafetyIrrigationElement() :
+      time(0U),
+      timer(0U) {}
 
     /// @brief Constructor initializing all members for a safety irrigation task.
     /// @param time Scheduled safety irrigation time in minutes.
@@ -148,8 +151,7 @@ private:
     SafetyIrrigationElement(uint16_t time, uint32_t timer, IrrigationQueueElement irrigation) :
       time(time),
       timer(timer),
-      irrigation(irrigation)
-    {}
+      irrigation(irrigation) {}
   };
 
   /// @brief Represents different states in the irrigation control process.
@@ -163,6 +165,7 @@ private:
 
   /// @brief Represents error states in the pump control system.
   enum class PumpControlError : PumpControlErrorType {
+    // clang-format off
     NONE          = 0U,                     // No error.
     CH_SELECT     = 1 << 0U,                // Channel select error.
     FLOW_STUCK    = 1 << 1U,                // Flow meter stuck error.
@@ -171,6 +174,7 @@ private:
     PUMP_OC       = 1 << 4U,                // Pump overcurrent error.
     PUMP_UC       = 1 << 5U,                // Pump undercurrent error.
     QUEUE_FULL    = 1 << 6U                 // Irrigation queue is full.
+    // clang-format on
   };
 
   void handleIdle(uint32_t actualTime);
@@ -210,7 +214,7 @@ private:
   static constexpr uint16_t errorCheckTime = Time::secToMs(1U);             // Error check interval in ms.
   static constexpr uint8_t maxAllowedStandbyCurrent = 100U;                 // Maximum standby current in mA.
   static constexpr uint16_t maxAllowedCurrent = 1000U;                      // Maximum working current in mA.
-  static constexpr uint8_t irrStartColors[3] = {0U, 5U, 10U};               // RGB LED colors when irrigation started.
+  static constexpr uint8_t irrStartColors[3] = { 0U, 5U, 10U };               // RGB LED colors when irrigation started.
 
   static volatile uint16_t flowCounter;                                     // Flow counter for water flow sensor measurement.
   PCF8574& pcf;                                                             // Reference to the GPIO expander.

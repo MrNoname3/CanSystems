@@ -20,6 +20,7 @@ private:
 
   /// @brief Error codes for file transfer operations.
   enum class DataTransferError : DataTransferErrorType {
+    // clang-format off
     NONE                      = 0U,                     // No error.
     FILE_SIZE_ZERO            = 1 << 0U,                // The provided file size is zero.
     FILE_MD5_NULLPTR          = 1 << 1U,                // The MD5 pointer is null.
@@ -46,6 +47,7 @@ private:
     FW_UPGRADE_WRITE_FAILED   = 1 << 22U,               // Firmware upgrade chunk write failed.
     FW_UPGRADE_END_FAILED     = 1 << 23U,               // Firmware upgrade finalization failed.
     RECEIVED_DATA_OVERRUN     = 1 << 24U                // More data received than the declared file size.
+    // clang-format on
   };
 
 public:

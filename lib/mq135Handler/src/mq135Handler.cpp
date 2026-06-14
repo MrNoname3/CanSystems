@@ -10,8 +10,7 @@ Mq135Handler::Mq135Handler(Connectivity& connectivity, const char* classID, AdcR
   measureTimer(0U),
   gasReadState(GasReadState::IDLE),
   readIndex(0U),
-  gasValues{0.0F}
-{
+  gasValues{ 0.0F } {
   mq135.setRegressionMethod(1);
   mq135.setRL(rlValue);
 }
@@ -53,7 +52,7 @@ bool Mq135Handler::run() {
     case GasReadState::SEND: {
       char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), mqttMsgFrame,
-        gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
+                                             gasValues[0], gasValues[1], gasValues[2], gasValues[3], gasValues[4], gasValues[5]);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(!dataOutValid) { return false; }
       if(!MqttBase::sendMessage(dataOut)) { return false; }
@@ -78,7 +77,7 @@ uint16_t Mq135Handler::getAnalogValue() {
   // The analog input channel has a voltage divider to limit the maximum signal voltage from 5V to 3.3V.
   constexpr int16_t maxAnalogValue = 17600;
   int16_t adcValue = adcReader.analogRead(channel);
-  adcValue = adcValue < 0 ? int16_t{0} : adcValue;                                                       // Avoid negative values.
+  adcValue = adcValue < 0 ? int16_t{ 0 } : adcValue;                                                       // Avoid negative values.
   adcValue = adcValue > maxAnalogValue ? maxAnalogValue : adcValue;                             // Set maximum allowed value.
   const uint16_t result = static_cast<uint16_t>(map(adcValue, 0U, maxAnalogValue, 0U, 4095U));  // Limit the result to 12bit.
   return result;

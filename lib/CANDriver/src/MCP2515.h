@@ -15,7 +15,7 @@ public:
   [[nodiscard]] uint8_t endPacket() override;
   [[nodiscard]] uint8_t parsePacket() override;
 
-  void onReceive(void(*callback)(int)) override;
+  void onReceive(void (*callback)(int)) override;
 
   using CANController::filter;
   [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask) override;
@@ -28,10 +28,10 @@ public:
   [[nodiscard]] uint8_t wakeup() override;
 
 #if defined(ARDUINO_ARCH_SAMD) && defined(PIN_SPI_MISO) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_SCK) && (PIN_SPI_MISO == 10) && (PIN_SPI_MOSI == 8) && (PIN_SPI_SCK == 9)
-  static constexpr uint8_t defaultCsPin  = 3U;
+  static constexpr uint8_t defaultCsPin = 3U;
   static constexpr uint8_t defaultIntPin = 7U;
 #else
-  static constexpr uint8_t defaultCsPin  = 10U;
+  static constexpr uint8_t defaultCsPin = 10U;
   static constexpr uint8_t defaultIntPin = 2U;
 #endif
 
@@ -56,8 +56,8 @@ private:
   static void onInterrupt();
 
   SPISettings spiSettings = SPISettings(10E6, MSBFIRST, SPI_MODE0);
-  uint8_t csPin           = defaultCsPin;
-  uint8_t intPin          = defaultIntPin;
+  uint8_t csPin = defaultCsPin;
+  uint8_t intPin = defaultIntPin;
   uint32_t clockFrequency = defaultClockFrequency;
 };
 

@@ -15,8 +15,7 @@ CANController::CANController() :
   rxDlc(0U),
   rxLength(0U),
   rxIndex(0U),
-  rxData{}
-{
+  rxData{} {
   setTimeout(0);
 }
 
@@ -120,7 +119,7 @@ int CANController::peek() {
 
 void CANController::flush() {}
 
-void CANController::onReceive(void(*callback)(int)) {
+void CANController::onReceive(void (*callback)(int)) {
   onReceiveCb = callback;
 }
 

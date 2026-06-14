@@ -4,11 +4,13 @@
 
 namespace {
   struct PayloadWriter {
-    char* const  buf;
+    char* const buf;
     const size_t bufSize;
-    size_t       pos      = 0U;
-    bool         overflow = false;
-    PayloadWriter(char* b, size_t s) : buf(b), bufSize(s) {}
+    size_t pos = 0U;
+    bool overflow = false;
+    PayloadWriter(char* b, size_t s) :
+      buf(b),
+      bufSize(s) {}
     [[nodiscard]] bool ok() const { return !overflow; }
   };
 
@@ -24,6 +26,7 @@ namespace {
   }
 
   // Named PROGMEM constants prevent duplicate flash arrays that PSTR() creates at each call site.
+  // clang-format off
   constexpr const char PROGMEM fmtUniqueId[]      = R"({"unique_id":"%s_%s","name":"%s")";
   constexpr const char PROGMEM fmtValueTemplate[] = R"(,"value_template":"%s")";
   constexpr const char PROGMEM fmtPayloadOn[]     = R"(,"payload_on":"%s")";
@@ -37,6 +40,7 @@ namespace {
   constexpr const char PROGMEM fmtTopicField[]    = R"(,"%s":"%s%s")";
   constexpr const char PROGMEM fmtAttrTopic[]     = R"(,"json_attributes_topic":"%s%s")";
   constexpr const char PROGMEM fmtAvailSingle[]   = R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"}])";
+  // clang-format on
 } // namespace
 
 HADiscovery::HADiscovery(PublishFn publishFn, void* publishCtx,
@@ -49,8 +53,7 @@ HADiscovery::HADiscovery(PublishFn publishFn, void* publishCtx,
   clientName(clientName),
   senderTopic(senderTopic),
   receiverTopic(receiverTopic),
-  availabilityTopic(availabilityTopic)
-{}
+  availabilityTopic(availabilityTopic) {}
 
 void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
   (void)snprintf_P(buf, sizeof(buf), PSTR("%hu (%08x)"), Build::getFwVersion(), Build::getGitHash());
@@ -60,12 +63,14 @@ void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
   // Start after the first underscore to get just "smoke".
   uint8_t start = 0U;
   for(uint8_t i = 0U; deviceId[i] != '\0'; ++i) {
-    if(deviceId[i] == '_') { start = i + 1U; break; }
+    if(deviceId[i] == '_') {
+      start = i + 1U;
+      break;
+    }
   }
   memset(deviceName, '\0', sizeof(deviceName));
   for(uint8_t i = 0U; i < (deviceNameBufSize - 8U) && deviceId[start + i] != '\0'; ++i) {
-    deviceName[i] = (deviceId[start + i] == '_')
-      ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[start + i])));
+    deviceName[i] = (deviceId[start + i] == '_') ? ' ' : static_cast<char>(toupper(static_cast<unsigned char>(deviceId[start + i])));
   }
   const uint8_t prefixLen = static_cast<uint8_t>(strnlen(deviceName, deviceNameBufSize));
   deviceName[prefixLen] = ' ';
@@ -79,13 +84,13 @@ HADiscovery::EntityConfig::sensor(
     StateClass stateClass, DeviceClass deviceClass,
     const char* icon, const char* attributesTemplate) {
   EntityConfig c;
-  c.type               = EntityType::sensor;
-  c.name               = name;
-  c.valueTemplate      = valueTemplate;
-  c.unit               = unit;
-  c.stateClass         = stateClass;
-  c.deviceClass        = deviceClass;
-  c.icon               = icon;
+  c.type = EntityType::sensor;
+  c.name = name;
+  c.valueTemplate = valueTemplate;
+  c.unit = unit;
+  c.stateClass = stateClass;
+  c.deviceClass = deviceClass;
+  c.icon = icon;
   c.attributesTemplate = attributesTemplate;
   return c;
 }
@@ -94,10 +99,10 @@ HADiscovery::EntityConfig
 HADiscovery::EntityConfig::button(
     const char* name, const char* cmdValue, DeviceClass deviceClass) {
   EntityConfig c;
-  c.type           = EntityType::button;
-  c.name           = name;
-  c.payloadPress   = cmdValue;
-  c.deviceClass    = deviceClass;
+  c.type = EntityType::button;
+  c.name = name;
+  c.payloadPress = cmdValue;
+  c.deviceClass = deviceClass;
   c.isCommandTopic = true;
   return c;
 }
@@ -108,13 +113,13 @@ HADiscovery::EntityConfig::binarySensor(
     const char* payloadOn, const char* payloadOff,
     DeviceClass deviceClass, const char* icon) {
   EntityConfig c;
-  c.type          = EntityType::binary_sensor;
-  c.name          = name;
+  c.type = EntityType::binary_sensor;
+  c.name = name;
   c.valueTemplate = valueTemplate;
-  c.payloadOn     = payloadOn;
-  c.payloadOff    = payloadOff;
-  c.deviceClass   = deviceClass;
-  c.icon          = icon;
+  c.payloadOn = payloadOn;
+  c.payloadOff = payloadOff;
+  c.deviceClass = deviceClass;
+  c.icon = icon;
   return c;
 }
 
@@ -122,15 +127,11 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
                                          const EntityConfig& config,
                                          const CanDeviceConfig& canDevConfig) {
   const char* haType = getTypeStr(config.type);
-  if(subtopic == nullptr || haType == nullptr || config.name == nullptr
-     || canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr
-     || canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr
-     || canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
+  if(subtopic == nullptr || haType == nullptr || config.name == nullptr || canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr || canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr || canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
 
   char discTopic[discoveryTopicBufSize] = { '\0' };
   {
-    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
-      haType, canDevConfig.deviceId, subtopic);
+    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic, haType, canDevConfig.deviceId, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
   // Discovery disabled: retract the entity by clearing its retained config topic.
@@ -147,32 +148,32 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
   char payload[canDiscoveryPayloadBufSize] = { '\0' };
   PayloadWriter pw(payload, sizeof(payload));
 
-  appendP(pw, fmtUniqueId,                                                  canDevConfig.deviceId, subtopic, config.name);
-  if(config.valueTemplate      != nullptr) { appendP(pw, fmtValueTemplate,  config.valueTemplate); }
-  if(config.payloadOn          != nullptr) { appendP(pw, fmtPayloadOn,      config.payloadOn); }
-  if(config.payloadOff         != nullptr) { appendP(pw, fmtPayloadOff,     config.payloadOff); }
-  if(config.payloadPress       != nullptr) { appendP(pw, fmtPayloadPress,   config.payloadPress); }
-  if(config.unit               != nullptr) { appendP(pw, fmtUnit,           config.unit); }
+  appendP(pw, fmtUniqueId, canDevConfig.deviceId, subtopic, config.name);
+  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
+  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
+  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
+  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
+  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
   {
     const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr)                      { appendP(pw, fmtStateClass,     sc); }
+    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
   }
   {
     const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr)                      { appendP(pw, fmtDeviceClass,    dc); }
+    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
   }
-  if(config.icon               != nullptr) { appendP(pw, fmtIcon,           config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate,   config.attributesTemplate); }
-  appendP(pw, fmtTopicField,                                                 topicField, topicBase, canDevConfig.dataSubtopic);
-  if(!config.isCommandTopic)               { appendP(pw, fmtAttrTopic,      topicBase, canDevConfig.dataSubtopic); }
+  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendP(pw, fmtTopicField, topicField, topicBase, canDevConfig.dataSubtopic);
+  if(!config.isCommandTopic) { appendP(pw, fmtAttrTopic, topicBase, canDevConfig.dataSubtopic); }
   if(canDevConfig.skipCanAvailability) {
-    appendP(pw, fmtAvailSingle,                                              availabilityTopic);
+    appendP(pw, fmtAvailSingle, availabilityTopic);
   } else {
     appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"},)"), availabilityTopic);
     appendP(pw, PSTR(R"({"topic":"%s","value_template":"{{ value_json.state }}"}],"availability_mode":"all")"), canDevConfig.extraAvailTopic);
   }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s","via_device":"%s"}})"),
-    canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
+          canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
 
   if(!pw.ok()) { return false; }
   return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
@@ -180,7 +181,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
   EntityConfig config = EntityConfig::binarySensor(
-    connName, connValueTpl, connPayloadOn, connPayloadOff, DeviceClass::connectivity);
+      connName, connValueTpl, connPayloadOn, connPayloadOff, DeviceClass::connectivity);
   config.skipAvailability = true;
   // "availability" is the literal suffix of the availability topic (after the sender topic base).
   const bool result = publishEntity(PSTR("availability"), config);
@@ -195,8 +196,7 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   getSwVersionStr(swVersion);
   char discTopic[discoveryTopicBufSize] = { '\0' };
   {
-    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic,
-      haType, clientName, subtopic);
+    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic, haType, clientName, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
   // Discovery disabled: retract the entity by clearing its retained config topic.
@@ -214,25 +214,25 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   char payload[discoveryPayloadBufSize] = { '\0' };
   PayloadWriter pw(payload, sizeof(payload));
 
-  appendP(pw, fmtUniqueId,                                                  clientName, subtopic, config.name);
-  if(config.valueTemplate      != nullptr) { appendP(pw, fmtValueTemplate,  config.valueTemplate); }
-  if(config.payloadOn          != nullptr) { appendP(pw, fmtPayloadOn,      config.payloadOn); }
-  if(config.payloadOff         != nullptr) { appendP(pw, fmtPayloadOff,     config.payloadOff); }
-  if(config.payloadPress       != nullptr) { appendP(pw, fmtPayloadPress,   config.payloadPress); }
-  if(config.unit               != nullptr) { appendP(pw, fmtUnit,           config.unit); }
+  appendP(pw, fmtUniqueId, clientName, subtopic, config.name);
+  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
+  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
+  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
+  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
+  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
   {
     const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr)                      { appendP(pw, fmtStateClass,     sc); }
+    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
   }
   {
     const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr)                      { appendP(pw, fmtDeviceClass,    dc); }
+    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
   }
-  if(config.icon               != nullptr) { appendP(pw, fmtIcon,           config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate,   config.attributesTemplate); }
-  appendP(pw, fmtTopicField,                                                 topicField, topicBase, subtopic);
+  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendP(pw, fmtTopicField, topicField, topicBase, subtopic);
   if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, fmtAttrTopic, topicBase, subtopic); }
-  if(!config.skipAvailability)             { appendP(pw, fmtAvailSingle,    availabilityTopic); }
+  if(!config.skipAvailability) { appendP(pw, fmtAvailSingle, availabilityTopic); }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }

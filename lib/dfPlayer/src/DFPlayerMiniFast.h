@@ -12,10 +12,9 @@
 /// @note The checksum is the two's complement negation of the sum of bytes 2–7 (version through LSB param).
 template<bool Debug = false>
 class DFPlayerMiniFast {
-
 public:
-
   enum class PacketValues : uint8_t {
+    // clang-format off
     STACK_SIZE      = 10U,          // Total number of bytes in a packet (same for cmds and queries).
     SB              = 0x7EU,        // Start byte.
     VER             = 0xFFU,        // Version.
@@ -23,9 +22,11 @@ public:
     FEEDBACK        = 1U,           // Feedback requested.
     NO_FEEDBACK     = 0U,           // No feedback requested.
     EB              = 0xEFU         // End byte.
+    // clang-format on
   };
 
   enum class ControlCommandValues : uint8_t {
+    // clang-format off
     NEXT            = 0x01U,
     PREV            = 0x02U,
     PLAY            = 0x03U,
@@ -52,9 +53,11 @@ public:
     RANDOM_ALL      = 0x18U,
     REPEAT_CURRENT  = 0x19U,
     SET_DAC         = 0x1AU
+    // clang-format on
   };
 
   enum class QueryCommandValues : uint8_t {
+    // clang-format off
     SEND_INIT        = 0x3FU,
     RETRANSMIT       = 0x40U,
     REPLY            = 0x41U,
@@ -72,39 +75,46 @@ public:
     GET_FLASH_TRACK  = 0x4DU,
     GET_FOLDER_FILES = 0x4EU,
     GET_FOLDERS      = 0x4FU
+    // clang-format on
   };
 
   enum class EqValues : uint8_t {
+    // clang-format off
     EQ_NORMAL       = 0U,
     EQ_POP          = 1U,
     EQ_ROCK         = 2U,
     EQ_JAZZ         = 3U,
     EQ_CLASSIC      = 4U,
     EQ_BASE         = 5U
+    // clang-format on
   };
 
   enum class ModeValues : uint8_t {
+    // clang-format off
     REPEAT          = 0U,
     FOLDER_REPEAT   = 1U,
     SINGLE_REPEAT   = 2U,
     RANDOM          = 3U
+    // clang-format on
   };
 
   enum class PlaybackSourceValues : uint8_t {
+    // clang-format off
     U               = 1U,
     TF              = 2U,
     AUX             = 3U,
     SLEEP           = 4U,
     FLASH           = 5U
+    // clang-format on
   };
 
   enum class BaseVolumeAdjustValue : uint8_t {
-    VOL_ADJUST      = 0x10U
+    VOL_ADJUST = 0x10U
   };
 
   enum class RepeatPlayValues : uint8_t {
-    STOP_REPEAT     = 0U,
-    START_REPEAT    = 1U
+    STOP_REPEAT = 0U,
+    START_REPEAT = 1U
   };
 
   /// @brief Configure the class.
@@ -288,9 +298,12 @@ public:
   DFPlayerMiniFast& operator=(DFPlayerMiniFast&&) = delete;
 
 private:
-
   /// @brief Result returned by processState() for each received byte.
-  enum class ParseResult : uint8_t { CONTINUE, SUCCESS, FAILURE };
+  enum class ParseResult : uint8_t {
+    CONTINUE,
+    SUCCESS,
+    FAILURE
+  };
 
   /// @brief MP3 response packet parsing states.
   enum class Fsm : uint8_t {
@@ -363,7 +376,7 @@ private:
   uint16_t timeoutTime = 10U;                                       // Max ms to wait for a query response.
   Fsm state = Fsm::find_start_byte;                                 // Current state of the response parser.
   Stack sendStack = {};                                             // Outgoing packet buffer.
-  Stack recStack  = {};                                             // Incoming packet buffer.
+  Stack recStack = {};                                             // Incoming packet buffer.
 };
 
 #endif // DFPLAYERMINIFAST_H

@@ -7,7 +7,7 @@
 /// @brief Provides common MQTT functionalities.
 class MqttCommon final : public MqttBase {
 private:
-  static constexpr uint8_t maxCmdLength   = 16U;                    // Maximum length of a command string.
+  static constexpr uint8_t maxCmdLength = 16U;                      // Maximum length of a command string.
 
   static constexpr const char PROGMEM cmdReboot[] = "reboot";  // Command name stored in flash; must match cmdValue in publishDiscovery().
 
@@ -69,7 +69,7 @@ private:
   /// @brief Entry in the command lookup table, pairing a command name with its handler.
   struct CmdEntry {
     const char* name;                                           // PROGMEM string pointer to the command name.
-    CmdHandler  handler;                                        // Pointer to the member function handling the command.
+    CmdHandler handler;                                         // Pointer to the member function handling the command.
   };
 
   static const CmdEntry cmdTable[];                             // Lookup table mapping command strings to handlers.

@@ -40,10 +40,9 @@ PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin
   errorCheckTimer(0U),
   pumpControlErrState(),
   reportError(reportError),
-  limitSwitches{nullptr},
+  limitSwitches{ nullptr },
   calibrationValue(0U),
-  safetyIrrigation{}
-{
+  safetyIrrigation{} {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(intPin), irqHandler, FALLING);
@@ -58,10 +57,10 @@ bool PumpControl::run() {
   const uint32_t actualTime = millis();
   analogValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue), analogValue);
   switch(irrigationState) {
-    case IrrigationState::IDLE:        handleIdle(actualTime);        break;
-    case IrrigationState::RUN:         handleRun(actualTime);         break;
-    case IrrigationState::STOP:        handleStop();                  break;
-    case IrrigationState::ERROR:       handleError();                 break;
+    case IrrigationState::IDLE: handleIdle(actualTime); break;
+    case IrrigationState::RUN: handleRun(actualTime); break;
+    case IrrigationState::STOP: handleStop(); break;
+    case IrrigationState::ERROR: handleError(); break;
     case IrrigationState::CALIBRATION: handleCalibration(actualTime); break;
   }
   return true;
@@ -253,10 +252,9 @@ void PumpControl::checkSafetyIrrigations() {
 void PumpControl::addSafetyIrrigation(uint16_t time, uint8_t channel, uint8_t duration, bool checkFlow, bool checkCurrent, uint8_t pwmValue, uint8_t repeatNum) {
   channel &= channelSafetyMask;
   safetyIrrigation[channel] = SafetyIrrigationElement(
-    time,
-    millis(),
-    IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum)
-  );
+      time,
+      millis(),
+      IrrigationQueueElement(channel, duration, checkFlow, checkCurrent, pwmValue, repeatNum));
 }
 
 void PumpControl::resetSafetyIrrigationTimer(uint8_t channel) {

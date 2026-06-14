@@ -16,8 +16,7 @@ public:
   /// represents the new maximum loop time in milliseconds.
   Performance(uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
     maxLoopTime(initialLoopTimeLimit),
-    maxLoopTimeCallback(maxLoopTimeCallback)
-  {}
+    maxLoopTimeCallback(maxLoopTimeCallback) {}
 
   /// @brief Default destructor.
   ~Performance() override = default;

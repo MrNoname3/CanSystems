@@ -4,8 +4,7 @@ SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
   jedecID(jedecID),
   spcr(0U),
-  spsr(0U)
-{}
+  spsr(0U) {}
 
 void SPIFlash::select() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
   // Save current SPI settings.
@@ -120,7 +119,9 @@ void SPIFlash::command(uint8_t cmd, bool isWrite) {
   // Wait for any write/erase to complete. A timeout cannot be added here because chip-erase
   // can take several seconds. If the chip is absent, a weak pull-down on MISO is recommended
   // to avoid hanging.
-  if(cmd != CMD_WAKE) { while(busy()) {} }
+  if(cmd != CMD_WAKE) {
+    while(busy()) {}
+  }
   select();
   SPI.transfer(cmd);
 }

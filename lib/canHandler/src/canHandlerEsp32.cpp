@@ -9,8 +9,7 @@ QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(
 
 CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
-  canDevicesListMutex(xSemaphoreCreateMutex())
-{}
+  canDevicesListMutex(xSemaphoreCreateMutex()) {}
 
 bool CanHandlerEsp32::init(uint32_t canBaud) {
   { // Setup mutex and message queues.
@@ -18,12 +17,12 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
       Logger::get()->printf_P(PSTR("[CAN] Mutex is not initialized properly!\r\n"));
       return false;
     }
-    //configASSERT(canRxQueue != nullptr);                          // Assert if the queue creation fails.
-    //configASSERT(canTxQueue != nullptr);
+    // configASSERT(canRxQueue != nullptr);                          // Assert if the queue creation fails.
+    // configASSERT(canTxQueue != nullptr);
     const bool rxQueueResult = (canRxQueue != nullptr);           // Check queue creation.
     const bool txQueueResult = (canTxQueue != nullptr);
     Logger::get()->printf_P(PSTR("[CAN] Creating queues:\r\n  RX -> %s\r\n  TX -> %s\r\n"),
-      Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
+                            Str::getStateStr(rxQueueResult), Str::getStateStr(txQueueResult));
     if(!rxQueueResult || !txQueueResult) { return false; }
   }
 #if defined(NEW_CAN_ADDRESS) && defined(MASTER_CAN_ADDRESS)
@@ -32,14 +31,14 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   static constexpr uint16_t newLocalCanId = static_cast<uint16_t>(NEW_CAN_ADDRESS);
   const bool canIdsSavingResult = saveCanIds(newMasterCanId, newLocalCanId);
   Logger::get()->printf_P(PSTR("[CAN] Saving new IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
-    Str::getStateStr(canIdsSavingResult), newMasterCanId, newLocalCanId);
+                          Str::getStateStr(canIdsSavingResult), newMasterCanId, newLocalCanId);
   if(!canIdsSavingResult) { return false; }
 #endif
   { // Load CAN ID's.
-  const bool canIdLoadingResult = loadCanIds();
-  Logger::get()->printf_P(PSTR("[CAN] Loading IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
-    Str::getStateStr(canIdLoadingResult), getMasterCanId(), getLocalCanId());
-  if(!canIdLoadingResult) { return false; }
+    const bool canIdLoadingResult = loadCanIds();
+    Logger::get()->printf_P(PSTR("[CAN] Loading IDs: %s\r\n  Master: %hu\r\n  Local: %hu\r\n"),
+                            Str::getStateStr(canIdLoadingResult), getMasterCanId(), getLocalCanId());
+    if(!canIdLoadingResult) { return false; }
   }
   { // Initialise CAN peripheral.
     const bool canBeginResult = CAN.begin(canBaud) == 1U;
@@ -48,8 +47,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
-    const bool setFilterResult = CAN.filterExtended(
-      CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
+    const bool setFilterResult = CAN.filterExtended(CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
     Logger::get()->printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
@@ -67,7 +65,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
 
 bool CanHandlerEsp32::send(uint16_t command, const uint8_t (&data)[8]) const {
   if(isDeviceMaster()) { return false; }
-  return send(CanFrame{getMasterCanId(), command, getLocalCanId(), data});
+  return send(CanFrame{ getMasterCanId(), command, getLocalCanId(), data });
 }
 
 bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
@@ -117,7 +115,7 @@ bool CanHandlerEsp32::run() {
         // The frame is already consumed from the queue, so a TX failure would otherwise vanish
         // silently (the mains discard the runTasks() failure mask).
         Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"),
-          static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
+                                static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
         return false;
       }
       // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);

@@ -33,8 +33,14 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
 
   JsonDocument wifiJson;
   const JsonLoadResult loadResult = loadJsonFile(credPath, wifiJson);
-  if(loadResult == JsonLoadResult::FileOpenFailed) { wifiConfErrState.setError(WifiConfigError::FILE_OPEN_FAILED); return wifiConfErrState.getRawErrorState(); }
-  if(loadResult == JsonLoadResult::ParseFailed) { wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR); return wifiConfErrState.getRawErrorState(); }
+  if(loadResult == JsonLoadResult::FileOpenFailed) {
+    wifiConfErrState.setError(WifiConfigError::FILE_OPEN_FAILED);
+    return wifiConfErrState.getRawErrorState();
+  }
+  if(loadResult == JsonLoadResult::ParseFailed) {
+    wifiConfErrState.setError(WifiConfigError::JSON_PARSING_ERROR);
+    return wifiConfErrState.getRawErrorState();
+  }
 
   JsonVariant ssidJsonVar = wifiJson[F("ssid")];
   JsonVariant passwordJsonVar = wifiJson[F("password")];
@@ -60,14 +66,22 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
 }
 
 ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize],
-  char (&mqttPassword)[maxMqttPasswordSize], char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort) {
+                                                                       char (&mqttPassword)[maxMqttPasswordSize],
+                                                                       char (&mqttServerUrl)[maxMqttServerUrlSize],
+                                                                       uint16_t& mqttServerPort) {
   ErrorState<ServerCredError, ServerCredErrorType> serverCredErrState;
   const char* const credPath = FileName::getMqttServerCredentialsLocation();
 
   JsonDocument serverCredJson;
   const JsonLoadResult loadResult = loadJsonFile(credPath, serverCredJson);
-  if(loadResult == JsonLoadResult::FileOpenFailed) { serverCredErrState.setError(ServerCredError::FILE_OPEN_FAILED); return serverCredErrState.getRawErrorState(); }
-  if(loadResult == JsonLoadResult::ParseFailed) { serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR); return serverCredErrState.getRawErrorState(); }
+  if(loadResult == JsonLoadResult::FileOpenFailed) {
+    serverCredErrState.setError(ServerCredError::FILE_OPEN_FAILED);
+    return serverCredErrState.getRawErrorState();
+  }
+  if(loadResult == JsonLoadResult::ParseFailed) {
+    serverCredErrState.setError(ServerCredError::JSON_PARSING_ERROR);
+    return serverCredErrState.getRawErrorState();
+  }
 
   JsonVariant mqttUserNameVar = serverCredJson[F("mqttUserName")];
   JsonVariant mqttPasswordVar = serverCredJson[F("mqttPassword")];

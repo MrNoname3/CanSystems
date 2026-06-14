@@ -94,6 +94,7 @@ public:
   SPIFlash& operator=(SPIFlash&&) = delete;
 
 private:
+  // clang-format off
   static constexpr uint8_t CMD_WRITE_ENABLE  = 0x06U;              // Write enable (WREN).
   static constexpr uint8_t CMD_ERASE_4K      = 0x20U;              // Erase one 4 KB block.
   static constexpr uint8_t CMD_ERASE_32K     = 0x52U;              // Erase one 32 KB block.
@@ -108,6 +109,7 @@ private:
   static constexpr uint8_t CMD_BYTE_PROGRAM  = 0x02U;              // Byte/page program (1–256 bytes).
   static constexpr uint8_t CMD_READ_ID       = 0x9FU;              // Read JEDEC manufacturer and device ID.
   static constexpr uint8_t CMD_READ_MAC      = 0x4BU;              // Read unique ID (MAC).
+  // clang-format on
 
   /// @brief Asserts chip-select and saves SPI state.
   void select(); // NOLINT(readability-make-member-function-const)

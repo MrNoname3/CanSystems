@@ -6,7 +6,8 @@ uint8_t DebugLedHandler::ledState = 0U;
 
 DebugLedHandler::DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState)
 #if defined(ESP8266) || defined(ESP32)
-  : ledTicker()
+  :
+  ledTicker()
 #endif
 {
   setupLedPin(debugLedPin, ledOnState);

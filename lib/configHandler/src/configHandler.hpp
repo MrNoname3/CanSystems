@@ -21,7 +21,11 @@ private:
 
 public:
   /// @brief Result of a `loadJsonFile` call.
-  enum class JsonLoadResult : uint8_t { Ok, FileOpenFailed, ParseFailed };
+  enum class JsonLoadResult : uint8_t {
+    Ok,
+    FileOpenFailed,
+    ParseFailed
+  };
 
   /// @brief Initializes the file system and retrieves usage statistics.
   /// @param totalBytes Reference to a variable where the total file system capacity (in bytes) will be stored.
@@ -45,8 +49,7 @@ public:
   /// @return `true` if the file was parsed and the key was found with the expected type.
   template<typename T>
   [[nodiscard]] static bool getJsonValue(const char* filePath_P, const char* key_P, T& outValue) {
-    static_assert(!std::is_pointer<T>::value,
-      "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
+    static_assert(!std::is_pointer<T>::value, "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
     JsonDocument doc;
     if(loadJsonFile(filePath_P, doc) != JsonLoadResult::Ok) { return false; }
     JsonVariant var = doc[FPSTR(key_P)];
@@ -112,7 +115,7 @@ public:
   /// @param mqttServerPort Variable to store the MQTT server port number.
   /// @return Error state, where `0` means success.
   [[nodiscard]] static ServerCredErrorType getServerCredentials(char (&mqttUserName)[maxMqttUserNameSize], char (&mqttPassword)[maxMqttPasswordSize],
-    char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t &mqttServerPort);
+                                                                char (&mqttServerUrl)[maxMqttServerUrlSize], uint16_t& mqttServerPort);
 
   ConfigHandler() = delete;                                           // Delete constructor.
   ~ConfigHandler() = delete;                                          // Delete destructor.
@@ -124,6 +127,7 @@ public:
 private:
   /// @brief Enumeration representing possible error states for Wi-Fi configuration.
   enum class WifiConfigError : WifiConfigErrorType {
+    // clang-format off
     NONE                  = 0U,                   // No error.
     FILE_OPEN_FAILED      = 1U << 0U,             // Unable to open the configuration file.
     JSON_PARSING_ERROR    = 1U << 1U,             // JSON parsing failed.
@@ -131,18 +135,22 @@ private:
     MISSING_PWD_KEY       = 1U << 3U,             // Password key is missing in the JSON.
     SSID_LENGTH_ERR       = 1U << 4U,             // SSID length is invalid.
     PWD_LENGTH_ERR        = 1U << 5U              // Password length is invalid.
+    // clang-format on
   };
 
   /// @brief Enumeration representing possible error states for server certificate retrieval.
   enum class ServerCertError : ServerCertErrorType {
+    // clang-format off
     NONE                  = 0U,                   // No error.
     FILE_OPEN_FAILED      = 1U << 0U,             // Unable to open the certificate file.
     CERT_FILE_EMPTY       = 1U << 1U,             // Server certificate file is empty.
     CERT_STORING_FAILED   = 1U << 2U              // Unable to store the certificate.
+    // clang-format on
   };
 
   /// @brief Enumeration representing possible error states for server credentials retrieval.
   enum class ServerCredError : ServerCredErrorType {
+    // clang-format off
     NONE                  = 0U,                   // No error.
     FILE_OPEN_FAILED      = 1U << 0U,             // Unable to open the credentials file.
     JSON_PARSING_ERROR    = 1U << 1U,             // JSON parsing failed.
@@ -154,6 +162,7 @@ private:
     MQTT_PASS_LENGTH_ERR  = 1U << 7U,             // MQTT password length is invalid.
     MQTT_URL_LENGTH_ERR   = 1U << 8U,             // MQTT server URL length is invalid.
     MQTT_PORT_NUM_ERR     = 1U << 9U              // MQTT server port number is invalid.
+    // clang-format on
   };
 };
 #endif // CONFIG_HANDLER_HPP

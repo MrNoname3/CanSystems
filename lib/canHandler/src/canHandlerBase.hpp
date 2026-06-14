@@ -44,16 +44,14 @@ private:
     /// @brief Default constructor.
     CanId() :
       master(0U),
-      local(0U)
-    {}
+      local(0U) {}
 
     /// @brief Parameterized constructor.
     /// @param master Master node CAN ID.
     /// @param local Local node CAN ID.
     CanId(uint16_t master, uint16_t local) :
       master(master),
-      local(local)
-    {}
+      local(local) {}
   };
 
 public:
@@ -73,7 +71,9 @@ public:
     uint8_t data[8];                          // Data payload for the CAN frame (up to 8 bytes).
 
     /// @brief Default constructor initializing the `extId` and `data` fields to zero.
-    CanFrame() : extId(0U), data{0U} {}
+    CanFrame() :
+      extId(0U),
+      data{ 0U } {}
 
     /// @brief Constructor to initialize a CAN frame using individual ID components and a data payload.
     /// @param to The receiver address (10 bits).
@@ -81,8 +81,7 @@ public:
     /// @param from The sender address (10 bits).
     /// @param canData The 8-byte array containing the payload.
     CanFrame(uint16_t to, uint16_t cmd, uint16_t from, const uint8_t (&canData)[8]) :
-      extId((static_cast<uint32_t>(to) & 0x3FF) | ((static_cast<uint32_t>(cmd) & 0x1FF) << 10U) | ((static_cast<uint32_t>(from) & 0x3FF) << 19U))
-    {
+      extId((static_cast<uint32_t>(to) & 0x3FF) | ((static_cast<uint32_t>(cmd) & 0x1FF) << 10U) | ((static_cast<uint32_t>(from) & 0x3FF) << 19U)) {
       memcpy(data, canData, sizeof(data));
     }
   };
@@ -111,7 +110,7 @@ public:
   /// @param command 10-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   inline bool send(uint16_t command) const { // NOLINT(modernize-use-nodiscard)
-    const uint8_t data[8] = {0U};
+    const uint8_t data[8] = { 0U };
     return send(command, data);
   }
 
@@ -135,7 +134,7 @@ public:
   /// @param response Enum value of `Response`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   inline bool send(CanCmd command, Response response) const { // NOLINT(modernize-use-nodiscard)
-    const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
+    const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
     return send(command, data);
   }
 
@@ -169,8 +168,7 @@ public:
 protected:
   /// @brief Default constructor for derived classes.
   CanHandlerBase() : // NOLINT(modernize-use-equals-default)
-    eepromHandler(&canId)
-  {}
+    eepromHandler(&canId) {}
 
   /// @brief Default destructor.
   ~CanHandlerBase() override = default;

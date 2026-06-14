@@ -21,11 +21,10 @@ private:
   static constexpr char hostnamePrefix[] = "project_";              // PIO env prefix stripped from the hostname.
   static constexpr uint8_t macSuffixBytes = 3U;                     // Number of MAC bytes (from the end) appended to the hostname.
   static constexpr uint8_t hostnameLen =
-    static_cast<uint8_t>(Build::getPioEnvLength()
-      - (static_cast<uint8_t>(sizeof(hostnamePrefix)) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
-      + 1U                             // underscore separator
-      + macSuffixBytes * 2U            // 2 hex digits per MAC byte
-      + 1U);                           // null terminator
+      static_cast<uint8_t>(Build::getPioEnvLength() - (static_cast<uint8_t>(sizeof(hostnamePrefix)) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
+                           + 1U                             // underscore separator
+                           + macSuffixBytes * 2U            // 2 hex digits per MAC byte
+                           + 1U);                           // null terminator
 #ifdef ESP32
   static constexpr uint8_t ethPhyAddress = 1U;                      // SMI/MDIO address of the Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
   static constexpr int32_t ethPhyPower = 17;                        // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
@@ -40,6 +39,7 @@ private:
 #endif
 
   // Wi-Fi status strings
+  // clang-format off
   static constexpr const char PROGMEM wlNoShieldStr[]        = "WL_NO_SHIELD";
   static constexpr const char PROGMEM wlIdleStatusStr[]      = "WL_IDLE_STATUS";
   static constexpr const char PROGMEM wlNoSsidAvailableStr[] = "WL_NO_SSID_AVAIL";
@@ -50,7 +50,7 @@ private:
   static constexpr const char PROGMEM wlWrongPasswordStr[]   = "WL_WRONG_PASSWORD";
   static constexpr const char PROGMEM wlDisconnectedStr[]    = "WL_DISCONNECTED";
   static constexpr const char PROGMEM wlUnknownStatusStr[]   = "WL_UNKNOWN_STATUS";
-
+  // clang-format on
 public:
   /// @brief Represents supported network interfaces.
   enum class Interface : uint8_t {
@@ -108,6 +108,7 @@ private:
 #endif
   // Network error types as bitfields.
   enum class NetworkError : NetworkErrorType {
+    // clang-format off
     NONE                  = 0U,                   // No error.
     INVALID_INTERFACE     = 1 << 0U,              // Invalid network interface selected.
     WIFI_INIT_FAILED      = 1 << 1U,              // Wi-Fi initialization failed.
@@ -119,6 +120,7 @@ private:
     WIFI_CONNECT_TIMEOUT     = 1 << 7U,           // Wi-Fi connect timed out waiting for DHCP.
     ENC28J60_CONNECT_TIMEOUT = 1 << 8U,           // ENC28J60 connect timed out waiting for DHCP.
     LAN8720_CONNECT_TIMEOUT  = 1 << 9U            // LAN8720 connect timed out waiting for DHCP.
+    // clang-format on
   };
 
 #ifdef ESP32

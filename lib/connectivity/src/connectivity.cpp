@@ -3,7 +3,7 @@
 #include <time.h>
 
 #if defined(ESP32)
-  #include <esp_sntp.h>
+#include <esp_sntp.h>
 #endif
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
@@ -21,14 +21,10 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   serverCert{},
 #endif
   haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
-                return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
-              },
-              this,
-              mqttCredentials.clientName,
-              mqttCredentials.senderTopic,
-              mqttCredentials.receiverTopic,
-              mqttCredentials.availabilityTopic)
-{}
+    return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
+  },
+              this, mqttCredentials.clientName, mqttCredentials.senderTopic, mqttCredentials.receiverTopic, mqttCredentials.availabilityTopic) {
+}
 
 bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   { // Initialise the file system.
@@ -43,8 +39,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   }
   { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
     if(ResetHandler::isWdtReset()) {
-      Logger::get()->printf_P(PSTR("[MQTT] WDT reset — waiting %us before reconnect\r\n"),
-        static_cast<uint32_t>(reconnectTime / 1000U));
+      Logger::get()->printf_P(PSTR("[MQTT] WDT reset — waiting %us before reconnect\r\n"), static_cast<uint32_t>(reconnectTime / 1000U));
       const uint32_t startMs = millis();
       while(!Time::hasElapsed(millis(), startMs, reconnectTime)) {
         delay(1000U);
@@ -67,7 +62,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const bool ntpSynced = syncNtpTime();
     Logger::get()->printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
-    char dateTimeStr[dateTimeStrBufSize] = {'\0'};
+    char dateTimeStr[dateTimeStrBufSize] = { '\0' };
     const bool dateTimeValid = Time::getIsoUtcString(dateTimeStr, sizeof(dateTimeStr));
     if(dateTimeValid) {
       Logger::get()->printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
@@ -154,7 +149,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
         DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
         if(parsingError != DeserializationError::Code::Ok) {
           Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"),
-            currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+                                  currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
           return;
         }
         currentMessageHandler->messageArrivedCallback(payloadJson);
@@ -177,8 +172,8 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
     char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
     const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(),
-      Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
-    const bool infoTopicValid   = (infoTopicSize   >= 0 && infoTopicSize   < static_cast<int32_t>(sizeof(infoTopic)));
+                                               Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
+    const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
     if(!infoTopicValid || !infoPayloadValid) { return false; }
     const bool infoResult = mqttClient.publish(infoTopic, infoPayload, true);
@@ -190,10 +185,10 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   const bool mqttConResult = mqttClient.connect(
-    mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
-    mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
+      mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
+      mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
   Logger::get()->printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
-    mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+                          mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) {
 #ifdef ESP8266
     char sslErr[64] = { '\0' };
@@ -300,7 +295,7 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 }
 
 bool Connectivity::syncNtpTime() {
-  const char* ntpServers[] = {"0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org"};
+  const char* ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };
   constexpr uint32_t timeoutMs = Time::secToMs(15U);
 
   Logger::get()->printf_P(PSTR("[NTP] Synchronising...\r\n"));
@@ -343,8 +338,8 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 }
 
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic,
-                                                    const HADiscovery::EntityConfig& config,
-                                                    const HADiscovery::CanDeviceConfig& canDevConfig) {
+                                                   const HADiscovery::EntityConfig& config,
+                                                   const HADiscovery::CanDeviceConfig& canDevConfig) {
   // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
@@ -362,16 +357,38 @@ bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readabili
 
 const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {  // NOLINT(readability-convert-member-functions-to-static)
   switch(status) {
-    case PubSubClient::State::CONNECTION_TIMEOUT:     { return mqttConnectionTimeoutStr; }
-    case PubSubClient::State::CONNECTION_LOST:        { return mqttConnectionLostStr; }
-    case PubSubClient::State::CONNECT_FAILED:         { return mqttConnectFailedStr; }
-    case PubSubClient::State::DISCONNECTED:           { return mqttDisconnectedStr; }
-    case PubSubClient::State::CONNECTED:              { return mqttConnectedStr; }
-    case PubSubClient::State::CONNECT_BAD_PROTOCOL:   { return mqttConnectBadProtocolStr; }
-    case PubSubClient::State::CONNECT_BAD_CLIENT_ID:  { return mqttConnectBadClientIdStr; }
-    case PubSubClient::State::CONNECT_UNAVAILABLE:    { return mqttConnectUnavailableStr; }
-    case PubSubClient::State::CONNECT_BAD_CREDENTIALS: { return mqttConnectBadCredentialsStr; }
-    case PubSubClient::State::CONNECT_UNAUTHORIZED:   { return mqttConnectUnauthorizedStr; }
-    default:                                        { return mqttUnknownStatusStr; }
+    case PubSubClient::State::CONNECTION_TIMEOUT: {
+      return mqttConnectionTimeoutStr;
+    }
+    case PubSubClient::State::CONNECTION_LOST: {
+      return mqttConnectionLostStr;
+    }
+    case PubSubClient::State::CONNECT_FAILED: {
+      return mqttConnectFailedStr;
+    }
+    case PubSubClient::State::DISCONNECTED: {
+      return mqttDisconnectedStr;
+    }
+    case PubSubClient::State::CONNECTED: {
+      return mqttConnectedStr;
+    }
+    case PubSubClient::State::CONNECT_BAD_PROTOCOL: {
+      return mqttConnectBadProtocolStr;
+    }
+    case PubSubClient::State::CONNECT_BAD_CLIENT_ID: {
+      return mqttConnectBadClientIdStr;
+    }
+    case PubSubClient::State::CONNECT_UNAVAILABLE: {
+      return mqttConnectUnavailableStr;
+    }
+    case PubSubClient::State::CONNECT_BAD_CREDENTIALS: {
+      return mqttConnectBadCredentialsStr;
+    }
+    case PubSubClient::State::CONNECT_UNAUTHORIZED: {
+      return mqttConnectUnauthorizedStr;
+    }
+    default: {
+      return mqttUnknownStatusStr;
+    }
   }
 }

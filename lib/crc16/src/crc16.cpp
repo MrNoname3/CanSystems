@@ -3,8 +3,7 @@
 Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
   crc_(initValue),
   initValue_(initValue),
-  polynomial_(polynomial)
-{}
+  polynomial_(polynomial) {}
 
 void Crc16::next(uint8_t value) {
   crc_ ^= static_cast<uint16_t>(value) << 8U;
@@ -35,8 +34,7 @@ uint16_t Crc16::calculate(const uint8_t* data, uint32_t length, uint16_t initVal
   return crc.get();
 }
 
-bool Crc16::verify(const uint8_t* data, uint32_t length, uint16_t expected,
-  uint16_t initValue, uint16_t polynomial) {
+bool Crc16::verify(const uint8_t* data, uint32_t length, uint16_t expected, uint16_t initValue, uint16_t polynomial) {
   if(data == nullptr || length == 0U) { return expected == initValue; }
   return calculate(data, length, initValue, polynomial) == expected;
 }

@@ -14,7 +14,7 @@ public:
   [[nodiscard]] uint8_t endPacket() override;
   [[nodiscard]] uint8_t parsePacket() override;
 
-  void onReceive(void(*callback)(int)) override;
+  void onReceive(void (*callback)(int)) override;
 
   using CANController::filter;
   [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask) override;
@@ -43,9 +43,9 @@ private:
 
   static void onInterrupt(void* arg);
 
-  gpio_num_t rxPin       = defaultRxPin;
-  gpio_num_t txPin       = defaultTxPin;
-  bool loopbackEnabled   = false;
+  gpio_num_t rxPin = defaultRxPin;
+  gpio_num_t txPin = defaultTxPin;
+  bool loopbackEnabled = false;
   intr_handle_t intrHandle = nullptr;
 };
 

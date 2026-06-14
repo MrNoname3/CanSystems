@@ -5,15 +5,15 @@ bool DFPlayerMiniFast<Debug>::begin(Stream& stream, uint16_t threshold) {
   timeoutTime = threshold;
   serial = &stream;
   sendStack.start_byte = static_cast<uint8_t>(PacketValues::SB);
-  sendStack.version    = static_cast<uint8_t>(PacketValues::VER);
-  sendStack.length     = static_cast<uint8_t>(PacketValues::LEN);
-  sendStack.end_byte   = static_cast<uint8_t>(PacketValues::EB);
+  sendStack.version = static_cast<uint8_t>(PacketValues::VER);
+  sendStack.length = static_cast<uint8_t>(PacketValues::LEN);
+  sendStack.end_byte = static_cast<uint8_t>(PacketValues::EB);
   return true;
 }
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playNext() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::NEXT);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::NEXT);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -23,7 +23,7 @@ void DFPlayerMiniFast<Debug>::playNext() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playPrevious() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PREV);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PREV);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -33,7 +33,7 @@ void DFPlayerMiniFast<Debug>::playPrevious() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::play(uint16_t trackNum) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PLAY);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PLAY);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>((trackNum >> 8U) & 0xFFU);
   sendStack.paramLSB = static_cast<uint8_t>(trackNum & 0xFFU);
@@ -43,7 +43,7 @@ void DFPlayerMiniFast<Debug>::play(uint16_t trackNum) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::stop() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::STOP);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::STOP);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 0U;
@@ -53,7 +53,7 @@ void DFPlayerMiniFast<Debug>::stop() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playFromMP3Folder(uint16_t trackNum) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::USE_MP3_FOLDER);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::USE_MP3_FOLDER);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>((trackNum >> 8U) & 0xFFU);
   sendStack.paramLSB = static_cast<uint8_t>(trackNum & 0xFFU);
@@ -63,7 +63,7 @@ void DFPlayerMiniFast<Debug>::playFromMP3Folder(uint16_t trackNum) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playAdvertisement(uint16_t trackNum) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::INSERT_ADVERT);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::INSERT_ADVERT);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>((trackNum >> 8U) & 0xFFU);
   sendStack.paramLSB = static_cast<uint8_t>(trackNum & 0xFFU);
@@ -73,7 +73,7 @@ void DFPlayerMiniFast<Debug>::playAdvertisement(uint16_t trackNum) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::stopAdvertisement() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::STOP_ADVERT);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::STOP_ADVERT);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 0U;
@@ -83,7 +83,7 @@ void DFPlayerMiniFast<Debug>::stopAdvertisement() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::incVolume() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::INC_VOL);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::INC_VOL);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -93,7 +93,7 @@ void DFPlayerMiniFast<Debug>::incVolume() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::decVolume() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::DEC_VOL);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::DEC_VOL);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -104,7 +104,7 @@ void DFPlayerMiniFast<Debug>::decVolume() {
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::volume(uint8_t level) {
   if(level <= 30U) {
-    sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::VOLUME);
+    sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::VOLUME);
     sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
     sendStack.paramMSB = 0U;
     sendStack.paramLSB = level;
@@ -116,7 +116,7 @@ void DFPlayerMiniFast<Debug>::volume(uint8_t level) {
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::EQSelect(uint8_t setting) {
   if(setting <= 5U) {
-    sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::EQ);
+    sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::EQ);
     sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
     sendStack.paramMSB = 0U;
     sendStack.paramLSB = setting;
@@ -127,7 +127,7 @@ void DFPlayerMiniFast<Debug>::EQSelect(uint8_t setting) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::loop(uint16_t trackNum) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PLAYBACK_MODE);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PLAYBACK_MODE);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>((trackNum >> 8U) & 0xFFU);
   sendStack.paramLSB = static_cast<uint8_t>(trackNum & 0xFFU);
@@ -138,7 +138,7 @@ void DFPlayerMiniFast<Debug>::loop(uint16_t trackNum) {
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playbackSource(uint8_t source) {
   if((source > 0U) && (source <= 5U)) {
-    sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PLAYBACK_SRC);
+    sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PLAYBACK_SRC);
     sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
     sendStack.paramMSB = 0U;
     sendStack.paramLSB = source;
@@ -149,7 +149,7 @@ void DFPlayerMiniFast<Debug>::playbackSource(uint8_t source) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::standbyMode() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::STANDBY);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::STANDBY);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -159,7 +159,7 @@ void DFPlayerMiniFast<Debug>::standbyMode() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::normalMode() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::NORMAL);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::NORMAL);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -169,7 +169,7 @@ void DFPlayerMiniFast<Debug>::normalMode() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::reset() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::RESET);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::RESET);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -179,7 +179,7 @@ void DFPlayerMiniFast<Debug>::reset() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::resume() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PLAYBACK);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PLAYBACK);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -189,7 +189,7 @@ void DFPlayerMiniFast<Debug>::resume() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::pause() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::PAUSE);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::PAUSE);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -199,7 +199,7 @@ void DFPlayerMiniFast<Debug>::pause() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::playFolder(uint8_t folderNum, uint8_t trackNum) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::SPEC_FOLDER);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::SPEC_FOLDER);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = folderNum;
   sendStack.paramLSB = trackNum;
@@ -211,7 +211,7 @@ template<bool Debug>
 void DFPlayerMiniFast<Debug>::playLargeFolder(uint8_t folderNum, uint16_t trackNum) {
   // Encode folder (4 bits) and track (12 bits) into a single 16-bit argument.
   const uint16_t arg = (static_cast<uint16_t>(folderNum) << 12U) | (trackNum & 0xFFFU);
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::SPEC_TRACK_3000);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::SPEC_TRACK_3000);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>(arg >> 8U);
   sendStack.paramLSB = static_cast<uint8_t>(arg & 0xFFU);
@@ -222,7 +222,7 @@ void DFPlayerMiniFast<Debug>::playLargeFolder(uint8_t folderNum, uint16_t trackN
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::volumeAdjustSet(uint8_t gain) {
   if(gain <= 31U) {
-    sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::VOL_ADJ);
+    sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::VOL_ADJ);
     sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
     sendStack.paramMSB = 0U;
     sendStack.paramLSB = static_cast<uint8_t>(BaseVolumeAdjustValue::VOL_ADJUST) + gain;
@@ -233,7 +233,7 @@ void DFPlayerMiniFast<Debug>::volumeAdjustSet(uint8_t gain) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::startRepeatPlay() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::REPEAT_PLAY);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::REPEAT_PLAY);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = static_cast<uint8_t>(RepeatPlayValues::START_REPEAT);
@@ -243,7 +243,7 @@ void DFPlayerMiniFast<Debug>::startRepeatPlay() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::stopRepeatPlay() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::REPEAT_PLAY);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::REPEAT_PLAY);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = static_cast<uint8_t>(RepeatPlayValues::STOP_REPEAT);
@@ -253,7 +253,7 @@ void DFPlayerMiniFast<Debug>::stopRepeatPlay() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::repeatFolder(uint16_t folder) {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::REPEAT_FOLDER);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::REPEAT_FOLDER);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = static_cast<uint8_t>((folder >> 8U) & 0xFFU);
   sendStack.paramLSB = static_cast<uint8_t>(folder & 0xFFU);
@@ -263,7 +263,7 @@ void DFPlayerMiniFast<Debug>::repeatFolder(uint16_t folder) {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::randomAll() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::RANDOM_ALL);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::RANDOM_ALL);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 0U;
@@ -273,7 +273,7 @@ void DFPlayerMiniFast<Debug>::randomAll() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::startRepeat() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::REPEAT_CURRENT);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::REPEAT_CURRENT);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 0U;
@@ -283,7 +283,7 @@ void DFPlayerMiniFast<Debug>::startRepeat() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::stopRepeat() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::REPEAT_CURRENT);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::REPEAT_CURRENT);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -293,7 +293,7 @@ void DFPlayerMiniFast<Debug>::stopRepeat() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::startDAC() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::SET_DAC);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::SET_DAC);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 0U;
@@ -303,7 +303,7 @@ void DFPlayerMiniFast<Debug>::startDAC() {
 
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::stopDAC() {
-  sendStack.commandValue  = static_cast<uint8_t>(ControlCommandValues::SET_DAC);
+  sendStack.commandValue = static_cast<uint8_t>(ControlCommandValues::SET_DAC);
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = 0U;
   sendStack.paramLSB = 1U;
@@ -399,7 +399,6 @@ template<bool Debug>
 void DFPlayerMiniFast<Debug>::printError() const {
   if(recStack.commandValue == 0x40U) {
     switch(recStack.paramLSB) {
-
       case 0x1U: {
         Serial.println(F("Module busy (this info is returned when the initialization is not done)"));
       } break;
@@ -440,10 +439,8 @@ void DFPlayerMiniFast<Debug>::printError() const {
         Serial.print(F("Unknown error: "));
         Serial.println(recStack.paramLSB);
       } break;
-
     }
-  }
-  else {
+  } else {
     Serial.println(F("No error"));
   }
 }
@@ -486,7 +483,7 @@ void DFPlayerMiniFast<Debug>::flush() { // NOLINT(readability-convert-member-fun
 template<bool Debug>
 int16_t DFPlayerMiniFast<Debug>::query(uint8_t cmd, uint8_t msb, uint8_t lsb) {
   flush();
-  sendStack.commandValue  = cmd;
+  sendStack.commandValue = cmd;
   sendStack.feedbackValue = static_cast<uint8_t>(PacketValues::NO_FEEDBACK);
   sendStack.paramMSB = msb;
   sendStack.paramLSB = lsb;
@@ -505,15 +502,24 @@ int16_t DFPlayerMiniFast<Debug>::query(uint8_t cmd, uint8_t msb, uint8_t lsb) {
 template<bool Debug>
 void DFPlayerMiniFast<Debug>::printStack(Stack _stack) {
   Serial.println(F("Stack:"));
-  Serial.print(_stack.start_byte, HEX);    Serial.print(' ');
-  Serial.print(_stack.version, HEX);       Serial.print(' ');
-  Serial.print(_stack.length, HEX);        Serial.print(' ');
-  Serial.print(_stack.commandValue, HEX);  Serial.print(' ');
-  Serial.print(_stack.feedbackValue, HEX); Serial.print(' ');
-  Serial.print(_stack.paramMSB, HEX);      Serial.print(' ');
-  Serial.print(_stack.paramLSB, HEX);      Serial.print(' ');
-  Serial.print(_stack.checksumMSB, HEX);   Serial.print(' ');
-  Serial.print(_stack.checksumLSB, HEX);   Serial.print(' ');
+  Serial.print(_stack.start_byte, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.version, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.length, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.commandValue, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.feedbackValue, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.paramMSB, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.paramLSB, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.checksumMSB, HEX);
+  Serial.print(' ');
+  Serial.print(_stack.checksumLSB, HEX);
+  Serial.print(' ');
   Serial.println(_stack.end_byte, HEX);
 }
 
@@ -524,7 +530,7 @@ void DFPlayerMiniFast<Debug>::debugLog([[maybe_unused]] const __FlashStringHelpe
 
 template<bool Debug>
 bool DFPlayerMiniFast<Debug>::verifyChecksum() {
-  const uint16_t recChecksum  = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
+  const uint16_t recChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
   findChecksum(recStack);
   const uint16_t calcChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
 
@@ -552,7 +558,6 @@ typename DFPlayerMiniFast<Debug>::ParseResult DFPlayerMiniFast<Debug>::processSt
   }
 
   switch(state) {
-
     case Fsm::find_start_byte: {
       debugLog(F("find_start_byte"));
       if(recChar == static_cast<uint8_t>(PacketValues::SB)) {
@@ -634,7 +639,6 @@ typename DFPlayerMiniFast<Debug>::ParseResult DFPlayerMiniFast<Debug>::processSt
 
     default: {
     } break;
-
   }
   return ParseResult::CONTINUE;
 }

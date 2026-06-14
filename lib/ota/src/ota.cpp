@@ -2,13 +2,12 @@
 
 OTA::OTA(SPIFlash& flash) :
   flash(flash),
-  firstFwBytes{0},
+  firstFwBytes{ 0 },
   fwSize(0),
   fwCrc(0),
   flashPointer(0),
   flashBlockBeginAddress(0),
-  otaState(OtaState::IDLE)
-{}
+  otaState(OtaState::IDLE) {}
 
 bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   if(fwSize == 0U) { return false; }                               // No firmware to write, return early.
@@ -49,7 +48,8 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
 
 OTA::OtaState OTA::run() {
   switch(otaState) {
-    case OtaState::IDLE: {} break;
+    case OtaState::IDLE: {
+    } break;
     case OtaState::START: {
       if(!flash.busy()) {
         otaState = OtaState::STORE;
