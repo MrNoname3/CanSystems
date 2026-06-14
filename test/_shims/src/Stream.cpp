@@ -14,9 +14,9 @@ size_t Stream::write(uint8_t b) {
   captured.push_back(b);
   this->_written++;
   TRACE(std::hex << static_cast<unsigned int>(b));
-  if (this->expectBuffer->available()) {
+  if(this->expectBuffer->available()) {
     uint8_t expected = this->expectBuffer->next();
-    if (expected != b) {
+    if(expected != b) {
       this->_error = true;
       TRACE("!=" << static_cast<unsigned int>(expected));
     }

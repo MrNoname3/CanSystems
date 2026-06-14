@@ -4,10 +4,10 @@
 
 class TwoWire {
 public:
-  void    begin() {}
-  void    setClock(uint32_t /*hz*/) {}
-  void    setWireTimeout(uint32_t /*timeout*/, bool /*reset*/) {}
-  void    beginTransmission(uint8_t /*addr*/) {}
+  void begin() {}
+  void setClock(uint32_t /*hz*/) {}
+  void setWireTimeout(uint32_t /*timeout*/, bool /*reset*/) {}
+  void beginTransmission(uint8_t /*addr*/) {}
 
   [[nodiscard]] uint8_t endTransmission() const { return txResult; }
 
@@ -22,16 +22,19 @@ public:
     return b;
   }
 
-  uint8_t write(uint8_t /*byte*/)                    { return 1U; }           // NOLINT(readability-convert-member-functions-to-static)
-  uint8_t write(const uint8_t* /*buf*/, uint8_t n)   { return n; }            // NOLINT(readability-convert-member-functions-to-static)
-  uint8_t available()                    { return static_cast<uint8_t>(readQueue.size()); }
+  uint8_t write(uint8_t /*byte*/) { return 1U; }           // NOLINT(readability-convert-member-functions-to-static)
+  uint8_t write(const uint8_t* /*buf*/, uint8_t n) { return n; }            // NOLINT(readability-convert-member-functions-to-static)
+  uint8_t available() { return static_cast<uint8_t>(readQueue.size()); }
 
-  void    addReadByte(uint8_t b)         { readQueue.push_back(b); }
-  void    addReadBytes(const uint8_t* d, uint8_t n) { // NOLINT(readability-convert-member-functions-to-static)
+  void addReadByte(uint8_t b) { readQueue.push_back(b); }
+  void addReadBytes(const uint8_t* d, uint8_t n) { // NOLINT(readability-convert-member-functions-to-static)
     for(uint8_t i = 0U; i < n; ++i) { readQueue.push_back(d[i]); }
   }
-  void    setEndTransmissionResult(uint8_t r) { txResult = r; }
-  void    reset() { readQueue.clear(); txResult = 0U; }
+  void setEndTransmissionResult(uint8_t r) { txResult = r; }
+  void reset() {
+    readQueue.clear();
+    txResult = 0U;
+  }
 
 private:
   std::deque<uint8_t> readQueue;

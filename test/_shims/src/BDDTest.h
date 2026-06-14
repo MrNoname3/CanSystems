@@ -11,9 +11,9 @@ int bddtest_summary();
 inline void SUITE(const char* name) {
   bddtest_suite(name);
 }
-#define TEST(x)                                                                                           \
-  {                                                                                                       \
-    if (!bddtest_test(__FILE__, static_cast<uint32_t>(__LINE__), #x, static_cast<bool>(x))) return false; \
+#define TEST(x)                                                                                          \
+  {                                                                                                      \
+    if(!bddtest_test(__FILE__, static_cast<uint32_t>(__LINE__), #x, static_cast<bool>(x))) return false; \
   }
 
 inline void IT(const char* desc) {

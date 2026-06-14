@@ -9,7 +9,7 @@
   }
 #define TRACE(x)                    \
   {                                 \
-    if (getenv("TRACE")) {          \
+    if(getenv("TRACE")) {           \
       std::cout << x << std::flush; \
     }                               \
   }

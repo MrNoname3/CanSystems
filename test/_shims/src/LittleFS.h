@@ -11,18 +11,27 @@
 
 #define FILE_READ "r"                                // Arduino fs open-mode macro (canMqttGateway).
 
-enum SeekMode : uint8_t { SeekSet = 0U, SeekCur = 1U, SeekEnd = 2U };  // Mirrors fs::SeekMode.
+enum SeekMode : uint8_t {
+  SeekSet = 0U,
+  SeekCur = 1U,
+  SeekEnd = 2U     // Mirrors fs::SeekMode.
+};
 
 class File {
 public:
   File() = default;
 
   // Read handle over a snapshot of the stored content.
-  explicit File(std::string content) : buf_(std::move(content)), valid_(true) {}
+  explicit File(std::string content) :
+    buf_(std::move(content)),
+    valid_(true) {}
 
   // Write handle: writes accumulate and are flushed to the store on close().
-  File(std::map<std::string, std::string>* store, std::string path)
-    : store_(store), path_(std::move(path)), valid_(true), write_(true) {}
+  File(std::map<std::string, std::string>* store, std::string path) :
+    store_(store),
+    path_(std::move(path)),
+    valid_(true),
+    write_(true) {}
 
   explicit operator bool() const { return valid_; }
   [[nodiscard]] size_t size() const { return buf_.size(); }
@@ -47,8 +56,11 @@ public:
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static) mutates pos_; mirrors fs::File
   bool seek(size_t position, SeekMode mode = SeekSet) {
     size_t target = position;
-    if(mode == SeekCur) { target = pos_ + position; }
-    else if(mode == SeekEnd) { target = buf_.size() + position; }
+    if(mode == SeekCur) {
+      target = pos_ + position;
+    } else if(mode == SeekEnd) {
+      target = buf_.size() + position;
+    }
     if(target > buf_.size()) { return false; }
     pos_ = target;
     return true;
@@ -71,9 +83,9 @@ private:
   std::string buf_;
   std::map<std::string, std::string>* store_ = nullptr;
   std::string path_;
-  size_t pos_   = 0U;
-  bool   valid_ = false;
-  bool   write_ = false;
+  size_t pos_ = 0U;
+  bool valid_ = false;
+  bool write_ = false;
 };
 
 class LittleFsShim {
@@ -127,7 +139,9 @@ public:
   void setFailRename(bool fail) { failRename_ = fail; }
   void reset() {
     files_.clear();
-    beginResult_ = true; failWriteOpen_ = false; failRename_ = false;
+    beginResult_ = true;
+    failWriteOpen_ = false;
+    failRename_ = false;
     File::sWriteShouldFail = false;
     capacity_ = defaultCapacity;
   }
@@ -135,9 +149,9 @@ public:
 private:
   static constexpr size_t defaultCapacity = 2024U * 1024U;  // mirrors the 2 MB LittleFS partition
   std::map<std::string, std::string> files_;
-  bool   beginResult_ = true;
-  bool   failWriteOpen_ = false;
-  bool   failRename_ = false;
+  bool beginResult_ = true;
+  bool failWriteOpen_ = false;
+  bool failRename_ = false;
   size_t capacity_ = defaultCapacity;
 };
 

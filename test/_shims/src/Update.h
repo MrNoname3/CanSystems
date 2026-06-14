@@ -49,13 +49,18 @@ public:
 
   // ---- test controls ----
   void reset() {
-    beginResult_ = true; setMd5Result_ = true; writeSucceeds_ = true; endResult_ = true;
-    size_ = 0U; progress_ = 0U; target_.clear();
+    beginResult_ = true;
+    setMd5Result_ = true;
+    writeSucceeds_ = true;
+    endResult_ = true;
+    size_ = 0U;
+    progress_ = 0U;
+    target_.clear();
   }
-  void setBeginResult(bool r)   { beginResult_ = r; }
-  void setSetMd5Result(bool r)  { setMd5Result_ = r; }
+  void setBeginResult(bool r) { beginResult_ = r; }
+  void setSetMd5Result(bool r) { setMd5Result_ = r; }
   void setWriteSucceeds(bool r) { writeSucceeds_ = r; }
-  void setEndResult(bool r)     { endResult_ = r; }
+  void setEndResult(bool r) { endResult_ = r; }
   [[nodiscard]] size_t written() const { return progress_; }
 
 private:
@@ -69,14 +74,14 @@ private:
     return true;
   }
 
-  MD5Builder  md5_;
-  size_t      size_ = 0U;
-  size_t      progress_ = 0U;
+  MD5Builder md5_;
+  size_t size_ = 0U;
+  size_t progress_ = 0U;
   std::string target_;
-  bool        beginResult_   = true;
-  bool        setMd5Result_  = true;
-  bool        writeSucceeds_ = true;
-  bool        endResult_     = true;
+  bool beginResult_ = true;
+  bool setMd5Result_ = true;
+  bool writeSucceeds_ = true;
+  bool endResult_ = true;
 };
 
 inline UpdateShim Update;

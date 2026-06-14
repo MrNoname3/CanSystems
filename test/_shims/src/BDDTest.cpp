@@ -17,7 +17,7 @@ void bddtest_suite(const char* name) {
 }
 
 bool bddtest_test(const char* file, uint32_t line, const char* assertion, bool result) {
-  if (!result) {
+  if(!result) {
     LOG("✗\n");
     std::ostringstream os;
     os << "   ! " << testDescription << "\n      " << file << ":" << line << " : " << assertion << " [" << static_cast<int>(result) << "]";
@@ -37,14 +37,14 @@ void bddtest_end() {
 }
 
 int bddtest_summary() {
-  for (const std::string& failure : failureList) {
+  for(const std::string& failure : failureList) {
     LOG("\n");
     LOG(failure);
     LOG("\n");
   }
 
   LOG(std::dec << testPasses << "/" << testCount << " tests passed\n\n");
-  if (testPasses == testCount) {
+  if(testPasses == testCount) {
     return 0;
   }
   return 1;

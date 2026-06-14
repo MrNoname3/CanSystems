@@ -10,14 +10,14 @@ public:
 
   template<typename T>
   void put(uint16_t addr, const T& val) {
-    if (static_cast<uint32_t>(addr) + sizeof(T) <= EEPROM_SHIM_SIZE) {
+    if(static_cast<uint32_t>(addr) + sizeof(T) <= EEPROM_SHIM_SIZE) {
       memcpy(storage + addr, &val, sizeof(T));
     }
   }
 
   template<typename T>
   void get(uint16_t addr, T& val) const {
-    if (static_cast<uint32_t>(addr) + sizeof(T) <= EEPROM_SHIM_SIZE) {
+    if(static_cast<uint32_t>(addr) + sizeof(T) <= EEPROM_SHIM_SIZE) {
       memcpy(&val, storage + addr, sizeof(T));
     }
   }

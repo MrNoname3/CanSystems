@@ -9,9 +9,12 @@
 class MD5Builder {
 public:
   void begin() {
-    state_[0] = 0x67452301U; state_[1] = 0xefcdab89U;
-    state_[2] = 0x98badcfeU; state_[3] = 0x10325476U;
-    bitLen_ = 0U; bufLen_ = 0U;
+    state_[0] = 0x67452301U;
+    state_[1] = 0xefcdab89U;
+    state_[2] = 0x98badcfeU;
+    state_[3] = 0x10325476U;
+    bitLen_ = 0U;
+    bufLen_ = 0U;
   }
 
   void add(const uint8_t* data, uint16_t len) {
@@ -47,7 +50,10 @@ private:
   // runs the compression function whenever a full 64-byte block has accumulated.
   void pushByte(uint8_t byte) {
     buf_[bufLen_++] = byte;
-    if(bufLen_ == 64U) { transform(); bufLen_ = 0U; }
+    if(bufLen_ == 64U) {
+      transform();
+      bufLen_ = 0U;
+    }
   }
 
   static uint32_t rotl(uint32_t value, uint8_t count) {
@@ -68,7 +74,7 @@ private:
     };
     static const uint8_t S[64] = {
       7U, 12U, 17U, 22U, 7U, 12U, 17U, 22U, 7U, 12U, 17U, 22U, 7U, 12U, 17U, 22U,
-      5U,  9U, 14U, 20U, 5U,  9U, 14U, 20U, 5U,  9U, 14U, 20U, 5U,  9U, 14U, 20U,
+      5U, 9U, 14U, 20U, 5U, 9U, 14U, 20U, 5U, 9U, 14U, 20U, 5U, 9U, 14U, 20U,
       4U, 11U, 16U, 23U, 4U, 11U, 16U, 23U, 4U, 11U, 16U, 23U, 4U, 11U, 16U, 23U,
       6U, 10U, 15U, 21U, 6U, 10U, 15U, 21U, 6U, 10U, 15U, 21U, 6U, 10U, 15U, 21U
     };
@@ -76,7 +82,7 @@ private:
     uint32_t M[16];
     for(size_t i = 0U; i < 16U; ++i) {
       const size_t off = i * 4U;
-      M[i] =  static_cast<uint32_t>(buf_[off]) |
+      M[i] = static_cast<uint32_t>(buf_[off]) |
              (static_cast<uint32_t>(buf_[off + 1U]) << 8U) |
              (static_cast<uint32_t>(buf_[off + 2U]) << 16U) |
              (static_cast<uint32_t>(buf_[off + 3U]) << 24U);
@@ -89,20 +95,34 @@ private:
     for(uint8_t i = 0U; i < 64U; ++i) {
       uint32_t f = 0U;
       uint8_t g = 0U;
-      if(i < 16U)      { f = (b & c) | (~b & d);        g = i; }
-      else if(i < 32U) { f = (d & b) | (~d & c);        g = static_cast<uint8_t>(((5U * i) + 1U) % 16U); }
-      else if(i < 48U) { f = b ^ c ^ d;                 g = static_cast<uint8_t>(((3U * i) + 5U) % 16U); }
-      else             { f = c ^ (b | ~d);              g = static_cast<uint8_t>((7U * i) % 16U); }
+      if(i < 16U) {
+        f = (b & c) | (~b & d);
+        g = i;
+      } else if(i < 32U) {
+        f = (d & b) | (~d & c);
+        g = static_cast<uint8_t>(((5U * i) + 1U) % 16U);
+      } else if(i < 48U) {
+        f = b ^ c ^ d;
+        g = static_cast<uint8_t>(((3U * i) + 5U) % 16U);
+      } else {
+        f = c ^ (b | ~d);
+        g = static_cast<uint8_t>((7U * i) % 16U);
+      }
       f = f + a + K[i] + M[g];
-      a = d; d = c; c = b;
+      a = d;
+      d = c;
+      c = b;
       b = b + rotl(f, S[i]);
     }
-    state_[0] += a; state_[1] += b; state_[2] += c; state_[3] += d;
+    state_[0] += a;
+    state_[1] += b;
+    state_[2] += c;
+    state_[3] += d;
   }
 
-  uint32_t state_[4] = {0U, 0U, 0U, 0U};
+  uint32_t state_[4] = { 0U, 0U, 0U, 0U };
   uint64_t bitLen_ = 0U;
-  uint8_t  buf_[64] = {0U};
-  uint8_t  bufLen_ = 0U;
-  uint8_t  digest_[16] = {0U};
+  uint8_t buf_[64] = { 0U };
+  uint8_t bufLen_ = 0U;
+  uint8_t digest_[16] = { 0U };
 };

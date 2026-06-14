@@ -9,13 +9,16 @@ struct RgbColor {
   uint8_t R;
   uint8_t G;
   uint8_t B;
-  RgbColor(uint8_t r, uint8_t g, uint8_t b) : R(r), G(g), B(b) {}
+  RgbColor(uint8_t r, uint8_t g, uint8_t b) :
+    R(r),
+    G(g),
+    B(b) {}
 };
 
 struct NeoGrbFeature {};
 struct NeoWs2812xMethod {};
 
-template <typename TFeature, typename TMethod>
+template<typename TFeature, typename TMethod>
 class NeoPixelBus final {
 public:
   NeoPixelBus(uint16_t /*countPixels*/, uint8_t /*pin*/) {}
@@ -27,12 +30,14 @@ public:
   }
 
   // ---- test inspection (static so tests can read them without a handle) ----
-  static inline RgbColor lastColor{0U, 0U, 0U};
-  static inline int beginCount   = 0;
-  static inline int showCount    = 0;
+  static inline RgbColor lastColor{ 0U, 0U, 0U };
+  static inline int beginCount = 0;
+  static inline int showCount = 0;
   static inline int clearToCount = 0;
   static void resetState() {
     lastColor = RgbColor(0U, 0U, 0U);
-    beginCount = 0; showCount = 0; clearToCount = 0;
+    beginCount = 0;
+    showCount = 0;
+    clearToCount = 0;
   }
 };

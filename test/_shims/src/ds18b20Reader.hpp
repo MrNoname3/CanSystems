@@ -8,13 +8,13 @@
 #include <stdio.h>
 #include <stddef.h>
 
-template <uint8_t MaxSensors>
+template<uint8_t MaxSensors>
 class Ds18b20Reader final {
   static_assert(MaxSensors > 0U && MaxSensors <= 16U, "MaxSensors must be between 1 and 16!");
 
 public:
   static constexpr uint8_t romHexSize = 17U;                       // 16 hex chars (8-byte ROM) + null terminator.
-  static constexpr float   invalidTempC = -127.0F;                 // Sentinel matching DEVICE_DISCONNECTED_C.
+  static constexpr float invalidTempC = -127.0F;                   // Sentinel matching DEVICE_DISCONNECTED_C.
 
   explicit Ds18b20Reader(uint8_t /*oneWirePin*/, uint8_t /*resolutionBits*/ = 12U) {}
 
@@ -43,8 +43,8 @@ public:
 
   // ---- test hooks (static so tests can set them without a handle) ----
   static inline uint8_t fakeSensorCount = 0U;                      // Sensors "found" by the next begin().
-  static inline float   fakeTempsC[MaxSensors] = {};               // Per-sensor temperature returned by readTempC().
-  static inline int     requestCount = 0;                          // Number of requestConversion() calls.
+  static inline float fakeTempsC[MaxSensors] = {};                 // Per-sensor temperature returned by readTempC().
+  static inline int requestCount = 0;                              // Number of requestConversion() calls.
   static void resetState() {
     fakeSensorCount = 0U;
     for(float& temp : fakeTempsC) { temp = 0.0F; }

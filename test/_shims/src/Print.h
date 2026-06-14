@@ -24,7 +24,7 @@ public:
   virtual size_t write(uint8_t) = 0;
   virtual size_t write(const uint8_t* buffer, size_t size) {
     size_t n = 0;
-    while (size--) {
+    while(size--) {
       n += write(*buffer++);
     }
     return n;

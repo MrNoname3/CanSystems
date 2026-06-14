@@ -33,22 +33,33 @@ public:
   // Queues a received frame and marks it available, as the ISR would on the real hardware.
   static void injectReceived(unsigned long long value, unsigned int bitLength,
                              unsigned int protocol, unsigned int delay) {
-    rxValue = value; rxBitLength = bitLength; rxProtocol = protocol; rxDelay = delay;
+    rxValue = value;
+    rxBitLength = bitLength;
+    rxProtocol = protocol;
+    rxDelay = delay;
     rxAvailable = true;
   }
   static void resetState() {
-    rxAvailable = false; rxValue = 0U; rxBitLength = 0U; rxProtocol = 0U; rxDelay = 0U;
-    lastProtocol = 0; lastPulseLength = 0; lastSentCode = 0U; lastSentLength = 0U; sendCount = 0;
+    rxAvailable = false;
+    rxValue = 0U;
+    rxBitLength = 0U;
+    rxProtocol = 0U;
+    rxDelay = 0U;
+    lastProtocol = 0;
+    lastPulseLength = 0;
+    lastSentCode = 0U;
+    lastSentLength = 0U;
+    sendCount = 0;
   }
 
-  static inline bool               rxAvailable = false;
+  static inline bool rxAvailable = false;
   static inline unsigned long long rxValue = 0U;
-  static inline unsigned int       rxBitLength = 0U;
-  static inline unsigned int       rxProtocol = 0U;
-  static inline unsigned int       rxDelay = 0U;
-  static inline int                lastProtocol = 0;
-  static inline int                lastPulseLength = 0;
+  static inline unsigned int rxBitLength = 0U;
+  static inline unsigned int rxProtocol = 0U;
+  static inline unsigned int rxDelay = 0U;
+  static inline int lastProtocol = 0;
+  static inline int lastPulseLength = 0;
   static inline unsigned long long lastSentCode = 0U;
-  static inline unsigned int       lastSentLength = 0U;
-  static inline int                sendCount = 0;
+  static inline unsigned int lastSentLength = 0U;
+  static inline int sendCount = 0;
 };

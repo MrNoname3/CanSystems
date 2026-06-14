@@ -16,7 +16,7 @@ bool Buffer::available() const {
 }
 
 uint8_t Buffer::next() {
-  if (this->available()) {
+  if(this->available()) {
     return this->buffer[this->pos++];
   }
   return 0;
@@ -27,7 +27,7 @@ void Buffer::reset() {
 }
 
 void Buffer::add(const uint8_t* buf, size_t size) {
-  for (size_t i = 0; i < size; i++) {
+  for(size_t i = 0; i < size; i++) {
     this->buffer[this->length++] = buf[i];
   }
 }

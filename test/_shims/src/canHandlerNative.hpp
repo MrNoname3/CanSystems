@@ -67,7 +67,7 @@ public:
   virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) = 0;
 
   [[nodiscard]] inline bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
-    return canHandler.send(CanHandler::CanFrame{getClientCanId(), command, canHandler.getLocalCanId(), data});
+    return canHandler.send(CanHandler::CanFrame{ getClientCanId(), command, canHandler.getLocalCanId(), data });
   }
 
   [[nodiscard]] inline bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
@@ -75,7 +75,7 @@ public:
   }
 
   [[nodiscard]] inline bool sendCanFrame(uint16_t command) const {
-    uint8_t data[8] = {0U};
+    uint8_t data[8] = { 0U };
     return sendCanFrame(command, data);
   }
 
@@ -84,7 +84,7 @@ public:
   }
 
   [[nodiscard]] bool sendCanResponse(uint16_t command, bool response) const {
-    const uint8_t data[8] = {static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U};
+    const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
     return sendCanFrame(command, data);
   }
 
@@ -100,8 +100,7 @@ public:
 protected:
   CanBase(CanHandler& canHandler, uint16_t clientCanId) :
     canHandler(canHandler),
-    clientCanId(clientCanId)
-  {
+    clientCanId(clientCanId) {
     if(isClientCanIdValid(this->clientCanId)) {
       this->canHandler.registerCallback(this);
     }

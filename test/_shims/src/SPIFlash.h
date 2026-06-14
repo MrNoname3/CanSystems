@@ -9,9 +9,9 @@ static constexpr uint32_t SPIFLASH_DEFAULT_CAPACITY = 65536U;
 
 class SPIFlash {
 public:
-  SPIFlash(uint8_t /*slaveSelectPin*/, uint16_t id = 0U,
-           uint32_t capacity = SPIFLASH_DEFAULT_CAPACITY)
-    : jedecId(id), flashCapacity(capacity) {}
+  SPIFlash(uint8_t /*slaveSelectPin*/, uint16_t id = 0U, uint32_t capacity = SPIFLASH_DEFAULT_CAPACITY) :
+    jedecId(id),
+    flashCapacity(capacity) {}
 
   [[nodiscard]] static bool initialize() { return true; }
   [[nodiscard]] static uint8_t readStatus() { return 0U; }
@@ -24,7 +24,7 @@ public:
 
   void readBytes(uint32_t addr, void* buf, uint16_t len) const {
     uint8_t* bytes = static_cast<uint8_t*>(buf);
-    for (uint16_t i = 0U; i < len; i++) {
+    for(uint16_t i = 0U; i < len; i++) {
       bytes[i] = readByte(addr + static_cast<uint32_t>(i));
     }
   }
@@ -36,7 +36,7 @@ public:
 
   void writeBytes(uint32_t addr, const void* buf, uint16_t len) {
     const uint8_t* bytes = static_cast<const uint8_t*>(buf);
-    for (uint16_t i = 0U; i < len; i++) {
+    for(uint16_t i = 0U; i < len; i++) {
       writeByte(addr + static_cast<uint32_t>(i), bytes[i]);
     }
   }
@@ -74,7 +74,7 @@ public:
 private:
   void eraseRange(uint32_t base, uint32_t size) { // NOLINT(readability-convert-member-functions-to-static)
     std::map<uint32_t, uint8_t>::iterator it = memory.lower_bound(base);
-    while (it != memory.end() && it->first < base + size) {
+    while(it != memory.end() && it->first < base + size) {
       it = memory.erase(it);
     }
   }
