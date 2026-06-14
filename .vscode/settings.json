@@ -3,6 +3,9 @@
   "editor.insertSpaces": true,
   "editor.detectIndentation": false,
   "files.trimTrailingWhitespace": true,
+  "[python]": {
+    "editor.tabSize": 4
+  },
   "files.associations": {
     "*.tpp": "cpp",
     "array": "cpp",
