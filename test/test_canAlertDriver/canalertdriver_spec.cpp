@@ -110,7 +110,7 @@ bool test_hum_temp_ldr_frame_publishes_json() {
   static Connectivity conn;
   static CanAlertDriver driver(can, 30U, conn, "alert5", -0.5F);
   // temp raw = 2345 (23.45 C), humidity = 55, light = 1023.
-  const uint8_t data[8] = {0x29U, 0x09U, 55U, 0U, 0xFFU, 0x03U, 0U, 0U};
+  const uint8_t data[8] = { 0x29U, 0x09U, 55U, 0U, 0xFFU, 0x03U, 0U, 0U };
   injectFrame(driver, CanCmd::READ_HUM_TEMP_LDR, data);
   IS_EQUAL(MqttBase::messageCount, 1);
   IS_TRUE(MqttBase::lastMessage == R"({"Temperature":22.95,"Humidity":55,"Light":1023})");
@@ -123,7 +123,7 @@ bool test_unknown_frame_is_ignored() {
   static CanHandler can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 31U, conn, "alert6");
-  const uint8_t data[8] = {0U};
+  const uint8_t data[8] = { 0U };
   injectFrame(driver, CanCmd::LOOP_TIME_MAX, data);
   IS_EQUAL(MqttBase::messageCount, 0);
   IS_EQUAL(MqttBase::subtopicMessages.size(), 0U);

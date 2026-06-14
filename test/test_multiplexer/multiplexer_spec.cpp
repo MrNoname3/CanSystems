@@ -2,13 +2,13 @@
 #include "Arduino.h"
 #include "BDDTest.h"
 
-static constexpr uint8_t kReadPin   = 10U;
+static constexpr uint8_t kReadPin = 10U;
 static constexpr uint8_t kEnablePin = 11U;
-static const uint8_t kSelPins[4]    = { 4U, 5U, 6U, 7U };
+static const uint8_t kSelPins[4] = { 4U, 5U, 6U, 7U };
 
 static Multiplexer make() {
   resetGpioState();
-  return {kReadPin, kEnablePin, kSelPins};
+  return { kReadPin, kEnablePin, kSelPins };
 }
 
 // ---- constructor ----
@@ -17,7 +17,7 @@ bool test_constructor_sets_enable_pin_output_high() {
   IT("constructor configures enablePin as OUTPUT and sets it HIGH (disabled)");
   resetGpioState();
   Multiplexer mux(kReadPin, kEnablePin, kSelPins);
-  IS_EQUAL(getPinMode(kEnablePin),          static_cast<uint8_t>(OUTPUT));
+  IS_EQUAL(getPinMode(kEnablePin), static_cast<uint8_t>(OUTPUT));
   IS_EQUAL(getDigitalWriteValue(kEnablePin), static_cast<uint8_t>(HIGH));
   END_IT
 }

@@ -13,23 +13,25 @@
 class CapturingClient : public Client {
 public:
   static constexpr size_t CAPTURE_BUF = 4096U;
-  static constexpr size_t RESP_BUF    = 16U;
+  static constexpr size_t RESP_BUF = 16U;
 
   uint8_t capData[CAPTURE_BUF] = {};
-  size_t  capLen = 0U;
+  size_t capLen = 0U;
 
 private:
   uint8_t respData[RESP_BUF] = {};
-  size_t  respLen = 0U;
-  size_t  respPos = 0U;
-  bool    _connected = false;
+  size_t respLen = 0U;
+  size_t respPos = 0U;
+  bool _connected = false;
 
 public:
   bool connect(IPAddress /*ip*/, uint16_t /*port*/) override {
-    _connected = true; return true;
+    _connected = true;
+    return true;
   }
   bool connect(const char* /*host*/, uint16_t /*port*/) override {
-    _connected = true; return true;
+    _connected = true;
+    return true;
   }
   size_t write(uint8_t b) override {
     if(capLen < CAPTURE_BUF) { capData[capLen++] = b; }
@@ -62,9 +64,12 @@ public:
   operator bool() override { return true; }
 
   void loadConnack() {
-    respData[0] = 0x20U; respData[1] = 0x02U;
-    respData[2] = 0x00U; respData[3] = 0x00U;
-    respLen = 4U; respPos = 0U;
+    respData[0] = 0x20U;
+    respData[1] = 0x02U;
+    respData[2] = 0x00U;
+    respData[3] = 0x00U;
+    respLen = 4U;
+    respPos = 0U;
   }
   void resetCapture() { capLen = 0U; }
 };
@@ -72,10 +77,10 @@ public:
 // ---- MQTT PUBLISH decoder -----------------------------------------------
 
 struct PublishRecord {
-  char topic[256]    = {};
+  char topic[256] = {};
   char payload[1024] = {};
-  bool retained      = false;
-  bool valid         = false;
+  bool retained = false;
+  bool valid = false;
 };
 
 static PublishRecord decodeMqttPublish(const uint8_t* buf, size_t len) {
@@ -88,7 +93,7 @@ static PublishRecord decodeMqttPublish(const uint8_t* buf, size_t len) {
   // Decode variable-length remaining field.
   size_t pos = 1U;
   uint32_t remaining = 0U;
-  uint32_t mult      = 1U;
+  uint32_t mult = 1U;
   uint8_t enc;
   do {
     if(pos >= len) { return r; }
@@ -120,11 +125,11 @@ static PublishRecord decodeMqttPublish(const uint8_t* buf, size_t len) {
 
 // ---- Test fixture -------------------------------------------------------
 
-static const uint8_t kServerIp[]     = { 127U, 0U, 0U, 1U };
-static const char    kClientName[]   = "esp32_can_AABBCCDDEEFF";
-static const char    kSenderTopic[]  = "iot/dtos/AABBCCDDEEFF/";
-static const char    kRecvTopic[]    = "iot/stod/AABBCCDDEEFF/#";
-static const char    kAvailTopic[]   = "iot/dtos/AABBCCDDEEFF/availability";
+static const uint8_t kServerIp[] = { 127U, 0U, 0U, 1U };
+static const char kClientName[] = "esp32_can_AABBCCDDEEFF";
+static const char kSenderTopic[] = "iot/dtos/AABBCCDDEEFF/";
+static const char kRecvTopic[] = "iot/stod/AABBCCDDEEFF/#";
+static const char kAvailTopic[] = "iot/dtos/AABBCCDDEEFF/availability";
 
 // Raw-publish callback bridging HADiscovery to the captured PubSubClient (mirrors Connectivity::publishRaw).
 static bool fixturePublish(void* ctx, const char* topic, const char* payload, bool retained) {
@@ -133,13 +138,12 @@ static bool fixturePublish(void* ctx, const char* topic, const char* payload, bo
 
 struct Fixture {
   CapturingClient cap;
-  PubSubClient    mqtt;
-  HADiscovery     had;
+  PubSubClient mqtt;
+  HADiscovery had;
 
   Fixture() :  // NOLINT(modernize-use-equals-default) non-trivial: connects the mock and primes the CONNACK
     mqtt(IPAddress(kServerIp), 1883U, cap),
-    had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic)
-  {
+    had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic) {
     cap.loadConnack();
     (void)mqtt.connect("test");
     cap.resetCapture();
@@ -159,8 +163,8 @@ bool test_buildDeviceName_appears_in_payload() {
   f.had.buildDeviceName(mac, "mcu_smoke");
 
   const auto cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}", nullptr,
-    HADiscovery::StateClass::none, HADiscovery::DeviceClass::none);
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::none, HADiscovery::DeviceClass::none);
   IS_TRUE(f.had.publishEntity("temperature", cfg));
 
   const PublishRecord rec = f.capture();
@@ -181,8 +185,7 @@ bool test_publishEntity_sensor_discovery_topic() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
   IS_TRUE(rec.retained);
   END_IT
 }
@@ -194,14 +197,13 @@ bool test_publishEntity_sensor_state_topic() {
   f.had.buildDeviceName(mac, "mcu_smoke");
 
   const auto cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}", nullptr,
-    HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature);
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature);
   IS_TRUE(f.had.publishEntity("temperature", cfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_TRUE(strstr(rec.payload,
-    "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/temperature\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/temperature\"") != nullptr);
   IS_TRUE(strstr(rec.payload, "\"device_class\":\"temperature\"") != nullptr);
   IS_TRUE(strstr(rec.payload, "\"state_class\":\"measurement\"") != nullptr);
   END_IT
@@ -218,8 +220,7 @@ bool test_publishEntity_sensor_attributes_topic() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_TRUE(strstr(rec.payload,
-    "\"json_attributes_topic\":\"iot/dtos/AABBCCDDEEFF/data\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"json_attributes_topic\":\"iot/dtos/AABBCCDDEEFF/data\"") != nullptr);
   END_IT
 }
 
@@ -229,19 +230,17 @@ bool test_publishEntity_button_command_topic() {
   const uint8_t mac[6] = {};
   f.had.buildDeviceName(mac, "mcu_smoke");
 
-  const auto cfg = HADiscovery::EntityConfig::button(
-    "Restart", "reboot", HADiscovery::DeviceClass::restart);
+  const auto cfg = HADiscovery::EntityConfig::button("Restart", "reboot", HADiscovery::DeviceClass::restart);
   IS_TRUE(f.had.publishEntity("restart", cfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/button/esp32_can_AABBCCDDEEFF_restart/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/button/esp32_can_AABBCCDDEEFF_restart/config"), 0);
   IS_TRUE(strstr(rec.payload, "\"command_topic\":") != nullptr);
-  IS_TRUE(strstr(rec.payload, "\"state_topic\":")    == nullptr);
-  IS_TRUE(strstr(rec.payload, "\"json_attributes_topic\":")  == nullptr);
-  IS_TRUE(strstr(rec.payload, "\"payload_press\":")            != nullptr);
-  IS_TRUE(strstr(rec.payload, R"(\"cmd\":\"reboot\")")        != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"state_topic\":") == nullptr);
+  IS_TRUE(strstr(rec.payload, "\"json_attributes_topic\":") == nullptr);
+  IS_TRUE(strstr(rec.payload, "\"payload_press\":") != nullptr);
+  IS_TRUE(strstr(rec.payload, R"(\"cmd\":\"reboot\")") != nullptr);
   END_IT
 }
 
@@ -255,12 +254,11 @@ bool test_publishConnectivity_skips_availability_block() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/binary_sensor/esp32_can_AABBCCDDEEFF_availability/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/binary_sensor/esp32_can_AABBCCDDEEFF_availability/config"), 0);
   IS_TRUE(strstr(rec.payload,
-    "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/availability\"") != nullptr);
+                 "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/availability\"") != nullptr);
   IS_TRUE(strstr(rec.payload, "\"availability\":[") == nullptr);
-  IS_TRUE(strstr(rec.payload, "\"json_attributes_topic\":")  == nullptr);
+  IS_TRUE(strstr(rec.payload, "\"json_attributes_topic\":") == nullptr);
   END_IT
 }
 
@@ -269,8 +267,8 @@ bool test_publishCanDeviceEntity_discovery_topic() {
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}", nullptr,
-    HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature);
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature);
 
   const HADiscovery::CanDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
@@ -286,8 +284,7 @@ bool test_publishCanDeviceEntity_discovery_topic() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
   IS_TRUE(rec.retained);
   END_IT
 }
@@ -296,8 +293,7 @@ bool test_publishCanDeviceEntity_state_topic_uses_dataSubtopic() {
   IT("publishCanDeviceEntity state_topic uses canDevConfig.dataSubtopic, not subtopic");
   Fixture f;
 
-  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}");
+  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
   const HADiscovery::CanDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
@@ -314,8 +310,7 @@ bool test_publishCanDeviceEntity_state_topic_uses_dataSubtopic() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   // state_topic must end with the data subtopic "alert1", not the entity subtopic "temperature".
-  IS_TRUE(strstr(rec.payload,
-    "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/alert1\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"state_topic\":\"iot/dtos/AABBCCDDEEFF/alert1\"") != nullptr);
   END_IT
 }
 
@@ -323,8 +318,7 @@ bool test_publishCanDeviceEntity_dual_availability() {
   IT("publishCanDeviceEntity includes both availability topics and availability_mode");
   Fixture f;
 
-  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}");
+  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
   const HADiscovery::CanDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
@@ -340,9 +334,9 @@ bool test_publishCanDeviceEntity_dual_availability() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_TRUE(strstr(rec.payload, "iot/dtos/AABBCCDDEEFF/availability")       != nullptr);
+  IS_TRUE(strstr(rec.payload, "iot/dtos/AABBCCDDEEFF/availability") != nullptr);
   IS_TRUE(strstr(rec.payload, "iot/dtos/AABBCCDDEEFF/alert1/availability") != nullptr);
-  IS_TRUE(strstr(rec.payload, "\"availability_mode\":\"all\"")             != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"availability_mode\":\"all\"") != nullptr);
   END_IT
 }
 
@@ -351,8 +345,8 @@ bool test_publishCanDeviceEntity_skip_can_avail() {
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::binarySensor(
-    "Connection", "{{ value_json.state }}", "online", "offline",
-    HADiscovery::DeviceClass::connectivity);
+      "Connection", "{{ value_json.state }}", "online", "offline",
+      HADiscovery::DeviceClass::connectivity);
 
   const HADiscovery::CanDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
@@ -369,7 +363,7 @@ bool test_publishCanDeviceEntity_skip_can_avail() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   IS_TRUE(strstr(rec.payload, "iot/dtos/AABBCCDDEEFF/availability") != nullptr);
-  IS_TRUE(strstr(rec.payload, "\"availability_mode\"")              == nullptr);
+  IS_TRUE(strstr(rec.payload, "\"availability_mode\"") == nullptr);
   END_IT
 }
 
@@ -385,8 +379,7 @@ bool test_publishEntity_button_command_topic_url() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   // Receiver topic "iot/stod/AABBCCDDEEFF/#" trimmed to "iot/stod/AABBCCDDEEFF/" + subtopic.
-  IS_TRUE(strstr(rec.payload,
-    "\"command_topic\":\"iot/stod/AABBCCDDEEFF/restart\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"command_topic\":\"iot/stod/AABBCCDDEEFF/restart\"") != nullptr);
   END_IT
 }
 
@@ -401,8 +394,8 @@ bool test_publishEntity_sw_version_in_device_block() {
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"")      != nullptr);
-  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"\"")    == nullptr);  // must not be empty
+  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"sw_version\":\"\"") == nullptr);  // must not be empty
   END_IT
 }
 
@@ -425,8 +418,7 @@ bool test_publishCanDeviceEntity_via_device_and_unique_id() {
   IT("publishCanDeviceEntity sets via_device and unique_id uses entity subtopic");
   Fixture f;
 
-  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}");
+  const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
   const HADiscovery::CanDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
@@ -443,11 +435,9 @@ bool test_publishCanDeviceEntity_via_device_and_unique_id() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   // unique_id must use the entity subtopic "temperature", not the data subtopic "alert1".
-  IS_TRUE(strstr(rec.payload,
-    "\"unique_id\":\"esp32_can_AABBCCDDEEFF_alert1_temperature\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"unique_id\":\"esp32_can_AABBCCDDEEFF_alert1_temperature\"") != nullptr);
   // via_device must point to the ESP32 client name.
-  IS_TRUE(strstr(rec.payload,
-    "\"via_device\":\"esp32_can_AABBCCDDEEFF\"")                   != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"via_device\":\"esp32_can_AABBCCDDEEFF\"") != nullptr);
   END_IT
 }
 
@@ -476,8 +466,7 @@ bool test_publishEntity_disabled_retracts_with_empty_payload() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   // Same discovery topic as the publish case, but with an empty payload (HA removes the entity).
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/sensor/esp32_can_AABBCCDDEEFF_temperature/config"), 0);
   IS_EQUAL(strcmp(rec.payload, ""), 0);
   IS_TRUE(rec.retained);
   END_IT
@@ -490,18 +479,17 @@ bool test_publishCanDeviceEntity_disabled_retracts_with_empty_payload() {
 
   const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
   HADiscovery::CanDeviceConfig dev{};
-  dev.deviceId        = "esp32_can_AABBCCDDEEFF_alert1";
-  dev.deviceName      = "ALERT1 DDEEFF";
-  dev.swVersion       = "1 (deadbeef)";
+  dev.deviceId = "esp32_can_AABBCCDDEEFF_alert1";
+  dev.deviceName = "ALERT1 DDEEFF";
+  dev.swVersion = "1 (deadbeef)";
   dev.extraAvailTopic = "iot/dtos/AABBCCDDEEFF/alert1/availability";
-  dev.dataSubtopic    = "alert1";
-  dev.hwVersion       = "ATmega328P";
+  dev.dataSubtopic = "alert1";
+  dev.hwVersion = "ATmega328P";
   IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
-  IS_EQUAL(strcmp(rec.topic,
-    "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
+  IS_EQUAL(strcmp(rec.topic, "homeassistant/sensor/esp32_can_AABBCCDDEEFF_alert1_temperature/config"), 0);
   IS_EQUAL(strcmp(rec.payload, ""), 0);
   IS_TRUE(rec.retained);
   END_IT
@@ -514,9 +502,9 @@ bool test_publishEntity_overflow_returns_false() {
   memset(hugeTemplate, 'x', sizeof(hugeTemplate) - 1U);
   hugeTemplate[sizeof(hugeTemplate) - 1U] = '\0';
   const auto cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}", nullptr,
-    HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
-    nullptr, hugeTemplate);
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+      nullptr, hugeTemplate);
   IS_FALSE(f.had.publishEntity("temperature", cfg));
   IS_EQUAL(f.cap.capLen, 0U);
   END_IT
@@ -529,9 +517,9 @@ bool test_publishCanDeviceEntity_overflow_returns_false() {
   memset(hugeTemplate, 'x', sizeof(hugeTemplate) - 1U);
   hugeTemplate[sizeof(hugeTemplate) - 1U] = '\0';
   const auto cfg = HADiscovery::EntityConfig::sensor(
-    "Temperature", "{{ value_json.t }}", nullptr,
-    HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
-    nullptr, hugeTemplate);
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+      nullptr, hugeTemplate);
   const HADiscovery::CanDeviceConfig dev = {
     "esp32_can_AABBCCDDEEFF_alert1", "ALERT1 DDEEFF", "1 (deadbeef)",
     "iot/dtos/AABBCCDDEEFF/alert1/availability", "alert1", "ATmega328P"

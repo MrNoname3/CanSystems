@@ -3,9 +3,10 @@
 
 struct SimpleTask : public Task {
   const bool result;
-  explicit SimpleTask(bool r) : result(r) {}
+  explicit SimpleTask(bool r) :
+    result(r) {}
   [[nodiscard]] bool init() override { return result; }
-  [[nodiscard]] bool run()  override { return result; }
+  [[nodiscard]] bool run() override { return result; }
 };
 
 class TrackingTask : public Task {
@@ -15,10 +16,18 @@ public:
   uint16_t initCount = 0;
   uint16_t runCount = 0;
 
-  TrackingTask(bool initOk, bool runOk) : initResult(initOk), runResult(runOk) {}
+  TrackingTask(bool initOk, bool runOk) :
+    initResult(initOk),
+    runResult(runOk) {}
 
-  [[nodiscard]] bool init() override { initCount++; return initResult; }
-  [[nodiscard]] bool run()  override { runCount++;  return runResult;  }
+  [[nodiscard]] bool init() override {
+    initCount++;
+    return initResult;
+  }
+  [[nodiscard]] bool run() override {
+    runCount++;
+    return runResult;
+  }
 };
 
 bool test_single_task_init_success() {
@@ -111,7 +120,7 @@ bool test_partial_round_robin_first_task_always_runs() {
   TaskHandler<3, false> handler(list);
 
   // Pattern over 6 calls: (t0,t1), (t0,t2), (t0,t1), (t0,t2), (t0,t1), (t0,t2)
-  for (uint8_t i = 0U; i < 6U; i++) {
+  for(uint8_t i = 0U; i < 6U; i++) {
     IS_EQUAL(handler.runTasks(), 0U);
   }
 
@@ -161,14 +170,38 @@ bool test_32_tasks_highest_bit_bitmask() {
   // Native int is >= 32-bit, so this cannot by itself prove the AVR case (16-bit int): there the
   // mask is correct only because TaskHandler shifts a uint32_t operand. This pins the contract;
   // the 32-bit operand is what makes it hold on the 16-bit-int AVR target too.
-  SimpleTask t00(true);  SimpleTask t01(true);  SimpleTask t02(true);  SimpleTask t03(true);
-  SimpleTask t04(true);  SimpleTask t05(true);  SimpleTask t06(true);  SimpleTask t07(true);
-  SimpleTask t08(true);  SimpleTask t09(true);  SimpleTask t10(true);  SimpleTask t11(true);
-  SimpleTask t12(true);  SimpleTask t13(true);  SimpleTask t14(true);  SimpleTask t15(true);
-  SimpleTask t16(true);  SimpleTask t17(true);  SimpleTask t18(true);  SimpleTask t19(true);
-  SimpleTask t20(true);  SimpleTask t21(true);  SimpleTask t22(true);  SimpleTask t23(true);
-  SimpleTask t24(true);  SimpleTask t25(true);  SimpleTask t26(true);  SimpleTask t27(true);
-  SimpleTask t28(true);  SimpleTask t29(true);  SimpleTask t30(true);  SimpleTask t31(false);
+  SimpleTask t00(true);
+  SimpleTask t01(true);
+  SimpleTask t02(true);
+  SimpleTask t03(true);
+  SimpleTask t04(true);
+  SimpleTask t05(true);
+  SimpleTask t06(true);
+  SimpleTask t07(true);
+  SimpleTask t08(true);
+  SimpleTask t09(true);
+  SimpleTask t10(true);
+  SimpleTask t11(true);
+  SimpleTask t12(true);
+  SimpleTask t13(true);
+  SimpleTask t14(true);
+  SimpleTask t15(true);
+  SimpleTask t16(true);
+  SimpleTask t17(true);
+  SimpleTask t18(true);
+  SimpleTask t19(true);
+  SimpleTask t20(true);
+  SimpleTask t21(true);
+  SimpleTask t22(true);
+  SimpleTask t23(true);
+  SimpleTask t24(true);
+  SimpleTask t25(true);
+  SimpleTask t26(true);
+  SimpleTask t27(true);
+  SimpleTask t28(true);
+  SimpleTask t29(true);
+  SimpleTask t30(true);
+  SimpleTask t31(false);
   Task* list[] = {
     &t00, &t01, &t02, &t03, &t04, &t05, &t06, &t07,
     &t08, &t09, &t10, &t11, &t12, &t13, &t14, &t15,

@@ -93,10 +93,14 @@ bool test_clear_resets_state() {
 bool test_wrap_around() {
   IT("handles pointer wrap-around correctly");
   CircularBuffer<uint8_t, 4> buf;
-  buf.put(1U); buf.put(2U); buf.put(3U); buf.put(4U);
+  buf.put(1U);
+  buf.put(2U);
+  buf.put(3U);
+  buf.put(4U);
   IS_EQUAL(buf.pop(), 1U);
   IS_EQUAL(buf.pop(), 2U);
-  buf.put(5U); buf.put(6U); // wrap around
+  buf.put(5U);
+  buf.put(6U); // wrap around
   IS_EQUAL(buf.pop(), 3U);
   IS_EQUAL(buf.pop(), 4U);
   IS_EQUAL(buf.pop(), 5U);
@@ -108,7 +112,7 @@ bool test_wrap_around() {
 bool test_multiple_overflows() {
   IT("handles multiple successive overflows correctly");
   CircularBuffer<uint8_t, 3> buf;
-  for (uint8_t i = 1U; i <= 9U; i++) {
+  for(uint8_t i = 1U; i <= 9U; i++) {
     buf.put(i);
   }
   IS_TRUE(buf.isFull());
@@ -118,13 +122,16 @@ bool test_multiple_overflows() {
   END_IT
 }
 
-struct Point { uint8_t x; uint8_t y; };
+struct Point {
+  uint8_t x;
+  uint8_t y;
+};
 
 bool test_struct_type() {
   IT("works with struct element types");
   CircularBuffer<Point, 4> buf;
-  buf.put({1U, 2U});
-  buf.put({3U, 4U});
+  buf.put({ 1U, 2U });
+  buf.put({ 3U, 4U });
   Point p = buf.pop();
   IS_EQUAL(p.x, 1U);
   IS_EQUAL(p.y, 2U);

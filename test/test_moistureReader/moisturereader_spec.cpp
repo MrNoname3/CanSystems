@@ -4,18 +4,18 @@
 #include <string.h>
 
 // Hardware pins for the multiplexer used across the tests.
-static constexpr uint8_t kReadPin   = 10U;
+static constexpr uint8_t kReadPin = 10U;
 static constexpr uint8_t kEnablePin = 11U;
-static const uint8_t     kSelPins[4] = { 4U, 5U, 6U, 7U };
-static const uint8_t     kChannels[2] = { 3U, 5U };
+static const uint8_t kSelPins[4] = { 4U, 5U, 6U, 7U };
+static const uint8_t kChannels[2] = { 3U, 5U };
 
 // Module timing constants (mirrored from moistureReader.hpp for readable test arithmetic).
-static constexpr uint32_t kWakeupMs    = 10000U;  // sensorWakeupTime
+static constexpr uint32_t kWakeupMs = 10000U;  // sensorWakeupTime
 static constexpr uint32_t kFilteringMs = 2000U;   // filteringTime
-static constexpr uint32_t kReadTime    = 1000U;   // interval between cycles
+static constexpr uint32_t kReadTime = 1000U;   // interval between cycles
 
 // ---- dataSender capture ----
-static uint8_t  g_sendData[8][8];
+static uint8_t g_sendData[8][8];
 static uint32_t g_sendCount;
 static void onData(const uint8_t (&d)[8]) {
   if(g_sendCount < 8U) { memcpy(g_sendData[g_sendCount], d, 8U); }
@@ -126,9 +126,13 @@ bool test_select_channel_pins_match_last_channel() {
   setFakeMillis(0U);
   (void)mr.init();
   uint32_t t = kReadTime + 1U;
-  setFakeMillis(t); (void)mr.run();                 // -> WAKEUP
-  t += kWakeupMs + 1U; setFakeMillis(t); (void)mr.run(); // -> SETUP
-  setFakeMillis(t); (void)mr.run();                 // SETUP -> READING channel 0 (3 = 0b0011)
+  setFakeMillis(t);
+  (void)mr.run();           // -> WAKEUP
+  t += kWakeupMs + 1U;
+  setFakeMillis(t);
+  (void)mr.run();           // -> SETUP
+  setFakeMillis(t);
+  (void)mr.run();           // SETUP -> READING channel 0 (3 = 0b0011)
   IS_EQUAL(getDigitalWriteValue(kSelPins[0]), static_cast<uint8_t>(HIGH));
   IS_EQUAL(getDigitalWriteValue(kSelPins[1]), static_cast<uint8_t>(HIGH));
   IS_EQUAL(getDigitalWriteValue(kSelPins[2]), static_cast<uint8_t>(LOW));

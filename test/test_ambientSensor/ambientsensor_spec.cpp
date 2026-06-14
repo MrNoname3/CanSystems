@@ -10,12 +10,12 @@
 class TestCanHandler final : public CanHandler {     // CanHandler = CanHandlerNative (test/_shims)
 public:
   using CanHandler::send;
-  mutable uint32_t sendCount   = 0U;
+  mutable uint32_t sendCount = 0U;
   mutable uint16_t lastCommand = 0U;
-  mutable uint8_t  lastData[8] = {};
+  mutable uint8_t lastData[8] = {};
 
   bool init() override { return true; } // NOLINT(readability-make-member-function-const)
-  bool run()  override { return true; } // NOLINT(readability-make-member-function-const)
+  bool run() override { return true; }  // NOLINT(readability-make-member-function-const)
 
   bool send(uint16_t command, const uint8_t (&data)[8]) const override {
     sendCount++;
@@ -66,7 +66,7 @@ static void runCycle(AmbientSensor& s, uint32_t msWhenIdle) {
 }
 
 static constexpr uint32_t kMeasPeriod = 100U; // short period for tests
-static constexpr uint8_t  kLightPin   = 3U;
+static constexpr uint8_t kLightPin = 3U;
 
 // ---- init ----
 

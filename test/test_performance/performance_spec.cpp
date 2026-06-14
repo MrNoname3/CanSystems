@@ -51,11 +51,11 @@ bool test_run_callback_called_on_new_max() {
   setFakeMillis(0U);
   Performance p(100U, onMaxLoopTime);
   p.init(); // lastLoopTime = 0
-  callbackCount    = 0U;
+  callbackCount = 0U;
   callbackLastValue = 0U;
   setFakeMillis(150U);
   p.run(); // delta = 150, 150 > 100 → callback(150)
-  IS_EQUAL(callbackCount,     1U);
+  IS_EQUAL(callbackCount, 1U);
   IS_EQUAL(callbackLastValue, 150U);
   clearFakeMillis();
   END_IT
@@ -131,11 +131,16 @@ bool test_multiple_runs_callback_count() {
   p.init(); // lastLoopTime = 0
 
   callbackCount = 0U;
-  setFakeMillis(30U);  p.run();  // delta=30  < 50 → no callback; lastLoopTime=30
-  setFakeMillis(80U);  p.run();  // delta=50  == 50 → no callback; lastLoopTime=80
-  setFakeMillis(150U); p.run();  // delta=70  > 50  → callback #1 (maxLoopTime=70); lastLoopTime=150
-  setFakeMillis(200U); p.run();  // delta=50  < 70  → no callback; lastLoopTime=200
-  setFakeMillis(271U); p.run();  // delta=71  > 70  → callback #2 (maxLoopTime=71); lastLoopTime=271
+  setFakeMillis(30U);
+  p.run();  // delta=30  < 50 → no callback; lastLoopTime=30
+  setFakeMillis(80U);
+  p.run();  // delta=50  == 50 → no callback; lastLoopTime=80
+  setFakeMillis(150U);
+  p.run();  // delta=70  > 50  → callback #1 (maxLoopTime=70); lastLoopTime=150
+  setFakeMillis(200U);
+  p.run();  // delta=50  < 70  → no callback; lastLoopTime=200
+  setFakeMillis(271U);
+  p.run();  // delta=71  > 70  → callback #2 (maxLoopTime=71); lastLoopTime=271
   IS_EQUAL(callbackCount, 2U);
   clearFakeMillis();
   END_IT

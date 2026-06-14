@@ -5,9 +5,9 @@
 
 // The Stream shim captures every byte DFPlayerMiniFast writes; packets are 10 bytes:
 // [0]=0x7E [1]=0xFF [2]=len [3]=command [4]=feedback [5]=paramMSB [6]=paramLSB [7..8]=crc [9]=0xEF.
-static constexpr uint8_t CMD_PLAY   = 0x03U;
+static constexpr uint8_t CMD_PLAY = 0x03U;
 static constexpr uint8_t CMD_VOLUME = 0x06U;
-static constexpr uint8_t CMD_STOP   = 0x16U;
+static constexpr uint8_t CMD_STOP = 0x16U;
 
 static constexpr uint8_t RX_PIN = 5U;
 static constexpr uint8_t TX_PIN = 6U;

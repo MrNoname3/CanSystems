@@ -6,40 +6,40 @@
 
 bool test_time_hr_to_ms() {
   IT("hrToMs converts hours to milliseconds");
-  IS_EQUAL(Time::hrToMs(0U),  0U);
-  IS_EQUAL(Time::hrToMs(1U),  3600000U);
+  IS_EQUAL(Time::hrToMs(0U), 0U);
+  IS_EQUAL(Time::hrToMs(1U), 3600000U);
   IS_EQUAL(Time::hrToMs(24U), 86400000U);
   END_IT
 }
 
 bool test_time_min_to_ms() {
   IT("minToMs converts minutes to milliseconds");
-  IS_EQUAL(Time::minToMs(0U),  0U);
-  IS_EQUAL(Time::minToMs(1U),  60000U);
+  IS_EQUAL(Time::minToMs(0U), 0U);
+  IS_EQUAL(Time::minToMs(1U), 60000U);
   IS_EQUAL(Time::minToMs(90U), 5400000U);
   END_IT
 }
 
 bool test_time_sec_to_ms() {
   IT("secToMs converts seconds to milliseconds");
-  IS_EQUAL(Time::secToMs(0U),  0U);
-  IS_EQUAL(Time::secToMs(1U),  1000U);
+  IS_EQUAL(Time::secToMs(0U), 0U);
+  IS_EQUAL(Time::secToMs(1U), 1000U);
   IS_EQUAL(Time::secToMs(60U), 60000U);
   END_IT
 }
 
 bool test_time_hr_to_min() {
   IT("hrToMin converts hours to minutes");
-  IS_EQUAL(Time::hrToMin(0U),  0U);
-  IS_EQUAL(Time::hrToMin(1U),  60U);
+  IS_EQUAL(Time::hrToMin(0U), 0U);
+  IS_EQUAL(Time::hrToMin(1U), 60U);
   IS_EQUAL(Time::hrToMin(24U), 1440U);
   END_IT
 }
 
 bool test_time_ms_to_us() {
   IT("msToUs converts milliseconds to microseconds");
-  IS_EQUAL(Time::msToUs(0U),    0U);
-  IS_EQUAL(Time::msToUs(1U),    1000U);
+  IS_EQUAL(Time::msToUs(0U), 0U);
+  IS_EQUAL(Time::msToUs(1U), 1000U);
   IS_EQUAL(Time::msToUs(1000U), 1000000U);
   END_IT
 }
@@ -106,7 +106,11 @@ bool test_analog_filter_alpha_boundary() {
 
 // ---- ErrorState ----
 
-enum class TestErr : uint8_t { A = 0x01U, B = 0x02U, C = 0x04U };
+enum class TestErr : uint8_t {
+  A = 0x01U,
+  B = 0x02U,
+  C = 0x04U
+};
 
 bool test_error_state_initial_clear() {
   IT("ErrorState starts with no errors set");
@@ -160,7 +164,11 @@ bool test_error_state_clear_all() {
   END_IT
 }
 
-enum class WideErr : uint16_t { X = 0x0001U, Y = 0x0100U, Z = 0x8000U };
+enum class WideErr : uint16_t {
+  X = 0x0001U,
+  Y = 0x0100U,
+  Z = 0x8000U
+};
 
 bool test_error_state_wide_storage() {
   IT("ErrorState with uint16_t storage tracks bits beyond the uint8_t range");
@@ -181,7 +189,7 @@ bool test_error_state_wide_storage() {
 
 bool test_str_get_state_str() {
   IT("getStateStr returns [OK] for true and [ERR] for false");
-  IS_TRUE(strcmp(Str::getStateStr(true),  "[OK]")  == 0);
+  IS_TRUE(strcmp(Str::getStateStr(true), "[OK]") == 0);
   IS_TRUE(strcmp(Str::getStateStr(false), "[ERR]") == 0);
   END_IT
 }
@@ -190,7 +198,7 @@ bool test_str_get_state_str() {
 
 bool test_array_size() {
   IT("arraySize returns the element count of a fixed-size array");
-  uint8_t  arr3[3] = {};
+  uint8_t arr3[3] = {};
   uint16_t arr5[5] = {};
   const uint32_t arr1[1] = {};
   IS_EQUAL(arraySize(arr3), 3U);

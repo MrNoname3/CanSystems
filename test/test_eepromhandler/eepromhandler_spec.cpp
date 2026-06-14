@@ -4,7 +4,7 @@
 
 // Simple struct used as stored payload in most tests.
 struct Config {
-  uint8_t  x;
+  uint8_t x;
   uint16_t y;
 };
 
@@ -40,7 +40,7 @@ bool test_save_load_uint8_roundtrip() {
 bool test_save_load_struct_roundtrip() {
   IT("save then load restores a struct value field by field");
   EEPROM.clear();
-  Config saved{0xABU, 0x1234U};
+  Config saved{ 0xABU, 0x1234U };
   Config loaded{};
   IS_TRUE((EEPROMHandler<Config, 20U>::save(&saved)));
   IS_TRUE((EEPROMHandler<Config, 20U>::load(&loaded)));

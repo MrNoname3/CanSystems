@@ -3,23 +3,31 @@
 #include "Wire.h"
 #include "BDDTest.h"
 
-static constexpr uint8_t kPwmPin     = 5U;
-static constexpr uint8_t kIntPin     = 3U;
+static constexpr uint8_t kPwmPin = 5U;
+static constexpr uint8_t kIntPin = 3U;
 static constexpr uint8_t kCurrentPin = 7U;
 
 // PumpControl error codes (mirror of the private PumpControlError enum bit positions).
-static constexpr uint8_t kErrChSelect    = 1U << 0U;
+// clang-format off
+static constexpr uint8_t kErrChSelect     = 1U << 0U;
 static constexpr uint8_t kErrFlowStuck    = 1U << 1U;
-static constexpr uint8_t kErrPumpOverrun = 1U << 3U;
+static constexpr uint8_t kErrPumpOverrun  = 1U << 3U;
 static constexpr uint8_t kErrPumpOc       = 1U << 4U;
 static constexpr uint8_t kErrPumpUc       = 1U << 5U;
-static constexpr uint8_t kErrQueueFull   = 1U << 6U;
+static constexpr uint8_t kErrQueueFull    = 1U << 6U;
+// clang-format on
 
 // ---- reportError capture ----
 static uint32_t g_lastErr;
 static uint32_t g_errCount;
-static void onError(uint8_t code) { g_lastErr = code; ++g_errCount; }
-static void resetErr() { g_lastErr = 0U; g_errCount = 0U; }
+static void onError(uint8_t code) {
+  g_lastErr = code;
+  ++g_errCount;
+}
+static void resetErr() {
+  g_lastErr = 0U;
+  g_errCount = 0U;
+}
 
 // Brings a fresh PumpControl from CALIBRATION to IDLE. The convergence loop runs at millis()==0
 // so handleCalibration() never fires (the 5 s window is not elapsed) and analogValue settles near
@@ -162,9 +170,11 @@ bool test_full_irrigation_cycle() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 1U, false, false, 200U, 0U);  // channel 0, 1 min, PWM 200
-  setFakeMillis(6000U);          (void)pc.run();         // IDLE -> RUN
+  setFakeMillis(6000U);
+  (void)pc.run();         // IDLE -> RUN
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 200U);
-  setFakeMillis(6000U + 60001U); (void)pc.run();         // RUN -> STOP (duration elapsed)
+  setFakeMillis(6000U + 60001U);
+  (void)pc.run();         // RUN -> STOP (duration elapsed)
   (void)pc.run();                                        // STOP -> IDLE (queue empty -> pump off)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
   IS_EQUAL(g_errCount, 0U);
@@ -183,7 +193,8 @@ bool test_encoded_irrigation_selects_channel() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(2U, 200U, 0U);     // encoded info: channel 2 (bits 0-1)
-  setFakeMillis(6000U); (void)pc.run();  // IDLE -> RUN: selectChannel(2)
+  setFakeMillis(6000U);
+  (void)pc.run();  // IDLE -> RUN: selectChannel(2)
   IS_EQUAL(pcf.getRegisterValue(), 0xF4U);  // high nibble kept, bit 2 set
   clearFakeMillis();
   END_IT
@@ -198,7 +209,8 @@ bool test_channel_select_failure_reports_error() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 1U, false, false, 200U, 0U);
-  setFakeMillis(6000U); (void)pc.run();   // IDLE: selectChannel fails -> CH_SELECT (reported same call)
+  setFakeMillis(6000U);
+  (void)pc.run();   // IDLE: selectChannel fails -> CH_SELECT (reported same call)
   IS_EQUAL(g_lastErr, static_cast<uint32_t>(kErrChSelect));
   clearFakeMillis();
   END_IT
@@ -215,10 +227,14 @@ bool test_flow_stuck_reports_error() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 10U, true, false, 200U, 0U);  // checkFlow = true, long duration
-  setFakeMillis(6000U);          (void)pc.run();         // IDLE -> RUN
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // RUN: error check -> no flow -> FLOW_STUCK, ERROR
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // ERROR -> IDLE
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // IDLE -> error flushed
+  setFakeMillis(6000U);
+  (void)pc.run();         // IDLE -> RUN
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // RUN: error check -> no flow -> FLOW_STUCK, ERROR
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // ERROR -> IDLE
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // IDLE -> error flushed
   IS_EQUAL(g_lastErr, static_cast<uint32_t>(kErrFlowStuck));
   clearFakeMillis();
   END_IT
@@ -235,10 +251,14 @@ bool test_undercurrent_reports_error() {
   driveToIdle(pc, 512U);          // ~0 mA, below the 100 mA standby threshold
   resetErr();
   pc.createIrrigation(0U, 10U, false, true, 200U, 0U);  // checkCurrent = true
-  setFakeMillis(6000U);          (void)pc.run();         // RUN
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // RUN: current < standby -> PUMP_UC, ERROR
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // ERROR -> IDLE
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // IDLE -> error flushed
+  setFakeMillis(6000U);
+  (void)pc.run();         // RUN
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // RUN: current < standby -> PUMP_UC, ERROR
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // ERROR -> IDLE
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // IDLE -> error flushed
   IS_EQUAL(g_lastErr, static_cast<uint32_t>(kErrPumpUc));
   clearFakeMillis();
   END_IT
@@ -256,10 +276,14 @@ bool test_overcurrent_reports_error() {
   resetErr();
   pc.createIrrigation(0U, 10U, false, true, 200U, 0U);  // checkCurrent = true
   setAnalogReadValue(1023U);                             // drive sensed current well over 1000 mA
-  setFakeMillis(6000U);          (void)pc.run();         // RUN (filter raises analogValue)
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // RUN: current > max -> PUMP_OC, ERROR
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // ERROR -> IDLE
-  setFakeMillis(6000U + 1001U);  (void)pc.run();         // IDLE -> error flushed
+  setFakeMillis(6000U);
+  (void)pc.run();         // RUN (filter raises analogValue)
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // RUN: current > max -> PUMP_OC, ERROR
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // ERROR -> IDLE
+  setFakeMillis(6000U + 1001U);
+  (void)pc.run();         // IDLE -> error flushed
   IS_TRUE((g_lastErr & static_cast<uint32_t>(kErrPumpOc)) != 0U);
   clearFakeMillis();
   END_IT
@@ -276,10 +300,12 @@ bool test_skip_actual_irrigation_stops_run() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 10U, false, false, 200U, 0U);
-  setFakeMillis(6000U); (void)pc.run();    // RUN
+  setFakeMillis(6000U);
+  (void)pc.run();    // RUN
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 200U);
   pc.skipActualIrrigation();               // backdates the timer; fires once time advances
-  setFakeMillis(6001U); (void)pc.run();    // RUN -> STOP
+  setFakeMillis(6001U);
+  (void)pc.run();    // RUN -> STOP
   (void)pc.run();                          // STOP -> IDLE (pump off)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
   clearFakeMillis();
@@ -297,9 +323,11 @@ bool test_skip_all_irrigations_clears_queue() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 10U, false, false, 200U, 0U);
-  setFakeMillis(6000U); (void)pc.run();    // RUN
+  setFakeMillis(6000U);
+  (void)pc.run();    // RUN
   pc.skipAllIrrigations();                 // clears queue, forces ERROR
-  setFakeMillis(6000U); (void)pc.run();    // ERROR -> IDLE (pump off)
+  setFakeMillis(6000U);
+  (void)pc.run();    // ERROR -> IDLE (pump off)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
   IS_EQUAL(g_errCount, 0U);                // abort is not an error report
   clearFakeMillis();
@@ -318,8 +346,10 @@ bool test_limit_switch_stops_run() {
   resetErr();
   pc.addLimitSwitch(0U, []() -> bool { return true; });  // always "reached"
   pc.createIrrigation(0U, 10U, false, false, 200U, 0U);
-  setFakeMillis(6000U); (void)pc.run();    // IDLE -> RUN
-  setFakeMillis(6000U); (void)pc.run();    // RUN: limit reached -> STOP
+  setFakeMillis(6000U);
+  (void)pc.run();    // IDLE -> RUN
+  setFakeMillis(6000U);
+  (void)pc.run();    // RUN: limit reached -> STOP
   (void)pc.run();                          // STOP -> IDLE (pump off)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
   IS_EQUAL(g_errCount, 0U);
@@ -338,12 +368,17 @@ bool test_repeat_irrigation_runs_again() {
   driveToIdle(pc, 512U);
   resetErr();
   pc.createIrrigation(0U, 1U, false, false, 200U, 1U);  // repeat once
-  setFakeMillis(6000U);           (void)pc.run();        // RUN
-  setFakeMillis(66001U);          (void)pc.run();        // RUN -> STOP (1 min)
-  setFakeMillis(66001U);          (void)pc.run();        // STOP: repeat -> re-queue (same channel, still on)
+  setFakeMillis(6000U);
+  (void)pc.run();        // RUN
+  setFakeMillis(66001U);
+  (void)pc.run();        // RUN -> STOP (1 min)
+  setFakeMillis(66001U);
+  (void)pc.run();        // STOP: repeat -> re-queue (same channel, still on)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 200U);
-  setFakeMillis(66001U);          (void)pc.run();        // IDLE -> RUN (repeat starts)
-  setFakeMillis(66001U + 60001U); (void)pc.run();        // RUN -> STOP (2nd min)
+  setFakeMillis(66001U);
+  (void)pc.run();        // IDLE -> RUN (repeat starts)
+  setFakeMillis(66001U + 60001U);
+  (void)pc.run();        // RUN -> STOP (2nd min)
   (void)pc.run();                                        // STOP -> IDLE (repeat exhausted -> off)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
   clearFakeMillis();
@@ -361,7 +396,8 @@ bool test_safety_irrigation_triggers() {
   driveToIdle(pc, 512U);                                 // millis() == 6000
   resetErr();
   pc.addSafetyIrrigation(1U, 0U, 1U, false, false, 200U, 0U);  // every 1 min, channel 0
-  setFakeMillis(6000U + 60001U); (void)pc.run();         // IDLE: safety window elapsed -> enqueues
+  setFakeMillis(6000U + 60001U);
+  (void)pc.run();         // IDLE: safety window elapsed -> enqueues
   (void)pc.run();                                        // IDLE -> RUN (safety irrigation starts)
   IS_EQUAL(getDigitalWriteValue(kPwmPin), 200U);
   clearFakeMillis();

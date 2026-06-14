@@ -5,14 +5,14 @@
 
 bool test_calculate_known_vector() {
   IT("computes known CRC16-XModem vector for '123456789'");
-  const uint8_t data[] = {'1','2','3','4','5','6','7','8','9'};
+  const uint8_t data[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
   IS_EQUAL(Crc16::calculate(data, 9U), 0x31C3U);
   END_IT
 }
 
 bool test_calculate_empty_returns_init() {
   IT("returns init value for null or zero-length input");
-  const uint8_t data[] = {0x01U};
+  const uint8_t data[] = { 0x01U };
   IS_EQUAL(Crc16::calculate(nullptr, 0U), 0U);
   IS_EQUAL(Crc16::calculate(nullptr, 5U), 0U);
   IS_EQUAL(Crc16::calculate(data, 0U), 0U);
@@ -21,11 +21,11 @@ bool test_calculate_empty_returns_init() {
 
 bool test_incremental_matches_batch() {
   IT("incremental next() matches single calculate() call");
-  const uint8_t data[] = {0x01U, 0x02U, 0x03U, 0x04U};
+  const uint8_t data[] = { 0x01U, 0x02U, 0x03U, 0x04U };
   uint16_t batch = Crc16::calculate(data, 4U);
 
   Crc16 crc;
-  for (const uint8_t b : data) {
+  for(const uint8_t b : data) {
     crc.next(b);
   }
   IS_EQUAL(crc.get(), batch);
@@ -34,13 +34,13 @@ bool test_incremental_matches_batch() {
 
 bool test_array_next_matches_single_bytes() {
   IT("next(array, len) matches sequential next(byte) calls");
-  const uint8_t data[] = {'H','e','l','l','o'};
+  const uint8_t data[] = { 'H', 'e', 'l', 'l', 'o' };
 
   Crc16 crc1;
   crc1.next(data, 5U);
 
   Crc16 crc2;
-  for (const uint8_t b : data) {
+  for(const uint8_t b : data) {
     crc2.next(b);
   }
   IS_EQUAL(crc1.get(), crc2.get());
@@ -55,7 +55,7 @@ bool test_reset_restores_initial_value() {
   crc.reset();
   IS_EQUAL(crc.get(), 0U);
 
-  const uint8_t data[] = {0xAAU, 0xBBU};
+  const uint8_t data[] = { 0xAAU, 0xBBU };
   crc.next(data, 2U);
   IS_EQUAL(crc.get(), Crc16::calculate(data, 2U));
   END_IT
@@ -63,7 +63,7 @@ bool test_reset_restores_initial_value() {
 
 bool test_verify_correct_crc() {
   IT("verify returns true for correct CRC");
-  const uint8_t data[] = {'1','2','3','4','5','6','7','8','9'};
+  const uint8_t data[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
   IS_TRUE(Crc16::verify(data, 9U, 0x31C3U));
   IS_FALSE(Crc16::verify(data, 9U, 0x0000U));
   END_IT
@@ -78,9 +78,9 @@ bool test_verify_empty_data() {
 
 bool test_custom_init_value() {
   IT("custom init value produces different CRC than default");
-  const uint8_t data[] = {0x01U, 0x02U};
+  const uint8_t data[] = { 0x01U, 0x02U };
   uint16_t crcDefault = Crc16::calculate(data, 2U, 0x0000U);
-  uint16_t crcCustom  = Crc16::calculate(data, 2U, 0xFFFFU);
+  uint16_t crcCustom = Crc16::calculate(data, 2U, 0xFFFFU);
   IS_NOT_EQUAL(crcDefault, crcCustom);
 
   Crc16 crc(0xFFFFU);
@@ -99,7 +99,7 @@ bool test_next_ignores_null_array() {
 
 bool test_two_segment_continuity() {
   IT("CRC computed in two segments matches one-shot calculation");
-  const uint8_t full[] = {0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U};
+  const uint8_t full[] = { 0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U };
   uint16_t expected = Crc16::calculate(full, 6U);
 
   Crc16 crc;
@@ -111,9 +111,9 @@ bool test_two_segment_continuity() {
 
 bool test_custom_polynomial() {
   IT("custom polynomial produces different CRC than the default polynomial");
-  const uint8_t data[] = {0x01U, 0x02U, 0x03U};
+  const uint8_t data[] = { 0x01U, 0x02U, 0x03U };
   uint16_t crcDefault = Crc16::calculate(data, 3U, 0U, 0x1021U);
-  uint16_t crcCustom  = Crc16::calculate(data, 3U, 0U, 0x8005U);
+  uint16_t crcCustom = Crc16::calculate(data, 3U, 0U, 0x8005U);
   IS_NOT_EQUAL(crcDefault, crcCustom);
   Crc16 crc(0U, 0x8005U);
   crc.next(data, 3U);
@@ -123,22 +123,22 @@ bool test_custom_polynomial() {
 
 bool test_verify_detects_data_corruption() {
   IT("verify returns false when a data byte is changed after CRC was computed");
-  const uint8_t original[]  = {0x01U, 0x02U, 0x03U};
-  const uint8_t corrupted[] = {0x01U, 0x02U, 0x04U};
+  const uint8_t original[] = { 0x01U, 0x02U, 0x03U };
+  const uint8_t corrupted[] = { 0x01U, 0x02U, 0x04U };
   uint16_t crc = Crc16::calculate(original, 3U);
-  IS_TRUE(Crc16::verify(original,  3U, crc));
+  IS_TRUE(Crc16::verify(original, 3U, crc));
   IS_FALSE(Crc16::verify(corrupted, 3U, crc));
   END_IT
 }
 
 bool test_three_segment_continuity() {
   IT("CRC computed in three unequal segments matches one-shot calculation");
-  const uint8_t full[] = {0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U};
+  const uint8_t full[] = { 0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U };
   uint16_t expected = Crc16::calculate(full, 9U);
   Crc16 crc;
-  crc.next(full,       2U);
-  crc.next(full + 2U,  4U);
-  crc.next(full + 6U,  3U);
+  crc.next(full, 2U);
+  crc.next(full + 2U, 4U);
+  crc.next(full + 6U, 3U);
   IS_EQUAL(crc.get(), expected);
   END_IT
 }

@@ -10,6 +10,7 @@
 
 // DataTransferError bit positions (mirror of the private enum).
 namespace Err {
+  // clang-format off
   constexpr uint32_t FILE_SIZE_ZERO     = 1UL << 0U;
   constexpr uint32_t MD5_NULLPTR        = 1UL << 1U;
   constexpr uint32_t MD5_INVALID        = 1UL << 2U;
@@ -32,17 +33,23 @@ namespace Err {
   constexpr uint32_t FW_WRITE_FAILED    = 1UL << 22U;
   constexpr uint32_t FW_END_FAILED      = 1UL << 23U;
   constexpr uint32_t DATA_OVERRUN       = 1UL << 24U;
-}
+  // clang-format on
+}  // namespace Err
 
+// clang-format off
 static const char* kMd5        = "0123456789abcdef0123456789abcdef";  // 32 chars; for begin() validation
 static const char* kMd5_abc    = "900150983cd24fb0d6963f7d28e17f72";  // MD5("abc")
 static const char* kMd5_abcdef = "e80b5017098950fc58aad83c8c14978e";  // MD5("abcdef")
 static const char* kMd5_empty  = "d41d8cd98f00b204e9800998ecf8427e";  // MD5("")
+// clang-format on
 
 // ---- checkOk callback capture ----
-static int  g_cbCount;
+static int g_cbCount;
 static bool g_lastValid;
-static void onCheckOk(bool valid) { g_lastValid = valid; ++g_cbCount; }
+static void onCheckOk(bool valid) {
+  g_lastValid = valid;
+  ++g_cbCount;
+}
 
 static void resetEnv() {
   LittleFS.reset();
@@ -52,15 +59,15 @@ static void resetEnv() {
 }
 
 static std::string b64(const std::string& raw) {
-  uint8_t out[512] = {0U};
+  uint8_t out[512] = { 0U };
   const uint32_t n = Base64::encodeBase64(reinterpret_cast<const uint8_t*>(raw.data()), out,
                                           static_cast<uint32_t>(raw.size()), sizeof(out));
   return std::string(reinterpret_cast<char*>(out), n);
 }
 
-static const char* fileName()  { return FileName::getCanAlertFwLocation(); }   // "/canAlertFw.bin"
-static const char* fwName()    { return FileName::getOtaFwLocation(); }        // "espFirmware"
-static const char* tempName()  { return FileName::getTempFileLocation(); }     // "/temp.tmp"
+static const char* fileName() { return FileName::getCanAlertFwLocation(); }   // "/canAlertFw.bin"
+static const char* fwName() { return FileName::getOtaFwLocation(); }        // "espFirmware"
+static const char* tempName() { return FileName::getTempFileLocation(); }     // "/temp.tmp"
 
 // ---- begin() validation ----
 

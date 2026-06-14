@@ -118,10 +118,12 @@ bool test_unknown_json_no_response() {
 
 class TestOtaTarget final : public OtaTarget {
 public:
-  explicit TestOtaTarget(const char* name) : name_(name) {}
+  explicit TestOtaTarget(const char* name) :
+    name_(name) {}
   [[nodiscard]] const char* getFwFileName() const override { return name_; }
   void triggerOta() override { triggered = true; }
   bool triggered = false;
+
 private:
   const char* name_;
 };

@@ -12,16 +12,20 @@ public:
   bool triggered = false;
   uint8_t triggerCount = 0U;
 
-  explicit TestTarget(const char* fn) : fileName(fn) {}
+  explicit TestTarget(const char* fn) :
+    fileName(fn) {}
   [[nodiscard]] const char* getFwFileName() const override { return fileName; }
-  void triggerOta() override { triggered = true; triggerCount++; }
+  void triggerOta() override {
+    triggered = true;
+    triggerCount++;
+  }
 };
 
-TestTarget targetA{"fw_a.bin"};
-TestTarget targetB{"fw_b.bin"};
-TestTarget targetC{"fw_a.bin"}; // same file name as targetA
-TestTarget targetNull{nullptr};  // null file name
-TestTarget targetDup{"fw_dup.bin"};
+TestTarget targetA{ "fw_a.bin" };
+TestTarget targetB{ "fw_b.bin" };
+TestTarget targetC{ "fw_a.bin" }; // same file name as targetA
+TestTarget targetNull{ nullptr };  // null file name
+TestTarget targetDup{ "fw_dup.bin" };
 
 bool test_matching_target_triggered() {
   IT("triggers the registered target whose file name matches");

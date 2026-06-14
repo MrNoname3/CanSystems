@@ -61,16 +61,14 @@ bool test_subtopicOffset() {
 bool test_infoPayloadBufSize() {
   IT("infoPayloadBufSize fits the maximum-length info payload");
   char buf[MqttTopics::getInfoPayloadBufSize()];
-  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttInfoPayload(),
-    static_cast<uint16_t>(65535U), 0xFFFFFFFFU,
-    static_cast<uint16_t>(255U), static_cast<uint16_t>(255U));
+  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttInfoPayload(), static_cast<uint16_t>(65535U), 0xFFFFFFFFU, static_cast<uint16_t>(255U), static_cast<uint16_t>(255U));
   TEST(n > 0 && static_cast<size_t>(n) < sizeof(buf));
   END_IT
 }
 
 bool test_availPayloads() {
   IT("availability payloads have the correct content");
-  IS_EQUAL(strcmp(MqttTopics::availOnlinePayload,  R"({"state":"online"})"),  0);
+  IS_EQUAL(strcmp(MqttTopics::availOnlinePayload, R"({"state":"online"})"), 0);
   IS_EQUAL(strcmp(MqttTopics::availOfflinePayload, R"({"state":"offline"})"), 0);
   END_IT
 }

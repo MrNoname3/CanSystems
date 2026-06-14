@@ -18,7 +18,7 @@ bool test_start_frame_byte_layout() {
   fields.storageNumber = 0x0201U;
   fields.fwSize = 0x06050403UL;
   fields.fwCrc = 0x0807U;
-  uint8_t canData[8] = {0U};
+  uint8_t canData[8] = { 0U };
   OtaCanFrame::packStart(fields, canData);
   IS_EQUAL(canData[0], 0x01U);                       // storageNumber low
   IS_EQUAL(canData[1], 0x02U);                       // storageNumber high
@@ -39,7 +39,7 @@ bool test_send_frame_byte_layout() {
   fields.data[2] = 0xCCU;
   fields.data[3] = 0xDDU;
   fields.dataAddress = 0x44332211UL;
-  uint8_t canData[8] = {0U};
+  uint8_t canData[8] = { 0U };
   OtaCanFrame::packSend(fields, canData);
   IS_EQUAL(canData[0], 0xAAU);
   IS_EQUAL(canData[1], 0xBBU);
@@ -60,7 +60,7 @@ bool test_start_frame_round_trip() {
   in.storageNumber = 0xFFFFU;
   in.fwSize = 0xFFFFFFFFUL;
   in.fwCrc = 0xABCDU;
-  uint8_t canData[8] = {0U};
+  uint8_t canData[8] = { 0U };
   OtaCanFrame::packStart(in, canData);
   const OtaCanFrame::StartFrame out = OtaCanFrame::unpackStart(canData);
   IS_EQUAL(out.storageNumber, 0xFFFFU);
@@ -77,7 +77,7 @@ bool test_send_frame_round_trip() {
   in.data[2] = 0x56U;
   in.data[3] = 0x78U;
   in.dataAddress = 0xFFFFFFFFUL;
-  uint8_t canData[8] = {0U};
+  uint8_t canData[8] = { 0U };
   OtaCanFrame::packSend(in, canData);
   const OtaCanFrame::SendFrame out = OtaCanFrame::unpackSend(canData);
   IS_EQUAL(out.data[0], 0x12U);
@@ -98,7 +98,7 @@ static OTA::OtaState streamThroughDevice(OTA& ota, const uint8_t* fw, uint32_t f
   startFields.storageNumber = 0U;
   startFields.fwSize = fwSize;
   startFields.fwCrc = fwCrc;
-  uint8_t startData[8] = {0U};
+  uint8_t startData[8] = { 0U };
   OtaCanFrame::packStart(startFields, startData);
   const OtaCanFrame::StartFrame parsedStart = OtaCanFrame::unpackStart(startData);
   if(!ota.start(parsedStart.storageNumber, parsedStart.fwSize, parsedStart.fwCrc)) {
@@ -108,14 +108,13 @@ static OTA::OtaState streamThroughDevice(OTA& ota, const uint8_t* fw, uint32_t f
   uint32_t offset = 0U;
   while(offset < fwSize) {
     const uint32_t remaining = fwSize - offset;
-    const uint8_t pieceLength = (remaining >= OtaCanFrame::dataPieceSize) ?
-      OtaCanFrame::dataPieceSize : static_cast<uint8_t>(remaining);
+    const uint8_t pieceLength = (remaining >= OtaCanFrame::dataPieceSize) ? OtaCanFrame::dataPieceSize : static_cast<uint8_t>(remaining);
     OtaCanFrame::SendFrame sendFields;
     for(uint8_t i = 0U; i < pieceLength; i++) {
       sendFields.data[i] = fw[offset + i];
     }
     sendFields.dataAddress = offset;
-    uint8_t sendData[8] = {0U};
+    uint8_t sendData[8] = { 0U };
     OtaCanFrame::packSend(sendFields, sendData);
     const OtaCanFrame::SendFrame parsedSend = OtaCanFrame::unpackSend(sendData);
     if(!ota.storeNextData(parsedSend.dataAddress, parsedSend.data)) {
@@ -136,7 +135,7 @@ bool test_device_parse_reconstructs_firmware() {
   SPIFlash flash(0U);
   OTA ota(flash);
   // 10 bytes: not a multiple of the 4-byte piece size, so the last piece is partial.
-  const uint8_t fw[10] = {0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U, 0xA0U};
+  const uint8_t fw[10] = { 0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U, 0xA0U };
   const uint16_t crc = Crc16::calculate(fw, sizeof(fw));
   IS_EQUAL(streamThroughDevice(ota, fw, sizeof(fw), crc), OTA::OtaState::VALID);
   // The first two bytes live in OTA memory until VALID writes them back; the rest came via flash.
@@ -150,7 +149,7 @@ bool test_device_parse_crc_mismatch_is_invalid() {
   IT("a frame stream whose declared CRC disagrees with the bytes ends INVALID, not VALID");
   SPIFlash flash(0U);
   OTA ota(flash);
-  const uint8_t fw[8] = {0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U};
+  const uint8_t fw[8] = { 0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U };
   const uint16_t wrongCrc = static_cast<uint16_t>(Crc16::calculate(fw, sizeof(fw)) + 1U);
   IS_EQUAL(streamThroughDevice(ota, fw, sizeof(fw), wrongCrc), OTA::OtaState::INVALID);
   END_IT
@@ -160,7 +159,7 @@ bool test_device_parse_rejects_wrong_offset() {
   IT("an OTA_SEND frame carrying an out-of-sequence offset is rejected by storeNextData");
   SPIFlash flash(0U);
   OTA ota(flash);
-  const uint8_t fw[8] = {0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U};
+  const uint8_t fw[8] = { 0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U };
   IS_TRUE(ota.start(0U, sizeof(fw), 0U));
   // Craft a SEND frame for offset 4 while the device still expects offset 0.
   OtaCanFrame::SendFrame sendFields;
@@ -169,7 +168,7 @@ bool test_device_parse_rejects_wrong_offset() {
   sendFields.data[2] = fw[6];
   sendFields.data[3] = fw[7];
   sendFields.dataAddress = 4U;
-  uint8_t sendData[8] = {0U};
+  uint8_t sendData[8] = { 0U };
   OtaCanFrame::packSend(sendFields, sendData);
   const OtaCanFrame::SendFrame parsed = OtaCanFrame::unpackSend(sendData);
   IS_EQUAL(parsed.dataAddress, 4U);

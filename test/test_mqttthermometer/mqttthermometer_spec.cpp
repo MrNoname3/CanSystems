@@ -41,9 +41,9 @@ bool test_publishes_one_message_per_sensor() {
   runCycle(task, now, 2U);
   IS_EQUAL(Reader::requestCount, 1);
   IS_EQUAL(MqttBase::subtopicMessages.size(), 2U);
-  IS_TRUE(MqttBase::subtopicMessages[0].first  == "temp/28ff000000000000");
+  IS_TRUE(MqttBase::subtopicMessages[0].first == "temp/28ff000000000000");
   IS_TRUE(MqttBase::subtopicMessages[0].second == R"({"tempC":23.50})");
-  IS_TRUE(MqttBase::subtopicMessages[1].first  == "temp/28ff000000000001");
+  IS_TRUE(MqttBase::subtopicMessages[1].first == "temp/28ff000000000001");
   IS_TRUE(MqttBase::subtopicMessages[1].second == R"({"tempC":-10.25})");
   END_IT
 }

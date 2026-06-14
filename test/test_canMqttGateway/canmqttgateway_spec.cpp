@@ -12,24 +12,30 @@ class TestGateway final : public CanMqttGateway {
 public:
   TestGateway(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity,
               const char* subTopic, const char* fwFileName = nullptr) :
-    CanMqttGateway(canHandler, clientCanId, connectivity, subTopic, fwFileName)
-  {}
+    CanMqttGateway(canHandler, clientCanId, connectivity, subTopic, fwFileName) {}
 
   using CanMqttGateway::getCanAvailTopic;
-  using CanMqttGateway::getCanInfoTopic;
-  using CanMqttGateway::getCanSwVersion;
   using CanMqttGateway::getCanDeviceId;
   using CanMqttGateway::getCanDeviceName;
+  using CanMqttGateway::getCanInfoTopic;
+  using CanMqttGateway::getCanSwVersion;
 
-  static inline int      customMessages = 0;
-  static inline int      customFrames   = 0;
-  static inline uint16_t lastCustomCmd  = 0U;
-  static void resetState() { customMessages = 0; customFrames = 0; lastCustomCmd = 0U; }
+  static inline int customMessages = 0;
+  static inline int customFrames = 0;
+  static inline uint16_t lastCustomCmd = 0U;
+  static void resetState() {
+    customMessages = 0;
+    customFrames = 0;
+    lastCustomCmd = 0U;
+  }
 
 private:
   bool initLocal() override { return true; }
   bool runLocal() override { return true; }
-  void processMessageArrived(JsonDocument& payloadJson) override { (void)payloadJson; ++customMessages; }
+  void processMessageArrived(JsonDocument& payloadJson) override {
+    (void)payloadJson;
+    ++customMessages;
+  }
   void processCanFrameArrived(const CanHandler::CanFrame& canFrame) override {
     ++customFrames;
     lastCustomCmd = static_cast<uint16_t>(canFrame.cmd);
@@ -51,7 +57,7 @@ static void injectFrame(CanMqttGateway& gateway, uint16_t cmd, const uint8_t (&d
 }
 
 static void injectAck(CanMqttGateway& gateway, CanCmd cmd) {
-  const uint8_t data[8] = {1U, 0U, 0U, 0U, 0U, 0U, 0U, 0U};   // data[0] = ACK
+  const uint8_t data[8] = { 1U, 0U, 0U, 0U, 0U, 0U, 0U, 0U };   // data[0] = ACK
   injectFrame(gateway, static_cast<uint16_t>(cmd), data);
 }
 
@@ -94,8 +100,8 @@ bool test_init_builds_topics_and_publishes_offline() {
   Task& task = gateway;
   IS_TRUE(task.init());
   IS_TRUE(std::string(gateway.getCanAvailTopic()) == "iot/dtos/aabbccddeeff/alert1/availability");
-  IS_TRUE(std::string(gateway.getCanInfoTopic())  == "iot/dtos/aabbccddeeff/alert1/info");
-  IS_TRUE(std::string(gateway.getCanDeviceId())   == "esp32_can_aabbccddeeff_alert1");
+  IS_TRUE(std::string(gateway.getCanInfoTopic()) == "iot/dtos/aabbccddeeff/alert1/info");
+  IS_TRUE(std::string(gateway.getCanDeviceId()) == "esp32_can_aabbccddeeff_alert1");
   IS_TRUE(std::string(gateway.getCanDeviceName()) == "ALERT1 ddeeff");  // MAC kept lowercase from the sender topic.
   IS_EQUAL(countFrames(static_cast<uint16_t>(CanCmd::FW_VERSION)), 1U);
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"offline"})"), 1U);
@@ -133,7 +139,7 @@ bool test_online_offline_transitions() {
   setFakeMillis(5001U);                               // 5 s of CAN silence
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"offline"})"), 2U);
-  const uint8_t pong[8] = {0U};
+  const uint8_t pong[8] = { 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::PING), pong);
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 2U);
@@ -151,7 +157,7 @@ bool test_fw_version_frame_publishes_info() {
   Task& task = gateway;
   IS_TRUE(task.init());
   // fw = 0x0102 = 258, git = 0x0a0b0c0d, dirty = 1.
-  const uint8_t version[8] = {0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0U};
+  const uint8_t version[8] = { 0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::FW_VERSION), version);
   IS_TRUE(std::string(gateway.getCanSwVersion()) == "258 (0a0b0c0d)");
   bool infoFound = false;
@@ -174,7 +180,7 @@ bool test_restart_frame_republishes_availability() {
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());                               // 1 FW_VERSION + 1 offline so far
-  const uint8_t empty[8] = {0U};
+  const uint8_t empty[8] = { 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::RESTART), empty);
   IS_EQUAL(countFrames(static_cast<uint16_t>(CanCmd::FW_VERSION)), 2U);
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"offline"})"), 2U);
@@ -190,10 +196,10 @@ bool test_button_event_frame_publishes_message() {
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());
-  const uint8_t button[8] = {3U, 0U, 0U, 0U, 0U, 0U, 0U, 0U};
+  const uint8_t button[8] = { 3U, 0U, 0U, 0U, 0U, 0U, 0U, 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::BUTTON_EVENT), button);
   IS_EQUAL(MqttBase::subtopicMessages.size(), 1U);
-  IS_TRUE(MqttBase::subtopicMessages[0].first  == "alert1/button");
+  IS_TRUE(MqttBase::subtopicMessages[0].first == "alert1/button");
   IS_TRUE(MqttBase::subtopicMessages[0].second == R"({"Button":3})");
   END_IT
 }
@@ -204,7 +210,7 @@ bool test_unknown_frame_goes_to_derived_handler() {
   CanHandler can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
-  const uint8_t data[8] = {0U};
+  const uint8_t data[8] = { 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR), data);
   IS_EQUAL(TestGateway::customFrames, 1);
   IS_EQUAL(TestGateway::lastCustomCmd, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR));
@@ -341,7 +347,7 @@ bool test_ota_nack_aborts_with_error_status() {
   LittleFS.setFile(kFwFile, "ABCD");
   IS_TRUE(gateway.startOta(kFwFile));
   IS_TRUE(pumpUntilFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_START), 1U));
-  const uint8_t nack[8] = {0U};                       // data[0] = NACK
+  const uint8_t nack[8] = { 0U };                       // data[0] = NACK
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_START), nack);
   IS_TRUE(runOnce(gateway));                          // INVALID -> status + cleanup
   IS_FALSE(gateway.isOtaInProgress());

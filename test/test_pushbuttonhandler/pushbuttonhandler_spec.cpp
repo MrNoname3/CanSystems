@@ -8,12 +8,12 @@
 class TestCanHandler final : public CanHandler {     // CanHandler = CanHandlerNative (test/_shims)
 public:
   using CanHandler::send;
-  mutable uint32_t sendCount    = 0U;
-  mutable uint16_t lastCommand  = 0U;
-  mutable uint8_t  lastData[8]  = {};
+  mutable uint32_t sendCount = 0U;
+  mutable uint16_t lastCommand = 0U;
+  mutable uint8_t lastData[8] = {};
 
   bool init() override { return true; } // NOLINT(readability-make-member-function-const)
-  bool run()  override { return true; } // NOLINT(readability-make-member-function-const)
+  bool run() override { return true; } // NOLINT(readability-make-member-function-const)
 
   bool send(uint16_t command, const uint8_t (&data)[8]) const override {
     sendCount++;
@@ -30,23 +30,32 @@ static bool readBtn() { return gButtonState; }
 // ---- Callback helpers ----
 static uint32_t cbCount = 0U;
 static PushButtonHandler::BtnEvent cbLastEvent = PushButtonHandler::BtnEvent::NONE;
-static void onBtnEvent(PushButtonHandler::BtnEvent e) { cbCount++; cbLastEvent = e; }
+static void onBtnEvent(PushButtonHandler::BtnEvent e) {
+  cbCount++;
+  cbLastEvent = e;
+}
 
 // Helper: drive a qualifying single tap through the handler
 // Uses PushButtonHandler constants: deadTime=250, longPressTime=500, debounceTime=70, polarity=false
 static void doSingleTap(PushButtonHandler& h) {
   gButtonState = false;           // press (polarity=false → active LOW)
-  setFakeMillis(0U);   h.run();
-  setFakeMillis(80U);  h.run();   // held 80 ms > debounce 70 ms
+  setFakeMillis(0U);
+  h.run();
+  setFakeMillis(80U);
+  h.run();   // held 80 ms > debounce 70 ms
   gButtonState = true;            // release
-  setFakeMillis(100U); h.run();   // pressedDuration=100 > debounce → shortPressedCnt=3
-  setFakeMillis(351U); h.run();   // 351-100=251 > deadTime=250 → fires event=3
+  setFakeMillis(100U);
+  h.run();   // pressedDuration=100 > debounce → shortPressedCnt=3
+  setFakeMillis(351U);
+  h.run();   // 351-100=251 > deadTime=250 → fires event=3
 }
 
 static void doLongPress(PushButtonHandler& h) {
   gButtonState = false;
-  setFakeMillis(0U);   h.run();
-  setFakeMillis(501U); h.run();   // pressedDuration=501 > longPressTime=500 → event=1
+  setFakeMillis(0U);
+  h.run();
+  setFakeMillis(501U);
+  h.run();   // pressedDuration=501 > longPressTime=500 → event=1
 }
 
 // ---- init ----
@@ -89,8 +98,10 @@ bool test_no_event_when_button_not_pressed() {
   TestCanHandler ch;
   PushButtonHandler h(ch, readBtn);
   gButtonState = true; // released (polarity=false)
-  setFakeMillis(0U);  h.run();
-  setFakeMillis(1000U); h.run();
+  setFakeMillis(0U);
+  h.run();
+  setFakeMillis(1000U);
+  h.run();
   IS_EQUAL(ch.sendCount, 0U);
   clearFakeMillis();
   END_IT
@@ -103,7 +114,7 @@ bool test_single_tap_sends_can_event_3() {
   TestCanHandler ch;
   PushButtonHandler h(ch, readBtn);
   doSingleTap(h);
-  IS_EQUAL(ch.sendCount,   1U);
+  IS_EQUAL(ch.sendCount, 1U);
   IS_EQUAL(ch.lastData[0], 3U);
   clearFakeMillis();
   END_IT
@@ -116,7 +127,7 @@ bool test_long_press_sends_can_event_1() {
   TestCanHandler ch;
   PushButtonHandler h(ch, readBtn);
   doLongPress(h);
-  IS_EQUAL(ch.sendCount,   1U);
+  IS_EQUAL(ch.sendCount, 1U);
   IS_EQUAL(ch.lastData[0], 1U);
   clearFakeMillis();
   END_IT

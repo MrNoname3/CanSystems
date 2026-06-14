@@ -97,8 +97,7 @@ bool test_mqtt_message_transmits_rf() {
   RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
   MqttBase& mqttSide = rf;
   JsonDocument doc;
-  IS_TRUE(deserializeJson(doc,
-    R"({"Data":4096,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
   mqttSide.messageArrivedCallback(doc);
   IS_EQUAL(RCSwitch::lastProtocol, 2);
   IS_EQUAL(RCSwitch::lastPulseLength, 400);
@@ -115,8 +114,7 @@ bool test_mqtt_message_without_data_does_not_transmit() {
   RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
   MqttBase& mqttSide = rf;
   JsonDocument doc;
-  IS_TRUE(deserializeJson(doc,
-    R"({"Data":0,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
+  IS_TRUE(deserializeJson(doc, R"({"Data":0,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
   mqttSide.messageArrivedCallback(doc);
   IS_EQUAL(RCSwitch::lastProtocol, 2);
   IS_EQUAL(RCSwitch::lastPulseLength, 400);

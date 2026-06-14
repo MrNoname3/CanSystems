@@ -3,7 +3,7 @@
 #include "Wire.h"
 #include "BDDTest.h"
 
-static constexpr uint8_t  kAddr    = 0x27U;
+static constexpr uint8_t kAddr = 0x27U;
 static constexpr uint32_t kTimeout = 5000U;
 
 // PCF8574 deletes its copy/move constructors (it is a Task), so it cannot be returned from a

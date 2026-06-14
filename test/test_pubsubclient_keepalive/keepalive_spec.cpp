@@ -16,7 +16,7 @@ uint8_t server[] = { 172U, 16U, 0U, 2U };
 namespace {
   constexpr uint32_t baseMs = 1000U;  // Non-zero fake-clock start; the value itself is irrelevant.
   constexpr uint32_t tickMs = 1000U;  // Virtual time advanced per loop() iteration (was sleep(1)).
-}
+}  // namespace
 
 void callback([[maybe_unused]] char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
   // handle message arrived
@@ -43,10 +43,10 @@ bool test_keepalive_pings_idle() {
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
 
-  for (uint8_t i = 0U; i < 50U; i++) {
+  for(uint8_t i = 0U; i < 50U; i++) {
     now += tickMs;
     setFakeMillis(now);
-    if (i == 15U || i == 31U || i == 47U) {
+    if(i == 15U || i == 31U || i == 47U) {
       shimClient.expect(pingreq, 2U);
       shimClient.respond(pingresp, 2U);
     }
@@ -78,7 +78,7 @@ bool test_keepalive_pings_with_outbound_qos0() {
 
   const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
 
-  for (uint8_t i = 0U; i < 50U; i++) {
+  for(uint8_t i = 0U; i < 50U; i++) {
     TRACE(i << ":");
     shimClient.expect(publish, 16U);
     rc = client.publish("topic", "payload");
@@ -86,7 +86,7 @@ bool test_keepalive_pings_with_outbound_qos0() {
     IS_FALSE(shimClient.error());
     now += tickMs;
     setFakeMillis(now);
-    if (i == 15U || i == 31U || i == 47U) {
+    if(i == 15U || i == 31U || i == 47U) {
       const uint8_t pingreq[] = { 0xC0U, 0x0U };
       shimClient.expect(pingreq, 2U);
       const uint8_t pingresp[] = { 0xD0U, 0x0U };
@@ -119,11 +119,11 @@ bool test_keepalive_pings_with_inbound_qos0() {
 
   const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
 
-  for (uint8_t i = 0U; i < 50U; i++) {
+  for(uint8_t i = 0U; i < 50U; i++) {
     TRACE(i << ":");
     now += tickMs;
     setFakeMillis(now);
-    if (i == 15U || i == 31U || i == 47U) {
+    if(i == 15U || i == 31U || i == 47U) {
       const uint8_t pingreq[] = { 0xC0U, 0x0U };
       shimClient.expect(pingreq, 2U);
       const uint8_t pingresp[] = { 0xD0U, 0x0U };
@@ -158,7 +158,7 @@ bool test_keepalive_no_pings_inbound_qos1() {
   const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   const uint8_t puback[] = { 0x40U, 0x2U, 0x12U, 0x34U };
 
-  for (uint8_t i = 0U; i < 50U; i++) {
+  for(uint8_t i = 0U; i < 50U; i++) {
     shimClient.respond(publish, 18U);
     shimClient.expect(puback, 4U);
     now += tickMs;
@@ -191,7 +191,7 @@ bool test_keepalive_disconnects_hung() {
   const uint8_t pingreq[] = { 0xC0U, 0x0U };
   shimClient.expect(pingreq, 2U);
 
-  for (uint8_t i = 0U; i < 32U; i++) {
+  for(uint8_t i = 0U; i < 32U; i++) {
     now += tickMs;
     setFakeMillis(now);
     rc = client.loop();
