@@ -24,7 +24,7 @@ namespace OtaCanFrame {
 
   /// @brief Fields of an OTA_SEND frame: one firmware piece and the byte offset it belongs to.
   struct SendFrame {
-    uint8_t data[dataPieceSize] = {0U};       // Firmware bytes for this piece (trailing bytes 0 on the last, short piece).
+    uint8_t data[dataPieceSize] = { 0U };       // Firmware bytes for this piece (trailing bytes 0 on the last, short piece).
     uint32_t dataAddress = 0U;                // Byte offset of this piece within the firmware.
   };
 
@@ -44,16 +44,16 @@ namespace OtaCanFrame {
   [[nodiscard]] inline StartFrame unpackStart(const uint8_t (&canData)[8]) {
     StartFrame fields;
     fields.storageNumber = static_cast<uint16_t>(
-      static_cast<uint16_t>(canData[0]) |
-      (static_cast<uint16_t>(canData[1]) << 8U));
+        static_cast<uint16_t>(canData[0]) |
+        (static_cast<uint16_t>(canData[1]) << 8U));
     fields.fwSize =
-      static_cast<uint32_t>(canData[2]) |
-      (static_cast<uint32_t>(canData[3]) << 8U) |
-      (static_cast<uint32_t>(canData[4]) << 16U) |
-      (static_cast<uint32_t>(canData[5]) << 24U);
+        static_cast<uint32_t>(canData[2]) |
+        (static_cast<uint32_t>(canData[3]) << 8U) |
+        (static_cast<uint32_t>(canData[4]) << 16U) |
+        (static_cast<uint32_t>(canData[5]) << 24U);
     fields.fwCrc = static_cast<uint16_t>(
-      static_cast<uint16_t>(canData[6]) |
-      (static_cast<uint16_t>(canData[7]) << 8U));
+        static_cast<uint16_t>(canData[6]) |
+        (static_cast<uint16_t>(canData[7]) << 8U));
     return fields;
   }
 
@@ -77,10 +77,10 @@ namespace OtaCanFrame {
     fields.data[2] = canData[2];
     fields.data[3] = canData[3];
     fields.dataAddress =
-      static_cast<uint32_t>(canData[4]) |
-      (static_cast<uint32_t>(canData[5]) << 8U) |
-      (static_cast<uint32_t>(canData[6]) << 16U) |
-      (static_cast<uint32_t>(canData[7]) << 24U);
+        static_cast<uint32_t>(canData[4]) |
+        (static_cast<uint32_t>(canData[5]) << 8U) |
+        (static_cast<uint32_t>(canData[6]) << 16U) |
+        (static_cast<uint32_t>(canData[7]) << 24U);
     return fields;
   }
 } // namespace OtaCanFrame

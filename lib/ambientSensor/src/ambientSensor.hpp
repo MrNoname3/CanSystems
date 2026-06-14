@@ -34,9 +34,9 @@ public:
   AmbientSensor& operator=(AmbientSensor&&) = delete;                 // Define move assignment operator.
 
 private:
-  static constexpr uint32_t kSendMaxPeriod  = 1800000UL; // 30 minutes between forced sends.
-  static constexpr int16_t  kTempTolerance  = 50;        // 0.50 °C in hundredths of a degree.
-  static constexpr uint8_t  kHumTolerance   = 3U;        // 3 % relative humidity.
+  static constexpr uint32_t kSendMaxPeriod = 1800000UL;  // 30 minutes between forced sends.
+  static constexpr int16_t kTempTolerance = 50;          // 0.50 °C in hundredths of a degree.
+  static constexpr uint8_t kHumTolerance = 3U;           // 3 % relative humidity.
   static constexpr uint16_t kLightTolerance = 20U;       // Filtered ADC counts.
 
   /// @brief Defines the state of the sensor task.
