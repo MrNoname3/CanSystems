@@ -1,6 +1,10 @@
 {
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "files.trimTrailingWhitespace": true,
   "files.associations": {
-    "*.tpp": "cpp"
+    "*.tpp": "cpp",
     "array": "cpp",
     "deque": "cpp",
     "list": "cpp",
