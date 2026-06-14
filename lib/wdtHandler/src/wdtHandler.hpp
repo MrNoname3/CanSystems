@@ -37,7 +37,7 @@ public:
   }
 
   /// @brief Destructor that disables the watchdog timer.
-  ~WdtHandler() { 
+  ~WdtHandler() {
     disableWatchdog();
   }
 
