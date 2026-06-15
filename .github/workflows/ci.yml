@@ -44,11 +44,13 @@ jobs:
           restore-keys: |
             pio-${{ runner.os }}-
 
-      - name: Install PlatformIO
+      - name: Install PlatformIO + tooling
         # intelhex: the ESP32 esptool (tool-esptoolpy) imports it when creating the
         # bootloader/firmware .bin. It ships with neither PlatformIO nor the platform,
         # so a fresh runner must add it (it is present locally but missing in CI).
-        run: pip install --upgrade platformio intelhex
+        # clang-format: the release gate's format step (scripts/format_check.py). Pinned
+        # to the VS Code cpptools version so the gate never disagrees with format-on-save.
+        run: pip install --upgrade platformio intelhex clang-format==22.1.3
 
       - name: Release gate (build all envs + native tests + static analysis)
         run: python scripts/release_check.py
