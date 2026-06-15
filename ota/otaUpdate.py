@@ -1004,7 +1004,7 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
 
     # Firmware upload
     firmware_path = config_manager.get_firmware_path(result.project.pio_project)
-    print(f"  Action:      Firmware upload")
+    print("  Action:      Firmware upload")
     print(f"  Firmware:    {firmware_path}")
     print()
     return OTAUpdater(device_config, mqtt_config, firmware_path)
@@ -1026,14 +1026,14 @@ def main():
             print("Cancelled.")
             sys.exit(0)
 
-        print(f"\n✅ Configuration loaded successfully:")
+        print("\n✅ Configuration loaded successfully:")
         print(f"  Protocol:    {mqtt_config.protocol}")
         print(f"  Host:        {mqtt_config.host}")
         print(f"  Port:        {mqtt_config.port}")
         print(f"  Client ID:   {mqtt_config.client_id}")
         print(f"  TLS Enabled: {mqtt_config.tls_enabled}")
         print(f"  Auth:        {'Yes' if mqtt_config.username else 'No'}")
-        print(f"\n🎯 Target:")
+        print("\n🎯 Target:")
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
 

@@ -203,7 +203,7 @@ def main() -> None:
     if not baseline_sizes:
         sys.exit(1)
 
-    print(f"\n Building current state...")
+    print("\n Building current state...")
     print("═" * 68)
     current_sizes = _build_and_capture(pio, envs)
     if not current_sizes:
