@@ -1,0 +1,24 @@
+# clang-tidy configuration — single source of truth for the check list.
+#
+# Shared by:
+#   - `pio check` / the release gate: platformio.ini points here with
+#     `clangtidy: --config-file=.clang-tidy` (cppcheck stays configured in platformio.ini;
+#     nothing in the editor runs cppcheck, so there is no parity reason to extract it).
+#   - the editor's live clang-tidy (VS Code cpptools), which auto-discovers this file.
+#
+# Compiler args (-std, -I, -D) are intentionally NOT here: the gate passes
+# `--extra-arg=-std=c++17`, the editor uses its own compile settings.
+Checks: >
+  clang-analyzer-*,
+  readability-*,
+  performance-*,
+  bugprone-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-branch-clone,
+  -modernize-deprecated-headers,
+  -modernize-use-auto
