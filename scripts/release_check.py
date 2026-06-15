@@ -5,7 +5,7 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   1. pio run                    (build every default environment)
   2. pio test -e native_test    (native unit-test suite)
   3. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
-  4. format_check.py            (clang-format --dry-run --Werror; ANY drift fails)
+  4. format_check.py            (clang-format + final-newline check; ANY violation fails)
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.
