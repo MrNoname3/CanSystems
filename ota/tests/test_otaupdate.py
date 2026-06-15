@@ -10,6 +10,7 @@ import base64
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,22 @@ def _write(tmp_path: Path, name: str, data: bytes) -> Path:
     path = tmp_path / name
     path.write_bytes(data)
     return path
+
+
+@pytest.fixture(autouse=True)
+def _stub_tqdm(monkeypatch):
+    """Replace tqdm with a no-op so the state-machine tests draw no progress bars."""
+    class _StubBar:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def update(self, _n):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(ota, "tqdm", _StubBar)
 
 
 # --- MQTTConfig: default port resolution and validation --------------------
@@ -187,3 +204,96 @@ def test_start_message_fields(tmp_path):
     assert message["fileSize"] == len(firmware)
     assert message["binId"] == "project_esp32_can"
     assert len(message["md5"]) == 32
+
+
+# --- OTA protocol state machine (sender side) ------------------------------
+
+def _updater_in_state(tmp_path, state, *, remaining=0, firmware=b"x" * 250):
+    updater = _make_updater(tmp_path, firmware)
+    updater.state = state
+    updater.remaining_bytes = remaining
+    return updater
+
+
+def test_start_ack_begins_sending(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_START_ACK, remaining=250)
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.SENDING_FW
+
+
+def test_start_nack_errors(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_START_ACK, remaining=250)
+    updater._process_response({"type": 0})
+    assert updater.state == ota.TransferState.ERROR
+
+
+def test_piece_ack_with_remaining_continues(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.SENDING_FW
+
+
+def test_piece_ack_when_done_waits_for_check(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=0)
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.WAIT_CHECK_ACK
+
+
+def test_check_ack_completes(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_CHECK_ACK)
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.DONE
+
+
+def test_response_without_type_is_ignored(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    updater._process_response({"err": 7})
+    assert updater.state == ota.TransferState.WAIT_PIECE_ACK  # unchanged
+
+
+def test_timeout_in_wait_state_errors(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    updater.timer_start = time.time() - (updater.timeout_seconds + 1)
+    updater._process_state()
+    assert updater.state == ota.TransferState.ERROR
+
+
+def test_no_timeout_within_window(tmp_path):
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    updater.timer_start = time.time()
+    updater._process_state()
+    assert updater.state == ota.TransferState.WAIT_PIECE_ACK
+
+
+def _run_simulated_transfer(updater, *, ack=True, max_ticks=10000):
+    """Drive the sender to completion with a simulated device that ACKs/NACKs every wait."""
+    waits = {
+        ota.TransferState.WAIT_START_ACK,
+        ota.TransferState.WAIT_PIECE_ACK,
+        ota.TransferState.WAIT_CHECK_ACK,
+    }
+    updater._send_start_message()
+    ticks = 0
+    while updater.state not in (ota.TransferState.DONE, ota.TransferState.ERROR):
+        ticks += 1
+        assert ticks < max_ticks, "state machine did not terminate"
+        if updater.state in waits:
+            updater._pending_messages.append({"type": 1 if ack else 0})
+        updater._process_state()
+
+
+def test_full_transfer_reaches_done(tmp_path):
+    firmware = b"project_e2e\x00" + bytes(range(256)) * 3  # valid firmware id + multi-piece body
+    updater = _make_updater(tmp_path, firmware)
+    _run_simulated_transfer(updater)
+
+    assert updater.state == ota.TransferState.DONE
+    # published[0] is the start message; the rest are the data pieces
+    pieces = [json.loads(payload)["data"] for _, payload in updater.mqtt_client.published[1:]]
+    assert b"".join(base64.b64decode(d) for d in pieces) == firmware
+
+
+def test_device_nack_aborts_transfer(tmp_path):
+    updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
+    _run_simulated_transfer(updater, ack=False)
+    assert updater.state == ota.TransferState.ERROR
