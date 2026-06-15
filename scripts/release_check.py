@@ -7,6 +7,7 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   3. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
   4. format_check.py            (clang-format + final-newline check; ANY violation fails)
   5. lint_check.py              (ruff check over the Python; skipped if ruff is absent)
+  6. pytest_check.py            (pytest over ota/tests; skipped if pytest is absent)
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.
@@ -107,6 +108,7 @@ def main() -> int:
                        "--fail-on-defect", "high"]),
         Step("format", [sys.executable, str(PROJECT_DIR / "scripts" / "format_check.py")]),
         Step("lint", [sys.executable, str(PROJECT_DIR / "scripts" / "lint_check.py")]),
+        Step("pytest", [sys.executable, str(PROJECT_DIR / "scripts" / "pytest_check.py")]),
     ]
 
     failed = None

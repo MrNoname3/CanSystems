@@ -16,3 +16,7 @@ line-length = 120
 "scripts/git_commit_info.py" = ["F821", "E402"]
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
 "scripts/patch_new_lib.py" = ["F821", "E402"]
+
+# pytest unit tests for the OTA tool (run by scripts/pytest_check.py, enforced in CI).
+[tool.pytest.ini_options]
+testpaths = ["ota/tests"]
