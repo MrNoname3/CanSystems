@@ -206,6 +206,36 @@ def test_start_message_fields(tmp_path):
     assert len(message["md5"]) == 32
 
 
+def test_file_start_message_fields(tmp_path):
+    source = _write(tmp_path, "config.json", b'{"a": 1}')
+    entry = ota.FileEntry(name="config", local_path=source, device_path="/config.json")
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+    )
+    message = transfer._build_start_message()
+    assert message["name"] == "/config.json"
+    assert message["fileSize"] == len(transfer.data)
+    assert len(message["md5"]) == 32
+    assert "binId" not in message  # a file transfer omits binId; that is how the device tells it from firmware
+
+
+# --- OTA command message ---------------------------------------------------
+
+def test_command_message_fields():
+    sender = ota.CommandSender(
+        ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        ota.CommandEntry(name="reboot", cmd="reboot"),
+    )
+    sender.mqtt_client = _RecordingMQTT()
+    sender._send_command()
+    topic, payload = sender.mqtt_client.published[0]
+    assert topic == sender.device_config.send_topic
+    assert json.loads(payload) == {"cmd": "reboot"}
+
+
 # --- OTA protocol state machine (sender side) ------------------------------
 
 def _updater_in_state(tmp_path, state, *, remaining=0, firmware=b"x" * 250):
