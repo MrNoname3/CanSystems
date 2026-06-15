@@ -1,0 +1,14 @@
+# Python tooling configuration (ruff lint + format). The project is firmware-first;
+# these settings cover the auxiliary Python (ota/, scripts/, test runner).
+[tool.ruff]
+line-length = 120
+
+# Default rule set (pyflakes F + pycodestyle E4/E7/E9). E501 line-length is intentionally
+# left to the formatter, not the linter.
+[tool.ruff.lint.per-file-ignores]
+# PlatformIO SCons build scripts: Import("env") injects names ruff cannot see, and the
+# import of project helpers legitimately follows that call (so F821 + E402 are expected).
+"scripts/elf_to_bin.py" = ["F821", "E402"]
+"scripts/git_commit_info.py" = ["F821", "E402"]
+"scripts/patch_elf2bin.py" = ["F821", "E402"]
+"scripts/patch_new_lib.py" = ["F821", "E402"]
