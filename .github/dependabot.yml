@@ -1,0 +1,18 @@
+# Dependabot keeps the GitHub Actions versions in .github/workflows/ current by opening
+# grouped, weekly PRs (which you review and merge — nothing changes without approval).
+#
+# Scope is github-actions ONLY. pip is deliberately not managed: ota/requirements.txt is
+# unpinned and the CI tool pins live inline in ci.yml (Dependabot's pip ecosystem wouldn't
+# see them). PlatformIO platform/library deps (pinned exact in platformio.ini) have no
+# Dependabot ecosystem at all — both stay manual.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]      # one combined PR for all action bumps, not one per action
+    commit-message:
+      prefix: ci
