@@ -72,6 +72,22 @@ uint16_t SPIFlash::readDeviceId() {
   return jedecid;
 }
 
+uint32_t SPIFlash::capacity() {
+#if defined(__AVR_ATmega32U4__)
+  command(CMD_READ_ID);
+#else
+  select();
+  SPI.transfer(CMD_READ_ID);
+#endif
+  (void)SPI.transfer(0U);                                          // Byte 1: manufacturer ID.
+  (void)SPI.transfer(0U);                                          // Byte 2: memory type.
+  const uint8_t densityCode = SPI.transfer(0U);                    // Byte 3: density (size = 2^code bytes).
+  unselect();
+  // 0x00 / 0xFF (absent chip) or a code that would overflow a 32-bit size mean "unknown".
+  if(densityCode == 0U || densityCode >= 32U) { return 0U; }
+  return static_cast<uint32_t>(1UL) << densityCode;
+}
+
 void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
   command(CMD_READ_MAC);
   SPI.transfer(0U);

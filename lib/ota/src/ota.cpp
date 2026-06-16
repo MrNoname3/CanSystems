@@ -12,6 +12,10 @@ OTA::OTA(SPIFlash& flash) :
 bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   if(fwSize == 0U) { return false; }                               // No firmware to write, return early.
   if(fwSize > programMemorySize) { return false; }                // Check fw size.
+  // Reject a target region that runs past the flash chip before erasing anything. capacity()
+  // reports 0 for an absent/unreadable chip, which rejects every transfer (fail-safe: never
+  // write to a flash we cannot size).
+  if(static_cast<uint32_t>(flashBlockNumber) * flashBlockTobytes + fwSize > flash.capacity()) { return false; }
   flash.chipErase();                                              // Attempt to erase the FLASH block.
   this->fwSize = fwSize;                                          // Save FW size.
   this->fwCrc = fwCrc;                                            // Store FW CRC.

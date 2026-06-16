@@ -74,6 +74,11 @@ public:
   /// @return 16-bit JEDEC ID.
   [[nodiscard]] uint16_t readDeviceId();
 
+  /// @brief Reads the chip capacity from the JEDEC ID's density byte.
+  /// @return Capacity in bytes (2^density, e.g. Winbond W25Q64 -> 8 MB), or 0 if the chip does
+  ///         not report a usable density code (absent chip / unsupported encoding).
+  [[nodiscard]] uint32_t capacity();
+
   /// @brief Reads the 64-bit unique device ID into a caller-provided buffer.
   /// @note Only needs to be called once after initialize().
   /// @param buf 8-byte buffer to store the unique ID.

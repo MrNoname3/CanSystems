@@ -21,6 +21,23 @@ bool test_start_rejects_oversized_fw() {
   END_IT
 }
 
+bool test_start_rejects_block_past_capacity() {
+  IT("start returns false when the target block runs past the flash chip capacity");
+  SPIFlash flash(0U); // host fake: 64 KB capacity = two 32 KB blocks (0 and 1)
+  OTA ota(flash);
+  // Block 2 begins at 64 KB, i.e. past the chip -> rejected before erasing anything.
+  IS_FALSE(ota.start(2U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  END_IT
+}
+
+bool test_start_rejects_when_capacity_unknown() {
+  IT("start returns false when the flash reports an unknown (zero) capacity");
+  SPIFlash flash(0U, 0U, 0U); // capacity 0 = absent/unreadable chip
+  OTA ota(flash);
+  IS_FALSE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  END_IT
+}
+
 bool test_start_success() {
   IT("start returns true for a valid fwSize");
   SPIFlash flash(0U);
@@ -259,6 +276,8 @@ int main() {
   SUITE("OTA");
   test_start_rejects_zero_size();
   test_start_rejects_oversized_fw();
+  test_start_rejects_block_past_capacity();
+  test_start_rejects_when_capacity_unknown();
   test_start_success();
   test_start_erases_flash();
   test_store_before_start_rejected();

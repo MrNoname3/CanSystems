@@ -16,6 +16,8 @@ public:
   [[nodiscard]] static bool initialize() { return true; }
   [[nodiscard]] static uint8_t readStatus() { return 0U; }
 
+  [[nodiscard]] uint32_t capacity() const { return flashCapacity; }
+
   [[nodiscard]] uint8_t readByte(uint32_t addr) const {
     assert(addr < flashCapacity);
     std::map<uint32_t, uint8_t>::const_iterator it = memory.find(addr);
