@@ -222,6 +222,7 @@ uint8_t MCP2515::parsePacket() {
     rxRtr = (sidl & flagSrr) != 0U;
   }
   rxDlc = dlc & 0x0FU;
+  if(rxDlc > 8U) { rxDlc = 8U; } // Classic CAN: DLC 9..15 still means 8 data bytes; never overrun rxData[8].
   rxIndex = 0U;
 
   if(rxRtr) {

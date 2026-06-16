@@ -197,6 +197,7 @@ uint8_t ESP32SJA1000::parsePacket() {
   rxExtended = (sff & 0x80U) != 0U;
   rxRtr      = (sff & 0x40U) != 0U;
   rxDlc      = sff & 0x0FU;
+  if(rxDlc > 8U) { rxDlc = 8U; } // Classic CAN: DLC 9..15 still means 8 data bytes; never overrun rxData[8].
   rxIndex    = 0U;
 
   uint8_t dataReg;
