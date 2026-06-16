@@ -3,6 +3,7 @@
 
 class Client {
 public:
+  virtual ~Client() = default;                       // Polymorphic base: needed for safe deletion through Client*.
   virtual bool connect(IPAddress ip, uint16_t port) = 0;
   virtual bool connect(const char* host, uint16_t port) = 0;
   virtual size_t write(uint8_t) = 0;

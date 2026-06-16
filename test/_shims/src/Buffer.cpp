@@ -27,7 +27,7 @@ void Buffer::reset() {
 }
 
 void Buffer::add(const uint8_t* buf, size_t size) {
-  for(size_t i = 0; i < size; i++) {
+  for(size_t i = 0; i < size && this->length < sizeof(this->buffer); i++) {
     this->buffer[this->length++] = buf[i];
   }
 }

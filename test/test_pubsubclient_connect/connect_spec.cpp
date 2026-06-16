@@ -266,7 +266,7 @@ bool test_connect_disconnect_connect() {
   state = client.state();
   IS_TRUE(state == PubSubClient::State::DISCONNECTED);
 
-  shimClient.expect(connect, 28U);
+  shimClient.expect(connect, 26U);
   shimClient.respond(connack, 4U);
   rc = client.connect("client_test1");
   IS_TRUE(rc);
