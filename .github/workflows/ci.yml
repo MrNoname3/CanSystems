@@ -111,3 +111,53 @@ jobs:
             sed -n '/Size comparison:/,$p' /tmp/size.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    # Informational native-test line coverage over lib/ (gcovr); continue-on-error, never blocks.
+    # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
+    # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
+    if: ${{ github.server_url == 'https://github.com' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO toolchains and pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO + gcovr
+        run: pip install --upgrade platformio gcovr
+
+      - name: Native tests with coverage instrumentation
+        run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test
+
+      - name: Coverage report (lib/)
+        # Pretty markdown table in the summary, plus a collapsible plain-text report whose
+        # "Missing" column lists the uncovered line ranges per file (the markdown format omits
+        # those). gcovr's INFO logs go to stderr, so only the report bodies reach the summary.
+        run: |
+          gcovr --root . --filter 'lib/' --markdown | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "<details>"
+            echo "<summary>Uncovered lines (per file)</summary>"
+            echo ""
+            echo '```text'
+            gcovr --root . --filter 'lib/'
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
