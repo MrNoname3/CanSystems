@@ -10,6 +10,10 @@ Stream::Stream() {
   this->_written = 0;
 }
 
+Stream::~Stream() {
+  delete this->expectBuffer;
+}
+
 size_t Stream::write(uint8_t b) {
   captured.push_back(b);
   this->_written++;

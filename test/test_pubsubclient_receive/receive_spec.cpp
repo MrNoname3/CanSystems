@@ -111,7 +111,7 @@ bool test_receive_max_sized_message() {
   IS_TRUE(rc);
 
   const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
-  uint8_t bigPublish[length];
+  uint8_t bigPublish[length + 1];                    // +1: bigPublish[length] holds a guard byte set below
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);
@@ -149,7 +149,7 @@ bool test_receive_oversized_message() {
   IS_TRUE(rc);
 
   const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
-  uint8_t bigPublish[length];
+  uint8_t bigPublish[length + 1];                    // +1: bigPublish[length] holds a guard byte set below
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);
@@ -212,7 +212,7 @@ bool test_resize_buffer() {
   IS_TRUE(rc);
 
   const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
-  uint8_t bigPublish[length];
+  uint8_t bigPublish[length + 1];                    // +1: bigPublish[length] holds a guard byte set below
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);
@@ -264,7 +264,7 @@ bool test_receive_oversized_stream_message() {
 
   const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
 
-  uint8_t bigPublish[length];
+  uint8_t bigPublish[length + 1];                    // +1: bigPublish[length] holds a guard byte set below
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);

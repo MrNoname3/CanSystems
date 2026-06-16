@@ -136,7 +136,7 @@ bool test_unsubscribe() {
   IS_TRUE(rc);
 
   const uint8_t unsubscribe[] = { 0xA2U, 0x9U, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
-  shimClient.expect(unsubscribe, 12U);
+  shimClient.expect(unsubscribe, 11U);
   const uint8_t unsuback[] = { 0xB0U, 0x2U, 0x0U, 0x2U };
   shimClient.respond(unsuback, 4U);
 

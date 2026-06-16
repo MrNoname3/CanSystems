@@ -64,6 +64,11 @@ ShimClient::ShimClient() {
   this->_expectedHost = nullptr;
 }
 
+ShimClient::~ShimClient() {
+  delete this->responseBuffer;
+  delete this->expectBuffer;
+}
+
 bool ShimClient::connect(IPAddress /*ip*/, uint16_t port) {
   if(this->_allowConnect) {
     this->_connected = true;

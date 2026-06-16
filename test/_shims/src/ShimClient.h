@@ -20,6 +20,7 @@ private:
 
 public:
   ShimClient();
+  ~ShimClient() override;                             // Frees responseBuffer/expectBuffer allocated in the constructor.
   ShimClient(const ShimClient&) = delete;
   ShimClient& operator=(const ShimClient&) = delete;
   bool connect(IPAddress ip, uint16_t port) override;

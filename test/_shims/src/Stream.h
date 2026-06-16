@@ -13,6 +13,7 @@ private:
 
 public:
   Stream();
+  ~Stream();                                         // Frees the heap-allocated expectBuffer (defined in Stream.cpp where Buffer is complete).
   Stream(const Stream&) = delete;
   Stream& operator=(const Stream&) = delete;
   size_t write(uint8_t);
