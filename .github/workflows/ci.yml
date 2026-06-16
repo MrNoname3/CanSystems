@@ -57,3 +57,57 @@ jobs:
 
       - name: Release gate (build all envs + native tests + static analysis)
         run: python scripts/release_check.py
+
+  size-diff:
+    # Informational firmware flash/RAM delta vs a baseline (merge-base with master, or the
+    # previous commit when pushing master). continue-on-error: it never blocks — the
+    # release-gate job is the source of truth for build health; this only reports sizes.
+    if: ${{ github.server_url == 'https://github.com' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history so the baseline commit can be built)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO toolchains and pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO + intelhex
+        run: pip install --upgrade platformio intelhex   # intelhex: ESP32 esptool needs it (see release-gate)
+
+      - name: Determine baseline commit
+        id: base
+        run: |
+          git fetch --no-tags --prune origin master
+          if [ "$GITHUB_REF_NAME" = master ]; then
+            base=$(git rev-parse HEAD^)              # delta of this push to master
+          else
+            base=$(git merge-base HEAD origin/master) # delta the branch adds vs master
+          fi
+          echo "commit=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Firmware size diff vs baseline
+        # size_compare.py builds the baseline in a temp worktree, then the current tree, and
+        # prints a per-env flash/RAM table (native_test has no size data and is skipped).
+        run: |
+          python scripts/size_compare.py --commit "${{ steps.base.outputs.commit }}" | tee /tmp/size.log
+          {
+            echo "## Firmware size vs \`${{ steps.base.outputs.commit }}\`"
+            echo '```'
+            sed -n '/Size comparison:/,$p' /tmp/size.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
