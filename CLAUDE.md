@@ -42,7 +42,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - Build features on a branch; merge to `master` only when done, reviewed, and CI-green, then
   delete the branch (local + remote) and push `master` to **both** remotes
   (`origin` = GitHub, `gitea`).
-- GitHub Actions runs the release gate plus a non-blocking firmware size-diff; **Gitea CI is
+- GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
+  jobs, and Dependabot opens weekly PRs for GitHub Actions version bumps; **Gitea CI is
   intentionally off**.
 - End commit messages with the `Co-Authored-By` trailer.
 
