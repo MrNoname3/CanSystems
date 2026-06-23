@@ -20,7 +20,8 @@ import uuid
 import hashlib
 import curses
 from pathlib import Path
-from typing import Optional, Dict, Any, List, ClassVar
+from types import FrameType
+from typing import Optional, Dict, Any, List, ClassVar, Callable, cast
 from dataclasses import dataclass, field
 from tqdm import tqdm
 import yaml
@@ -57,7 +58,7 @@ class MQTTConfig:
     cafile: Optional[str] = None             # CA certificate file path
 
     # Default ports keyed by (protocol, tls_enabled)
-    _DEFAULT_PORTS: ClassVar[dict] = {
+    _DEFAULT_PORTS: ClassVar[dict[tuple[str, bool], int]] = {
         ("mqtt", False): 1883,
         ("mqtt", True):  8883,
         ("ws",   False): 80,
@@ -118,7 +119,7 @@ class DeviceEntry:
     """A single device entry from devices.yaml"""
     mac: str
     friendly_name: Optional[str] = None
-    files: List[FileEntry] = field(default_factory=list)
+    files: List[FileEntry] = field(default_factory=list[FileEntry])
 
     @property
     def display_name(self) -> str:
@@ -132,8 +133,8 @@ class ProjectEntry:
     """A project entry from devices.yaml"""
     name: str
     pio_project: str
-    commands: List[CommandEntry] = field(default_factory=list)  # Merged common + project commands.
-    devices: List[DeviceEntry] = field(default_factory=list)
+    commands: List[CommandEntry] = field(default_factory=list[CommandEntry])  # Merged common + project commands.
+    devices: List[DeviceEntry] = field(default_factory=list[DeviceEntry])
 
 
 @dataclass
@@ -202,9 +203,9 @@ class DeviceManager:
 
         return projects
 
-    def _parse_commands(self, raw: list, context: str) -> List[CommandEntry]:
+    def _parse_commands(self, raw: list[Any], context: str) -> List[CommandEntry]:
         """Parse a list of raw command dicts into CommandEntry objects."""
-        commands = []
+        commands: list[CommandEntry] = []
         for c in raw:
             if 'name' not in c or 'cmd' not in c:
                 raise ValueError(
@@ -217,7 +218,7 @@ class DeviceManager:
             ))
         return commands
 
-    def _parse_file(self, f: dict, mac: str) -> FileEntry:
+    def _parse_file(self, f: dict[str, Any], mac: str) -> FileEntry:
         """Parse a single file entry dict into a FileEntry object."""
         if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
             raise ValueError(
@@ -230,7 +231,7 @@ class DeviceManager:
             device_path=f['device_path']
         )
 
-    def _parse_device(self, d: dict, project_name: str) -> DeviceEntry:
+    def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
         """Parse a single device entry dict into a DeviceEntry object."""
         if 'mac' not in d:
             raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
@@ -240,7 +241,7 @@ class DeviceManager:
             files=[self._parse_file(f, d['mac']) for f in d.get('files', [])]
         )
 
-    def _parse_project(self, p: dict, common_commands: List[CommandEntry]) -> ProjectEntry:
+    def _parse_project(self, p: dict[str, Any], common_commands: List[CommandEntry]) -> ProjectEntry:
         """Parse a single project entry dict into a ProjectEntry object."""
         if 'name' not in p or 'pio_project' not in p:
             raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
@@ -272,7 +273,7 @@ class MenuSelector:
         """
         return curses.wrapper(self._run, title, options, show_back)
 
-    def _run(self, stdscr, title: str, options: List[str], show_back: bool):
+    def _run(self, stdscr: "curses.window", title: str, options: List[str], show_back: bool) -> str:
         curses.curs_set(0)
         curses.start_color()
         curses.use_default_colors()
@@ -359,7 +360,7 @@ class ConfigManager:
 
         try:
             with open(self.config_file, 'r', encoding='utf-8') as file:
-                config_data = yaml.safe_load(file) or {}
+                config_data: dict[str, Any] = yaml.safe_load(file) or {}
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML configuration file: {e}")
         except UnicodeDecodeError as e:
@@ -485,8 +486,9 @@ class FileDataProvider:
     def _strip_comments(text: str) -> str:
         """Remove // line comments and /* */ block comments from JSON-like text.
         String literals are left untouched."""
-        def replacer(match: re.Match) -> str:
-            return match.group(1) if match.group(1) else ''
+        def replacer(match: re.Match[str]) -> str:
+            literal = cast("str | None", match.group(1))   # group 1 is the string-literal alternative
+            return literal or ''
         return re.sub(r'("(?:[^"\\]|\\.)*")|//[^\r\n]*|/\*.*?\*/', replacer, text, flags=re.DOTALL)
 
     def _serialize_json(self, raw: bytes) -> bytes:
@@ -547,9 +549,10 @@ class MQTTClient:
             self.client.username_pw_set(username=self.config.username, password=self.config.password)
 
         if self.config.tls_enabled:
-            self.client.tls_set(ca_certs=self.config.cafile)  # cafile=None uses system store
+            # paho's own tls_set stub leaves some parameters unannotated (partially unknown).
+            self.client.tls_set(ca_certs=self.config.cafile)  # pyright: ignore[reportUnknownMemberType]  # cafile=None uses system store
 
-    def set_callbacks(self, on_connect_callback, on_message_callback):
+    def set_callbacks(self, on_connect_callback: Callable[..., None], on_message_callback: Callable[..., None]) -> None:
         """Set MQTT event callbacks"""
         self.client.on_connect = on_connect_callback
         self.client.on_message = on_message_callback
@@ -610,7 +613,7 @@ class _BaseTransfer:
         self.timer_start = 0.0
         self.piece_size = 100
         self.timeout_seconds = 25
-        self.progress_bar: Optional[tqdm] = None
+        self.progress_bar: Optional["tqdm[Any]"] = None
 
         # Queue for incoming MQTT messages to avoid race conditions between
         # the MQTT callback thread and the main loop
@@ -621,10 +624,10 @@ class _BaseTransfer:
 
     # --- Abstract interface ---------------------------------------------------
 
-    def _build_start_message(self) -> dict:
+    def _build_start_message(self) -> dict[str, Any]:
         raise NotImplementedError
 
-    def _start_log_info(self):
+    def _start_log_info(self) -> None:
         raise NotImplementedError
 
     @property
@@ -641,7 +644,7 @@ class _BaseTransfer:
 
     # --- MQTT callbacks -------------------------------------------------------
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties):
+    def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if reason_code == 0:
             logging.info("Successfully connected to MQTT broker")
             client.subscribe(self.device_config.receive_topic)
@@ -654,7 +657,7 @@ class _BaseTransfer:
         """Called after a successful connection. Override to customize post-connect behavior."""
         self._send_start_message()
 
-    def _on_message(self, client, userdata, msg):
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
         """Queue incoming MQTT messages for processing in the main loop.
         This avoids race conditions where an ACK arrives before the state
         machine has transitioned to the expected state."""
@@ -750,7 +753,7 @@ class _BaseTransfer:
                 logging.error(f"Timeout occurred in state: {self.state.name}")
                 self.state = TransferState.ERROR
 
-    def _cleanup(self):
+    def cleanup(self) -> None:
         """Clean up resources."""
         self._close_progress_bar()
         self.mqtt_client.disconnect()
@@ -776,7 +779,7 @@ class _BaseTransfer:
             logging.error(f"Unexpected error during transfer: {e}")
             return False
         finally:
-            self._cleanup()
+            self.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -802,7 +805,7 @@ class OTAUpdater(_BaseTransfer):
     def _progress_desc(self) -> str:
         return "Sending Firmware"
 
-    def _build_start_message(self) -> dict:
+    def _build_start_message(self) -> dict[str, Any]:
         return {
             "name":     "espFirmware",
             "fileSize": self.firmware_manager.size,
@@ -841,7 +844,7 @@ class FileTransfer(_BaseTransfer):
     def _progress_desc(self) -> str:
         return f"Sending {self.file_entry.local_path.name}"
 
-    def _build_start_message(self) -> dict:
+    def _build_start_message(self) -> dict[str, Any]:
         return {
             "name":     self.file_entry.device_path,
             "fileSize": self.file_provider.size,
@@ -921,7 +924,7 @@ class CommandSender(_BaseTransfer):
             logging.error(f"Unexpected error during command sending: {e}")
             return False
         finally:
-            self._cleanup()
+            self.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -1041,9 +1044,9 @@ def main():
         worker = _build_worker(result, config_manager, mqtt_config)
 
         # Set up signal handler for graceful shutdown
-        def signal_handler(sig, frame):
+        def signal_handler(sig: int, frame: "FrameType | None") -> None:
             logging.info("Received interrupt signal, shutting down...")
-            worker._cleanup()
+            worker.cleanup()
             sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)

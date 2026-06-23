@@ -53,7 +53,7 @@ def format_duration(seconds: float) -> str:
 class Step:
     """One gate step: runs a command through a pty, streaming and capturing its output."""
 
-    def __init__(self, name: str, argv: list):
+    def __init__(self, name: str, argv: list[str]):
         self.name = name
         self.argv = argv
         self.passed = False
