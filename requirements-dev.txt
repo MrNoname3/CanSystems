@@ -1,0 +1,20 @@
+# Development / CI tooling for the release gate (scripts/release_check.py) and CI.
+#
+# Single source of truth for the pinned Python tooling. Install into a project-root .venv:
+#
+#     python -m venv .venv
+#     .venv/bin/pip install -r requirements-dev.txt
+#
+# The gate guards (format/lint/typecheck/pytest) find these in .venv automatically; PlatformIO
+# itself is NOT here - it runs from its own penv (`VIRTUAL_ENV="" ~/.platformio/penv/bin/pio`),
+# and CI installs platformio/intelhex on top of this file.
+#
+# Includes the OTA tool's runtime deps so pytest (which imports otaUpdate) and pyright can
+# resolve paho-mqtt/pyyaml/tqdm.
+-r ota/requirements.txt
+
+clang-format==22.1.3        # format_check.py; matches the VS Code cpptools version
+ruff==0.15.17               # lint_check.py (lint only; ruff format is never run)
+pyright==1.1.410            # typecheck_check.py (strict)
+pytest==9.1.0               # pytest_check.py
+gcovr==8.6                  # CI coverage job (native_test line coverage over lib/)

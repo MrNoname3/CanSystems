@@ -89,7 +89,7 @@ def main() -> int:
     args = parser.parse_args()
 
     os.chdir(PROJECT_DIR)
-    os.environ.pop("VIRTUAL_ENV", None)               # ota/.venv breaks pio's venv detection.
+    os.environ.pop("VIRTUAL_ENV", None)               # a project .venv breaks pio's venv detection.
     pio = find_pio()
 
     # Step 0: same dirty rule as the firmware's GIT_DIRTY build flag.
