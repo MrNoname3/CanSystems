@@ -17,6 +17,27 @@ line-length = 120
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
 "scripts/patch_new_lib.py" = ["F821", "E402"]
 
+# Static type checking (run by scripts/typecheck_check.py, enforced in CI). Standard mode for
+# now; intended to be tightened toward strict later. Scope is the production Python (the OTA tool
+# + dev scripts). Excluded: the four SCons build scripts (Import("env") injects names pyright
+# cannot see, same reason they are ruff per-file-ignored above) and ota/tests (the MQTT test
+# fakes are monkeypatched onto typed attributes - revisit when tightening to strict). The OTA
+# tool's third-party deps are resolved via the interpreter the runner passes with --pythonpath
+# (ota/.venv locally, the CI interpreter in CI).
+[tool.pyright]
+include = ["ota", "scripts"]
+exclude = [
+    "**/.venv",
+    "**/__pycache__",
+    ".pio",
+    "ota/tests",
+    "scripts/elf_to_bin.py",
+    "scripts/git_commit_info.py",
+    "scripts/patch_elf2bin.py",
+    "scripts/patch_new_lib.py",
+]
+typeCheckingMode = "standard"
+
 # pytest unit tests for the OTA tool (run by scripts/pytest_check.py, enforced in CI).
 [tool.pytest.ini_options]
 testpaths = ["ota/tests"]

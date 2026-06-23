@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from tqdm import tqdm
 import yaml
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +536,7 @@ class MQTTClient:
         transport = "websockets" if self.config.protocol == "ws" else "tcp"
         self.client = mqtt.Client(
             client_id=self.config.client_id,
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            callback_api_version=CallbackAPIVersion.VERSION2,
             transport=transport
         )
 
@@ -955,7 +956,7 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
             device_map = {d.display_name: d for d in selected_project.devices}
             choice = menu.select(f"Select device  [{selected_project.name}]", list(device_map), show_back=True)
 
-            if choice == MenuSelector.CANCEL:
+            if choice in (MenuSelector.CANCEL, None):
                 return None
             if choice == MenuSelector.BACK:
                 break  # go back to project selection

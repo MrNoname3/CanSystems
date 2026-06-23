@@ -14,3 +14,7 @@ insert_final_newline = true
 # Python follows PEP 8 (4-space), like the [python] override in .vscode/settings.json.
 [*.py]
 indent_size = 4
+
+# Markdown: two trailing spaces are a hard line break, so don't strip trailing whitespace.
+[*.md]
+trim_trailing_whitespace = false
