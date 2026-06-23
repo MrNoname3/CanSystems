@@ -7,7 +7,7 @@ follow when editing.
 
 ## Commands
 
-PlatformIO is not on `PATH` here, and `ota/.venv` confuses pio's virtualenv detection, so
+PlatformIO is not on `PATH` here, and a project `.venv` confuses pio's virtualenv detection, so
 **always run pio as:**
 
 ```sh
@@ -17,11 +17,14 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
 - Native tests: `… pio test -e native_test` (~30 s, ~442 cases)
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
-- **Release gate** (build + test + check + format + lint + pytest, fail-fast):
+- **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree)
 - Individual guards: `scripts/format_check.py` (clang-format + final newline),
-  `scripts/lint_check.py` (ruff), `scripts/pytest_check.py`
-- Python tooling lives in `ota/.venv` (pytest/ruff); the OTA tool's deps are `ota/requirements.txt`
+  `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
+- Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
+  install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
+  -r requirements-dev.txt`) — every gate guard finds it there. pio is unaffected by the root
+  `.venv` (it runs from its own penv). `ota/requirements.txt` holds only the OTA tool's runtime deps.
 - urboot bootloader: `scripts/build_urboot.sh [771|800|801]` (podman/docker; see `bootloader/README.md`)
 
 The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it that way.
@@ -51,7 +54,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 
 All PlatformIO platform/package/lib deps are pinned **exact** in `platformio.ini`; keep them
 pinned when bumping. **Do not `pip install` into the pio penv** (`~/.platformio/penv`) — it has
-broken the ESP32 build before; use `ota/.venv` for Python tooling.
+broken the ESP32 build before; use the project-root `.venv` (from `requirements-dev.txt`) for
+Python tooling.
 
 ## Testing notes
 

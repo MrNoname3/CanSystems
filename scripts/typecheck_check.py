@@ -2,14 +2,15 @@
 """Type-check guard for the release gate: `pyright` over the project's Python.
 
 Runs pyright (config in pyproject.toml's [tool.pyright]) over the OTA tool and the dev
-scripts in standard mode. If pyright is not installed it skips with a note and exits 0, so
+scripts in strict mode. If pyright is not installed it skips with a note and exits 0, so
 the local gate stays usable without it - CI installs pyright and enforces it. The four
 PlatformIO SCons build scripts are excluded in the config (they rely on Import()/env names
 pyright cannot see).
 
-pyright lookup order: $PYRIGHT, then `pyright` on PATH, then the project's ota/.venv.
-The OTA tool imports third-party deps (paho-mqtt/pyyaml/tqdm), so pyright is pointed at the
-interpreter that has them (--pythonpath): ota/.venv if present, else the current interpreter.
+pyright lookup order: $PYRIGHT, then `pyright` on PATH, then the project-root .venv
+(created from requirements-dev.txt). The OTA tool imports third-party deps
+(paho-mqtt/pyyaml/tqdm), so pyright is pointed at the interpreter that has them
+(--pythonpath): the .venv if present, else the current interpreter.
 """
 
 import os
@@ -19,7 +20,7 @@ import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-OTA_VENV = PROJECT_DIR / "ota" / ".venv"
+VENV = PROJECT_DIR / ".venv"
 
 
 def find_pyright() -> str | None:
@@ -29,13 +30,13 @@ def find_pyright() -> str | None:
     on_path = shutil.which("pyright")
     if on_path is not None:
         return on_path
-    local = OTA_VENV / "bin" / "pyright"
+    local = VENV / "bin" / "pyright"
     return str(local) if local.exists() else None
 
 
 def deps_python() -> str:
     """Interpreter that has the OTA tool's third-party deps, for pyright's import resolution."""
-    venv_python = OTA_VENV / "bin" / "python"
+    venv_python = VENV / "bin" / "python"
     return str(venv_python) if venv_python.exists() else sys.executable
 
 

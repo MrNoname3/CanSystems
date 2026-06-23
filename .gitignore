@@ -22,9 +22,12 @@ data/*.bin
 # Scripts
 **/__pycache__/
 
+# Python tooling venv (project-root, from requirements-dev.txt); the bare pattern also
+# catches any stray ota/.venv from before the consolidation.
+.venv/
+
 # OTA
 ota/config.yaml
-ota/.venv
 ota/files/**/*.crt
 ota/files/**/*.bak
 ota/files/**/server.json

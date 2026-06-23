@@ -21,7 +21,7 @@ line-length = 120
 # tool, the dev scripts and the OTA tests. Excluded: the four SCons build scripts (Import("env")
 # injects names pyright cannot see, same reason they are ruff per-file-ignored above). The OTA
 # tool's third-party deps are resolved via the interpreter the runner passes with --pythonpath
-# (ota/.venv locally, the CI interpreter in CI).
+# (the project-root .venv locally, the CI interpreter in CI).
 [tool.pyright]
 include = ["ota", "scripts"]
 # ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime).

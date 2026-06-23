@@ -84,7 +84,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `src/main_*.cpp` | One entry point per environment (selected via `build_src_filter`) |
 | `lib/`           | Feature libraries (task scheduler, MQTT/CAN stacks, drivers, OTA, …) |
 | `test/`          | Native test suites + `test/_shims/` (Arduino/LittleFS/Update/PubSubClient fakes) |
-| `ota/`           | Server-side OTA/file-transfer tool (Python venv: `paho-mqtt`, `pyyaml`, `tqdm`) |
+| `ota/`           | Server-side OTA/file-transfer tool (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
 | `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
@@ -105,13 +105,32 @@ The whole build is warning-clean under `-Wall -Wextra -Werror`; keep it that way
 Firmware version comes from the git commit count, so commit before flashing release builds
 (the `dirty` flag is published in the info topic).
 
+### Development setup
+
+C/C++ builds and tests run through PlatformIO. The Python tooling for the release gate
+(clang-format, ruff, pyright, pytest, gcovr) plus the OTA tool's runtime deps are pinned in
+`requirements-dev.txt`; install them into a **project-root `.venv`**, which every gate guard
+discovers automatically:
+
+```sh
+python -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+```
+
+PlatformIO is **not** in that venv — it runs from its own install (`pio`, or
+`~/.platformio/penv/bin/pio`); the root `.venv` does not interfere with it. CI installs the same
+file plus `platformio` and `intelhex` on top.
+
 ### Release gate
 
-`scripts/release_check.py` chains the three commands above fail-fast: build all environments,
-run the native test suite, then static analysis — where a **single defect of any severity**
-(`--fail-on-defect low/medium/high`) fails the gate, unlike a bare `pio check`, which reports
-SUCCESS even with findings. Step 0 checks the git tree with the same rule the firmware uses for
-its `GIT_DIRTY` flag.
+`scripts/release_check.py` chains seven steps fail-fast: build all environments, run the native
+test suite, static analysis (`pio check` — where a **single defect of any severity** via
+`--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
+SUCCESS even with findings), then the Python guards — clang-format + final-newline
+(`format_check.py`), ruff lint (`lint_check.py`), pyright strict (`typecheck_check.py`), and
+pytest (`pytest_check.py`). The three Python guards skip with a note if their tool is absent, so
+the gate stays usable without the dev venv — CI always has it and enforces. Step 0 checks the git
+tree with the same rule the firmware uses for its `GIT_DIRTY` flag.
 
 ```sh
 python3 scripts/release_check.py            # build + test + check; dirty tree is a warning
