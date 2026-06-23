@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from typing import cast
 
 
 _SIZE_RE = re.compile(
@@ -112,12 +113,12 @@ def _parse_lines(lines: list[str]) -> dict[str, Sizes]:
     for line in lines:
         m = env_header_re.search(line)
         if m:
-            current_env = m.group(1).strip()
+            current_env = cast(str, m.group(1)).strip()  # mandatory capture group: never None when m matched
             env_data.setdefault(current_env, {})
             continue
         m = building_re.search(line)
         if m:
-            current_env = m.group(1).strip()
+            current_env = cast(str, m.group(1)).strip()  # mandatory capture group: never None when m matched
             env_data.setdefault(current_env, {})
             continue
 

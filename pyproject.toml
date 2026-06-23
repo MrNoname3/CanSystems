@@ -17,6 +17,32 @@ line-length = 120
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
 "scripts/patch_new_lib.py" = ["F821", "E402"]
 
+# Static type checking (run by scripts/typecheck_check.py, enforced in CI). Strict over the OTA
+# tool, the dev scripts and the OTA tests. Excluded: the four SCons build scripts (Import("env")
+# injects names pyright cannot see, same reason they are ruff per-file-ignored above). The OTA
+# tool's third-party deps are resolved via the interpreter the runner passes with --pythonpath
+# (ota/.venv locally, the CI interpreter in CI).
+[tool.pyright]
+include = ["ota", "scripts"]
+# ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime).
+extraPaths = ["ota"]
+exclude = [
+    "**/.venv",
+    "**/__pycache__",
+    ".pio",
+    "scripts/elf_to_bin.py",
+    "scripts/git_commit_info.py",
+    "scripts/patch_elf2bin.py",
+    "scripts/patch_new_lib.py",
+]
+typeCheckingMode = "strict"
+
+# Unit tests legitimately reach into the classes they test, so the protected-access rule would
+# fire on normal test code; disable it for the tests only (everything else stays strict).
+[[tool.pyright.executionEnvironments]]
+root = "ota/tests"
+reportPrivateUsage = false
+
 # pytest unit tests for the OTA tool (run by scripts/pytest_check.py, enforced in CI).
 [tool.pytest.ini_options]
 testpaths = ["ota/tests"]

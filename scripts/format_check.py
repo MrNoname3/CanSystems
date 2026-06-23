@@ -49,7 +49,7 @@ def find_clang_format() -> str:
     sys.exit("clang-format not found (set $CLANG_FORMAT, put it on PATH, or install the cpptools extension)")
 
 
-def git_ls_files(*patterns) -> list:
+def git_ls_files(*patterns: str) -> list[str]:
     """Tracked files matching the given pathspecs, relative to the project root."""
     result = subprocess.run(["git", "ls-files", *patterns], cwd=PROJECT_DIR,
                             capture_output=True, text=True, check=True)
@@ -64,7 +64,7 @@ def is_text_file(path: Path) -> bool:
         return b"\0" not in handle.read(8192)
 
 
-def check_clang_format(clang_format: str) -> list:
+def check_clang_format(clang_format: str) -> list[str]:
     """Return the list of tracked C/C++ files that are not clang-format-clean."""
     files = git_ls_files(*(f"*{ext}" for ext in CPP_EXTENSIONS))
     if not files:
@@ -78,9 +78,9 @@ def check_clang_format(clang_format: str) -> list:
                               cwd=PROJECT_DIR, capture_output=True).returncode != 0]
 
 
-def check_final_newlines() -> list:
+def check_final_newlines() -> list[str]:
     """Return the list of tracked text files that do not end with a newline."""
-    missing = []
+    missing: list[str] = []
     for f in git_ls_files():
         path = PROJECT_DIR / f
         if not is_text_file(path):

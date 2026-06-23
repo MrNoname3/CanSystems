@@ -12,6 +12,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -31,16 +32,16 @@ def _write(tmp_path: Path, name: str, data: bytes) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def _stub_tqdm(monkeypatch):
+def _stub_tqdm(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]  # pytest autouse fixture
     """Replace tqdm with a no-op so the state-machine tests draw no progress bars."""
     class _StubBar:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def update(self, _n):
+        def update(self, _n: object) -> None:
             pass
 
-        def close(self):
+        def close(self) -> None:
             pass
 
     monkeypatch.setattr(ota, "tqdm", _StubBar)
@@ -54,36 +55,36 @@ def _stub_tqdm(monkeypatch):
     ("ws", False, 80),
     ("ws", True, 443),
 ])
-def test_mqttconfig_default_port(protocol, tls, expected_port):
+def test_mqttconfig_default_port(protocol: str, tls: bool, expected_port: int) -> None:
     assert ota.MQTTConfig(protocol=protocol, host="broker", tls_enabled=tls).port == expected_port
 
 
-def test_mqttconfig_explicit_port_kept():
+def test_mqttconfig_explicit_port_kept() -> None:
     assert ota.MQTTConfig(host="broker", port=12345).port == 12345
 
 
-def test_mqttconfig_autogenerates_client_id():
+def test_mqttconfig_autogenerates_client_id() -> None:
     assert ota.MQTTConfig(host="broker").client_id.startswith("Python_OTA_")
 
 
-def test_mqttconfig_bad_protocol():
+def test_mqttconfig_bad_protocol() -> None:
     with pytest.raises(ValueError):
         ota.MQTTConfig(protocol="amqp", host="broker")
 
 
-def test_mqttconfig_port_out_of_range():
+def test_mqttconfig_port_out_of_range() -> None:
     with pytest.raises(ValueError):
         ota.MQTTConfig(host="broker", port=70000)
 
 
-def test_mqttconfig_empty_host():
+def test_mqttconfig_empty_host() -> None:
     with pytest.raises(ValueError):
         ota.MQTTConfig(host="   ")
 
 
 # --- DeviceConfig: topic construction --------------------------------------
 
-def test_deviceconfig_topics():
+def test_deviceconfig_topics() -> None:
     device = ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x")
     assert device.send_topic == "iot/stod/AABBCCDDEEFF/common"
     assert device.receive_topic == "iot/dtos/AABBCCDDEEFF/common"
@@ -91,19 +92,19 @@ def test_deviceconfig_topics():
 
 # --- FirmwareManager: size, md5, firmware id -------------------------------
 
-def test_firmware_size_and_md5(tmp_path):
+def test_firmware_size_and_md5(tmp_path: Path) -> None:
     blob = b"\x01\x02project_esp32_can\x00trailing"
     firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob))
     assert firmware.size == len(blob)
     assert firmware.md5 == hashlib.md5(blob).hexdigest()
 
 
-def test_firmware_id_extracted(tmp_path):
+def test_firmware_id_extracted(tmp_path: Path) -> None:
     firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"....project_esp8266_thermo\x00...."))
     assert firmware.firmware_id == "project_esp8266_thermo"
 
 
-def test_firmware_id_missing_raises(tmp_path):
+def test_firmware_id_missing_raises(tmp_path: Path) -> None:
     firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"no id here"))
     with pytest.raises(ValueError):
         _ = firmware.firmware_id
@@ -111,25 +112,25 @@ def test_firmware_id_missing_raises(tmp_path):
 
 # --- FileDataProvider: JSON minification + comment stripping ---------------
 
-def test_json_is_serialized_compact(tmp_path):
+def test_json_is_serialized_compact(tmp_path: Path) -> None:
     src = '{\n  "a": 1,\n  "b": [1, 2, 3]\n}\n'
     provider = ota.FileDataProvider(_write(tmp_path, "config.json", src.encode()))
     assert provider.data == b'{"a":1,"b":[1,2,3]}'
 
 
-def test_json_comments_stripped(tmp_path):
+def test_json_comments_stripped(tmp_path: Path) -> None:
     src = '{\n  // line comment\n  "a": 1, /* block */ "b": "//not a comment"\n}'
     provider = ota.FileDataProvider(_write(tmp_path, "config.json", src.encode()))
     assert provider.data == b'{"a":1,"b":"//not a comment"}'
 
 
-def test_non_json_passthrough(tmp_path):
+def test_non_json_passthrough(tmp_path: Path) -> None:
     blob = b"\x00\x01raw bytes\xff"
     provider = ota.FileDataProvider(_write(tmp_path, "blob.bin", blob))
     assert provider.data == blob
 
 
-def test_invalid_json_raises(tmp_path):
+def test_invalid_json_raises(tmp_path: Path) -> None:
     provider = ota.FileDataProvider(_write(tmp_path, "bad.json", b"{not valid"))
     with pytest.raises(ValueError):
         _ = provider.data
@@ -140,34 +141,35 @@ def test_invalid_json_raises(tmp_path):
 class _RecordingMQTT:
     """Stands in for MQTTClient: records publish(topic, payload) instead of networking."""
 
-    def __init__(self):
-        self.published = []
+    def __init__(self) -> None:
+        self.published: list[tuple[str, str]] = []
 
-    def publish(self, topic, payload):
+    def publish(self, topic: str, payload: str) -> None:
         self.published.append((topic, payload))
 
 
 def _make_updater(tmp_path: Path, firmware: bytes) -> "ota.OTAUpdater":
     device = ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x")
     updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"), _write(tmp_path, "firmware.bin", firmware))
-    updater.mqtt_client = _RecordingMQTT()
+    updater.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
     return updater
 
 
-def _drain_pieces(updater: "ota.OTAUpdater") -> list:
+def _drain_pieces(updater: "ota.OTAUpdater") -> list[dict[str, Any]]:
     """Drive _send_piece until every byte is sent; return the decoded piece payloads."""
     updater.remaining_bytes = updater.size
-    pieces = []
+    recorder = cast(_RecordingMQTT, updater.mqtt_client)
+    pieces: list[dict[str, Any]] = []
     while updater.remaining_bytes > 0:
-        index = len(updater.mqtt_client.published)
+        index = len(recorder.published)
         updater._send_piece()
-        topic, payload = updater.mqtt_client.published[index]
+        topic, payload = recorder.published[index]
         assert topic == updater.device_config.send_topic
         pieces.append(json.loads(payload))
     return pieces
 
 
-def test_piece_splitting_reconstructs_firmware(tmp_path):
+def test_piece_splitting_reconstructs_firmware(tmp_path: Path) -> None:
     firmware = bytes(range(256)) * 3  # 768 bytes -> 7 full pieces of 100 + a 68-byte remainder
     updater = _make_updater(tmp_path, firmware)
     pieces = _drain_pieces(updater)
@@ -181,14 +183,14 @@ def test_piece_splitting_reconstructs_firmware(tmp_path):
     assert updater.remaining_bytes == 0
 
 
-def test_exact_multiple_of_piece_size(tmp_path):
+def test_exact_multiple_of_piece_size(tmp_path: Path) -> None:
     updater = _make_updater(tmp_path, b"A" * 200)  # exactly two full pieces, no remainder
     pieces = _drain_pieces(updater)
     assert len(pieces) == 2
     assert all(len(base64.b64decode(p["data"])) == 100 for p in pieces)
 
 
-def test_single_short_piece(tmp_path):
+def test_single_short_piece(tmp_path: Path) -> None:
     updater = _make_updater(tmp_path, b"hello")  # smaller than piece_size -> one piece
     pieces = _drain_pieces(updater)
     assert len(pieces) == 1
@@ -197,7 +199,7 @@ def test_single_short_piece(tmp_path):
 
 # --- OTA start message -----------------------------------------------------
 
-def test_start_message_fields(tmp_path):
+def test_start_message_fields(tmp_path: Path) -> None:
     firmware = b"....project_esp32_can\x00...."
     message = _make_updater(tmp_path, firmware)._build_start_message()
     assert message["name"] == "espFirmware"
@@ -206,7 +208,7 @@ def test_start_message_fields(tmp_path):
     assert len(message["md5"]) == 32
 
 
-def test_file_start_message_fields(tmp_path):
+def test_file_start_message_fields(tmp_path: Path) -> None:
     source = _write(tmp_path, "config.json", b'{"a": 1}')
     entry = ota.FileEntry(name="config", local_path=source, device_path="/config.json")
     transfer = ota.FileTransfer(
@@ -223,79 +225,81 @@ def test_file_start_message_fields(tmp_path):
 
 # --- OTA command message ---------------------------------------------------
 
-def test_command_message_fields():
+def test_command_message_fields() -> None:
     sender = ota.CommandSender(
         ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
         ota.MQTTConfig(host="broker"),
         ota.CommandEntry(name="reboot", cmd="reboot"),
     )
-    sender.mqtt_client = _RecordingMQTT()
+    sender.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
     sender._send_command()
-    topic, payload = sender.mqtt_client.published[0]
+    recorder = cast(_RecordingMQTT, sender.mqtt_client)
+    topic, payload = recorder.published[0]
     assert topic == sender.device_config.send_topic
     assert json.loads(payload) == {"cmd": "reboot"}
 
 
 # --- OTA protocol state machine (sender side) ------------------------------
 
-def _updater_in_state(tmp_path, state, *, remaining=0, firmware=b"x" * 250):
+def _updater_in_state(tmp_path: Path, state: "ota.TransferState", *, remaining: int = 0,
+                      firmware: bytes = b"x" * 250) -> "ota.OTAUpdater":
     updater = _make_updater(tmp_path, firmware)
     updater.state = state
     updater.remaining_bytes = remaining
     return updater
 
 
-def test_start_ack_begins_sending(tmp_path):
+def test_start_ack_begins_sending(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_START_ACK, remaining=250)
     updater._process_response({"type": 1})
     assert updater.state == ota.TransferState.SENDING_FW
 
 
-def test_start_nack_errors(tmp_path):
+def test_start_nack_errors(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_START_ACK, remaining=250)
     updater._process_response({"type": 0})
     assert updater.state == ota.TransferState.ERROR
 
 
-def test_piece_ack_with_remaining_continues(tmp_path):
+def test_piece_ack_with_remaining_continues(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
     updater._process_response({"type": 1})
     assert updater.state == ota.TransferState.SENDING_FW
 
 
-def test_piece_ack_when_done_waits_for_check(tmp_path):
+def test_piece_ack_when_done_waits_for_check(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=0)
     updater._process_response({"type": 1})
     assert updater.state == ota.TransferState.WAIT_CHECK_ACK
 
 
-def test_check_ack_completes(tmp_path):
+def test_check_ack_completes(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_CHECK_ACK)
     updater._process_response({"type": 1})
     assert updater.state == ota.TransferState.DONE
 
 
-def test_response_without_type_is_ignored(tmp_path):
+def test_response_without_type_is_ignored(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
     updater._process_response({"err": 7})
     assert updater.state == ota.TransferState.WAIT_PIECE_ACK  # unchanged
 
 
-def test_timeout_in_wait_state_errors(tmp_path):
+def test_timeout_in_wait_state_errors(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
     updater.timer_start = time.time() - (updater.timeout_seconds + 1)
     updater._process_state()
     assert updater.state == ota.TransferState.ERROR
 
 
-def test_no_timeout_within_window(tmp_path):
+def test_no_timeout_within_window(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
     updater.timer_start = time.time()
     updater._process_state()
     assert updater.state == ota.TransferState.WAIT_PIECE_ACK
 
 
-def _run_simulated_transfer(updater, *, ack=True, max_ticks=10000):
+def _run_simulated_transfer(updater: "ota.OTAUpdater", *, ack: bool = True, max_ticks: int = 10000) -> None:
     """Drive the sender to completion with a simulated device that ACKs/NACKs every wait."""
     waits = {
         ota.TransferState.WAIT_START_ACK,
@@ -312,18 +316,19 @@ def _run_simulated_transfer(updater, *, ack=True, max_ticks=10000):
         updater._process_state()
 
 
-def test_full_transfer_reaches_done(tmp_path):
+def test_full_transfer_reaches_done(tmp_path: Path) -> None:
     firmware = b"project_e2e\x00" + bytes(range(256)) * 3  # valid firmware id + multi-piece body
     updater = _make_updater(tmp_path, firmware)
     _run_simulated_transfer(updater)
 
     assert updater.state == ota.TransferState.DONE
     # published[0] is the start message; the rest are the data pieces
-    pieces = [json.loads(payload)["data"] for _, payload in updater.mqtt_client.published[1:]]
+    recorder = cast(_RecordingMQTT, updater.mqtt_client)
+    pieces = [json.loads(payload)["data"] for _, payload in recorder.published[1:]]
     assert b"".join(base64.b64decode(d) for d in pieces) == firmware
 
 
-def test_device_nack_aborts_transfer(tmp_path):
+def test_device_nack_aborts_transfer(tmp_path: Path) -> None:
     updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
     _run_simulated_transfer(updater, ack=False)
     assert updater.state == ota.TransferState.ERROR
