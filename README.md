@@ -1,9 +1,19 @@
 # CanSystems
 
+[![CI](https://github.com/MrNoname3/CanSystems/actions/workflows/ci.yml/badge.svg)](https://github.com/MrNoname3/CanSystems/actions/workflows/ci.yml)
+
 Firmware monorepo for a distributed home-IoT system: ESP8266/ESP32 nodes talk to a Mosquitto
 broker over MQTT/TLS (with optional Home Assistant auto-discovery), and an ESP32 gateway bridges
 a 500 kbit/s CAN bus of ATmega328P devices onto MQTT. Everything — firmware, configuration files,
 even the CAN devices' firmware — is updatable over the air through MQTT.
+
+> **About this repository.** This is a personal project built for my own home setup, shared as a
+> **reference to draw ideas from** rather than a turnkey product to deploy as-is — the hardware,
+> CAN IDs and device list are specific to my installation. If something here is useful to you,
+> take the pattern and adapt it. Things it may be worth a look for: a CAN↔MQTT bridge, an
+> MQTT-based OTA scheme that also updates the AVR CAN nodes through the ESP32 gateway, a native
+> (host) test setup with hardware shims for embedded code, and a one-command release gate
+> (build + tests + static analysis + lint/type/format) mirrored in CI.
 
 ## Architecture
 
@@ -66,6 +76,7 @@ Per-device copies live in `ota/files/<mac>/`. `data/config` is a **git symlink**
 
 **ESP firmware / files (MQTT):** `ota/otaUpdate.py` (interactive curses menu; configured by
 `ota/config.yaml` + `ota/devices.yaml`) sends files as base64 pieces with per-piece ACK.
+See [`ota/README.md`](ota/README.md) for setup and a copy-paste `config.yaml` example.
 Firmware uploads carry a `binId` that the running firmware checks against its own PIO env, then
 stream into the Updater and reboot; other files go to a temp file, are MD5-verified and renamed
 into place (file names are allow-listed). The 100-byte piece size is deliberate — larger pieces
@@ -84,7 +95,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `src/main_*.cpp` | One entry point per environment (selected via `build_src_filter`) |
 | `lib/`           | Feature libraries (task scheduler, MQTT/CAN stacks, drivers, OTA, …) |
 | `test/`          | Native test suites + `test/_shims/` (Arduino/LittleFS/Update/PubSubClient fakes) |
-| `ota/`           | Server-side OTA/file-transfer tool (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
+| `ota/`           | Server-side OTA/file-transfer tool + its own [README](ota/README.md) (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
 | `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
