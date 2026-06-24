@@ -128,9 +128,9 @@ test suite, static analysis (`pio check` — where a **single defect of any seve
 `--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
 SUCCESS even with findings), then the Python guards — clang-format + final-newline
 (`format_check.py`), ruff lint (`lint_check.py`), pyright strict (`typecheck_check.py`), and
-pytest (`pytest_check.py`). The three Python guards skip with a note if their tool is absent, so
-the gate stays usable without the dev venv — CI always has it and enforces. Step 0 checks the git
-tree with the same rule the firmware uses for its `GIT_DIRTY` flag.
+pytest (`pytest_check.py`). Every guard is **required**: a missing tool fails the gate rather
+than skipping, so set up the dev venv (above) before running it. Step 0 checks the git tree with
+the same rule the firmware uses for its `GIT_DIRTY` flag.
 
 ```sh
 python3 scripts/release_check.py            # build + test + check; dirty tree is a warning

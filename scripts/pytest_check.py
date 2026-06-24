@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test guard for the release gate: run pytest over the Python unit tests (ota/tests).
 
-Skips with a note and exits 0 if pytest is not installed, so the local gate stays usable;
-CI installs pytest + the OTA runtime deps and enforces it. The tests themselves skip when
-the OTA deps (paho-mqtt, tqdm, pyyaml) are absent (pytest.importorskip in ota/tests), so a
-deps-less environment never hard-fails here either.
+pytest is required: if it is not found the gate fails (install requirements-dev.txt into
+.venv, which also brings the OTA runtime deps the tests import). The tests themselves skip
+when the OTA deps (paho-mqtt, tqdm, pyyaml) are absent (pytest.importorskip in ota/tests),
+so a pytest-without-deps environment still does not hard-fail mid-run.
 
-pytest lookup order: $PYTEST, then `pytest` on PATH, then a project-local .venv.
+pytest lookup order: $PYTEST, then `pytest` on PATH, then the project-root .venv.
 """
 
 import os
@@ -18,7 +18,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 
-def find_pytest() -> str | None:
+def find_pytest() -> str:
     override = os.environ.get("PYTEST")
     if override and Path(override).exists():
         return override
@@ -26,14 +26,13 @@ def find_pytest() -> str | None:
     if on_path is not None:
         return on_path
     local = PROJECT_DIR / ".venv" / "bin" / "pytest"
-    return str(local) if local.exists() else None
+    if local.exists():
+        return str(local)
+    sys.exit("pytest not found (set $PYTEST, put it on PATH, or install requirements-dev.txt into .venv)")
 
 
 def main() -> int:
     pytest_bin = find_pytest()
-    if pytest_bin is None:
-        print("pytest: not found - skipping (install pytest, or let CI enforce it)")
-        return 0
     return subprocess.run([pytest_bin, "-q"], cwd=PROJECT_DIR).returncode
 
 
