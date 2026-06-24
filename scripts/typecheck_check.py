@@ -2,10 +2,9 @@
 """Type-check guard for the release gate: `pyright` over the project's Python.
 
 Runs pyright (config in pyproject.toml's [tool.pyright]) over the OTA tool and the dev
-scripts in strict mode. If pyright is not installed it skips with a note and exits 0, so
-the local gate stays usable without it - CI installs pyright and enforces it. The four
-PlatformIO SCons build scripts are excluded in the config (they rely on Import()/env names
-pyright cannot see).
+scripts in strict mode. pyright is required: if it is not found the gate fails (install
+requirements-dev.txt into .venv). The four PlatformIO SCons build scripts are excluded in
+the config (they rely on Import()/env names pyright cannot see).
 
 pyright lookup order: $PYRIGHT, then `pyright` on PATH, then the project-root .venv
 (created from requirements-dev.txt). The OTA tool imports third-party deps
@@ -23,7 +22,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 VENV = PROJECT_DIR / ".venv"
 
 
-def find_pyright() -> str | None:
+def find_pyright() -> str:
     override = os.environ.get("PYRIGHT")
     if override and Path(override).exists():
         return override
@@ -31,7 +30,9 @@ def find_pyright() -> str | None:
     if on_path is not None:
         return on_path
     local = VENV / "bin" / "pyright"
-    return str(local) if local.exists() else None
+    if local.exists():
+        return str(local)
+    sys.exit("pyright not found (set $PYRIGHT, put it on PATH, or install requirements-dev.txt into .venv)")
 
 
 def deps_python() -> str:
@@ -42,9 +43,6 @@ def deps_python() -> str:
 
 def main() -> int:
     pyright = find_pyright()
-    if pyright is None:
-        print("typecheck: pyright not found - skipping (install pyright, or let CI enforce it)")
-        return 0
     version = subprocess.run([pyright, "--version"], capture_output=True, text=True).stdout.strip()
     print(f"typecheck: {version}", flush=True)
     return subprocess.run([pyright, "--pythonpath", deps_python()], cwd=PROJECT_DIR).returncode
