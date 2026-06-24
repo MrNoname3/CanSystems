@@ -22,6 +22,11 @@ data/*.bin
 # Scripts
 **/__pycache__/
 
+# Python tool caches (pytest/ruff drop a self-ignoring .gitignore inside too; listed
+# here explicitly so it does not depend on the tool version writing it).
+.pytest_cache/
+.ruff_cache/
+
 # Python tooling venv (project-root, from requirements-dev.txt); the bare pattern also
 # catches any stray ota/.venv from before the consolidation.
 .venv/
