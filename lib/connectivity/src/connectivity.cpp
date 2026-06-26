@@ -293,11 +293,11 @@ bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
 }
 
 bool Connectivity::syncNtpTime() {
-  const char* ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };
   constexpr uint32_t timeoutMs = Time::secToMs(15U);
 
   Logger::get()->printf_P(PSTR("[NTP] Synchronising...\r\n"));
-  configTime(0, 0, ntpServers[0], ntpServers[1], ntpServers[2]);
+  // System time tracks UTC; the TZ rule only feeds localtime() (Time::getLocalTm/getLocalString). DST is automatic.
+  configTzTime(tzEuropeBudapest, ntpServers[0], ntpServers[1], ntpServers[2]);
 
   const uint32_t startMs = millis();
 #if defined(ESP32)
