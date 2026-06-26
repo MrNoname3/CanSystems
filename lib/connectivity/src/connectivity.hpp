@@ -36,6 +36,8 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t reconnectTime = Time::secToMs(60U);     // Interval for MQTT reconnect retries and WDT-reset backoff.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
+  static constexpr const char* const ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };  // Hungarian NTP pool servers.
+  static constexpr const char* tzEuropeBudapest = "CET-1CEST,M3.5.0/2,M10.5.0/3";  // POSIX TZ (CET/CEST, EU DST rules); system time stays UTC, only localtime() applies it.
   // clang-format off
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.

@@ -14,6 +14,13 @@ namespace {
     if(currentTime == -1) { return nullptr; }           // Clock not set yet (NTP not synced).
     return gmtime(&currentTime);                        // Always UTC, independent of any TZ setting.
   }
+
+  /// @brief Returns the current time as a validated local `tm`, or nullptr if the clock is unset.
+  const tm* localNow() {
+    const time_t currentTime = time(nullptr);
+    if(currentTime == -1) { return nullptr; }           // Clock not set yet (NTP not synced).
+    return localtime(&currentTime);                     // Applies the POSIX TZ rule set at NTP sync (DST automatic).
+  }
 }  // namespace
 
 bool Time::getIsoUtcString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
@@ -28,6 +35,20 @@ bool Time::getUtcFileStamp(char* buf, size_t bufSize) {  // NOLINT(readability-c
   if(utc == nullptr) { return false; }
   const size_t formattedSize = strftime(buf, bufSize, "%Y%m%d_%H%M%SZ", utc);
   return (formattedSize > 0U && formattedSize < bufSize);
+}
+
+bool Time::getLocalString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+  const tm* local = localNow();
+  if(local == nullptr) { return false; }
+  const size_t formattedSize = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S%z", local);
+  return (formattedSize > 0U && formattedSize < bufSize);
+}
+
+bool Time::getLocalTm(tm& out) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+  const tm* local = localNow();
+  if(local == nullptr) { return false; }
+  out = *local;
+  return true;
 }
 #endif
 

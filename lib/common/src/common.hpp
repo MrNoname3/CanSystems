@@ -5,6 +5,9 @@
 #if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
 #include <pgmspace.h>                                               /// Provides PROGMEM support (real on ESP, shim natively for strcmp_P etc.).
 #endif
+#if defined(ESP8266) || defined(ESP32)
+#include <time.h>                                                   /// `tm` type for the local-time component accessor.
+#endif
 #include "sync.hpp"                                                 /// Cross-platform mutex/lock-guard (no-op off ESP32) for the Logger lock.
 
 /// @brief Utility class for time unit conversions and elapsed time checks.
@@ -68,6 +71,18 @@ public:
   /// @param bufSize Size of the destination buffer.
   /// @return `true` on success; `false` if the system clock is unset or formatting failed.
   [[nodiscard]] static bool getUtcFileStamp(char* buf, size_t bufSize);
+
+  /// @brief Writes the current local time as an ISO 8601 string with UTC offset ("2026-06-26T14:30:00+0200").
+  /// The offset reflects the active DST state of the POSIX TZ rule set at NTP sync; no manual offset handling.
+  /// @param buf Destination buffer (>= 25 bytes: "2026-06-26T14:30:00+0200" + null terminator).
+  /// @param bufSize Size of the destination buffer.
+  /// @return `true` on success; `false` if the system clock is unset or formatting failed.
+  [[nodiscard]] static bool getLocalString(char* buf, size_t bufSize);
+
+  /// @brief Copies the current local-time components into `out` (per the configured POSIX TZ, DST included).
+  /// @param out Destination `tm`, filled only on success (e.g. for wall-clock scheduling on `tm_hour`/`tm_min`).
+  /// @return `true` on success; `false` if the system clock is unset.
+  [[nodiscard]] static bool getLocalTm(tm& out);
 #endif
 
   Time() = delete;                                   // Delete constructor.
