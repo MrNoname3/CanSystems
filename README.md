@@ -99,7 +99,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
 | `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
-| `audio/`         | MP3 set for the alert node's DFPlayer SD card |
+| `audio/`         | MP3 set for the alert node's DFPlayer SD card (see [`audio/README.md`](audio/README.md)) |
 
 ## Building, testing, flashing
 
