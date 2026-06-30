@@ -11,12 +11,7 @@
 platformio-device-monitor-*
 logs/device-monitor-*
 
-# Notes
-notes.txt
-
 # Data
-audio/*
-!audio/.gitkeep
 data/*.bin
 
 # Scripts

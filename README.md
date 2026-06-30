@@ -50,7 +50,7 @@ even the CAN devices' firmware — is updatable over the air through MQTT.
 | `native_test`              | host       | Native unit-test suite (custom runner + shims) |
 
 The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader and fuses
-(see `notes.txt` for the avrdude commands and fuse values).
+(see [`bootloader/README.md`](bootloader/README.md) for the variants, fuses and rebuild steps).
 
 ## MQTT scheme
 
@@ -100,7 +100,6 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
 | `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
 | `audio/`         | MP3 set for the alert node's DFPlayer SD card |
-| `notes.txt`      | Fuse values, avrdude/bootloader build commands, misc. operational notes |
 
 ## Building, testing, flashing
 
@@ -158,7 +157,9 @@ Exit code is 0 only on a fully clean run (~5 minutes).
 
 - **`data/config` symlink:** requires `git config core.symlinks true`. If it ever turns into a
   19-byte regular file containing the path text, the LittleFS image silently loses the config
-  files. File-sync tools can also break it (look for `*_Conflict` files).
+  files. File-sync tools can also break it (look for `*_Conflict` files). Restore it with
+  `git config core.symlinks true && rm data/config && git checkout -- data/config` — note
+  `core.symlinks` is a local setting, so a fresh clone can flatten it again.
 - **Cross-project reflash:** a running firmware rejects an OTA image whose `binId` does not match
   its own environment, so converting a board to another project needs a one-time serial flash.
 - **CAN IDs** are stored in EEPROM (CRC-protected). To provision a new node, build once with

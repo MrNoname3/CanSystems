@@ -24,6 +24,20 @@ it (and needs the larger 1024-byte section). The matching fuses live in
 pio run -e nanoatmega328_bootloader_urboot800 -t bootloader
 ```
 
+## Reading the fuses
+
+PlatformIO *writes* the fuses for you (`-t fuses`, or `-t bootloader` which also burns the
+bootloader), but has no read-back target. To verify the fuses actually on a chip, query the
+programmer with avrdude directly — e.g. via USBasp (the `upload_protocol` these envs use):
+
+```sh
+avrdude -c usbasp -p m328p -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h -U lock:r:-:h
+```
+
+With an Arduino-as-ISP, swap the programmer and add its serial port/baud, e.g.
+`-c avrisp -b 19200 -P /dev/ttyUSB0`. The expected values live in the `board_fuses` keys of
+`platformio.ini`: lfuse `0xFF`, hfuse `0xD4` (771) / `0xD6` (800), efuse `0xFC`.
+
 ## Rebuilding
 
 `scripts/build_urboot.sh` reproduces these **byte-for-byte** in a container. It

@@ -11,6 +11,10 @@ It reads two files from this directory:
 - **`devices.yaml`** — the device list and per-device file mappings (tracked; see the existing
   file for the structure).
 
+The CA cert referenced by `cafile` (and uploaded to the devices as `mosq-ca.crt`) is
+per-deployment and git-ignored. For a broker behind a public CA it is just that CA's roots —
+e.g. for Let's Encrypt the ISRG Root X1 + X2 bundle; a self-signed broker cert is not needed.
+
 ## Setup
 
 The tool's runtime deps (`paho-mqtt`, `pyyaml`, `tqdm`) are in `requirements.txt`. They are
