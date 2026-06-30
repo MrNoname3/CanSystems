@@ -117,19 +117,30 @@ Firmware version comes from the git commit count, so commit before flashing rele
 
 ### Development setup
 
-C/C++ builds and tests run through PlatformIO. The Python tooling for the release gate
-(clang-format, ruff, pyright, pytest, gcovr) plus the OTA tool's runtime deps are pinned in
-`requirements-dev.txt`; install them into a **project-root `.venv`**, which every gate guard
-discovers automatically:
+C/C++ builds and tests run through PlatformIO. Setting up a fresh clone:
 
 ```sh
-python -m venv .venv
+git clone <repo> && cd CanSystems
+git config core.symlinks true          # so data/config stays a symlink (see Gotchas)
+
+python -m venv .venv                    # release-gate Python tooling + OTA runtime deps
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-PlatformIO is **not** in that venv — it runs from its own install (`pio`, or
-`~/.platformio/penv/bin/pio`); the root `.venv` does not interfere with it. CI installs the same
-file plus `platformio` and `intelhex` on top.
+- **PlatformIO** provides the build (`pio`). Install it via the VS Code PlatformIO IDE
+  extension (recommended in `.vscode/extensions.json`) or `pip install platformio`; it runs from
+  its own install (`~/.platformio/penv/bin/pio`), not from `.venv`, and the root `.venv` does not
+  interfere with it. Toolchains download on the first build (needs internet).
+- The Python tooling for the release gate (clang-format, ruff, pyright, pytest, gcovr) plus the
+  OTA tool's runtime deps are pinned in `requirements-dev.txt`; installed into the **project-root
+  `.venv`**, every gate guard discovers it automatically. CI installs the same file plus
+  `platformio` and `intelhex` on top.
+- **Second push remote (optional):** a GitHub clone only has `origin`. To mirror `master` to the
+  self-hosted Gitea as well, add it: `git remote add gitea <gitea-url>`.
+- **Per-deployment files are not in the repo** (git-ignored): the OTA tool's `ota/config.yaml`,
+  and each device's `ota/files/.../server.json` + `mosq-ca.crt`. They are only needed to run OTA
+  or to build the on-device LittleFS config image — recreate them from the templates in
+  [`ota/README.md`](ota/README.md). Building and testing the firmware needs none of them.
 
 ### Release gate
 

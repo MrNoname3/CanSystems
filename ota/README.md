@@ -65,6 +65,36 @@ Default port when `port` is omitted (or `0`):
 | `mqtt`   | 1883    | 8883   |
 | `ws`     | 80      | 443    |
 
+## Device config files (`ota/files/`)
+
+These are the files the tool uploads to a device's `/config/` (per `devices.yaml`). They are
+per-deployment and git-ignored (`server.json`, `*.crt`), so a fresh clone won't have them —
+create them as needed. Paths are relative to `ota/`, and `ota/files/common/` is also the target
+of the `data/config` symlink, so files placed there are picked up by the LittleFS image too.
+
+**`server.json`** — the WiFi + MQTT credentials the firmware reads from `/config/server.json`
+(JSON; `//` comments are allowed). All keys live in this one file:
+
+```json
+{
+  "ssid": "MyWiFi",
+  "password": "wifi-secret",
+  "mqttUserName": "device01",
+  "mqttPassword": "mqtt-secret",
+  "mqttServerUrl": "broker.example.com",
+  "mqttServerPort": 8883,
+  "haDiscovery": true        // optional, default false: Home Assistant auto-discovery
+}
+```
+
+**`tube.json`** — radiation node only; selects the Geiger tube type:
+
+```json
+{ "tube": 1 }   // 1 = J305, 2 = M4011
+```
+
+**`mosq-ca.crt`** — the broker's CA certificate (see the note above).
+
 ## Running
 
 ```sh
