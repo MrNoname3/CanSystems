@@ -122,6 +122,7 @@ C/C++ builds and tests run through PlatformIO. Setting up a fresh clone:
 ```sh
 git clone <repo> && cd CanSystems
 git config core.symlinks true          # so data/config stays a symlink (see Gotchas)
+git config core.autocrlf input         # Windows only: keep LF endings (the gate checks them)
 
 python -m venv .venv                    # release-gate Python tooling + OTA runtime deps
 .venv/bin/pip install -r requirements-dev.txt
