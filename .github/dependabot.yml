@@ -25,10 +25,5 @@ updates:
     groups:
       dev-tooling:
         patterns: ["*"]      # one combined PR for all dev-tooling bumps
-    ignore:
-      # clang-format is pinned to the VS Code cpptools bundled version on purpose, so the gate
-      # never disagrees with format-on-save. Bumping it must stay manual and in lockstep with
-      # the editor — Dependabot cannot know that constraint.
-      - dependency-name: clang-format
     commit-message:
       prefix: chore(deps-dev)
