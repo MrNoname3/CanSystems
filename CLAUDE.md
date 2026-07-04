@@ -67,6 +67,7 @@ Python tooling.
 
 ## Gotchas
 
-See README.md "Gotchas" (the `data/config` symlink, cross-project `binId` reflash, CAN IDs in
-EEPROM). Also: the MQ-135 smoke node is WIP and likely to be dropped — don't flag its dead
-calibration path or missing tests as defects.
+See README.md "Gotchas" (cross-project `binId` reflash, CAN IDs in EEPROM). Also: the MQ-135
+smoke node is WIP and likely to be dropped — don't flag its dead calibration path or missing
+tests as defects. Per-deployment secrets live in the git-ignored `ota/secrets.yaml`
+(+ `ota/files/common/mosq-ca.crt`) — never commit or print their contents.
