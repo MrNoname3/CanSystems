@@ -10,7 +10,7 @@ It reads two files from this directory:
 - **`secrets.yaml`** — every per-deployment secret in one git-ignored file: the tool's broker
   connection and the devices' `server.json` fields (you create this; template below). When
   cloning the repo on another machine, this is the single file to carry over manually
-  (plus `files/common/mosq-ca.crt`, see below).
+  (plus `mosq-ca.crt`, see below).
 - **`devices.yaml`** — the device list, per-device file mappings and non-secret device config
   (tracked; see the existing file for the structure).
 
@@ -49,7 +49,7 @@ broker:
   # TLS (recommended). When tls_enabled is true, point cafile at the broker's CA cert,
   # or leave it null to use the system CA store. A relative path resolves against ota/.
   tls_enabled: true
-  cafile: files/common/mosq-ca.crt
+  cafile: mosq-ca.crt
 
   # basepath: /            # only used with the "ws" protocol
 
@@ -96,15 +96,13 @@ It is **not stored anywhere** — the tool renders it on the fly from `secrets.y
 Home Assistant auto-discovery toggle, default false). A `devices.yaml` file entry selects
 the rendered content with `render: server_json` instead of a `local_path`.
 
-**`tube.json`** — radiation node only; selects the Geiger tube type. Tracked under
-`ota/files/<mac>/`:
-
-```json
-{ "tube": 1 }   // 1 = J305, 2 = M4011
-```
+**`tube.json`** — radiation node only; selects the Geiger tube type (1 = J305, 2 = M4011).
+Non-secret and tiny, so it lives **inline** in the device's `devices.yaml` file entry as a
+`content:` mapping, serialized to compact JSON at send time. Any small JSON config can be
+inlined the same way instead of pointing `local_path` at a file.
 
 **`mosq-ca.crt`** — the broker's CA certificate (see the note above), expected at
-`ota/files/common/mosq-ca.crt` (git-ignored).
+`ota/mosq-ca.crt` (git-ignored).
 
 ## Running
 

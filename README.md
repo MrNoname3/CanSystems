@@ -143,7 +143,7 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 - **Second push remote (optional):** a GitHub clone only has `origin`. To mirror `master` to the
   self-hosted Gitea as well, add it: `git remote add gitea <gitea-url>`.
 - **Per-deployment files are not in the repo** (git-ignored): `ota/secrets.yaml` (all broker
-  and device credentials in one file) and `ota/files/common/mosq-ca.crt`. They are only needed
+  and device credentials in one file) and `ota/mosq-ca.crt`. They are only needed
   to run OTA or to provision a device — copy them from your other machine or recreate them
   from the templates in [`ota/README.md`](ota/README.md). Building and testing the firmware
   needs none of them.

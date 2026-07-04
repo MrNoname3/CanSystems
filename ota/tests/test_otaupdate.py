@@ -287,6 +287,30 @@ def test_parse_file_unknown_render_type(tmp_path: Path) -> None:
         )
 
 
+def test_parse_file_inline_content_entry(tmp_path: Path) -> None:
+    entry = _file_parser(tmp_path)._parse_file(
+        {"name": "Tube config", "content": {"tube": 1}, "device_path": "/config/tube.json"},
+        mac="aabbccddeeff",
+    )
+    assert entry.content == {"tube": 1}
+    assert entry.local_path is None and entry.render is None
+
+
+def test_parse_file_content_must_be_mapping(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "content": [1, 2], "device_path": "/x"}, mac="aabbccddeeff"
+        )
+
+
+def test_parse_file_content_and_render_conflict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "content": {}, "render": "server_json", "device_path": "/x"},
+            mac="aabbccddeeff",
+        )
+
+
 # --- build_file_provider ------------------------------------------------------
 
 def _device_with_secrets(tmp_path: Path) -> "tuple[ota.DeviceEntry, ota.ConfigManager]":
@@ -319,6 +343,13 @@ def test_provider_reads_local_file(tmp_path: Path) -> None:
     source = _write(tmp_path, "blob.bin", b"\x00\x01")
     entry = ota.FileEntry(name="blob", device_path="/blob.bin", local_path=source)
     assert ota.build_file_provider(entry, device, manager).data == b"\x00\x01"
+
+
+def test_provider_serializes_inline_content(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
+                          content={"tube": 1})
+    assert ota.build_file_provider(entry, device, manager).data == b'{"tube":1}'
 
 
 def test_provider_missing_local_file_raises(tmp_path: Path) -> None:

@@ -112,12 +112,14 @@ class CommandEntry:
 @dataclass
 class FileEntry:
     """A transferable file entry from devices.yaml.
-    Exactly one of `local_path` (a file on disk) or `render` (content generated
-    at send time; currently only "server_json") is set."""
+    Exactly one of `local_path` (a file on disk), `render` (content generated
+    at send time; currently only "server_json") or `content` (an inline mapping
+    sent as compact JSON) is set."""
     name: str                        # Display name shown in the menu
     device_path: str                 # Destination path on the device (sent as 'name' in JSON)
     local_path: Optional[Path] = None  # Local path to the file (relative to ota/ directory)
     render: Optional[str] = None       # Renderer id for generated content ("server_json")
+    content: Optional[Dict[str, Any]] = None  # Inline JSON content from devices.yaml
 
 
 @dataclass
@@ -232,23 +234,27 @@ class DeviceManager:
             raise ValueError(
                 f"Each file entry must have 'name' and 'device_path' fields (device: {mac})"
             )
-        has_local = 'local_path' in f
-        has_render = 'render' in f
-        if has_local == has_render:
+        sources = [key for key in ('local_path', 'render', 'content') if key in f]
+        if len(sources) != 1:
             raise ValueError(
-                f"File entry '{f['name']}' must have exactly one of 'local_path' or 'render' "
-                f"(device: {mac})"
+                f"File entry '{f['name']}' must have exactly one of 'local_path', 'render' "
+                f"or 'content' (device: {mac})"
             )
-        if has_render and f['render'] != 'server_json':
+        if 'render' in f and f['render'] != 'server_json':
             raise ValueError(
                 f"Unknown render type '{f['render']}' in file entry '{f['name']}' "
                 f"(device: {mac}); only 'server_json' is supported"
             )
+        if 'content' in f and not isinstance(f['content'], dict):
+            raise ValueError(
+                f"'content' must be a mapping in file entry '{f['name']}' (device: {mac})"
+            )
         return FileEntry(
             name=f['name'],
             device_path=f['device_path'],
-            local_path=self.script_dir / f['local_path'] if has_local else None,
-            render=f.get('render')
+            local_path=self.script_dir / f['local_path'] if 'local_path' in f else None,
+            render=f.get('render'),
+            content=cast(Optional[Dict[str, Any]], f.get('content'))
         )
 
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
@@ -658,12 +664,15 @@ class RenderedDataProvider:
 def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
                         config_manager: "ConfigManager") -> "FileDataProvider | RenderedDataProvider":
     """Data provider for a file entry: disk-backed for local_path entries,
-    rendered in memory for render entries."""
+    rendered in memory for render and inline-content entries."""
     if file_entry.render == 'server_json':
         return RenderedDataProvider(render_server_json(
             config_manager.device_server_secrets(device.mac), device.server_config))
+    if file_entry.content is not None:
+        return RenderedDataProvider(
+            json.dumps(file_entry.content, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
     if file_entry.local_path is None:
-        raise ValueError(f"File entry '{file_entry.name}' has neither local_path nor render")
+        raise ValueError(f"File entry '{file_entry.name}' has no content source")
     if not file_entry.local_path.exists():
         raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
     return FileDataProvider(file_entry.local_path)
@@ -1217,8 +1226,12 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
 
     if result.file is not None:
         provider = build_file_provider(result.file, result.device, config_manager)
-        source = result.file.local_path if result.file.local_path is not None \
-            else "rendered from devices.yaml + secrets.yaml"
+        if result.file.local_path is not None:
+            source = str(result.file.local_path)
+        elif result.file.content is not None:
+            source = "inline content from devices.yaml"
+        else:
+            source = "rendered from devices.yaml + secrets.yaml"
         print(f"  Action:      {result.file.name}")
         print(f"  Source:      {source}")
         print(f"  Device path: {result.file.device_path}")
