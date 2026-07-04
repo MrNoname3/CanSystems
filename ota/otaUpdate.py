@@ -9,7 +9,10 @@ Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.ya
 """
 
 import json
+import os
 import re
+import shutil
+import subprocess
 import time
 import base64
 import sys
@@ -144,12 +147,13 @@ class ProjectEntry:
 @dataclass
 class ActionResult:
     """Holds the result of the interactive menu selection.
-    Exactly one of `file` or `command` is not None; the other is always None.
-    If both are None, the selected action is a firmware upload."""
+    At most one of `file` / `command` is not None, or `provision` is True.
+    If none of them is set, the selected action is a firmware upload."""
     project: ProjectEntry
     device: DeviceEntry
     file: Optional[FileEntry] = None        # Set when a file transfer was selected.
     command: Optional[CommandEntry] = None  # Set when a command was selected.
+    provision: bool = False                 # Set when USB provisioning was selected.
 
 
 @dataclass
@@ -666,6 +670,68 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
 
 
 # ---------------------------------------------------------------------------
+# USB provisioning (initial LittleFS image)
+# ---------------------------------------------------------------------------
+
+class Provisioner:
+    """Builds and uploads the initial LittleFS image for a device over USB.
+
+    Materializes every /config/* file entry of the device into <repo>/data
+    (the PlatformIO filesystem source directory, git-ignored), runs
+    `pio run -e <env> -t uploadfs`, then clears data/ again. This puts the
+    device's own credentials on it from the very first flash — no shared
+    bootstrap config is involved."""
+
+    CONFIG_PREFIX = '/config/'
+
+    def __init__(self, repo_root: Path, pio_cmd: str):
+        self.repo_root = repo_root
+        self.data_dir = repo_root / 'data'
+        self.pio_cmd = pio_cmd
+
+    def provision(self, project: ProjectEntry, device: DeviceEntry,
+                  config_manager: "ConfigManager") -> bool:
+        """Materialize the device's /config/* files into data/ and flash the
+        filesystem image over serial. data/ is cleared before (so nothing
+        stale ends up on the device) and after (so no credentials linger)."""
+        entries = [f for f in device.files if f.device_path.startswith(self.CONFIG_PREFIX)]
+        if not entries:
+            raise ValueError(f"Device {device.mac} has no {self.CONFIG_PREFIX}* file entries to provision")
+
+        self._clear_data_dir()
+        try:
+            for entry in entries:
+                provider = build_file_provider(entry, device, config_manager)
+                target = self.data_dir / entry.device_path.lstrip('/')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(provider.data)
+                logging.info(f"Materialized {entry.device_path} ({provider.size} bytes)")
+            return self._run_uploadfs(project.pio_project)
+        finally:
+            self._clear_data_dir()
+
+    def _clear_data_dir(self):
+        """Reset data/ to an empty directory so only the freshly materialized
+        files end up in the filesystem image."""
+        if self.data_dir.exists():
+            shutil.rmtree(self.data_dir)
+        self.data_dir.mkdir()
+
+    def _run_uploadfs(self, pio_env: str) -> bool:
+        """Run `pio run -e <env> -t uploadfs` from the repo root, streaming its output."""
+        command = [self.pio_cmd, 'run', '-e', pio_env, '-t', 'uploadfs']
+        env = dict(os.environ)
+        env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
+        logging.info(f"Running: {' '.join(command)}")
+        try:
+            result = subprocess.run(command, cwd=self.repo_root, env=env)
+        except FileNotFoundError:
+            logging.error(f"pio executable not found: {self.pio_cmd} (set the 'pio' key in secrets.yaml)")
+            return False
+        return result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
 # MQTT client
 # ---------------------------------------------------------------------------
 
@@ -1080,8 +1146,9 @@ class CommandSender(_BaseTransfer):
 # Main
 # ---------------------------------------------------------------------------
 
-# Sentinel used in the action menu to identify the firmware upload option.
+# Sentinels used in the action menu for the fixed (non-devices.yaml) options.
 _FW_OPTION = "Firmware upload"
+_PROVISION_OPTION = "Initial provisioning (USB: build + upload LittleFS image)"
 
 
 def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
@@ -1117,10 +1184,10 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
             while True:
                 # --- Level 3: action selection ---
-                # Order: firmware upload → file transfers → commands.
+                # Order: firmware upload → provisioning → file transfers → commands.
                 file_map    = {f.name: f for f in selected_device.files}
                 command_map = {c.display_name: c for c in selected_project.commands}
-                action_options = [_FW_OPTION] + list(file_map) + list(command_map)
+                action_options = [_FW_OPTION, _PROVISION_OPTION] + list(file_map) + list(command_map)
 
                 choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
@@ -1131,6 +1198,8 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
                 if choice == _FW_OPTION:
                     return ActionResult(project=selected_project, device=selected_device)
+                if choice == _PROVISION_OPTION:
+                    return ActionResult(project=selected_project, device=selected_device, provision=True)
                 if choice in file_map:
                     return ActionResult(project=selected_project, device=selected_device, file=file_map[choice])
                 if choice in command_map:
@@ -1191,6 +1260,12 @@ def main():
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
 
+        if result.provision:
+            print("  Action:      Initial provisioning (USB)")
+            print()
+            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
+            sys.exit(0 if provisioner.provision(result.project, result.device, config_manager) else 1)
+
         worker = _build_worker(result, config_manager, mqtt_config)
 
         # Set up signal handler for graceful shutdown
@@ -1205,6 +1280,9 @@ def main():
 
         sys.exit(0 if worker.run() else 1)
 
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        sys.exit(1)
     except FileNotFoundError as e:
         print(f"❌ File Error: {e}")
         sys.exit(1)

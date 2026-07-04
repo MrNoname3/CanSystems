@@ -345,6 +345,122 @@ def test_rendered_transfer_start_message(tmp_path: Path) -> None:
     assert "binId" not in message
 
 
+# --- Provisioner: data/ materialization + uploadfs invocation ---------------
+
+class _FakePioRun:
+    """Stands in for subprocess.run: records the command and snapshots data/."""
+
+    def __init__(self, repo_root: Path, returncode: int = 0) -> None:
+        self.repo_root = repo_root
+        self.returncode = returncode
+        self.commands: list[list[str]] = []
+        self.data_snapshot: dict[str, bytes] = {}
+
+    def __call__(self, command: list[str], **kwargs: Any) -> Any:
+        self.commands.append(command)
+        data_dir = self.repo_root / "data"
+        self.data_snapshot = {
+            str(p.relative_to(data_dir)): p.read_bytes()
+            for p in sorted(data_dir.rglob("*")) if p.is_file()
+        }
+
+        class _Result:
+            returncode = self.returncode
+
+        return _Result()
+
+
+def _provision_setup(tmp_path: Path) -> "tuple[ota.ProjectEntry, ota.DeviceEntry, ota.ConfigManager, Path]":
+    """A repo root with an ota/ dir, secrets.yaml, a cert file, and one device."""
+    repo_root = tmp_path / "repo"
+    ota_dir = repo_root / "ota"
+    ota_dir.mkdir(parents=True)
+    (ota_dir / "secrets.yaml").write_text("""
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+""", encoding="utf-8")
+    (ota_dir / "ca.crt").write_bytes(b"CERTBYTES")
+
+    device = ota.DeviceEntry(
+        mac="aabbccddeeff",
+        server_config={"haDiscovery": True},
+        files=[
+            ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=ota_dir / "ca.crt"),
+            ota.FileEntry(name="Server config", device_path="/config/server.json",
+                          render="server_json"),
+            ota.FileEntry(name="CAN firmware", device_path="/canAlertFw.bin",
+                          local_path=ota_dir / "missing.bin"),  # not /config/* -> must be skipped
+        ],
+    )
+    project = ota.ProjectEntry(name="Thermo", pio_project="project_esp8266_thermo", devices=[device])
+    manager = ota.ConfigManager(str(ota_dir / "otaUpdate.py"))
+    return project, device, manager, repo_root
+
+
+def test_provision_materializes_config_files_and_runs_uploadfs(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    provisioner = ota.Provisioner(repo_root, "pio")
+    assert provisioner.provision(project, device, manager) is True
+
+    # pio was invoked with the project's environment and the uploadfs target.
+    assert fake_run.commands == [["pio", "run", "-e", "project_esp8266_thermo", "-t", "uploadfs"]]
+    # At upload time data/ held exactly the /config/* files (the CAN fw entry is skipped).
+    assert set(fake_run.data_snapshot) == {"config/mosq-ca.crt", "config/server.json"}
+    assert fake_run.data_snapshot["config/mosq-ca.crt"] == b"CERTBYTES"
+    assert json.loads(fake_run.data_snapshot["config/server.json"])["mqttUserName"] == "dev"
+    # data/ is cleared again afterwards.
+    assert list((repo_root / "data").iterdir()) == []
+
+
+def test_provision_clears_stale_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    stale = repo_root / "data" / "leftover.bin"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"junk")
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    assert ota.Provisioner(repo_root, "pio").provision(project, device, manager) is True
+    assert "leftover.bin" not in fake_run.data_snapshot
+
+
+def test_provision_failed_upload_returns_false_and_cleans_up(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    monkeypatch.setattr(ota.subprocess, "run", _FakePioRun(repo_root, returncode=1))
+
+    assert ota.Provisioner(repo_root, "pio").provision(project, device, manager) is False
+    assert list((repo_root / "data").iterdir()) == []
+
+
+def test_provision_without_config_entries_raises(tmp_path: Path) -> None:
+    project, _device, manager, repo_root = _provision_setup(tmp_path)
+    bare = ota.DeviceEntry(mac="aabbccddeeff", files=[])
+    with pytest.raises(ValueError):
+        ota.Provisioner(repo_root, "pio").provision(project, bare, manager)
+
+
+def test_provision_missing_pio_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+
+    def raise_missing(command: list[str], **kwargs: Any) -> Any:
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(ota.subprocess, "run", raise_missing)
+    assert ota.Provisioner(repo_root, "/nonexistent/pio").provision(project, device, manager) is False
+    assert list((repo_root / "data").iterdir()) == []
+
+
 # --- OTA framing: the piece-splitting that builds the wire frames -----------
 
 class _RecordingMQTT:
