@@ -24,6 +24,7 @@ logs/device-monitor-*
 .venv/
 
 # OTA
+ota/secrets.yaml
 ota/config.yaml
 ota/files/**/*.crt
 ota/files/**/server.json

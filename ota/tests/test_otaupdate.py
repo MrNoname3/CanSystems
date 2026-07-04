@@ -82,6 +82,85 @@ def test_mqttconfig_empty_host() -> None:
         ota.MQTTConfig(host="   ")
 
 
+# --- ConfigManager: secrets.yaml loading ------------------------------------
+
+def _write_secrets(tmp_path: Path, content: str) -> "ota.ConfigManager":
+    """Write a secrets.yaml into tmp_path and return a ConfigManager rooted there."""
+    (tmp_path / "secrets.yaml").write_text(content, encoding="utf-8")
+    return ota.ConfigManager(str(tmp_path / "otaUpdate.py"))
+
+
+def test_broker_section_builds_mqtt_config(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, """
+broker:
+  protocol: ws
+  host: broker.example.com
+  username: user
+  password: pass
+  tls_enabled: true
+""")
+    config = manager.load_mqtt_config()
+    assert config.protocol == "ws"
+    assert config.host == "broker.example.com"
+    assert config.port == 443  # ws + TLS default
+    assert config.username == "user"
+    assert config.tls_enabled is True
+
+
+def test_relative_cafile_resolves_against_ota_dir(tmp_path: Path) -> None:
+    (tmp_path / "ca.crt").write_bytes(b"cert")
+    manager = _write_secrets(tmp_path, """
+broker:
+  host: broker
+  tls_enabled: true
+  cafile: ca.crt
+""")
+    assert manager.load_mqtt_config().cafile == str(tmp_path / "ca.crt")
+
+
+def test_missing_secrets_file_raises(tmp_path: Path) -> None:
+    manager = ota.ConfigManager(str(tmp_path / "otaUpdate.py"))
+    with pytest.raises(FileNotFoundError):
+        manager.load_mqtt_config()
+
+
+def test_missing_broker_section_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "devices: {}\n")
+    with pytest.raises(ValueError):
+        manager.load_mqtt_config()
+
+
+def test_device_secrets_merge_defaults_and_overrides(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, """
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+    mqttServerPort: 443
+""")
+    secrets = manager.device_server_secrets("aabbccddeeff")
+    assert secrets == {
+        "mqttServerUrl": "broker.example.com",
+        "mqttServerPort": 443,  # device entry overrides the default
+        "mqttUserName": "dev",
+        "mqttPassword": "secret",
+    }
+
+
+def test_device_secrets_unknown_mac_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "devices: {aabbccddeeff: {mqttUserName: x}}\n")
+    with pytest.raises(ValueError):
+        manager.device_server_secrets("000000000000")
+
+
+def test_pio_command_override(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "pio: /custom/pio\n")
+    assert manager.pio_command() == "/custom/pio"
+
+
 # --- DeviceConfig: topic construction --------------------------------------
 
 def test_deviceconfig_topics() -> None:

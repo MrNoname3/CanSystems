@@ -5,7 +5,7 @@ ESP8266/ESP32 Over-The-Air (OTA) Update Tool via MQTT
 This tool provides a modular approach to updating ESP devices firmware
 and transferring configuration files through MQTT communication with
 proper error handling and progress tracking.
-Uses YAML configuration file (config.yaml) and device list (devices.yaml).
+Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.yaml).
 """
 
 import json
@@ -343,45 +343,101 @@ class MenuSelector:
 # ---------------------------------------------------------------------------
 
 class ConfigManager:
-    """Manages YAML configuration loading and validation"""
+    """Loads ota/secrets.yaml: the tool's broker connection, the per-device
+    server.json secrets, and the optional pio executable override used by
+    USB provisioning. secrets.yaml is git-ignored — it is the single file
+    carried over manually when the repo is cloned on another machine."""
 
     def __init__(self, script_path: str):
         self.script_dir = Path(script_path).parent
         self.parent_dir = self.script_dir.parent
-        self.config_file = self.script_dir / 'config.yaml'
+        self.secrets_file = self.script_dir / 'secrets.yaml'
+        self._secrets: Optional[dict[str, Any]] = None
 
-    def load_mqtt_config(self) -> MQTTConfig:
-        """Load MQTT configuration from config.yaml"""
-        if not self.config_file.exists():
+    def _load_secrets(self) -> dict[str, Any]:
+        """Load and cache secrets.yaml."""
+        if self._secrets is not None:
+            return self._secrets
+
+        if not self.secrets_file.exists():
             raise FileNotFoundError(
-                f"Configuration file not found: {self.config_file}\n"
-                f"Please create a config.yaml file in the same directory as the script."
+                f"Secrets file not found: {self.secrets_file}\n"
+                f"Create ota/secrets.yaml from the template in ota/README.md (it is git-ignored)."
             )
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as file:
-                config_data: dict[str, Any] = yaml.safe_load(file) or {}
+            with open(self.secrets_file, 'r', encoding='utf-8') as file:
+                data: Any = yaml.safe_load(file) or {}
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse YAML configuration file: {e}")
+            raise ValueError(f"Failed to parse YAML secrets file: {e}")
         except UnicodeDecodeError as e:
-            raise ValueError(f"Configuration file encoding error: {e}")
+            raise ValueError(f"Secrets file encoding error: {e}")
         except Exception as e:
-            raise IOError(f"Failed to read configuration file: {e}")
+            raise IOError(f"Failed to read secrets file: {e}")
+
+        if not isinstance(data, dict):
+            raise ValueError("secrets.yaml must be a YAML mapping")
+
+        self._secrets = cast(dict[str, Any], data)
+        return self._secrets
+
+    def load_mqtt_config(self) -> MQTTConfig:
+        """Build the tool's broker connection from the 'broker' section of secrets.yaml."""
+        broker: Any = self._load_secrets().get('broker')
+        if not isinstance(broker, dict):
+            raise ValueError("secrets.yaml must contain a 'broker' mapping")
+        broker_data = cast(dict[str, Any], broker)
+
+        # A relative cafile is resolved against ota/, so the tool works from any CWD.
+        cafile: Optional[str] = broker_data.get('cafile')
+        if cafile is not None and not Path(cafile).expanduser().is_absolute():
+            cafile = str(self.script_dir / cafile)
 
         try:
             return MQTTConfig(
-                protocol=config_data.get('protocol', 'mqtt'),
-                host=config_data.get('host', ''),
-                port=config_data.get('port', 0),
-                basepath=config_data.get('basepath', '/'),
-                client_id=config_data.get('client_id', "OtaUpdater"),
-                username=config_data.get('username'),
-                password=config_data.get('password'),
-                tls_enabled=config_data.get('tls_enabled', False),
-                cafile=config_data.get('cafile')
+                protocol=broker_data.get('protocol', 'mqtt'),
+                host=broker_data.get('host', ''),
+                port=broker_data.get('port', 0),
+                basepath=broker_data.get('basepath', '/'),
+                client_id=broker_data.get('client_id', "OtaUpdater"),
+                username=broker_data.get('username'),
+                password=broker_data.get('password'),
+                tls_enabled=broker_data.get('tls_enabled', False),
+                cafile=cafile
             )
         except (ValueError, FileNotFoundError) as e:
             raise ValueError(f"Configuration validation error: {e}")
+
+    def device_server_secrets(self, mac: str) -> dict[str, Any]:
+        """Secret server.json fields for one device: 'server_defaults' merged
+        with (and overridden by) the device's entry under 'devices'."""
+        data = self._load_secrets()
+
+        defaults: Any = data.get('server_defaults') or {}
+        if not isinstance(defaults, dict):
+            raise ValueError("'server_defaults' in secrets.yaml must be a mapping")
+
+        devices: Any = data.get('devices') or {}
+        if not isinstance(devices, dict):
+            raise ValueError("'devices' in secrets.yaml must be a mapping")
+
+        entry: Any = cast(dict[Any, Any], devices).get(mac)
+        if entry is None:
+            raise ValueError(f"No entry for device {mac} under 'devices' in secrets.yaml")
+        if not isinstance(entry, dict):
+            raise ValueError(f"Device entry {mac} in secrets.yaml must be a mapping")
+
+        return {**cast(dict[str, Any], defaults), **cast(dict[str, Any], entry)}
+
+    def pio_command(self) -> str:
+        """The pio executable used for provisioning: the optional top-level 'pio'
+        key of secrets.yaml, else the standard PlatformIO penv location when it
+        exists, else 'pio' from PATH."""
+        override: Any = self._load_secrets().get('pio')
+        if override:
+            return str(Path(str(override)).expanduser())
+        bundled = Path.home() / '.platformio' / 'penv' / 'bin' / 'pio'
+        return str(bundled) if bundled.exists() else 'pio'
 
     def get_firmware_path(self, pio_project: str) -> Path:
         """Get the firmware binary path"""
