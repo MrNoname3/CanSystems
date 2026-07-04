@@ -108,10 +108,13 @@ class CommandEntry:
 
 @dataclass
 class FileEntry:
-    """A transferable file entry from devices.yaml"""
-    name: str                  # Display name shown in the menu
-    local_path: Path           # Local path to the file (relative to ota/ directory)
-    device_path: str           # Destination path on the device (sent as 'name' in JSON)
+    """A transferable file entry from devices.yaml.
+    Exactly one of `local_path` (a file on disk) or `render` (content generated
+    at send time; currently only "server_json") is set."""
+    name: str                        # Display name shown in the menu
+    device_path: str                 # Destination path on the device (sent as 'name' in JSON)
+    local_path: Optional[Path] = None  # Local path to the file (relative to ota/ directory)
+    render: Optional[str] = None       # Renderer id for generated content ("server_json")
 
 
 @dataclass
@@ -120,6 +123,7 @@ class DeviceEntry:
     mac: str
     friendly_name: Optional[str] = None
     files: List[FileEntry] = field(default_factory=list[FileEntry])
+    server_config: Dict[str, Any] = field(default_factory=dict[str, Any])  # Non-secret server.json fields (e.g. haDiscovery).
 
     @property
     def display_name(self) -> str:
@@ -220,25 +224,41 @@ class DeviceManager:
 
     def _parse_file(self, f: dict[str, Any], mac: str) -> FileEntry:
         """Parse a single file entry dict into a FileEntry object."""
-        if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
+        if 'name' not in f or 'device_path' not in f:
             raise ValueError(
-                f"Each file entry must have 'name', 'local_path' and 'device_path' fields "
+                f"Each file entry must have 'name' and 'device_path' fields (device: {mac})"
+            )
+        has_local = 'local_path' in f
+        has_render = 'render' in f
+        if has_local == has_render:
+            raise ValueError(
+                f"File entry '{f['name']}' must have exactly one of 'local_path' or 'render' "
                 f"(device: {mac})"
+            )
+        if has_render and f['render'] != 'server_json':
+            raise ValueError(
+                f"Unknown render type '{f['render']}' in file entry '{f['name']}' "
+                f"(device: {mac}); only 'server_json' is supported"
             )
         return FileEntry(
             name=f['name'],
-            local_path=self.script_dir / f['local_path'],
-            device_path=f['device_path']
+            device_path=f['device_path'],
+            local_path=self.script_dir / f['local_path'] if has_local else None,
+            render=f.get('render')
         )
 
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
         """Parse a single device entry dict into a DeviceEntry object."""
         if 'mac' not in d:
             raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
+        server_config: Any = d.get('server_config', {})
+        if not isinstance(server_config, dict):
+            raise ValueError(f"'server_config' must be a mapping (device: {d['mac']})")
         return DeviceEntry(
             mac=d['mac'],
             friendly_name=d.get('friendly_name'),
-            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])]
+            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])],
+            server_config=cast(Dict[str, Any], server_config)
         )
 
     def _parse_project(self, p: dict[str, Any], common_commands: List[CommandEntry]) -> ProjectEntry:
@@ -579,6 +599,73 @@ class FileDataProvider:
 
 
 # ---------------------------------------------------------------------------
+# server.json renderer
+# ---------------------------------------------------------------------------
+
+# Every field server.json may carry, in the order the rendered content emits them.
+_SERVER_JSON_FIELDS = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort",
+                       "haDiscovery", "ssid", "password")
+_SERVER_JSON_REQUIRED = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort")
+
+
+def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
+    """Build the compact server.json content for one device.
+
+    `secret_fields` comes from secrets.yaml (server_defaults merged with the
+    per-device entry), `server_config` from the device's entry in devices.yaml
+    (the non-secret fields, e.g. haDiscovery). devices.yaml wins on conflicts."""
+    merged = {**secret_fields, **server_config}
+
+    unknown = [k for k in merged if k not in _SERVER_JSON_FIELDS]
+    if unknown:
+        raise ValueError(f"Unknown server.json field(s): {', '.join(sorted(unknown))}")
+
+    missing = [k for k in _SERVER_JSON_REQUIRED if k not in merged]
+    if missing:
+        raise ValueError(f"Missing required server.json field(s): {', '.join(missing)}")
+
+    ordered = {k: merged[k] for k in _SERVER_JSON_FIELDS if k in merged}
+    return json.dumps(ordered, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+
+
+class RenderedDataProvider:
+    """Provides in-memory rendered content with the same interface as
+    FileDataProvider (data / size / md5)."""
+
+    def __init__(self, data: bytes):
+        self._data = data
+        self._md5: Optional[str] = None
+
+    @property
+    def data(self) -> bytes:
+        return self._data
+
+    @property
+    def size(self) -> int:
+        return len(self._data)
+
+    @property
+    def md5(self) -> str:
+        if self._md5 is None:
+            self._md5 = hashlib.md5(self._data).hexdigest()
+        return self._md5
+
+
+def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
+                        config_manager: "ConfigManager") -> "FileDataProvider | RenderedDataProvider":
+    """Data provider for a file entry: disk-backed for local_path entries,
+    rendered in memory for render entries."""
+    if file_entry.render == 'server_json':
+        return RenderedDataProvider(render_server_json(
+            config_manager.device_server_secrets(device.mac), device.server_config))
+    if file_entry.local_path is None:
+        raise ValueError(f"File entry '{file_entry.name}' has neither local_path nor render")
+    if not file_entry.local_path.exists():
+        raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
+    return FileDataProvider(file_entry.local_path)
+
+
+# ---------------------------------------------------------------------------
 # MQTT client
 # ---------------------------------------------------------------------------
 
@@ -883,10 +970,15 @@ class FileTransfer(_BaseTransfer):
     Uses 'name' + 'fileSize' + 'md5' in the start message instead of 'binId',
     which signals to the device that this is a generic file transfer, not a firmware update."""
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry,
+                 provider: "FileDataProvider | RenderedDataProvider | None" = None):
         super().__init__(device_config, mqtt_config)
         self.file_entry = file_entry
-        self.file_provider = FileDataProvider(file_entry.local_path)
+        if provider is None:
+            if file_entry.local_path is None:
+                raise ValueError(f"File entry '{file_entry.name}' needs an explicit provider (rendered content)")
+            provider = FileDataProvider(file_entry.local_path)
+        self.file_provider = provider
 
     @property
     def data(self) -> bytes:
@@ -898,7 +990,7 @@ class FileTransfer(_BaseTransfer):
 
     @property
     def _progress_desc(self) -> str:
-        return f"Sending {self.file_entry.local_path.name}"
+        return f"Sending {Path(self.file_entry.device_path).name}"
 
     def _build_start_message(self) -> dict[str, Any]:
         return {
@@ -908,7 +1000,8 @@ class FileTransfer(_BaseTransfer):
         }
 
     def _start_log_info(self):
-        logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
+        source = self.file_entry.local_path if self.file_entry.local_path is not None else "<rendered>"
+        logging.info(f"File transfer started - Source: {source}")
         logging.info(f"  Device path: {self.file_entry.device_path}")
         logging.info(f"  Size:  {self.file_provider.size} bytes")
         logging.info(f"  MD5:   {self.file_provider.md5}")
@@ -1054,13 +1147,14 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
         return CommandSender(device_config, mqtt_config, result.command)
 
     if result.file is not None:
-        if not result.file.local_path.exists():
-            raise FileNotFoundError(f"Local file not found: {result.file.local_path}")
+        provider = build_file_provider(result.file, result.device, config_manager)
+        source = result.file.local_path if result.file.local_path is not None \
+            else "rendered from devices.yaml + secrets.yaml"
         print(f"  Action:      {result.file.name}")
-        print(f"  Local file:  {result.file.local_path}")
+        print(f"  Source:      {source}")
         print(f"  Device path: {result.file.device_path}")
         print()
-        return FileTransfer(device_config, mqtt_config, result.file)
+        return FileTransfer(device_config, mqtt_config, result.file, provider)
 
     # Firmware upload
     firmware_path = config_manager.get_firmware_path(result.project.pio_project)

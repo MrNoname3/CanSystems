@@ -215,6 +215,136 @@ def test_invalid_json_raises(tmp_path: Path) -> None:
         _ = provider.data
 
 
+# --- server.json renderer ----------------------------------------------------
+
+_SECRET_FIELDS = {
+    "mqttUserName": "dev",
+    "mqttPassword": "secret",
+    "mqttServerUrl": "broker.example.com",
+    "mqttServerPort": 8883,
+}
+
+
+def test_render_server_json_compact_and_ordered() -> None:
+    rendered = ota.render_server_json(
+        {**_SECRET_FIELDS, "ssid": "wifi", "password": "wpa"},
+        {"haDiscovery": True},
+    )
+    assert rendered == (
+        b'{"mqttUserName":"dev","mqttPassword":"secret","mqttServerUrl":"broker.example.com",'
+        b'"mqttServerPort":8883,"haDiscovery":true,"ssid":"wifi","password":"wpa"}'
+    )
+
+
+def test_render_server_json_optional_fields_omitted() -> None:
+    parsed = json.loads(ota.render_server_json(_SECRET_FIELDS, {}))
+    assert set(parsed) == set(_SECRET_FIELDS)  # no haDiscovery / ssid / password key emitted
+
+
+def test_render_server_json_missing_required_raises() -> None:
+    incomplete = {k: v for k, v in _SECRET_FIELDS.items() if k != "mqttPassword"}
+    with pytest.raises(ValueError, match="mqttPassword"):
+        ota.render_server_json(incomplete, {})
+
+
+def test_render_server_json_unknown_field_raises() -> None:
+    with pytest.raises(ValueError, match="mqttUsername"):
+        ota.render_server_json({**_SECRET_FIELDS, "mqttUsername": "typo"}, {})
+
+
+# --- DeviceManager: file entry parsing (local_path vs render) ---------------
+
+def _file_parser(tmp_path: Path) -> "ota.DeviceManager":
+    return ota.DeviceManager(str(tmp_path / "otaUpdate.py"))
+
+
+def test_parse_file_render_entry(tmp_path: Path) -> None:
+    entry = _file_parser(tmp_path)._parse_file(
+        {"name": "Server config", "render": "server_json", "device_path": "/config/server.json"},
+        mac="aabbccddeeff",
+    )
+    assert entry.render == "server_json"
+    assert entry.local_path is None
+
+
+def test_parse_file_local_and_render_conflict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "local_path": "a", "render": "server_json", "device_path": "/x"},
+            mac="aabbccddeeff",
+        )
+
+
+def test_parse_file_neither_source_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file({"name": "x", "device_path": "/x"}, mac="aabbccddeeff")
+
+
+def test_parse_file_unknown_render_type(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "render": "nope", "device_path": "/x"}, mac="aabbccddeeff"
+        )
+
+
+# --- build_file_provider ------------------------------------------------------
+
+def _device_with_secrets(tmp_path: Path) -> "tuple[ota.DeviceEntry, ota.ConfigManager]":
+    manager = _write_secrets(tmp_path, """
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+""")
+    device = ota.DeviceEntry(mac="aabbccddeeff", server_config={"haDiscovery": True})
+    return device, manager
+
+
+def test_provider_renders_server_json(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json", render="server_json")
+    provider = ota.build_file_provider(entry, device, manager)
+    parsed = json.loads(provider.data)
+    assert parsed["mqttUserName"] == "dev"
+    assert parsed["haDiscovery"] is True
+    assert provider.size == len(provider.data)
+    assert provider.md5 == hashlib.md5(provider.data).hexdigest()
+
+
+def test_provider_reads_local_file(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    source = _write(tmp_path, "blob.bin", b"\x00\x01")
+    entry = ota.FileEntry(name="blob", device_path="/blob.bin", local_path=source)
+    assert ota.build_file_provider(entry, device, manager).data == b"\x00\x01"
+
+
+def test_provider_missing_local_file_raises(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="gone", device_path="/gone", local_path=tmp_path / "gone")
+    with pytest.raises(FileNotFoundError):
+        ota.build_file_provider(entry, device, manager)
+
+
+def test_rendered_transfer_start_message(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json", render="server_json")
+    provider = ota.build_file_provider(entry, device, manager)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address="aabbccddeeff", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+        provider,
+    )
+    message = transfer._build_start_message()
+    assert message["name"] == "/config/server.json"
+    assert message["fileSize"] == provider.size
+    assert message["md5"] == provider.md5
+    assert "binId" not in message
+
+
 # --- OTA framing: the piece-splitting that builds the wire frames -----------
 
 class _RecordingMQTT:
