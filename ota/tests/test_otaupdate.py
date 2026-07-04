@@ -655,21 +655,22 @@ def test_no_timeout_within_window(tmp_path: Path) -> None:
     assert updater.state == ota.TransferState.WAIT_PIECE_ACK
 
 
-def _run_simulated_transfer(updater: "ota.OTAUpdater", *, ack: bool = True, max_ticks: int = 10000) -> None:
-    """Drive the sender to completion with a simulated device that ACKs/NACKs every wait."""
+def _run_simulated_transfer(transfer: "ota._BaseTransfer", *, ack: bool = True, max_ticks: int = 10000) -> None:
+    """Drive a sender (OTAUpdater or FileTransfer) to completion with a
+    simulated device that ACKs/NACKs every wait."""
     waits = {
         ota.TransferState.WAIT_START_ACK,
         ota.TransferState.WAIT_PIECE_ACK,
         ota.TransferState.WAIT_CHECK_ACK,
     }
-    updater._send_start_message()
+    transfer._send_start_message()
     ticks = 0
-    while updater.state not in (ota.TransferState.DONE, ota.TransferState.ERROR):
+    while transfer.state not in (ota.TransferState.DONE, ota.TransferState.ERROR):
         ticks += 1
         assert ticks < max_ticks, "state machine did not terminate"
-        if updater.state in waits:
-            updater._pending_messages.append({"type": 1 if ack else 0})
-        updater._process_state()
+        if transfer.state in waits:
+            transfer._pending_messages.append({"type": 1 if ack else 0})
+        transfer._process_state()
 
 
 def test_full_transfer_reaches_done(tmp_path: Path) -> None:
@@ -688,3 +689,96 @@ def test_device_nack_aborts_transfer(tmp_path: Path) -> None:
     updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
     _run_simulated_transfer(updater, ack=False)
     assert updater.state == ota.TransferState.ERROR
+
+
+# --- FileTransfer end-to-end: every content source over the simulated wire ---
+# These guard the switch from concrete per-device files to rendered / inline
+# content: whatever the provider yields must arrive byte-identically.
+
+def _transferred_payload(entry: "ota.FileEntry", device: "ota.DeviceEntry",
+                         manager: "ota.ConfigManager") -> bytes:
+    """Run a full simulated FileTransfer for `entry`; return the reassembled bytes
+    after verifying the start message (device path, size, md5) against them."""
+    provider = ota.build_file_provider(entry, device, manager)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address=device.mac, project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+        provider,
+    )
+    transfer.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
+    _run_simulated_transfer(transfer)
+    assert transfer.state == ota.TransferState.DONE
+
+    recorder = cast(_RecordingMQTT, transfer.mqtt_client)
+    start = json.loads(recorder.published[0][1])
+    payload = b"".join(base64.b64decode(json.loads(p)["data"]) for _, p in recorder.published[1:])
+    assert start["name"] == entry.device_path
+    assert start["fileSize"] == len(payload)
+    assert start["md5"] == hashlib.md5(payload).hexdigest()
+    return payload
+
+
+def test_e2e_local_file_arrives_byte_identical(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    cert = bytes(range(256)) * 11  # 2816 bytes, binary, multi-piece like the real CA cert
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=_write(tmp_path, "ca.crt", cert))
+    assert _transferred_payload(entry, device, manager) == cert
+
+
+def test_e2e_rendered_server_json_arrives_valid(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json",
+                          render="server_json")
+    parsed = json.loads(_transferred_payload(entry, device, manager))
+    assert parsed == {
+        "mqttUserName": "dev",
+        "mqttPassword": "secret",
+        "mqttServerUrl": "broker.example.com",
+        "mqttServerPort": 8883,
+        "haDiscovery": True,
+    }
+
+
+def test_e2e_inline_content_arrives_compact(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
+                          content={"tube": 1})
+    assert _transferred_payload(entry, device, manager) == b'{"tube":1}'
+
+
+# --- The real devices.yaml: every file entry must still be sendable ----------
+
+def test_real_devices_yaml_entries_resolve(tmp_path: Path) -> None:
+    """Load the repo's tracked devices.yaml and check every device: the
+    server.json renders from (synthetic) secrets, inline content serializes,
+    and local_path entries resolve under ota/. Git-ignored / build-output
+    files may be absent on a fresh clone, so only their paths are checked."""
+    ota_dir = Path(ota.__file__).resolve().parent
+    projects = ota.DeviceManager(str(ota_dir / "otaUpdate.py")).load()
+    devices = [(p, d) for p in projects for d in p.devices]
+    assert devices, "devices.yaml lists no devices"
+
+    macs = {d.mac for _, d in devices}
+    manager = _write_secrets(tmp_path, (
+        "server_defaults:\n"
+        "  mqttServerUrl: broker.example.com\n"
+        "  mqttServerPort: 8883\n"
+        "devices:\n"
+        + "".join(f"  {mac}:\n    mqttUserName: u\n    mqttPassword: p\n" for mac in sorted(macs))
+    ))
+
+    for _project, device in devices:
+        assert any(f.render == "server_json" for f in device.files), \
+            f"{device.mac} has no rendered server.json entry"
+        for entry in device.files:
+            if entry.local_path is not None:
+                assert not entry.local_path.is_absolute() or str(entry.local_path).startswith(str(ota_dir.parent)), \
+                    f"{device.mac} {entry.name}: path escapes the repo"
+                if not entry.local_path.exists():
+                    continue  # git-ignored cert / firmware build output — absent on a fresh clone
+            payload = _transferred_payload(entry, device, manager)
+            assert payload
+            if entry.device_path.endswith(".json"):
+                json.loads(payload)  # every JSON config must arrive parseable
