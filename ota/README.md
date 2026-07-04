@@ -116,12 +116,15 @@ to `ota/` or the repo root, so the tool works from any directory.
 Pick a project, then a device, then an action. Firmware actions expect the build output at
 `.pio/build/<env>/firmware.bin`, so build the target first (`pio run -e <env>`).
 
-### Initial provisioning (USB)
+### Bench setup of a fresh device (USB)
 
 A brand-new (or wiped) device has no config to connect with, so the OTA path can't reach it.
-The **Initial provisioning** action flashes the first LittleFS image over serial instead:
-it clears `data/`, materializes the device's `/config/*` files there (rendered
-`server.json`, the CA cert, `tube.json`, ...), runs `pio run -e <env> -t uploadfs`, then
-clears `data/` again. The device gets **its own** credentials from the very first flash.
-`data/` is transient and git-ignored — don't keep anything there. Flash the firmware itself
-separately (`pio run -e <env> -t upload`).
+Two menu actions cover the full bench setup — running both leaves a ready device:
+
+- **Initial firmware flash** — builds the project's firmware (incrementally) and flashes it
+  over serial (`pio run -e <env> -t upload`).
+- **Initial provisioning** — flashes the first LittleFS image over serial: it clears `data/`,
+  materializes the device's `/config/*` files there (rendered `server.json`, the CA cert,
+  `tube.json`, ...), runs `pio run -e <env> -t uploadfs`, then clears `data/` again. The
+  device gets **its own** credentials from the very first flash. `data/` is transient and
+  git-ignored — don't keep anything there.

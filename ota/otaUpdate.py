@@ -149,13 +149,14 @@ class ProjectEntry:
 @dataclass
 class ActionResult:
     """Holds the result of the interactive menu selection.
-    At most one of `file` / `command` is not None, or `provision` is True.
-    If none of them is set, the selected action is a firmware upload."""
+    At most one of `file` / `command` is not None, or one of the USB flags is
+    True. If none of them is set, the selected action is an OTA firmware upload."""
     project: ProjectEntry
     device: DeviceEntry
     file: Optional[FileEntry] = None        # Set when a file transfer was selected.
     command: Optional[CommandEntry] = None  # Set when a command was selected.
     provision: bool = False                 # Set when USB provisioning was selected.
+    serial_flash: bool = False              # Set when the initial USB firmware flash was selected.
 
 
 @dataclass
@@ -683,12 +684,14 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
 # ---------------------------------------------------------------------------
 
 class Provisioner:
-    """Builds and uploads the initial LittleFS image for a device over USB.
+    """Bench (USB) setup for a factory-fresh device: the initial firmware
+    flash and the initial LittleFS provisioning. Running both makes the
+    device fully operational without any pre-existing config on it.
 
-    Materializes every /config/* file entry of the device into <repo>/data
-    (the PlatformIO filesystem source directory, git-ignored), runs
-    `pio run -e <env> -t uploadfs`, then clears data/ again. This puts the
-    device's own credentials on it from the very first flash — no shared
+    Provisioning materializes every /config/* file entry of the device into
+    <repo>/data (the PlatformIO filesystem source directory, git-ignored),
+    runs `pio run -e <env> -t uploadfs`, then clears data/ again. This puts
+    the device's own credentials on it from the very first flash — no shared
     bootstrap config is involved."""
 
     CONFIG_PREFIX = '/config/'
@@ -715,9 +718,13 @@ class Provisioner:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(provider.data)
                 logging.info(f"Materialized {entry.device_path} ({provider.size} bytes)")
-            return self._run_uploadfs(project.pio_project)
+            return self._run_pio_target(project.pio_project, 'uploadfs')
         finally:
             self._clear_data_dir()
+
+    def flash_firmware(self, project: ProjectEntry) -> bool:
+        """Build the project's firmware and flash it over serial (initial USB flash)."""
+        return self._run_pio_target(project.pio_project, 'upload')
 
     def _clear_data_dir(self):
         """Reset data/ to an empty directory so only the freshly materialized
@@ -726,9 +733,9 @@ class Provisioner:
             shutil.rmtree(self.data_dir)
         self.data_dir.mkdir()
 
-    def _run_uploadfs(self, pio_env: str) -> bool:
-        """Run `pio run -e <env> -t uploadfs` from the repo root, streaming its output."""
-        command = [self.pio_cmd, 'run', '-e', pio_env, '-t', 'uploadfs']
+    def _run_pio_target(self, pio_env: str, target: str) -> bool:
+        """Run `pio run -e <env> -t <target>` from the repo root, streaming its output."""
+        command = [self.pio_cmd, 'run', '-e', pio_env, '-t', target]
         env = dict(os.environ)
         env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
         logging.info(f"Running: {' '.join(command)}")
@@ -1158,6 +1165,7 @@ class CommandSender(_BaseTransfer):
 # Sentinels used in the action menu for the fixed (non-devices.yaml) options.
 _FW_OPTION = "Firmware upload"
 _PROVISION_OPTION = "Initial provisioning (USB: build + upload LittleFS image)"
+_SERIAL_FLASH_OPTION = "Initial firmware flash (USB: build + serial upload)"
 
 
 def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
@@ -1193,10 +1201,11 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
             while True:
                 # --- Level 3: action selection ---
-                # Order: firmware upload → provisioning → file transfers → commands.
+                # Order: OTA firmware upload → USB provisioning/flash → file transfers → commands.
                 file_map    = {f.name: f for f in selected_device.files}
                 command_map = {c.display_name: c for c in selected_project.commands}
-                action_options = [_FW_OPTION, _PROVISION_OPTION] + list(file_map) + list(command_map)
+                action_options = ([_FW_OPTION, _PROVISION_OPTION, _SERIAL_FLASH_OPTION]
+                                  + list(file_map) + list(command_map))
 
                 choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
@@ -1209,6 +1218,8 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
                     return ActionResult(project=selected_project, device=selected_device)
                 if choice == _PROVISION_OPTION:
                     return ActionResult(project=selected_project, device=selected_device, provision=True)
+                if choice == _SERIAL_FLASH_OPTION:
+                    return ActionResult(project=selected_project, device=selected_device, serial_flash=True)
                 if choice in file_map:
                     return ActionResult(project=selected_project, device=selected_device, file=file_map[choice])
                 if choice in command_map:
@@ -1273,11 +1284,17 @@ def main():
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
 
-        if result.provision:
-            print("  Action:      Initial provisioning (USB)")
-            print()
+        if result.provision or result.serial_flash:
             provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
-            sys.exit(0 if provisioner.provision(result.project, result.device, config_manager) else 1)
+            if result.provision:
+                print("  Action:      Initial provisioning (USB)")
+                print()
+                success = provisioner.provision(result.project, result.device, config_manager)
+            else:
+                print("  Action:      Initial firmware flash (USB)")
+                print()
+                success = provisioner.flash_firmware(result.project)
+            sys.exit(0 if success else 1)
 
         worker = _build_worker(result, config_manager, mqtt_config)
 

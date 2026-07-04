@@ -113,8 +113,10 @@ pio test -e native_test                  # native test suite (~30 s, 442 cases)
 pio check                                # cppcheck + clang-tidy on all environments
 ```
 
-The initial LittleFS config image is flashed by `ota/otaUpdate.py`'s **Initial provisioning**
-action (it generates `data/` and runs `uploadfs` itself — see [`ota/README.md`](ota/README.md)).
+A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmware flash**
+action serial-flashes the firmware, and **Initial provisioning** flashes the first LittleFS
+config image (it generates `data/` and runs `uploadfs` itself — see
+[`ota/README.md`](ota/README.md)).
 
 The whole build is warning-clean under `-Wall -Wextra -Werror`; keep it that way.
 Firmware version comes from the git commit count, so commit before flashing release builds

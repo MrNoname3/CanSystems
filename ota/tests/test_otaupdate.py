@@ -481,6 +481,23 @@ def test_provision_without_config_entries_raises(tmp_path: Path) -> None:
         ota.Provisioner(repo_root, "pio").provision(project, bare, manager)
 
 
+def test_flash_firmware_runs_serial_upload_target(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, _device, _manager, repo_root = _provision_setup(tmp_path)
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    assert ota.Provisioner(repo_root, "pio").flash_firmware(project) is True
+    assert fake_run.commands == [["pio", "run", "-e", "project_esp8266_thermo", "-t", "upload"]]
+
+
+def test_flash_firmware_failure_returns_false(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, _device, _manager, repo_root = _provision_setup(tmp_path)
+    monkeypatch.setattr(ota.subprocess, "run", _FakePioRun(repo_root, returncode=1))
+    assert ota.Provisioner(repo_root, "pio").flash_firmware(project) is False
+
+
 def test_provision_missing_pio_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     project, device, manager, repo_root = _provision_setup(tmp_path)
 
