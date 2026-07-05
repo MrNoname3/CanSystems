@@ -708,6 +708,18 @@ def extract_system_ca_roots(root_names: List[str]) -> bytes:
     return ''.join(ssl.DER_cert_to_PEM_cert(der_by_name[n]) for n in root_names).encode('ascii')
 
 
+def ensure_ca_bundle(config_manager: "ConfigManager") -> Path:
+    """Return the CA bundle path, generating the file from the system trust
+    store on first use. A hand-placed file is never overwritten."""
+    path = config_manager.ca_bundle_path
+    if not path.exists():
+        roots = config_manager.ca_roots()
+        path.write_bytes(extract_system_ca_roots(roots))
+        logging.info(f"Generated CA bundle {path} from the system trust store "
+                     f"({', '.join(roots)})")
+    return path
+
+
 def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
                         config_manager: "ConfigManager") -> "FileDataProvider | RenderedDataProvider":
     """Data provider for a file entry: disk-backed for local_path entries,
@@ -721,14 +733,86 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
             json.dumps(file_entry.content, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
     if file_entry.local_path is None:
         raise ValueError(f"File entry '{file_entry.name}' has no content source")
-    if not file_entry.local_path.exists() and file_entry.local_path == config_manager.ca_bundle_path:
-        roots = config_manager.ca_roots()
-        file_entry.local_path.write_bytes(extract_system_ca_roots(roots))
-        logging.info(f"Generated CA bundle {file_entry.local_path} from the system trust store "
-                     f"({', '.join(roots)})")
+    if file_entry.local_path == config_manager.ca_bundle_path:
+        ensure_ca_bundle(config_manager)
     if not file_entry.local_path.exists():
         raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
     return FileDataProvider(file_entry.local_path)
+
+
+# ---------------------------------------------------------------------------
+# Device-identity preflight check
+# ---------------------------------------------------------------------------
+
+def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path,
+                             timeout: float = 15.0) -> bool:
+    """Connect to the broker exactly as the target device would: same host and
+    port, the device's own MQTT credentials, plain MQTT over TLS validated
+    with the CA bundle that is about to be shipped. Returns True when the
+    broker accepts the connection. A distinct client id is used so a live
+    device is not kicked off its session."""
+    host: Any = server_secrets.get('mqttServerUrl')
+    port: Any = server_secrets.get('mqttServerPort')
+    username: Any = server_secrets.get('mqttUserName')
+    password: Any = server_secrets.get('mqttPassword')
+    if not all(isinstance(v, str) and v for v in (host, username, password)) \
+            or not isinstance(port, int):
+        raise ValueError("Device secrets must contain mqttServerUrl/mqttServerPort/"
+                         "mqttUserName/mqttPassword for the identity check")
+
+    client = mqtt.Client(
+        client_id=f"OtaVerify_{uuid.uuid4().hex[:8]}",
+        callback_api_version=CallbackAPIVersion.VERSION2,
+        transport="tcp"
+    )
+    client.username_pw_set(username=cast(str, username), password=cast(str, password))
+    # paho's own tls_set stub leaves some parameters unannotated (partially unknown).
+    client.tls_set(ca_certs=str(cafile))  # pyright: ignore[reportUnknownMemberType]
+
+    outcome: List[bool] = []
+
+    def on_connect(cl: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code == 0:
+            outcome.append(True)
+        else:
+            logging.error(f"Broker rejected the device credentials: {reason_code}")
+            outcome.append(False)
+
+    client.on_connect = on_connect
+
+    logging.info(f"Identity check: connecting to {host}:{port} as '{username}' "
+                 f"(TLS via {cafile.name})")
+    try:
+        client.connect(cast(str, host), port, 30)   # TCP + TLS handshake happen here
+    except Exception as e:
+        logging.error(f"Identity check failed to reach the broker: {e}")
+        return False
+
+    deadline = time.time() + timeout
+    while not outcome and time.time() < deadline:
+        client.loop(timeout=0.2)
+    client.disconnect()
+
+    if not outcome:
+        logging.error("Identity check timed out waiting for the broker's CONNACK")
+        return False
+    if outcome[0]:
+        logging.info("Identity check OK: the broker accepts this device's configuration")
+    return outcome[0]
+
+
+def run_identity_check(config_manager: "ConfigManager", device: DeviceEntry) -> bool:
+    """Preflight for actions that ship connection config to a device: verify
+    the device's rendered identity (credentials + URL/port + CA bundle)
+    against the live broker before anything is uploaded or flashed."""
+    cafile = ensure_ca_bundle(config_manager)
+    secrets = config_manager.device_server_secrets(device.mac)
+    print("🔐 Identity check: connecting to the broker as the device would...")
+    if not verify_device_connection(secrets, cafile):
+        print("❌ Identity check failed — nothing was uploaded. "
+              "Fix secrets.yaml (or the CA bundle) and retry.")
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -1335,6 +1419,14 @@ def main():
         print("\n🎯 Target:")
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
+
+        # Preflight for actions that ship connection config to the device: the
+        # cert upload over MQTT and the USB provisioning. Both are verified by
+        # connecting to the broker with the device's own rendered identity.
+        ships_connection_config = result.provision or (
+            result.file is not None and result.file.local_path == config_manager.ca_bundle_path)
+        if ships_connection_config and not run_identity_check(config_manager, result.device):
+            sys.exit(1)
 
         if result.provision or result.serial_flash:
             provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
