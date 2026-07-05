@@ -376,6 +376,99 @@ def test_rendered_transfer_start_message(tmp_path: Path) -> None:
     assert "binId" not in message
 
 
+# --- CA bundle: system trust store extraction + on-demand generation --------
+
+class _FakeSSLContext:
+    """Stands in for the ssl context: a fixed two-root 'trust store'."""
+
+    _STORE = [
+        ({"subject": ((("commonName", "ISRG Root X1"),),)}, b"der-x1"),
+        ({"subject": ((("countryName", "US"),), (("commonName", "ISRG Root X2"),))}, b"der-x2"),
+    ]
+
+    def get_ca_certs(self, binary_form: bool = False) -> Any:
+        return [der if binary_form else info for info, der in self._STORE]
+
+
+def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    bundle = ota.extract_system_ca_roots(["ISRG Root X2", "ISRG Root X1"])
+    assert bundle.count(b"BEGIN CERTIFICATE") == 2
+    # Requested order is preserved: X2 first.
+    assert bundle == (ota.ssl.DER_cert_to_PEM_cert(b"der-x2")
+                      + ota.ssl.DER_cert_to_PEM_cert(b"der-x1")).encode("ascii")
+
+
+def test_extract_ca_roots_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    with pytest.raises(ValueError, match="No Such Root"):
+        ota.extract_system_ca_roots(["ISRG Root X1", "No Such Root"])
+
+
+def test_extract_default_roots_from_real_system_store() -> None:
+    """Integration: the real trust store must contain the Let's Encrypt roots."""
+    bundle = ota.extract_system_ca_roots(ota.ConfigManager.DEFAULT_CA_ROOTS)
+    assert bundle.count(b"BEGIN CERTIFICATE") == 2
+    assert bundle.decode("ascii").strip().endswith("END CERTIFICATE-----")
+
+
+def test_ca_roots_default_and_override(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "broker: {host: b}\n")
+    assert manager.ca_roots() == ["ISRG Root X1", "ISRG Root X2"]
+    manager = _write_secrets(tmp_path, "ca_roots: [My Private CA]\n")
+    assert manager.ca_roots() == ["My Private CA"]
+
+
+def test_ca_roots_invalid_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "ca_roots: []\n")
+    with pytest.raises(ValueError):
+        manager.ca_roots()
+
+
+def test_missing_ca_bundle_is_generated_once(tmp_path: Path,
+                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    calls: list[list[str]] = []
+
+    def fake_extract(names: list[str]) -> bytes:
+        calls.append(names)
+        return b"PEMPEM"
+
+    monkeypatch.setattr(ota, "extract_system_ca_roots", fake_extract)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=manager.ca_bundle_path)
+
+    provider = ota.build_file_provider(entry, device, manager)
+    assert provider.data == b"PEMPEM"
+    assert manager.ca_bundle_path.read_bytes() == b"PEMPEM"
+    assert calls == [["ISRG Root X1", "ISRG Root X2"]]
+
+    # Second build reuses the file - no second extraction.
+    ota.build_file_provider(entry, device, manager)
+    assert calls == [["ISRG Root X1", "ISRG Root X2"]]
+
+
+def test_existing_ca_bundle_never_overwritten(tmp_path: Path,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    manager.ca_bundle_path.write_bytes(b"MANUAL")
+
+    def fail_extract(names: list[str]) -> bytes:
+        pytest.fail("must not extract")
+
+    monkeypatch.setattr(ota, "extract_system_ca_roots", fail_extract)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=manager.ca_bundle_path)
+    assert ota.build_file_provider(entry, device, manager).data == b"MANUAL"
+
+
+def test_missing_non_ca_file_still_raises(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="other", device_path="/x", local_path=tmp_path / "other.bin")
+    with pytest.raises(FileNotFoundError):
+        ota.build_file_provider(entry, device, manager)
+
+
 # --- Provisioner: data/ materialization + uploadfs invocation ---------------
 
 class _FakePioRun:

@@ -144,11 +144,11 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
   `platformio` and `intelhex` on top.
 - **Second push remote (optional):** a GitHub clone only has `origin`. To mirror `master` to the
   self-hosted Gitea as well, add it: `git remote add gitea <gitea-url>`.
-- **Per-deployment files are not in the repo** (git-ignored): `ota/secrets.yaml` (all broker
-  and device credentials in one file) and `ota/mosq-ca.crt`. They are only needed
-  to run OTA or to provision a device — copy them from your other machine or recreate them
-  from the templates in [`ota/README.md`](ota/README.md). Building and testing the firmware
-  needs none of them.
+- **Per-deployment files are not in the repo** (git-ignored): `ota/secrets.yaml` holds all
+  broker and device credentials in one file — copy it from your other machine or recreate it
+  from the template in [`ota/README.md`](ota/README.md). The CA bundle (`ota/mosq-ca.crt`)
+  regenerates automatically from the system trust store. Both are only needed to run OTA or
+  to provision a device; building and testing the firmware needs neither.
 
 ### Release gate
 

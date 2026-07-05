@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import time
 import base64
@@ -470,6 +471,27 @@ class ConfigManager:
         bundled = Path.home() / '.platformio' / 'penv' / 'bin' / 'pio'
         return str(bundled) if bundled.exists() else 'pio'
 
+    # The broker CA roots sent to the devices as mosq-ca.crt. Let's Encrypt's
+    # ISRG Root X1 + X2 cover both the RSA and the ECDSA issuance chains.
+    DEFAULT_CA_ROOTS: ClassVar[List[str]] = ["ISRG Root X1", "ISRG Root X2"]
+
+    def ca_roots(self) -> List[str]:
+        """Subject common names of the CA roots the devices must trust:
+        the optional top-level 'ca_roots' list of secrets.yaml, else the
+        Let's Encrypt defaults."""
+        roots: Any = self._load_secrets().get('ca_roots')
+        if roots is None:
+            return list(self.DEFAULT_CA_ROOTS)
+        if not isinstance(roots, list) or not roots \
+                or not all(isinstance(r, str) for r in cast(List[Any], roots)):
+            raise ValueError("'ca_roots' in secrets.yaml must be a non-empty list of strings")
+        return cast(List[str], roots)
+
+    @property
+    def ca_bundle_path(self) -> Path:
+        """Location of the (git-ignored) CA bundle uploaded to the devices."""
+        return self.script_dir / 'mosq-ca.crt'
+
     def get_firmware_path(self, pio_project: str) -> Path:
         """Get the firmware binary path"""
         firmware_path = self.parent_dir / '.pio' / 'build' / pio_project / 'firmware.bin'
@@ -662,10 +684,35 @@ class RenderedDataProvider:
         return self._md5
 
 
+def extract_system_ca_roots(root_names: List[str]) -> bytes:
+    """Extract the named root certificates (matched by subject commonName)
+    from the system trust store as a concatenated PEM bundle, in the order
+    given. Raises ValueError when a requested root is not in the store."""
+    context = ssl.create_default_context()   # loads the system trust store
+    # get_ca_certs() and get_ca_certs(binary_form=True) return index-aligned lists.
+    infos = cast(List[Dict[str, Any]], context.get_ca_certs())
+    ders = context.get_ca_certs(binary_form=True)
+    der_by_name: dict[str, bytes] = {}
+    for info, der in zip(infos, ders):
+        rdns = cast("tuple[tuple[tuple[str, str], ...], ...]", info.get('subject', ()))
+        subject = {pair[0]: pair[1] for rdn in rdns for pair in rdn}
+        common_name = subject.get('commonName')
+        if common_name in root_names and common_name not in der_by_name:
+            der_by_name[common_name] = der
+
+    missing = [n for n in root_names if n not in der_by_name]
+    if missing:
+        raise ValueError(
+            f"Root certificate(s) not found in the system trust store: {', '.join(missing)}")
+
+    return ''.join(ssl.DER_cert_to_PEM_cert(der_by_name[n]) for n in root_names).encode('ascii')
+
+
 def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
                         config_manager: "ConfigManager") -> "FileDataProvider | RenderedDataProvider":
     """Data provider for a file entry: disk-backed for local_path entries,
-    rendered in memory for render and inline-content entries."""
+    rendered in memory for render and inline-content entries. A missing CA
+    bundle is generated once from the system trust store."""
     if file_entry.render == 'server_json':
         return RenderedDataProvider(render_server_json(
             config_manager.device_server_secrets(device.mac), device.server_config))
@@ -674,6 +721,11 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
             json.dumps(file_entry.content, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
     if file_entry.local_path is None:
         raise ValueError(f"File entry '{file_entry.name}' has no content source")
+    if not file_entry.local_path.exists() and file_entry.local_path == config_manager.ca_bundle_path:
+        roots = config_manager.ca_roots()
+        file_entry.local_path.write_bytes(extract_system_ca_roots(roots))
+        logging.info(f"Generated CA bundle {file_entry.local_path} from the system trust store "
+                     f"({', '.join(roots)})")
     if not file_entry.local_path.exists():
         raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
     return FileDataProvider(file_entry.local_path)

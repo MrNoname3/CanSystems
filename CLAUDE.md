@@ -69,5 +69,6 @@ Python tooling.
 
 See README.md "Gotchas" (cross-project `binId` reflash, CAN IDs in EEPROM). Also: the MQ-135
 smoke node is WIP and likely to be dropped — don't flag its dead calibration path or missing
-tests as defects. Per-deployment secrets live in the git-ignored `ota/secrets.yaml`
-(+ `ota/mosq-ca.crt`) — never commit or print their contents.
+tests as defects. Per-deployment secrets live in the git-ignored `ota/secrets.yaml` — never
+commit or print its contents (the git-ignored `ota/mosq-ca.crt` is just the public CA bundle,
+regenerated from the system trust store when missing).

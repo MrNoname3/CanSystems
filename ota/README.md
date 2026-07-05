@@ -9,14 +9,15 @@ It reads two files from this directory:
 
 - **`secrets.yaml`** — every per-deployment secret in one git-ignored file: the tool's broker
   connection and the devices' `server.json` fields (you create this; template below). When
-  cloning the repo on another machine, this is the single file to carry over manually
-  (plus `mosq-ca.crt`, see below).
+  cloning the repo on another machine, this is the **only** file to carry over manually.
 - **`devices.yaml`** — the device list, per-device file mappings and non-secret device config
   (tracked; see the existing file for the structure).
 
-The CA cert (uploaded to the devices as `mosq-ca.crt`) is per-deployment and git-ignored.
-For a broker behind a public CA it is just that CA's roots — e.g. for Let's Encrypt the
-ISRG Root X1 + X2 bundle; a self-signed broker cert is not needed.
+The CA bundle uploaded to the devices as `mosq-ca.crt` is git-ignored but needs no manual
+transfer: when `ota/mosq-ca.crt` is missing, the tool generates it from the **system trust
+store** (by default the Let's Encrypt ISRG Root X1 + X2 roots; override the subject CNs with
+the `ca_roots` list in `secrets.yaml`). A hand-placed file is never overwritten, so a
+self-signed CA can simply be dropped there.
 
 ## Setup
 
@@ -54,6 +55,10 @@ broker:
   # basepath: /            # only used with the "ws" protocol
 
 # pio: /custom/path/to/pio # optional; provisioning default: ~/.platformio/penv/bin/pio, then PATH
+
+# ca_roots:                # optional; system-store subject CNs for the generated mosq-ca.crt
+#   - ISRG Root X1         # (these two Let's Encrypt roots are the default)
+#   - ISRG Root X2
 
 # server.json fields shared by every device; a device entry below can override them.
 server_defaults:
@@ -101,8 +106,8 @@ Non-secret and tiny, so it lives **inline** in the device's `devices.yaml` file 
 `content:` mapping, serialized to compact JSON at send time. Any small JSON config can be
 inlined the same way instead of pointing `local_path` at a file.
 
-**`mosq-ca.crt`** — the broker's CA certificate (see the note above), expected at
-`ota/mosq-ca.crt` (git-ignored).
+**`mosq-ca.crt`** — the broker's CA bundle at `ota/mosq-ca.crt` (git-ignored); generated
+from the system trust store when missing (see the note above).
 
 ## Running
 

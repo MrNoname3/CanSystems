@@ -28,4 +28,4 @@ logs/device-monitor-*
 
 # OTA
 ota/secrets.yaml
-ota/mosq-ca.crt
+ota/mosq-ca.crt*
