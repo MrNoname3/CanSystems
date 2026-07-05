@@ -82,6 +82,85 @@ def test_mqttconfig_empty_host() -> None:
         ota.MQTTConfig(host="   ")
 
 
+# --- ConfigManager: secrets.yaml loading ------------------------------------
+
+def _write_secrets(tmp_path: Path, content: str) -> "ota.ConfigManager":
+    """Write a secrets.yaml into tmp_path and return a ConfigManager rooted there."""
+    (tmp_path / "secrets.yaml").write_text(content, encoding="utf-8")
+    return ota.ConfigManager(str(tmp_path / "otaUpdate.py"))
+
+
+def test_broker_section_builds_mqtt_config(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, """
+broker:
+  protocol: ws
+  host: broker.example.com
+  username: user
+  password: pass
+  tls_enabled: true
+""")
+    config = manager.load_mqtt_config()
+    assert config.protocol == "ws"
+    assert config.host == "broker.example.com"
+    assert config.port == 443  # ws + TLS default
+    assert config.username == "user"
+    assert config.tls_enabled is True
+
+
+def test_relative_cafile_resolves_against_ota_dir(tmp_path: Path) -> None:
+    (tmp_path / "ca.crt").write_bytes(b"cert")
+    manager = _write_secrets(tmp_path, """
+broker:
+  host: broker
+  tls_enabled: true
+  cafile: ca.crt
+""")
+    assert manager.load_mqtt_config().cafile == str(tmp_path / "ca.crt")
+
+
+def test_missing_secrets_file_raises(tmp_path: Path) -> None:
+    manager = ota.ConfigManager(str(tmp_path / "otaUpdate.py"))
+    with pytest.raises(FileNotFoundError):
+        manager.load_mqtt_config()
+
+
+def test_missing_broker_section_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "devices: {}\n")
+    with pytest.raises(ValueError):
+        manager.load_mqtt_config()
+
+
+def test_device_secrets_merge_defaults_and_overrides(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, """
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+    mqttServerPort: 443
+""")
+    secrets = manager.device_server_secrets("aabbccddeeff")
+    assert secrets == {
+        "mqttServerUrl": "broker.example.com",
+        "mqttServerPort": 443,  # device entry overrides the default
+        "mqttUserName": "dev",
+        "mqttPassword": "secret",
+    }
+
+
+def test_device_secrets_unknown_mac_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "devices: {aabbccddeeff: {mqttUserName: x}}\n")
+    with pytest.raises(ValueError):
+        manager.device_server_secrets("000000000000")
+
+
+def test_pio_command_override(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "pio: /custom/pio\n")
+    assert manager.pio_command() == "/custom/pio"
+
+
 # --- DeviceConfig: topic construction --------------------------------------
 
 def test_deviceconfig_topics() -> None:
@@ -134,6 +213,511 @@ def test_invalid_json_raises(tmp_path: Path) -> None:
     provider = ota.FileDataProvider(_write(tmp_path, "bad.json", b"{not valid"))
     with pytest.raises(ValueError):
         _ = provider.data
+
+
+# --- server.json renderer ----------------------------------------------------
+
+_SECRET_FIELDS = {
+    "mqttUserName": "dev",
+    "mqttPassword": "secret",
+    "mqttServerUrl": "broker.example.com",
+    "mqttServerPort": 8883,
+}
+
+
+def test_render_server_json_compact_and_ordered() -> None:
+    rendered = ota.render_server_json(
+        {**_SECRET_FIELDS, "ssid": "wifi", "password": "wpa"},
+        {"haDiscovery": True},
+    )
+    assert rendered == (
+        b'{"mqttUserName":"dev","mqttPassword":"secret","mqttServerUrl":"broker.example.com",'
+        b'"mqttServerPort":8883,"haDiscovery":true,"ssid":"wifi","password":"wpa"}'
+    )
+
+
+def test_render_server_json_optional_fields_omitted() -> None:
+    parsed = json.loads(ota.render_server_json(_SECRET_FIELDS, {}))
+    assert set(parsed) == set(_SECRET_FIELDS)  # no haDiscovery / ssid / password key emitted
+
+
+def test_render_server_json_missing_required_raises() -> None:
+    incomplete = {k: v for k, v in _SECRET_FIELDS.items() if k != "mqttPassword"}
+    with pytest.raises(ValueError, match="mqttPassword"):
+        ota.render_server_json(incomplete, {})
+
+
+def test_render_server_json_unknown_field_raises() -> None:
+    with pytest.raises(ValueError, match="mqttUsername"):
+        ota.render_server_json({**_SECRET_FIELDS, "mqttUsername": "typo"}, {})
+
+
+# --- DeviceManager: file entry parsing (local_path vs render) ---------------
+
+def _file_parser(tmp_path: Path) -> "ota.DeviceManager":
+    return ota.DeviceManager(str(tmp_path / "otaUpdate.py"))
+
+
+def test_parse_file_render_entry(tmp_path: Path) -> None:
+    entry = _file_parser(tmp_path)._parse_file(
+        {"name": "Server config", "render": "server_json", "device_path": "/config/server.json"},
+        mac="aabbccddeeff",
+    )
+    assert entry.render == "server_json"
+    assert entry.local_path is None
+
+
+def test_parse_file_local_and_render_conflict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "local_path": "a", "render": "server_json", "device_path": "/x"},
+            mac="aabbccddeeff",
+        )
+
+
+def test_parse_file_neither_source_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file({"name": "x", "device_path": "/x"}, mac="aabbccddeeff")
+
+
+def test_parse_file_unknown_render_type(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "render": "nope", "device_path": "/x"}, mac="aabbccddeeff"
+        )
+
+
+def test_parse_file_inline_content_entry(tmp_path: Path) -> None:
+    entry = _file_parser(tmp_path)._parse_file(
+        {"name": "Tube config", "content": {"tube": 1}, "device_path": "/config/tube.json"},
+        mac="aabbccddeeff",
+    )
+    assert entry.content == {"tube": 1}
+    assert entry.local_path is None and entry.render is None
+
+
+def test_parse_file_content_must_be_mapping(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "content": [1, 2], "device_path": "/x"}, mac="aabbccddeeff"
+        )
+
+
+def test_parse_file_content_and_render_conflict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "content": {}, "render": "server_json", "device_path": "/x"},
+            mac="aabbccddeeff",
+        )
+
+
+# --- build_file_provider ------------------------------------------------------
+
+def _device_with_secrets(tmp_path: Path) -> "tuple[ota.DeviceEntry, ota.ConfigManager]":
+    manager = _write_secrets(tmp_path, """
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+""")
+    device = ota.DeviceEntry(mac="aabbccddeeff", server_config={"haDiscovery": True})
+    return device, manager
+
+
+def test_provider_renders_server_json(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json", render="server_json")
+    provider = ota.build_file_provider(entry, device, manager)
+    parsed = json.loads(provider.data)
+    assert parsed["mqttUserName"] == "dev"
+    assert parsed["haDiscovery"] is True
+    assert provider.size == len(provider.data)
+    assert provider.md5 == hashlib.md5(provider.data).hexdigest()
+
+
+def test_provider_reads_local_file(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    source = _write(tmp_path, "blob.bin", b"\x00\x01")
+    entry = ota.FileEntry(name="blob", device_path="/blob.bin", local_path=source)
+    assert ota.build_file_provider(entry, device, manager).data == b"\x00\x01"
+
+
+def test_provider_serializes_inline_content(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
+                          content={"tube": 1})
+    assert ota.build_file_provider(entry, device, manager).data == b'{"tube":1}'
+
+
+def test_provider_missing_local_file_raises(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="gone", device_path="/gone", local_path=tmp_path / "gone")
+    with pytest.raises(FileNotFoundError):
+        ota.build_file_provider(entry, device, manager)
+
+
+def test_rendered_transfer_start_message(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json", render="server_json")
+    provider = ota.build_file_provider(entry, device, manager)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address="aabbccddeeff", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+        provider,
+    )
+    message = transfer._build_start_message()
+    assert message["name"] == "/config/server.json"
+    assert message["fileSize"] == provider.size
+    assert message["md5"] == provider.md5
+    assert "binId" not in message
+
+
+# --- CA bundle: system trust store extraction + on-demand generation --------
+
+class _FakeSSLContext:
+    """Stands in for the ssl context: a fixed two-root 'trust store'."""
+
+    _STORE = [
+        ({"subject": ((("commonName", "ISRG Root X1"),),)}, b"der-x1"),
+        ({"subject": ((("countryName", "US"),), (("commonName", "ISRG Root X2"),))}, b"der-x2"),
+    ]
+
+    def get_ca_certs(self, binary_form: bool = False) -> Any:
+        return [der if binary_form else info for info, der in self._STORE]
+
+
+def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    bundle = ota.extract_system_ca_roots(["ISRG Root X2", "ISRG Root X1"])
+    assert bundle.count(b"BEGIN CERTIFICATE") == 2
+    # Requested order is preserved: X2 first.
+    assert bundle == (ota.ssl.DER_cert_to_PEM_cert(b"der-x2")
+                      + ota.ssl.DER_cert_to_PEM_cert(b"der-x1")).encode("ascii")
+
+
+def test_extract_ca_roots_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    with pytest.raises(ValueError, match="No Such Root"):
+        ota.extract_system_ca_roots(["ISRG Root X1", "No Such Root"])
+
+
+def test_extract_default_roots_from_real_system_store() -> None:
+    """Integration: the real trust store must contain the Let's Encrypt roots."""
+    bundle = ota.extract_system_ca_roots(ota.ConfigManager.DEFAULT_CA_ROOTS)
+    assert bundle.count(b"BEGIN CERTIFICATE") == 2
+    assert bundle.decode("ascii").strip().endswith("END CERTIFICATE-----")
+
+
+def test_ca_roots_default_and_override(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "broker: {host: b}\n")
+    assert manager.ca_roots() == ["ISRG Root X1", "ISRG Root X2"]
+    manager = _write_secrets(tmp_path, "ca_roots: [My Private CA]\n")
+    assert manager.ca_roots() == ["My Private CA"]
+
+
+def test_ca_roots_invalid_raises(tmp_path: Path) -> None:
+    manager = _write_secrets(tmp_path, "ca_roots: []\n")
+    with pytest.raises(ValueError):
+        manager.ca_roots()
+
+
+def test_missing_ca_bundle_is_generated_once(tmp_path: Path,
+                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    calls: list[list[str]] = []
+
+    def fake_extract(names: list[str]) -> bytes:
+        calls.append(names)
+        return b"PEMPEM"
+
+    monkeypatch.setattr(ota, "extract_system_ca_roots", fake_extract)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=manager.ca_bundle_path)
+
+    provider = ota.build_file_provider(entry, device, manager)
+    assert provider.data == b"PEMPEM"
+    assert manager.ca_bundle_path.read_bytes() == b"PEMPEM"
+    assert calls == [["ISRG Root X1", "ISRG Root X2"]]
+
+    # Second build reuses the file - no second extraction.
+    ota.build_file_provider(entry, device, manager)
+    assert calls == [["ISRG Root X1", "ISRG Root X2"]]
+
+
+def test_existing_ca_bundle_never_overwritten(tmp_path: Path,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    manager.ca_bundle_path.write_bytes(b"MANUAL")
+
+    def fail_extract(names: list[str]) -> bytes:
+        pytest.fail("must not extract")
+
+    monkeypatch.setattr(ota, "extract_system_ca_roots", fail_extract)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=manager.ca_bundle_path)
+    assert ota.build_file_provider(entry, device, manager).data == b"MANUAL"
+
+
+def test_missing_non_ca_file_still_raises(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="other", device_path="/x", local_path=tmp_path / "other.bin")
+    with pytest.raises(FileNotFoundError):
+        ota.build_file_provider(entry, device, manager)
+
+
+# --- Device-identity preflight check -----------------------------------------
+
+_DEVICE_SECRETS = {
+    "mqttServerUrl": "broker.example.com",
+    "mqttServerPort": 8883,
+    "mqttUserName": "dev",
+    "mqttPassword": "secret",
+}
+
+
+class _FakeVerifyClient:
+    """Stands in for paho's Client in verify_device_connection tests."""
+
+    behavior = "accept"          # "accept" | "reject" | "raise" | "silent"
+    last: "_FakeVerifyClient | None" = None
+
+    def __init__(self, client_id: str = "", callback_api_version: Any = None,
+                 transport: str = "") -> None:
+        self.client_id = client_id
+        self.transport = transport
+        self.username: str | None = None
+        self.ca_certs: str | None = None
+        self.on_connect: Any = None
+        self.disconnected = False
+        _FakeVerifyClient.last = self
+
+    def username_pw_set(self, username: str, password: str) -> None:
+        self.username = username
+
+    def tls_set(self, ca_certs: str) -> None:
+        self.ca_certs = ca_certs
+
+    def connect(self, host: str, port: int, keepalive: int) -> None:
+        if self.behavior == "raise":
+            raise OSError("TLS handshake failed")
+
+    def loop(self, timeout: float = 0.1) -> None:
+        if self.behavior == "accept":
+            self.on_connect(self, None, None, 0, None)
+        elif self.behavior == "reject":
+            self.on_connect(self, None, None, 5, None)  # not authorized
+
+    def disconnect(self) -> None:
+        self.disconnected = True
+
+
+@pytest.fixture
+def _fake_verify_client(monkeypatch: pytest.MonkeyPatch) -> "type[_FakeVerifyClient]":  # pyright: ignore[reportUnusedFunction]  # pytest fixture
+
+    monkeypatch.setattr(ota.mqtt, "Client", _FakeVerifyClient)
+    _FakeVerifyClient.behavior = "accept"
+    return _FakeVerifyClient
+
+
+def test_identity_check_accepts(tmp_path: Path,
+                                _fake_verify_client: "type[_FakeVerifyClient]") -> None:
+    cafile = _write(tmp_path, "ca.crt", b"PEM")
+    assert ota.verify_device_connection(_DEVICE_SECRETS, cafile, "40f52033765d") is True
+    client = _FakeVerifyClient.last
+    assert client is not None
+    assert client.username == "dev"
+    assert client.ca_certs == str(cafile)              # TLS validated with the shipped bundle
+    assert client.client_id == "verify_40f52033765d"   # identifies the device in broker logs,
+    assert client.transport == "tcp"                   # but never equals its real client id
+    assert client.disconnected
+
+
+def test_identity_check_rejected_credentials(tmp_path: Path,
+                                             _fake_verify_client: "type[_FakeVerifyClient]") -> None:
+    _fake_verify_client.behavior = "reject"
+    assert ota.verify_device_connection(
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
+
+
+def test_identity_check_unreachable_broker(tmp_path: Path,
+                                           _fake_verify_client: "type[_FakeVerifyClient]") -> None:
+    _fake_verify_client.behavior = "raise"
+    assert ota.verify_device_connection(
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
+
+
+def test_identity_check_connack_timeout(tmp_path: Path,
+                                        _fake_verify_client: "type[_FakeVerifyClient]") -> None:
+    _fake_verify_client.behavior = "silent"
+    assert ota.verify_device_connection(
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d", timeout=0.3) is False
+
+
+def test_identity_check_incomplete_secrets_raises(tmp_path: Path) -> None:
+    incomplete = {k: v for k, v in _DEVICE_SECRETS.items() if k != "mqttServerPort"}
+    with pytest.raises(ValueError):
+        ota.verify_device_connection(incomplete, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d")
+
+
+def test_run_identity_check_generates_bundle_and_passes_device_secrets(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+
+    def fake_extract(names: list[str]) -> bytes:
+        return b"PEM"
+
+    monkeypatch.setattr(ota, "extract_system_ca_roots", fake_extract)
+    seen: dict[str, Any] = {}
+
+    def fake_verify(secrets: dict[str, Any], cafile: Path, mac: str, timeout: float = 15.0) -> bool:
+        seen["secrets"] = secrets
+        seen["cafile"] = cafile
+        seen["mac"] = mac
+        return True
+
+    monkeypatch.setattr(ota, "verify_device_connection", fake_verify)
+    assert ota.run_identity_check(manager, device) is True
+    assert seen["cafile"] == manager.ca_bundle_path
+    assert manager.ca_bundle_path.read_bytes() == b"PEM"   # bundle generated for the check
+    assert seen["secrets"]["mqttUserName"] == "dev"
+    assert seen["mac"] == device.mac
+
+
+# --- Provisioner: data/ materialization + uploadfs invocation ---------------
+
+class _FakePioRun:
+    """Stands in for subprocess.run: records the command and snapshots data/."""
+
+    def __init__(self, repo_root: Path, returncode: int = 0) -> None:
+        self.repo_root = repo_root
+        self.returncode = returncode
+        self.commands: list[list[str]] = []
+        self.data_snapshot: dict[str, bytes] = {}
+
+    def __call__(self, command: list[str], **kwargs: Any) -> Any:
+        self.commands.append(command)
+        data_dir = self.repo_root / "data"
+        self.data_snapshot = {
+            str(p.relative_to(data_dir)): p.read_bytes()
+            for p in sorted(data_dir.rglob("*")) if p.is_file()
+        }
+
+        class _Result:
+            returncode = self.returncode
+
+        return _Result()
+
+
+def _provision_setup(tmp_path: Path) -> "tuple[ota.ProjectEntry, ota.DeviceEntry, ota.ConfigManager, Path]":
+    """A repo root with an ota/ dir, secrets.yaml, a cert file, and one device."""
+    repo_root = tmp_path / "repo"
+    ota_dir = repo_root / "ota"
+    ota_dir.mkdir(parents=True)
+    (ota_dir / "secrets.yaml").write_text("""
+server_defaults:
+  mqttServerUrl: broker.example.com
+  mqttServerPort: 8883
+devices:
+  aabbccddeeff:
+    mqttUserName: dev
+    mqttPassword: secret
+""", encoding="utf-8")
+    (ota_dir / "ca.crt").write_bytes(b"CERTBYTES")
+
+    device = ota.DeviceEntry(
+        mac="aabbccddeeff",
+        server_config={"haDiscovery": True},
+        files=[
+            ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=ota_dir / "ca.crt"),
+            ota.FileEntry(name="Server config", device_path="/config/server.json",
+                          render="server_json"),
+            ota.FileEntry(name="CAN firmware", device_path="/canAlertFw.bin",
+                          local_path=ota_dir / "missing.bin"),  # not /config/* -> must be skipped
+        ],
+    )
+    project = ota.ProjectEntry(name="Thermo", pio_project="project_esp8266_thermo", devices=[device])
+    manager = ota.ConfigManager(str(ota_dir / "otaUpdate.py"))
+    return project, device, manager, repo_root
+
+
+def test_provision_materializes_config_files_and_runs_uploadfs(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    provisioner = ota.Provisioner(repo_root, "pio")
+    assert provisioner.provision(project, device, manager) is True
+
+    # pio was invoked with the project's environment and the uploadfs target.
+    assert fake_run.commands == [["pio", "run", "-e", "project_esp8266_thermo", "-t", "uploadfs"]]
+    # At upload time data/ held exactly the /config/* files (the CAN fw entry is skipped).
+    assert set(fake_run.data_snapshot) == {"config/mosq-ca.crt", "config/server.json"}
+    assert fake_run.data_snapshot["config/mosq-ca.crt"] == b"CERTBYTES"
+    assert json.loads(fake_run.data_snapshot["config/server.json"])["mqttUserName"] == "dev"
+    # data/ is cleared again afterwards.
+    assert list((repo_root / "data").iterdir()) == []
+
+
+def test_provision_clears_stale_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    stale = repo_root / "data" / "leftover.bin"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"junk")
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    assert ota.Provisioner(repo_root, "pio").provision(project, device, manager) is True
+    assert "leftover.bin" not in fake_run.data_snapshot
+
+
+def test_provision_failed_upload_returns_false_and_cleans_up(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+    monkeypatch.setattr(ota.subprocess, "run", _FakePioRun(repo_root, returncode=1))
+
+    assert ota.Provisioner(repo_root, "pio").provision(project, device, manager) is False
+    assert list((repo_root / "data").iterdir()) == []
+
+
+def test_provision_without_config_entries_raises(tmp_path: Path) -> None:
+    project, _device, manager, repo_root = _provision_setup(tmp_path)
+    bare = ota.DeviceEntry(mac="aabbccddeeff", files=[])
+    with pytest.raises(ValueError):
+        ota.Provisioner(repo_root, "pio").provision(project, bare, manager)
+
+
+def test_flash_firmware_runs_serial_upload_target(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, _device, _manager, repo_root = _provision_setup(tmp_path)
+    fake_run = _FakePioRun(repo_root)
+    monkeypatch.setattr(ota.subprocess, "run", fake_run)
+
+    assert ota.Provisioner(repo_root, "pio").flash_firmware(project) is True
+    assert fake_run.commands == [["pio", "run", "-e", "project_esp8266_thermo", "-t", "upload"]]
+
+
+def test_flash_firmware_failure_returns_false(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, _device, _manager, repo_root = _provision_setup(tmp_path)
+    monkeypatch.setattr(ota.subprocess, "run", _FakePioRun(repo_root, returncode=1))
+    assert ota.Provisioner(repo_root, "pio").flash_firmware(project) is False
+
+
+def test_provision_missing_pio_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project, device, manager, repo_root = _provision_setup(tmp_path)
+
+    def raise_missing(command: list[str], **kwargs: Any) -> Any:
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(ota.subprocess, "run", raise_missing)
+    assert ota.Provisioner(repo_root, "/nonexistent/pio").provision(project, device, manager) is False
+    assert list((repo_root / "data").iterdir()) == []
 
 
 # --- OTA framing: the piece-splitting that builds the wire frames -----------
@@ -299,21 +883,22 @@ def test_no_timeout_within_window(tmp_path: Path) -> None:
     assert updater.state == ota.TransferState.WAIT_PIECE_ACK
 
 
-def _run_simulated_transfer(updater: "ota.OTAUpdater", *, ack: bool = True, max_ticks: int = 10000) -> None:
-    """Drive the sender to completion with a simulated device that ACKs/NACKs every wait."""
+def _run_simulated_transfer(transfer: "ota._BaseTransfer", *, ack: bool = True, max_ticks: int = 10000) -> None:
+    """Drive a sender (OTAUpdater or FileTransfer) to completion with a
+    simulated device that ACKs/NACKs every wait."""
     waits = {
         ota.TransferState.WAIT_START_ACK,
         ota.TransferState.WAIT_PIECE_ACK,
         ota.TransferState.WAIT_CHECK_ACK,
     }
-    updater._send_start_message()
+    transfer._send_start_message()
     ticks = 0
-    while updater.state not in (ota.TransferState.DONE, ota.TransferState.ERROR):
+    while transfer.state not in (ota.TransferState.DONE, ota.TransferState.ERROR):
         ticks += 1
         assert ticks < max_ticks, "state machine did not terminate"
-        if updater.state in waits:
-            updater._pending_messages.append({"type": 1 if ack else 0})
-        updater._process_state()
+        if transfer.state in waits:
+            transfer._pending_messages.append({"type": 1 if ack else 0})
+        transfer._process_state()
 
 
 def test_full_transfer_reaches_done(tmp_path: Path) -> None:
@@ -332,3 +917,96 @@ def test_device_nack_aborts_transfer(tmp_path: Path) -> None:
     updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
     _run_simulated_transfer(updater, ack=False)
     assert updater.state == ota.TransferState.ERROR
+
+
+# --- FileTransfer end-to-end: every content source over the simulated wire ---
+# These guard the switch from concrete per-device files to rendered / inline
+# content: whatever the provider yields must arrive byte-identically.
+
+def _transferred_payload(entry: "ota.FileEntry", device: "ota.DeviceEntry",
+                         manager: "ota.ConfigManager") -> bytes:
+    """Run a full simulated FileTransfer for `entry`; return the reassembled bytes
+    after verifying the start message (device path, size, md5) against them."""
+    provider = ota.build_file_provider(entry, device, manager)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address=device.mac, project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+        provider,
+    )
+    transfer.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
+    _run_simulated_transfer(transfer)
+    assert transfer.state == ota.TransferState.DONE
+
+    recorder = cast(_RecordingMQTT, transfer.mqtt_client)
+    start = json.loads(recorder.published[0][1])
+    payload = b"".join(base64.b64decode(json.loads(p)["data"]) for _, p in recorder.published[1:])
+    assert start["name"] == entry.device_path
+    assert start["fileSize"] == len(payload)
+    assert start["md5"] == hashlib.md5(payload).hexdigest()
+    return payload
+
+
+def test_e2e_local_file_arrives_byte_identical(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    cert = bytes(range(256)) * 11  # 2816 bytes, binary, multi-piece like the real CA cert
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
+                          local_path=_write(tmp_path, "ca.crt", cert))
+    assert _transferred_payload(entry, device, manager) == cert
+
+
+def test_e2e_rendered_server_json_arrives_valid(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json",
+                          render="server_json")
+    parsed = json.loads(_transferred_payload(entry, device, manager))
+    assert parsed == {
+        "mqttUserName": "dev",
+        "mqttPassword": "secret",
+        "mqttServerUrl": "broker.example.com",
+        "mqttServerPort": 8883,
+        "haDiscovery": True,
+    }
+
+
+def test_e2e_inline_content_arrives_compact(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
+                          content={"tube": 1})
+    assert _transferred_payload(entry, device, manager) == b'{"tube":1}'
+
+
+# --- The real devices.yaml: every file entry must still be sendable ----------
+
+def test_real_devices_yaml_entries_resolve(tmp_path: Path) -> None:
+    """Load the repo's tracked devices.yaml and check every device: the
+    server.json renders from (synthetic) secrets, inline content serializes,
+    and local_path entries resolve under ota/. Git-ignored / build-output
+    files may be absent on a fresh clone, so only their paths are checked."""
+    ota_dir = Path(ota.__file__).resolve().parent
+    projects = ota.DeviceManager(str(ota_dir / "otaUpdate.py")).load()
+    devices = [(p, d) for p in projects for d in p.devices]
+    assert devices, "devices.yaml lists no devices"
+
+    macs = {d.mac for _, d in devices}
+    manager = _write_secrets(tmp_path, (
+        "server_defaults:\n"
+        "  mqttServerUrl: broker.example.com\n"
+        "  mqttServerPort: 8883\n"
+        "devices:\n"
+        + "".join(f"  {mac}:\n    mqttUserName: u\n    mqttPassword: p\n" for mac in sorted(macs))
+    ))
+
+    for _project, device in devices:
+        assert any(f.render == "server_json" for f in device.files), \
+            f"{device.mac} has no rendered server.json entry"
+        for entry in device.files:
+            if entry.local_path is not None:
+                assert not entry.local_path.is_absolute() or str(entry.local_path).startswith(str(ota_dir.parent)), \
+                    f"{device.mac} {entry.name}: path escapes the repo"
+                if not entry.local_path.exists():
+                    continue  # git-ignored cert / firmware build output — absent on a fresh clone
+            payload = _transferred_payload(entry, device, manager)
+            assert payload
+            if entry.device_path.endswith(".json"):
+                json.loads(payload)  # every JSON config must arrive parseable

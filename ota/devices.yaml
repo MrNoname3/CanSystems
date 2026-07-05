@@ -18,27 +18,33 @@ projects:
     devices:
       - mac: c82b96034710
         friendly_name: "Home BP"
+        server_config:
+          haDiscovery: true
         files:
           - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
+            local_path: mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
-            local_path: files/c82b96034710/server.json
+            render: server_json
             device_path: /config/server.json
           - name: "Tube configuration upload"
-            local_path: files/c82b96034710/tube.json
+            content:
+              tube: 1                       # 1 = J305, 2 = M4011
             device_path: /config/tube.json
       - mac: cc50e30872d3
         friendly_name: "Home H"
+        server_config:
+          haDiscovery: true
         files:
           - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
+            local_path: mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
-            local_path: files/cc50e30872d3/server.json
+            render: server_json
             device_path: /config/server.json
           - name: "Tube configuration upload"
-            local_path: files/cc50e30872d3/tube.json
+            content:
+              tube: 1                       # 1 = J305, 2 = M4011
             device_path: /config/tube.json
 
   - name: "CAN gateway"
@@ -46,12 +52,14 @@ projects:
     devices:
       - mac: fcf5c401bd83
         friendly_name: "Home BP living room"
+        server_config:
+          haDiscovery: true
         files:
           - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
+            local_path: mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
-            local_path: files/fcf5c401bd83/server.json
+            render: server_json
             device_path: /config/server.json
           - name: "CAN alert firmware upload"
             local_path: ../.pio/build/nanoatmega328_alert/firmware.bin
@@ -62,19 +70,23 @@ projects:
     devices:
       - mac: bcddc2b622c9
         friendly_name: "Home BP"
+        server_config:
+          haDiscovery: true
         files:
           - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
+            local_path: mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
-            local_path: files/bcddc2b622c9/server.json
+            render: server_json
             device_path: /config/server.json
       - mac: 40f52033765d
         friendly_name: "Test2"
+        server_config:
+          haDiscovery: true
         files:
           - name: "CA certificate upload"
-            local_path: files/common/mosq-ca.crt
+            local_path: mosq-ca.crt
             device_path: /config/mosq-ca.crt
           - name: "Server configuration upload"
-            local_path: files/40f52033765d/server.json
+            render: server_json
             device_path: /config/server.json

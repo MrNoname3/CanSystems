@@ -69,14 +69,17 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
 | `/config/mosq-ca.crt`  | CA certificate for TLS server validation (NTP sync runs first for X.509) |
 | `/config/tube.json`    | Geiger tube type (rad node only) |
 
-Per-device copies live in `ota/files/<mac>/`. `data/config` is a **git symlink** to
-`ota/files/common` so the LittleFS image picks up the shared files — see Gotchas below.
+`server.json` is rendered per device by `ota/otaUpdate.py` from `ota/secrets.yaml`
+(git-ignored secrets) + `ota/devices.yaml` (non-secret fields); the first LittleFS image of a
+fresh device is flashed over USB by the tool's **Initial provisioning** action, which stages
+the device's `/config/*` files into the transient, git-ignored `data/` directory and runs
+`uploadfs`. See [`ota/README.md`](ota/README.md).
 
 ## OTA and file transfer
 
 **ESP firmware / files (MQTT):** `ota/otaUpdate.py` (interactive curses menu; configured by
-`ota/config.yaml` + `ota/devices.yaml`) sends files as base64 pieces with per-piece ACK.
-See [`ota/README.md`](ota/README.md) for setup and a copy-paste `config.yaml` example.
+`ota/secrets.yaml` + `ota/devices.yaml`) sends files as base64 pieces with per-piece ACK.
+See [`ota/README.md`](ota/README.md) for setup and a copy-paste `secrets.yaml` example.
 Firmware uploads carry a `binId` that the running firmware checks against its own PIO env, then
 stream into the Updater and reboot; other files go to a temp file, are MD5-verified and renamed
 into place (file names are allow-listed). The 100-byte piece size is deliberate — larger pieces
@@ -98,7 +101,7 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 | `ota/`           | Server-side OTA/file-transfer tool + its own [README](ota/README.md) (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
-| `data/`          | LittleFS image source (`data/config` → symlink to `ota/files/common`) |
+| `data/`          | LittleFS image source — transient and git-ignored; `ota/otaUpdate.py` provisioning generates and clears it |
 | `audio/`         | MP3 set for the alert node's DFPlayer SD card (see [`audio/README.md`](audio/README.md)) |
 
 ## Building, testing, flashing
@@ -106,10 +109,14 @@ urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA"
 ```sh
 pio run                                  # build all environments
 pio run -e project_esp8266_thermo -t upload      # serial flash one target
-pio run -t uploadfs -e <env>             # flash the LittleFS image (data/)
 pio test -e native_test                  # native test suite (~30 s, 442 cases)
 pio check                                # cppcheck + clang-tidy on all environments
 ```
+
+A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmware flash**
+action serial-flashes the firmware, and **Initial provisioning** flashes the first LittleFS
+config image (it generates `data/` and runs `uploadfs` itself — see
+[`ota/README.md`](ota/README.md)).
 
 The whole build is warning-clean under `-Wall -Wextra -Werror`; keep it that way.
 Firmware version comes from the git commit count, so commit before flashing release builds
@@ -121,7 +128,6 @@ C/C++ builds and tests run through PlatformIO. Setting up a fresh clone:
 
 ```sh
 git clone <repo> && cd CanSystems
-git config core.symlinks true          # so data/config stays a symlink (see Gotchas)
 git config core.autocrlf input         # Windows only: keep LF endings (the gate checks them)
 
 python -m venv .venv                    # release-gate Python tooling + OTA runtime deps
@@ -138,10 +144,11 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
   `platformio` and `intelhex` on top.
 - **Second push remote (optional):** a GitHub clone only has `origin`. To mirror `master` to the
   self-hosted Gitea as well, add it: `git remote add gitea <gitea-url>`.
-- **Per-deployment files are not in the repo** (git-ignored): the OTA tool's `ota/config.yaml`,
-  and each device's `ota/files/.../server.json` + `mosq-ca.crt`. They are only needed to run OTA
-  or to build the on-device LittleFS config image — recreate them from the templates in
-  [`ota/README.md`](ota/README.md). Building and testing the firmware needs none of them.
+- **Per-deployment files are not in the repo** (git-ignored): `ota/secrets.yaml` holds all
+  broker and device credentials in one file — copy it from your other machine or recreate it
+  from the template in [`ota/README.md`](ota/README.md). The CA bundle (`ota/mosq-ca.crt`)
+  regenerates automatically from the system trust store. Both are only needed to run OTA or
+  to provision a device; building and testing the firmware needs neither.
 
 ### Release gate
 
@@ -167,11 +174,6 @@ Exit code is 0 only on a fully clean run (~5 minutes).
 
 ## Gotchas
 
-- **`data/config` symlink:** requires `git config core.symlinks true`. If it ever turns into a
-  19-byte regular file containing the path text, the LittleFS image silently loses the config
-  files. File-sync tools can also break it (look for `*_Conflict` files). Restore it with
-  `git config core.symlinks true && rm data/config && git checkout -- data/config` — note
-  `core.symlinks` is a local setting, so a fresh clone can flatten it again.
 - **Cross-project reflash:** a running firmware rejects an OTA image whose `binId` does not match
   its own environment, so converting a board to another project needs a one-time serial flash.
 - **CAN IDs** are stored in EEPROM (CRC-protected). To provision a new node, build once with

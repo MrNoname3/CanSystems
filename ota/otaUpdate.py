@@ -5,11 +5,15 @@ ESP8266/ESP32 Over-The-Air (OTA) Update Tool via MQTT
 This tool provides a modular approach to updating ESP devices firmware
 and transferring configuration files through MQTT communication with
 proper error handling and progress tracking.
-Uses YAML configuration file (config.yaml) and device list (devices.yaml).
+Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.yaml).
 """
 
 import json
+import os
 import re
+import shutil
+import ssl
+import subprocess
 import time
 import base64
 import sys
@@ -108,10 +112,15 @@ class CommandEntry:
 
 @dataclass
 class FileEntry:
-    """A transferable file entry from devices.yaml"""
-    name: str                  # Display name shown in the menu
-    local_path: Path           # Local path to the file (relative to ota/ directory)
-    device_path: str           # Destination path on the device (sent as 'name' in JSON)
+    """A transferable file entry from devices.yaml.
+    Exactly one of `local_path` (a file on disk), `render` (content generated
+    at send time; currently only "server_json") or `content` (an inline mapping
+    sent as compact JSON) is set."""
+    name: str                        # Display name shown in the menu
+    device_path: str                 # Destination path on the device (sent as 'name' in JSON)
+    local_path: Optional[Path] = None  # Local path to the file (relative to ota/ directory)
+    render: Optional[str] = None       # Renderer id for generated content ("server_json")
+    content: Optional[Dict[str, Any]] = None  # Inline JSON content from devices.yaml
 
 
 @dataclass
@@ -120,6 +129,7 @@ class DeviceEntry:
     mac: str
     friendly_name: Optional[str] = None
     files: List[FileEntry] = field(default_factory=list[FileEntry])
+    server_config: Dict[str, Any] = field(default_factory=dict[str, Any])  # Non-secret server.json fields (e.g. haDiscovery).
 
     @property
     def display_name(self) -> str:
@@ -140,12 +150,14 @@ class ProjectEntry:
 @dataclass
 class ActionResult:
     """Holds the result of the interactive menu selection.
-    Exactly one of `file` or `command` is not None; the other is always None.
-    If both are None, the selected action is a firmware upload."""
+    At most one of `file` / `command` is not None, or one of the USB flags is
+    True. If none of them is set, the selected action is an OTA firmware upload."""
     project: ProjectEntry
     device: DeviceEntry
     file: Optional[FileEntry] = None        # Set when a file transfer was selected.
     command: Optional[CommandEntry] = None  # Set when a command was selected.
+    provision: bool = False                 # Set when USB provisioning was selected.
+    serial_flash: bool = False              # Set when the initial USB firmware flash was selected.
 
 
 @dataclass
@@ -220,25 +232,45 @@ class DeviceManager:
 
     def _parse_file(self, f: dict[str, Any], mac: str) -> FileEntry:
         """Parse a single file entry dict into a FileEntry object."""
-        if 'name' not in f or 'local_path' not in f or 'device_path' not in f:
+        if 'name' not in f or 'device_path' not in f:
             raise ValueError(
-                f"Each file entry must have 'name', 'local_path' and 'device_path' fields "
-                f"(device: {mac})"
+                f"Each file entry must have 'name' and 'device_path' fields (device: {mac})"
+            )
+        sources = [key for key in ('local_path', 'render', 'content') if key in f]
+        if len(sources) != 1:
+            raise ValueError(
+                f"File entry '{f['name']}' must have exactly one of 'local_path', 'render' "
+                f"or 'content' (device: {mac})"
+            )
+        if 'render' in f and f['render'] != 'server_json':
+            raise ValueError(
+                f"Unknown render type '{f['render']}' in file entry '{f['name']}' "
+                f"(device: {mac}); only 'server_json' is supported"
+            )
+        if 'content' in f and not isinstance(f['content'], dict):
+            raise ValueError(
+                f"'content' must be a mapping in file entry '{f['name']}' (device: {mac})"
             )
         return FileEntry(
             name=f['name'],
-            local_path=self.script_dir / f['local_path'],
-            device_path=f['device_path']
+            device_path=f['device_path'],
+            local_path=self.script_dir / f['local_path'] if 'local_path' in f else None,
+            render=f.get('render'),
+            content=cast(Optional[Dict[str, Any]], f.get('content'))
         )
 
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
         """Parse a single device entry dict into a DeviceEntry object."""
         if 'mac' not in d:
             raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
+        server_config: Any = d.get('server_config', {})
+        if not isinstance(server_config, dict):
+            raise ValueError(f"'server_config' must be a mapping (device: {d['mac']})")
         return DeviceEntry(
             mac=d['mac'],
             friendly_name=d.get('friendly_name'),
-            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])]
+            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])],
+            server_config=cast(Dict[str, Any], server_config)
         )
 
     def _parse_project(self, p: dict[str, Any], common_commands: List[CommandEntry]) -> ProjectEntry:
@@ -343,45 +375,122 @@ class MenuSelector:
 # ---------------------------------------------------------------------------
 
 class ConfigManager:
-    """Manages YAML configuration loading and validation"""
+    """Loads ota/secrets.yaml: the tool's broker connection, the per-device
+    server.json secrets, and the optional pio executable override used by
+    USB provisioning. secrets.yaml is git-ignored — it is the single file
+    carried over manually when the repo is cloned on another machine."""
 
     def __init__(self, script_path: str):
         self.script_dir = Path(script_path).parent
         self.parent_dir = self.script_dir.parent
-        self.config_file = self.script_dir / 'config.yaml'
+        self.secrets_file = self.script_dir / 'secrets.yaml'
+        self._secrets: Optional[dict[str, Any]] = None
 
-    def load_mqtt_config(self) -> MQTTConfig:
-        """Load MQTT configuration from config.yaml"""
-        if not self.config_file.exists():
+    def _load_secrets(self) -> dict[str, Any]:
+        """Load and cache secrets.yaml."""
+        if self._secrets is not None:
+            return self._secrets
+
+        if not self.secrets_file.exists():
             raise FileNotFoundError(
-                f"Configuration file not found: {self.config_file}\n"
-                f"Please create a config.yaml file in the same directory as the script."
+                f"Secrets file not found: {self.secrets_file}\n"
+                f"Create ota/secrets.yaml from the template in ota/README.md (it is git-ignored)."
             )
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as file:
-                config_data: dict[str, Any] = yaml.safe_load(file) or {}
+            with open(self.secrets_file, 'r', encoding='utf-8') as file:
+                data: Any = yaml.safe_load(file) or {}
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse YAML configuration file: {e}")
+            raise ValueError(f"Failed to parse YAML secrets file: {e}")
         except UnicodeDecodeError as e:
-            raise ValueError(f"Configuration file encoding error: {e}")
+            raise ValueError(f"Secrets file encoding error: {e}")
         except Exception as e:
-            raise IOError(f"Failed to read configuration file: {e}")
+            raise IOError(f"Failed to read secrets file: {e}")
+
+        if not isinstance(data, dict):
+            raise ValueError("secrets.yaml must be a YAML mapping")
+
+        self._secrets = cast(dict[str, Any], data)
+        return self._secrets
+
+    def load_mqtt_config(self) -> MQTTConfig:
+        """Build the tool's broker connection from the 'broker' section of secrets.yaml."""
+        broker: Any = self._load_secrets().get('broker')
+        if not isinstance(broker, dict):
+            raise ValueError("secrets.yaml must contain a 'broker' mapping")
+        broker_data = cast(dict[str, Any], broker)
+
+        # A relative cafile is resolved against ota/, so the tool works from any CWD.
+        cafile: Optional[str] = broker_data.get('cafile')
+        if cafile is not None and not Path(cafile).expanduser().is_absolute():
+            cafile = str(self.script_dir / cafile)
 
         try:
             return MQTTConfig(
-                protocol=config_data.get('protocol', 'mqtt'),
-                host=config_data.get('host', ''),
-                port=config_data.get('port', 0),
-                basepath=config_data.get('basepath', '/'),
-                client_id=config_data.get('client_id', "OtaUpdater"),
-                username=config_data.get('username'),
-                password=config_data.get('password'),
-                tls_enabled=config_data.get('tls_enabled', False),
-                cafile=config_data.get('cafile')
+                protocol=broker_data.get('protocol', 'mqtt'),
+                host=broker_data.get('host', ''),
+                port=broker_data.get('port', 0),
+                basepath=broker_data.get('basepath', '/'),
+                client_id=broker_data.get('client_id', "OtaUpdater"),
+                username=broker_data.get('username'),
+                password=broker_data.get('password'),
+                tls_enabled=broker_data.get('tls_enabled', False),
+                cafile=cafile
             )
         except (ValueError, FileNotFoundError) as e:
             raise ValueError(f"Configuration validation error: {e}")
+
+    def device_server_secrets(self, mac: str) -> dict[str, Any]:
+        """Secret server.json fields for one device: 'server_defaults' merged
+        with (and overridden by) the device's entry under 'devices'."""
+        data = self._load_secrets()
+
+        defaults: Any = data.get('server_defaults') or {}
+        if not isinstance(defaults, dict):
+            raise ValueError("'server_defaults' in secrets.yaml must be a mapping")
+
+        devices: Any = data.get('devices') or {}
+        if not isinstance(devices, dict):
+            raise ValueError("'devices' in secrets.yaml must be a mapping")
+
+        entry: Any = cast(dict[Any, Any], devices).get(mac)
+        if entry is None:
+            raise ValueError(f"No entry for device {mac} under 'devices' in secrets.yaml")
+        if not isinstance(entry, dict):
+            raise ValueError(f"Device entry {mac} in secrets.yaml must be a mapping")
+
+        return {**cast(dict[str, Any], defaults), **cast(dict[str, Any], entry)}
+
+    def pio_command(self) -> str:
+        """The pio executable used for provisioning: the optional top-level 'pio'
+        key of secrets.yaml, else the standard PlatformIO penv location when it
+        exists, else 'pio' from PATH."""
+        override: Any = self._load_secrets().get('pio')
+        if override:
+            return str(Path(str(override)).expanduser())
+        bundled = Path.home() / '.platformio' / 'penv' / 'bin' / 'pio'
+        return str(bundled) if bundled.exists() else 'pio'
+
+    # The broker CA roots sent to the devices as mosq-ca.crt. Let's Encrypt's
+    # ISRG Root X1 + X2 cover both the RSA and the ECDSA issuance chains.
+    DEFAULT_CA_ROOTS: ClassVar[List[str]] = ["ISRG Root X1", "ISRG Root X2"]
+
+    def ca_roots(self) -> List[str]:
+        """Subject common names of the CA roots the devices must trust:
+        the optional top-level 'ca_roots' list of secrets.yaml, else the
+        Let's Encrypt defaults."""
+        roots: Any = self._load_secrets().get('ca_roots')
+        if roots is None:
+            return list(self.DEFAULT_CA_ROOTS)
+        if not isinstance(roots, list) or not roots \
+                or not all(isinstance(r, str) for r in cast(List[Any], roots)):
+            raise ValueError("'ca_roots' in secrets.yaml must be a non-empty list of strings")
+        return cast(List[str], roots)
+
+    @property
+    def ca_bundle_path(self) -> Path:
+        """Location of the (git-ignored) CA bundle uploaded to the devices."""
+        return self.script_dir / 'mosq-ca.crt'
 
     def get_firmware_path(self, pio_project: str) -> Path:
         """Get the firmware binary path"""
@@ -520,6 +629,259 @@ class FileDataProvider:
         if self._md5 is None:
             self._md5 = hashlib.md5(self.data).hexdigest()
         return self._md5
+
+
+# ---------------------------------------------------------------------------
+# server.json renderer
+# ---------------------------------------------------------------------------
+
+# Every field server.json may carry, in the order the rendered content emits them.
+_SERVER_JSON_FIELDS = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort",
+                       "haDiscovery", "ssid", "password")
+_SERVER_JSON_REQUIRED = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort")
+
+
+def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
+    """Build the compact server.json content for one device.
+
+    `secret_fields` comes from secrets.yaml (server_defaults merged with the
+    per-device entry), `server_config` from the device's entry in devices.yaml
+    (the non-secret fields, e.g. haDiscovery). devices.yaml wins on conflicts."""
+    merged = {**secret_fields, **server_config}
+
+    unknown = [k for k in merged if k not in _SERVER_JSON_FIELDS]
+    if unknown:
+        raise ValueError(f"Unknown server.json field(s): {', '.join(sorted(unknown))}")
+
+    missing = [k for k in _SERVER_JSON_REQUIRED if k not in merged]
+    if missing:
+        raise ValueError(f"Missing required server.json field(s): {', '.join(missing)}")
+
+    ordered = {k: merged[k] for k in _SERVER_JSON_FIELDS if k in merged}
+    return json.dumps(ordered, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+
+
+class RenderedDataProvider:
+    """Provides in-memory rendered content with the same interface as
+    FileDataProvider (data / size / md5)."""
+
+    def __init__(self, data: bytes):
+        self._data = data
+        self._md5: Optional[str] = None
+
+    @property
+    def data(self) -> bytes:
+        return self._data
+
+    @property
+    def size(self) -> int:
+        return len(self._data)
+
+    @property
+    def md5(self) -> str:
+        if self._md5 is None:
+            self._md5 = hashlib.md5(self._data).hexdigest()
+        return self._md5
+
+
+def extract_system_ca_roots(root_names: List[str]) -> bytes:
+    """Extract the named root certificates (matched by subject commonName)
+    from the system trust store as a concatenated PEM bundle, in the order
+    given. Raises ValueError when a requested root is not in the store."""
+    context = ssl.create_default_context()   # loads the system trust store
+    # get_ca_certs() and get_ca_certs(binary_form=True) return index-aligned lists.
+    infos = cast(List[Dict[str, Any]], context.get_ca_certs())
+    ders = context.get_ca_certs(binary_form=True)
+    der_by_name: dict[str, bytes] = {}
+    for info, der in zip(infos, ders):
+        rdns = cast("tuple[tuple[tuple[str, str], ...], ...]", info.get('subject', ()))
+        subject = {pair[0]: pair[1] for rdn in rdns for pair in rdn}
+        common_name = subject.get('commonName')
+        if common_name in root_names and common_name not in der_by_name:
+            der_by_name[common_name] = der
+
+    missing = [n for n in root_names if n not in der_by_name]
+    if missing:
+        raise ValueError(
+            f"Root certificate(s) not found in the system trust store: {', '.join(missing)}")
+
+    return ''.join(ssl.DER_cert_to_PEM_cert(der_by_name[n]) for n in root_names).encode('ascii')
+
+
+def ensure_ca_bundle(config_manager: "ConfigManager") -> Path:
+    """Return the CA bundle path, generating the file from the system trust
+    store on first use. A hand-placed file is never overwritten."""
+    path = config_manager.ca_bundle_path
+    if not path.exists():
+        roots = config_manager.ca_roots()
+        path.write_bytes(extract_system_ca_roots(roots))
+        logging.info(f"Generated CA bundle {path} from the system trust store "
+                     f"({', '.join(roots)})")
+    return path
+
+
+def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
+                        config_manager: "ConfigManager") -> "FileDataProvider | RenderedDataProvider":
+    """Data provider for a file entry: disk-backed for local_path entries,
+    rendered in memory for render and inline-content entries. A missing CA
+    bundle is generated once from the system trust store."""
+    if file_entry.render == 'server_json':
+        return RenderedDataProvider(render_server_json(
+            config_manager.device_server_secrets(device.mac), device.server_config))
+    if file_entry.content is not None:
+        return RenderedDataProvider(
+            json.dumps(file_entry.content, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
+    if file_entry.local_path is None:
+        raise ValueError(f"File entry '{file_entry.name}' has no content source")
+    if file_entry.local_path == config_manager.ca_bundle_path:
+        ensure_ca_bundle(config_manager)
+    if not file_entry.local_path.exists():
+        raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
+    return FileDataProvider(file_entry.local_path)
+
+
+# ---------------------------------------------------------------------------
+# Device-identity preflight check
+# ---------------------------------------------------------------------------
+
+def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path, mac: str,
+                             timeout: float = 15.0) -> bool:
+    """Connect to the broker exactly as the target device would: same host and
+    port, the device's own MQTT credentials, plain MQTT over TLS validated
+    with the CA bundle that is about to be shipped. Returns True when the
+    broker accepts the connection. The client id is 'verify_<mac>' — it
+    differs from the device's real client id (so a live device is not kicked
+    off its session) while broker logs still show whose identity was tested."""
+    host: Any = server_secrets.get('mqttServerUrl')
+    port: Any = server_secrets.get('mqttServerPort')
+    username: Any = server_secrets.get('mqttUserName')
+    password: Any = server_secrets.get('mqttPassword')
+    if not all(isinstance(v, str) and v for v in (host, username, password)) \
+            or not isinstance(port, int):
+        raise ValueError("Device secrets must contain mqttServerUrl/mqttServerPort/"
+                         "mqttUserName/mqttPassword for the identity check")
+
+    client = mqtt.Client(
+        client_id=f"verify_{mac}",
+        callback_api_version=CallbackAPIVersion.VERSION2,
+        transport="tcp"
+    )
+    client.username_pw_set(username=cast(str, username), password=cast(str, password))
+    # paho's own tls_set stub leaves some parameters unannotated (partially unknown).
+    client.tls_set(ca_certs=str(cafile))  # pyright: ignore[reportUnknownMemberType]
+
+    outcome: List[bool] = []
+
+    def on_connect(cl: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code == 0:
+            outcome.append(True)
+        else:
+            logging.error(f"Broker rejected the device credentials: {reason_code}")
+            outcome.append(False)
+
+    client.on_connect = on_connect
+
+    logging.info(f"Identity check: connecting to {host}:{port} as '{username}' "
+                 f"(TLS via {cafile.name})")
+    try:
+        client.connect(cast(str, host), port, 30)   # TCP + TLS handshake happen here
+    except Exception as e:
+        logging.error(f"Identity check failed to reach the broker: {e}")
+        return False
+
+    deadline = time.time() + timeout
+    while not outcome and time.time() < deadline:
+        client.loop(timeout=0.2)
+    client.disconnect()
+
+    if not outcome:
+        logging.error("Identity check timed out waiting for the broker's CONNACK")
+        return False
+    if outcome[0]:
+        logging.info("Identity check OK: the broker accepts this device's configuration")
+    return outcome[0]
+
+
+def run_identity_check(config_manager: "ConfigManager", device: DeviceEntry) -> bool:
+    """Preflight for actions that ship connection config to a device: verify
+    the device's rendered identity (credentials + URL/port + CA bundle)
+    against the live broker before anything is uploaded or flashed."""
+    cafile = ensure_ca_bundle(config_manager)
+    secrets = config_manager.device_server_secrets(device.mac)
+    print("🔐 Identity check: connecting to the broker as the device would...")
+    if not verify_device_connection(secrets, cafile, device.mac):
+        print("❌ Identity check failed — nothing was uploaded. "
+              "Fix secrets.yaml (or the CA bundle) and retry.")
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# USB provisioning (initial LittleFS image)
+# ---------------------------------------------------------------------------
+
+class Provisioner:
+    """Bench (USB) setup for a factory-fresh device: the initial firmware
+    flash and the initial LittleFS provisioning. Running both makes the
+    device fully operational without any pre-existing config on it.
+
+    Provisioning materializes every /config/* file entry of the device into
+    <repo>/data (the PlatformIO filesystem source directory, git-ignored),
+    runs `pio run -e <env> -t uploadfs`, then clears data/ again. This puts
+    the device's own credentials on it from the very first flash — no shared
+    bootstrap config is involved."""
+
+    CONFIG_PREFIX = '/config/'
+
+    def __init__(self, repo_root: Path, pio_cmd: str):
+        self.repo_root = repo_root
+        self.data_dir = repo_root / 'data'
+        self.pio_cmd = pio_cmd
+
+    def provision(self, project: ProjectEntry, device: DeviceEntry,
+                  config_manager: "ConfigManager") -> bool:
+        """Materialize the device's /config/* files into data/ and flash the
+        filesystem image over serial. data/ is cleared before (so nothing
+        stale ends up on the device) and after (so no credentials linger)."""
+        entries = [f for f in device.files if f.device_path.startswith(self.CONFIG_PREFIX)]
+        if not entries:
+            raise ValueError(f"Device {device.mac} has no {self.CONFIG_PREFIX}* file entries to provision")
+
+        self._clear_data_dir()
+        try:
+            for entry in entries:
+                provider = build_file_provider(entry, device, config_manager)
+                target = self.data_dir / entry.device_path.lstrip('/')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(provider.data)
+                logging.info(f"Materialized {entry.device_path} ({provider.size} bytes)")
+            return self._run_pio_target(project.pio_project, 'uploadfs')
+        finally:
+            self._clear_data_dir()
+
+    def flash_firmware(self, project: ProjectEntry) -> bool:
+        """Build the project's firmware and flash it over serial (initial USB flash)."""
+        return self._run_pio_target(project.pio_project, 'upload')
+
+    def _clear_data_dir(self):
+        """Reset data/ to an empty directory so only the freshly materialized
+        files end up in the filesystem image."""
+        if self.data_dir.exists():
+            shutil.rmtree(self.data_dir)
+        self.data_dir.mkdir()
+
+    def _run_pio_target(self, pio_env: str, target: str) -> bool:
+        """Run `pio run -e <env> -t <target>` from the repo root, streaming its output."""
+        command = [self.pio_cmd, 'run', '-e', pio_env, '-t', target]
+        env = dict(os.environ)
+        env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
+        logging.info(f"Running: {' '.join(command)}")
+        try:
+            result = subprocess.run(command, cwd=self.repo_root, env=env)
+        except FileNotFoundError:
+            logging.error(f"pio executable not found: {self.pio_cmd} (set the 'pio' key in secrets.yaml)")
+            return False
+        return result.returncode == 0
 
 
 # ---------------------------------------------------------------------------
@@ -827,10 +1189,15 @@ class FileTransfer(_BaseTransfer):
     Uses 'name' + 'fileSize' + 'md5' in the start message instead of 'binId',
     which signals to the device that this is a generic file transfer, not a firmware update."""
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry):
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry,
+                 provider: "FileDataProvider | RenderedDataProvider | None" = None):
         super().__init__(device_config, mqtt_config)
         self.file_entry = file_entry
-        self.file_provider = FileDataProvider(file_entry.local_path)
+        if provider is None:
+            if file_entry.local_path is None:
+                raise ValueError(f"File entry '{file_entry.name}' needs an explicit provider (rendered content)")
+            provider = FileDataProvider(file_entry.local_path)
+        self.file_provider = provider
 
     @property
     def data(self) -> bytes:
@@ -842,7 +1209,7 @@ class FileTransfer(_BaseTransfer):
 
     @property
     def _progress_desc(self) -> str:
-        return f"Sending {self.file_entry.local_path.name}"
+        return f"Sending {Path(self.file_entry.device_path).name}"
 
     def _build_start_message(self) -> dict[str, Any]:
         return {
@@ -852,7 +1219,8 @@ class FileTransfer(_BaseTransfer):
         }
 
     def _start_log_info(self):
-        logging.info(f"File transfer started - File: {self.file_entry.local_path.name}")
+        source = self.file_entry.local_path if self.file_entry.local_path is not None else "<rendered>"
+        logging.info(f"File transfer started - Source: {source}")
         logging.info(f"  Device path: {self.file_entry.device_path}")
         logging.info(f"  Size:  {self.file_provider.size} bytes")
         logging.info(f"  MD5:   {self.file_provider.md5}")
@@ -931,8 +1299,10 @@ class CommandSender(_BaseTransfer):
 # Main
 # ---------------------------------------------------------------------------
 
-# Sentinel used in the action menu to identify the firmware upload option.
+# Sentinels used in the action menu for the fixed (non-devices.yaml) options.
 _FW_OPTION = "Firmware upload"
+_PROVISION_OPTION = "Initial provisioning (USB: build + upload LittleFS image)"
+_SERIAL_FLASH_OPTION = "Initial firmware flash (USB: build + serial upload)"
 
 
 def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
@@ -968,10 +1338,11 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
             while True:
                 # --- Level 3: action selection ---
-                # Order: firmware upload → file transfers → commands.
+                # Order: OTA firmware upload → USB provisioning/flash → file transfers → commands.
                 file_map    = {f.name: f for f in selected_device.files}
                 command_map = {c.display_name: c for c in selected_project.commands}
-                action_options = [_FW_OPTION] + list(file_map) + list(command_map)
+                action_options = ([_FW_OPTION, _PROVISION_OPTION, _SERIAL_FLASH_OPTION]
+                                  + list(file_map) + list(command_map))
 
                 choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
@@ -982,6 +1353,10 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
                 if choice == _FW_OPTION:
                     return ActionResult(project=selected_project, device=selected_device)
+                if choice == _PROVISION_OPTION:
+                    return ActionResult(project=selected_project, device=selected_device, provision=True)
+                if choice == _SERIAL_FLASH_OPTION:
+                    return ActionResult(project=selected_project, device=selected_device, serial_flash=True)
                 if choice in file_map:
                     return ActionResult(project=selected_project, device=selected_device, file=file_map[choice])
                 if choice in command_map:
@@ -998,13 +1373,18 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
         return CommandSender(device_config, mqtt_config, result.command)
 
     if result.file is not None:
-        if not result.file.local_path.exists():
-            raise FileNotFoundError(f"Local file not found: {result.file.local_path}")
+        provider = build_file_provider(result.file, result.device, config_manager)
+        if result.file.local_path is not None:
+            source = str(result.file.local_path)
+        elif result.file.content is not None:
+            source = "inline content from devices.yaml"
+        else:
+            source = "rendered from devices.yaml + secrets.yaml"
         print(f"  Action:      {result.file.name}")
-        print(f"  Local file:  {result.file.local_path}")
+        print(f"  Source:      {source}")
         print(f"  Device path: {result.file.device_path}")
         print()
-        return FileTransfer(device_config, mqtt_config, result.file)
+        return FileTransfer(device_config, mqtt_config, result.file, provider)
 
     # Firmware upload
     firmware_path = config_manager.get_firmware_path(result.project.pio_project)
@@ -1041,6 +1421,28 @@ def main():
         print(f"  Project:     {result.project.name}  ({result.project.pio_project})")
         print(f"  Device:      {result.device.display_name}")
 
+        # Preflight for actions that ship connection config to the device: the
+        # cert and server.json uploads over MQTT and the USB provisioning. All
+        # are verified by connecting to the broker with the device's own
+        # rendered identity first.
+        ships_connection_config = result.provision or (result.file is not None and (
+            result.file.render == 'server_json'
+            or result.file.local_path == config_manager.ca_bundle_path))
+        if ships_connection_config and not run_identity_check(config_manager, result.device):
+            sys.exit(1)
+
+        if result.provision or result.serial_flash:
+            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
+            if result.provision:
+                print("  Action:      Initial provisioning (USB)")
+                print()
+                success = provisioner.provision(result.project, result.device, config_manager)
+            else:
+                print("  Action:      Initial firmware flash (USB)")
+                print()
+                success = provisioner.flash_firmware(result.project)
+            sys.exit(0 if success else 1)
+
         worker = _build_worker(result, config_manager, mqtt_config)
 
         # Set up signal handler for graceful shutdown
@@ -1055,6 +1457,9 @@ def main():
 
         sys.exit(0 if worker.run() else 1)
 
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        sys.exit(1)
     except FileNotFoundError as e:
         print(f"❌ File Error: {e}")
         sys.exit(1)
