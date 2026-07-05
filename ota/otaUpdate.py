@@ -744,13 +744,14 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
 # Device-identity preflight check
 # ---------------------------------------------------------------------------
 
-def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path,
+def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path, mac: str,
                              timeout: float = 15.0) -> bool:
     """Connect to the broker exactly as the target device would: same host and
     port, the device's own MQTT credentials, plain MQTT over TLS validated
     with the CA bundle that is about to be shipped. Returns True when the
-    broker accepts the connection. A distinct client id is used so a live
-    device is not kicked off its session."""
+    broker accepts the connection. The client id is 'verify_<mac>' — it
+    differs from the device's real client id (so a live device is not kicked
+    off its session) while broker logs still show whose identity was tested."""
     host: Any = server_secrets.get('mqttServerUrl')
     port: Any = server_secrets.get('mqttServerPort')
     username: Any = server_secrets.get('mqttUserName')
@@ -761,7 +762,7 @@ def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path,
                          "mqttUserName/mqttPassword for the identity check")
 
     client = mqtt.Client(
-        client_id=f"OtaVerify_{uuid.uuid4().hex[:8]}",
+        client_id=f"verify_{mac}",
         callback_api_version=CallbackAPIVersion.VERSION2,
         transport="tcp"
     )
@@ -808,7 +809,7 @@ def run_identity_check(config_manager: "ConfigManager", device: DeviceEntry) -> 
     cafile = ensure_ca_bundle(config_manager)
     secrets = config_manager.device_server_secrets(device.mac)
     print("🔐 Identity check: connecting to the broker as the device would...")
-    if not verify_device_connection(secrets, cafile):
+    if not verify_device_connection(secrets, cafile, device.mac):
         print("❌ Identity check failed — nothing was uploaded. "
               "Fix secrets.yaml (or the CA bundle) and retry.")
         return False
@@ -1421,10 +1422,12 @@ def main():
         print(f"  Device:      {result.device.display_name}")
 
         # Preflight for actions that ship connection config to the device: the
-        # cert upload over MQTT and the USB provisioning. Both are verified by
-        # connecting to the broker with the device's own rendered identity.
-        ships_connection_config = result.provision or (
-            result.file is not None and result.file.local_path == config_manager.ca_bundle_path)
+        # cert and server.json uploads over MQTT and the USB provisioning. All
+        # are verified by connecting to the broker with the device's own
+        # rendered identity first.
+        ships_connection_config = result.provision or (result.file is not None and (
+            result.file.render == 'server_json'
+            or result.file.local_path == config_manager.ca_bundle_path))
         if ships_connection_config and not run_identity_check(config_manager, result.device):
             sys.exit(1)
 

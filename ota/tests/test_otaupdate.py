@@ -526,39 +526,41 @@ def _fake_verify_client(monkeypatch: pytest.MonkeyPatch) -> "type[_FakeVerifyCli
 def test_identity_check_accepts(tmp_path: Path,
                                 _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     cafile = _write(tmp_path, "ca.crt", b"PEM")
-    assert ota.verify_device_connection(_DEVICE_SECRETS, cafile) is True
+    assert ota.verify_device_connection(_DEVICE_SECRETS, cafile, "40f52033765d") is True
     client = _FakeVerifyClient.last
     assert client is not None
     assert client.username == "dev"
-    assert client.ca_certs == str(cafile)             # TLS validated with the shipped bundle
-    assert client.client_id.startswith("OtaVerify_")  # never the device's own client id
-    assert client.transport == "tcp"                  # devices use plain MQTT over TLS
+    assert client.ca_certs == str(cafile)              # TLS validated with the shipped bundle
+    assert client.client_id == "verify_40f52033765d"   # identifies the device in broker logs,
+    assert client.transport == "tcp"                   # but never equals its real client id
     assert client.disconnected
 
 
 def test_identity_check_rejected_credentials(tmp_path: Path,
                                              _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "reject"
-    assert ota.verify_device_connection(_DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM")) is False
+    assert ota.verify_device_connection(
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
 
 
 def test_identity_check_unreachable_broker(tmp_path: Path,
                                            _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "raise"
-    assert ota.verify_device_connection(_DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM")) is False
+    assert ota.verify_device_connection(
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
 
 
 def test_identity_check_connack_timeout(tmp_path: Path,
                                         _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "silent"
     assert ota.verify_device_connection(
-        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), timeout=0.3) is False
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d", timeout=0.3) is False
 
 
 def test_identity_check_incomplete_secrets_raises(tmp_path: Path) -> None:
     incomplete = {k: v for k, v in _DEVICE_SECRETS.items() if k != "mqttServerPort"}
     with pytest.raises(ValueError):
-        ota.verify_device_connection(incomplete, _write(tmp_path, "ca.crt", b"PEM"))
+        ota.verify_device_connection(incomplete, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d")
 
 
 def test_run_identity_check_generates_bundle_and_passes_device_secrets(
@@ -571,9 +573,10 @@ def test_run_identity_check_generates_bundle_and_passes_device_secrets(
     monkeypatch.setattr(ota, "extract_system_ca_roots", fake_extract)
     seen: dict[str, Any] = {}
 
-    def fake_verify(secrets: dict[str, Any], cafile: Path, timeout: float = 15.0) -> bool:
+    def fake_verify(secrets: dict[str, Any], cafile: Path, mac: str, timeout: float = 15.0) -> bool:
         seen["secrets"] = secrets
         seen["cafile"] = cafile
+        seen["mac"] = mac
         return True
 
     monkeypatch.setattr(ota, "verify_device_connection", fake_verify)
@@ -581,6 +584,7 @@ def test_run_identity_check_generates_bundle_and_passes_device_secrets(
     assert seen["cafile"] == manager.ca_bundle_path
     assert manager.ca_bundle_path.read_bytes() == b"PEM"   # bundle generated for the check
     assert seen["secrets"]["mqttUserName"] == "dev"
+    assert seen["mac"] == device.mac
 
 
 # --- Provisioner: data/ materialization + uploadfs invocation ---------------

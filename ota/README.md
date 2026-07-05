@@ -19,13 +19,14 @@ store** (by default the Let's Encrypt ISRG Root X1 + X2 roots; override the subj
 the `ca_roots` list in `secrets.yaml`). A hand-placed file is never overwritten, so a
 self-signed CA can simply be dropped there.
 
-**Identity preflight.** Before the two actions that ship connection config to a device —
-the CA certificate upload over MQTT and the USB Initial provisioning — the tool first
-connects to the broker **as that device would**: same host/port, the device's own MQTT
-credentials from `secrets.yaml`, TLS validated with the exact CA bundle about to be shipped
-(with a separate client id, so a live device is not kicked off). If the broker rejects it,
-nothing is uploaded — a typo in `secrets.yaml` or a bad bundle cannot lock a deployed
-device out.
+**Identity preflight.** Before every action that ships connection config to a device —
+the CA certificate and server.json uploads over MQTT and the USB Initial provisioning —
+the tool first connects to the broker **as that device would**: same host/port, the
+device's own MQTT credentials from `secrets.yaml`, TLS validated with the exact CA bundle
+about to be shipped. It connects as `verify_<mac>`, so broker logs show whose identity was
+tested while the device's live session (whose client id embeds the project name too) is
+never taken over. If the broker rejects it, nothing is uploaded — a typo in `secrets.yaml`
+or a bad bundle cannot lock a deployed device out.
 
 ## Setup
 
