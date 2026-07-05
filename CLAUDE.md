@@ -15,7 +15,7 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 ```
 
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
-- Native tests: `… pio test -e native_test` (~30 s, ~442 cases)
+- Native tests: `… pio test -e native_test` (~30 s, ~444 cases)
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree)
@@ -46,8 +46,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
   which **push-mirrors to GitHub** automatically — no second remote needed).
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
-  jobs, and Dependabot opens weekly PRs for GitHub Actions version bumps; **Gitea CI is
-  intentionally off**.
+  jobs, and Dependabot opens weekly PRs for GitHub Actions and pip dev-tooling version bumps;
+  **Gitea CI is intentionally off**.
 - End commit messages with the `Co-Authored-By` trailer.
 
 ## Dependencies
