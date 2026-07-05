@@ -142,8 +142,9 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
   OTA tool's runtime deps are pinned in `requirements-dev.txt`; installed into the **project-root
   `.venv`**, every gate guard discovers it automatically. CI installs the same file plus
   `platformio` and `intelhex` on top.
-- **Second push remote (optional):** a GitHub clone only has `origin`. To mirror `master` to the
-  self-hosted Gitea as well, add it: `git remote add gitea <gitea-url>`.
+- **Remotes:** the canonical repo is the self-hosted Gitea, which push-mirrors to GitHub
+  automatically — a single `origin` (the Gitea URL) is all a working clone needs. A clone
+  from GitHub works too; it just cannot push.
 - **Per-deployment files are not in the repo** (git-ignored): `ota/secrets.yaml` holds all
   broker and device credentials in one file — copy it from your other machine or recreate it
   from the template in [`ota/README.md`](ota/README.md). The CA bundle (`ota/mosq-ca.crt`)

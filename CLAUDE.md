@@ -43,8 +43,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 
 - Always merge with `git merge --no-ff` (never fast-forward).
 - Build features on a branch; merge to `master` only when done, reviewed, and CI-green, then
-  delete the branch (local + remote) and push `master` to **both** remotes
-  (`origin` = GitHub, `gitea`).
+  delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
+  which **push-mirrors to GitHub** automatically — no second remote needed).
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
   jobs, and Dependabot opens weekly PRs for GitHub Actions version bumps; **Gitea CI is
   intentionally off**.
