@@ -8,7 +8,7 @@
 # clone brings the exact, version-matched compiler along (hence --platform amd64).
 #
 # Build arg:  URBOOT_REF   urboot git tag, e.g. u7.7.1 / u8.0 / u8.0.1
-FROM --platform=linux/amd64 ubuntu:jammy
+FROM --platform=linux/amd64 ubuntu:resolute
 
 # build-essential + perl: urboot's Makefile/helper scripts. Capture::Tiny and
 # Number::Range are the only non-core Perl modules upstream installs via cpan
