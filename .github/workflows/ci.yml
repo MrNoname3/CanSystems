@@ -17,11 +17,7 @@ concurrency:                # a newer push to the same ref cancels the in-flight
 
 jobs:
   release-gate:
-    # GitHub-only on purpose: the Gitea runner is a low-power local box, not enabled yet.
-    # Gitea also scans .github/workflows, so this guard makes the job skip there — the gate
-    # runs only on github.com. (If Gitea is enabled later via .gitea/workflows/ci.yml, the
-    # same guard also keeps the gate from running twice.)
-    if: ${{ github.server_url == 'https://github.com' }}
+    # Runs on both GitHub Actions and Gitea Actions (Gitea also scans .github/workflows).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
@@ -61,7 +57,6 @@ jobs:
     # Informational firmware flash/RAM delta vs a baseline (merge-base with master, or the
     # previous commit when pushing master). continue-on-error: it never blocks — the
     # release-gate job is the source of truth for build health; this only reports sizes.
-    if: ${{ github.server_url == 'https://github.com' }}
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
@@ -115,7 +110,6 @@ jobs:
     # Informational native-test line coverage over lib/ (gcovr); continue-on-error, never blocks.
     # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
     # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
-    if: ${{ github.server_url == 'https://github.com' }}
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
