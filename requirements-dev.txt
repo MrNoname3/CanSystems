@@ -13,7 +13,7 @@
 # resolve paho-mqtt/pyyaml/tqdm.
 -r ota/requirements.txt
 
-clang-format==22.1.5        # format_check.py (check only). Dependabot may bump it; if a new version
+clang-format==22.1.8        # format_check.py (check only). Dependabot may bump it; if a new version
                             # reformats anything, the gate fails the PR — review, then match the VS
                             # Code cpptools version so format-on-save agrees.
 ruff==0.15.21               # lint_check.py (lint only; ruff format is never run)
