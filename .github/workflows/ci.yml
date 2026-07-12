@@ -19,6 +19,7 @@ jobs:
   release-gate:
     # Runs on both GitHub Actions and Gitea Actions (Gitea also scans .github/workflows).
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # generous (cold PlatformIO builds are slow) but still catches a hang vs the 3h runner default
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@v7
@@ -64,6 +65,7 @@ jobs:
     # release-gate job is the source of truth for build health; this only reports sizes.
     continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # builds the baseline AND the current tree, so allow extra headroom
     steps:
       - name: Checkout (full history so the baseline commit can be built)
         uses: actions/checkout@v7
@@ -122,6 +124,7 @@ jobs:
     # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
     continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # cold PlatformIO build + coverage; still catches a hang vs the 3h runner default
     steps:
       - name: Checkout
         uses: actions/checkout@v7
