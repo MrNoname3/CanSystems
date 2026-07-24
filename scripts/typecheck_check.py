@@ -43,9 +43,9 @@ def deps_python() -> str:
 
 def main() -> int:
     pyright = find_pyright()
-    version = subprocess.run([pyright, "--version"], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([pyright, "--version"], capture_output=True, text=True, check=False).stdout.strip()
     print(f"typecheck: {version}", flush=True)
-    return subprocess.run([pyright, "--pythonpath", deps_python()], cwd=PROJECT_DIR).returncode
+    return subprocess.run([pyright, "--pythonpath", deps_python()], cwd=PROJECT_DIR, check=False).returncode
 
 
 if __name__ == "__main__":

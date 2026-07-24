@@ -391,7 +391,7 @@ class _FakeSSLContext:
 
 
 def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    monkeypatch.setattr(ota.ssl, "create_default_context", _FakeSSLContext)
     bundle = ota.extract_system_ca_roots(["ISRG Root X2", "ISRG Root X1"])
     assert bundle.count(b"BEGIN CERTIFICATE") == 2
     # Requested order is preserved: X2 first.
@@ -400,7 +400,7 @@ def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_extract_ca_roots_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    monkeypatch.setattr(ota.ssl, "create_default_context", _FakeSSLContext)
     with pytest.raises(ValueError, match="No Such Root"):
         ota.extract_system_ca_roots(["ISRG Root X1", "No Such Root"])
 

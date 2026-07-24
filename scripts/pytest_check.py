@@ -33,7 +33,7 @@ def find_pytest() -> str:
 
 def main() -> int:
     pytest_bin = find_pytest()
-    return subprocess.run([pytest_bin, "-q"], cwd=PROJECT_DIR).returncode
+    return subprocess.run([pytest_bin, "-q"], cwd=PROJECT_DIR, check=False).returncode
 
 
 if __name__ == "__main__":

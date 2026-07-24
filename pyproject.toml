@@ -21,6 +21,10 @@ select = [
     "B904", "B905",                 # exception chaining (raise ... from), zip(..., strict=)
     "UP015", "UP024", "UP037",      # drop redundant open mode, OSError aliases, quoted annotations
     "RUF005", "RUF012", "RUF100",   # iterable unpacking, ClassVar for mutable defaults, dead noqa
+    "SIM102",                       # collapse nested if into a single condition
+    "PLW1510",                      # subprocess.run needs an explicit check= (intent is documented)
+    "PLW0108", "FLY002",            # drop needless lambda, static str.join -> literal
+    "EXE001",                       # a file with a shebang must be executable
 ]
 
 [tool.ruff.lint.per-file-ignores]

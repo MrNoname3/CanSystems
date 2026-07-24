@@ -1110,10 +1110,10 @@ class _BaseTransfer:
             else:
                 self._finish_sending()
 
-        elif self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}:
-            if time.time() - self.timer_start > self.timeout_seconds:
-                logging.error(f"Timeout occurred in state: {self.state.name}")
-                self.state = TransferState.ERROR
+        elif (self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}
+              and time.time() - self.timer_start > self.timeout_seconds):
+            logging.error(f"Timeout occurred in state: {self.state.name}")
+            self.state = TransferState.ERROR
 
     def cleanup(self) -> None:
         """Clean up resources."""
@@ -1263,10 +1263,9 @@ class CommandSender(_BaseTransfer):
                 self.state = TransferState.ERROR
         self._pending_messages.clear()
 
-        if self.state == TransferState.WAIT_START_ACK:
-            if time.time() - self.timer_start > self.timeout_seconds:
-                logging.error("Timeout waiting for command acknowledgment")
-                self.state = TransferState.ERROR
+        if self.state == TransferState.WAIT_START_ACK and time.time() - self.timer_start > self.timeout_seconds:
+            logging.error("Timeout waiting for command acknowledgment")
+            self.state = TransferState.ERROR
 
     def run(self) -> bool:
         """Send the command and wait for the device acknowledgment."""
