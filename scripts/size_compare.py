@@ -22,7 +22,6 @@ import tempfile
 from dataclasses import dataclass
 from typing import cast
 
-
 _SIZE_RE = re.compile(
     r"(Flash|RAM):\s+\[.*?\]\s+[\d.]+%\s+\(used\s+(\d+)\s+bytes\s+from\s+(\d+)\s+bytes\)",
 )
@@ -83,7 +82,7 @@ def _build_baseline_in_worktree(pio: str, envs: list[str], commit: str) -> dict[
     try:
         result = subprocess.run(
             ["git", "worktree", "add", "--detach", tmpdir, commit],
-            capture_output=True, text=True,
+            capture_output=True, text=True, check=False,
         )
         if result.returncode != 0:
             print(f"❌ git worktree add failed:\n{result.stderr}", file=sys.stderr)
@@ -92,7 +91,7 @@ def _build_baseline_in_worktree(pio: str, envs: list[str], commit: str) -> dict[
     finally:
         subprocess.run(
             ["git", "worktree", "remove", "--force", tmpdir],
-            capture_output=True,
+            capture_output=True, check=False,
         )
         shutil.rmtree(tmpdir, ignore_errors=True)
 

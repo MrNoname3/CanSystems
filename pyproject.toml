@@ -9,11 +9,23 @@
 line-length = 120
 
 [tool.ruff.lint]
-# Pin the rule set explicitly to what was ruff's historical default (pyflakes F + pycodestyle
-# E4/E7/E9); E501 line-length is deliberately not enabled. Ruff 0.16 massively expanded its
-# *implicit* default select, so relying on it silently turned on dozens of new rule categories
-# on a version bump — pinning select here keeps the lint surface stable across ruff upgrades.
-select = ["E4", "E7", "E9", "F"]
+# The rule set is pinned by explicit code (never ruff's implicit default): ruff 0.16 massively
+# expanded that default, so relying on it turned on dozens of rules on a version bump. Pinning
+# keeps the lint surface stable across upgrades. Beyond the historical default (pyflakes F +
+# pycodestyle E4/E7/E9; E501 line-length stays off), a curated set of high-value rules is added.
+# Deliberately NOT adopted: UP006/UP035/UP045 (list/X|None rewrites would break the manually
+# column-aligned trailing comments, since `ruff format` is never run to re-align them).
+select = [
+    "E4", "E7", "E9", "F",          # ruff's historical default (pyflakes + pycodestyle subset)
+    "I",                            # import sorting (isort)
+    "B904", "B905",                 # exception chaining (raise ... from), zip(..., strict=)
+    "UP015", "UP024", "UP037",      # drop redundant open mode, OSError aliases, quoted annotations
+    "RUF005", "RUF012", "RUF100",   # iterable unpacking, ClassVar for mutable defaults, dead noqa
+    "SIM102",                       # collapse nested if into a single condition
+    "PLW1510",                      # subprocess.run needs an explicit check= (intent is documented)
+    "PLW0108", "FLY002",            # drop needless lambda, static str.join -> literal
+    "EXE001",                       # a file with a shebang must be executable
+]
 
 [tool.ruff.lint.per-file-ignores]
 # PlatformIO SCons build scripts: Import("env") injects names ruff cannot see, and the

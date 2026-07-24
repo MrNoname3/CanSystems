@@ -70,12 +70,12 @@ def check_clang_format(clang_format: str) -> list[str]:
     if not files:
         return []
     # Fast path: one batch run; clang-format exits non-zero if any file needs changes.
-    if subprocess.run([clang_format, "--dry-run", "--Werror", *files], cwd=PROJECT_DIR).returncode == 0:
+    if subprocess.run([clang_format, "--dry-run", "--Werror", *files], cwd=PROJECT_DIR, check=False).returncode == 0:
         return []
     # Slow path (only on failure): pinpoint exactly which files drift.
     return [f for f in files
             if subprocess.run([clang_format, "--dry-run", "--Werror", f],
-                              cwd=PROJECT_DIR, capture_output=True).returncode != 0]
+                              cwd=PROJECT_DIR, capture_output=True, check=False).returncode != 0]
 
 
 def check_final_newlines() -> list[str]:
@@ -97,7 +97,7 @@ def check_final_newlines() -> list[str]:
 
 def main() -> int:
     clang_format = find_clang_format()
-    version = subprocess.run([clang_format, "--version"], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([clang_format, "--version"], capture_output=True, text=True, check=False).stdout.strip()
     print(f"format: {version}")
 
     drifted = check_clang_format(clang_format)

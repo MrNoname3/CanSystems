@@ -22,7 +22,7 @@ pytest.importorskip("tqdm")
 pytest.importorskip("yaml")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # ota/ for `import otaUpdate`
-import otaUpdate as ota  # noqa: E402
+import otaUpdate as ota
 
 
 def _write(tmp_path: Path, name: str, data: bytes) -> Path:
@@ -381,17 +381,17 @@ def test_rendered_transfer_start_message(tmp_path: Path) -> None:
 class _FakeSSLContext:
     """Stands in for the ssl context: a fixed two-root 'trust store'."""
 
-    _STORE = [
+    _STORE = (
         ({"subject": ((("commonName", "ISRG Root X1"),),)}, b"der-x1"),
         ({"subject": ((("countryName", "US"),), (("commonName", "ISRG Root X2"),))}, b"der-x2"),
-    ]
+    )
 
     def get_ca_certs(self, binary_form: bool = False) -> Any:
         return [der if binary_form else info for info, der in self._STORE]
 
 
 def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    monkeypatch.setattr(ota.ssl, "create_default_context", _FakeSSLContext)
     bundle = ota.extract_system_ca_roots(["ISRG Root X2", "ISRG Root X1"])
     assert bundle.count(b"BEGIN CERTIFICATE") == 2
     # Requested order is preserved: X2 first.
@@ -400,7 +400,7 @@ def test_extract_ca_roots_ordered_pem(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_extract_ca_roots_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ota.ssl, "create_default_context", lambda: _FakeSSLContext())
+    monkeypatch.setattr(ota.ssl, "create_default_context", _FakeSSLContext)
     with pytest.raises(ValueError, match="No Such Root"):
         ota.extract_system_ca_roots(["ISRG Root X1", "No Such Root"])
 

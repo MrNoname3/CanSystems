@@ -33,9 +33,9 @@ def find_ruff() -> str:
 
 def main() -> int:
     ruff = find_ruff()
-    version = subprocess.run([ruff, "--version"], capture_output=True, text=True).stdout.strip()
+    version = subprocess.run([ruff, "--version"], capture_output=True, text=True, check=False).stdout.strip()
     print(f"lint: {version}", flush=True)
-    return subprocess.run([ruff, "check", *TARGETS], cwd=PROJECT_DIR).returncode
+    return subprocess.run([ruff, "check", *TARGETS], cwd=PROJECT_DIR, check=False).returncode
 
 
 if __name__ == "__main__":

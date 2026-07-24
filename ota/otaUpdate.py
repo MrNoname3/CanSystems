@@ -8,30 +8,30 @@ proper error handling and progress tracking.
 Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.yaml).
 """
 
+import base64
+import curses
+import enum
+import hashlib
 import json
+import logging
 import os
 import re
 import shutil
+import signal
 import ssl
 import subprocess
-import time
-import base64
 import sys
-import signal
-import enum
-import logging
+import time
 import uuid
-import hashlib
-import curses
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType
-from typing import Optional, Dict, Any, List, ClassVar, Callable, cast
-from dataclasses import dataclass, field
-from tqdm import tqdm
-import yaml
-import paho.mqtt.client as mqtt
-from paho.mqtt.enums import CallbackAPIVersion
+from typing import Any, Callable, ClassVar, Dict, List, Optional, cast
 
+import paho.mqtt.client as mqtt
+import yaml
+from paho.mqtt.enums import CallbackAPIVersion
+from tqdm import tqdm
 
 # ---------------------------------------------------------------------------
 # Enums & Data classes
@@ -194,10 +194,10 @@ class DeviceManager:
             )
 
         try:
-            with open(self.devices_file, 'r', encoding='utf-8') as f:
+            with open(self.devices_file, encoding='utf-8') as f:
                 data = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse devices.yaml: {e}")
+            raise ValueError(f"Failed to parse devices.yaml: {e}") from e
 
         if not data or 'projects' not in data:
             raise ValueError("devices.yaml must contain a 'projects' key")
@@ -398,14 +398,14 @@ class ConfigManager:
             )
 
         try:
-            with open(self.secrets_file, 'r', encoding='utf-8') as file:
+            with open(self.secrets_file, encoding='utf-8') as file:
                 data: Any = yaml.safe_load(file) or {}
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse YAML secrets file: {e}")
+            raise ValueError(f"Failed to parse YAML secrets file: {e}") from e
         except UnicodeDecodeError as e:
-            raise ValueError(f"Secrets file encoding error: {e}")
+            raise ValueError(f"Secrets file encoding error: {e}") from e
         except Exception as e:
-            raise IOError(f"Failed to read secrets file: {e}")
+            raise OSError(f"Failed to read secrets file: {e}") from e
 
         if not isinstance(data, dict):
             raise ValueError("secrets.yaml must be a YAML mapping")
@@ -438,7 +438,7 @@ class ConfigManager:
                 cafile=cafile
             )
         except (ValueError, FileNotFoundError) as e:
-            raise ValueError(f"Configuration validation error: {e}")
+            raise ValueError(f"Configuration validation error: {e}") from e
 
     def device_server_secrets(self, mac: str) -> dict[str, Any]:
         """Secret server.json fields for one device: 'server_defaults' merged
@@ -545,8 +545,8 @@ class FirmwareManager:
         """Read firmware binary file"""
         try:
             return self.firmware_path.read_bytes()
-        except IOError as e:
-            raise IOError(f"Failed to read firmware file: {e}")
+        except OSError as e:
+            raise OSError(f"Failed to read firmware file: {e}") from e
 
     def _extract_firmware_id(self) -> Optional[str]:
         """Extract firmware identifier from binary"""
@@ -586,8 +586,8 @@ class FileDataProvider:
         if self._data is None:
             try:
                 raw = self.file_path.read_bytes()
-            except IOError as e:
-                raise IOError(f"Failed to read file: {e}")
+            except OSError as e:
+                raise OSError(f"Failed to read file: {e}") from e
             self._data = self._serialize_json(raw) if self.file_path.suffix.lower() == '.json' else raw
         return self._data
 
@@ -607,7 +607,7 @@ class FileDataProvider:
         try:
             parsed = json.loads(self._strip_comments(raw.decode('utf-8')))
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            raise ValueError(f"Invalid JSON file '{self.file_path.name}': {e}")
+            raise ValueError(f"Invalid JSON file '{self.file_path.name}': {e}") from e
 
         serialized_bytes = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
@@ -693,7 +693,7 @@ def extract_system_ca_roots(root_names: List[str]) -> bytes:
     infos = cast(List[Dict[str, Any]], context.get_ca_certs())
     ders = context.get_ca_certs(binary_form=True)
     der_by_name: dict[str, bytes] = {}
-    for info, der in zip(infos, ders):
+    for info, der in zip(infos, ders, strict=True):   # same certs, so index-aligned
         rdns = cast("tuple[tuple[tuple[str, str], ...], ...]", info.get('subject', ()))
         subject = {pair[0]: pair[1] for rdn in rdns for pair in rdn}
         common_name = subject.get('commonName')
@@ -877,7 +877,7 @@ class Provisioner:
         env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
         logging.info(f"Running: {' '.join(command)}")
         try:
-            result = subprocess.run(command, cwd=self.repo_root, env=env)
+            result = subprocess.run(command, cwd=self.repo_root, env=env, check=False)
         except FileNotFoundError:
             logging.error(f"pio executable not found: {self.pio_cmd} (set the 'pio' key in secrets.yaml)")
             return False
@@ -975,7 +975,7 @@ class _BaseTransfer:
         self.timer_start = 0.0
         self.piece_size = 100
         self.timeout_seconds = 25
-        self.progress_bar: Optional["tqdm[Any]"] = None
+        self.progress_bar: Optional[tqdm[Any]] = None
 
         # Queue for incoming MQTT messages to avoid race conditions between
         # the MQTT callback thread and the main loop
@@ -1110,10 +1110,10 @@ class _BaseTransfer:
             else:
                 self._finish_sending()
 
-        elif self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}:
-            if time.time() - self.timer_start > self.timeout_seconds:
-                logging.error(f"Timeout occurred in state: {self.state.name}")
-                self.state = TransferState.ERROR
+        elif (self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}
+              and time.time() - self.timer_start > self.timeout_seconds):
+            logging.error(f"Timeout occurred in state: {self.state.name}")
+            self.state = TransferState.ERROR
 
     def cleanup(self) -> None:
         """Clean up resources."""
@@ -1263,10 +1263,9 @@ class CommandSender(_BaseTransfer):
                 self.state = TransferState.ERROR
         self._pending_messages.clear()
 
-        if self.state == TransferState.WAIT_START_ACK:
-            if time.time() - self.timer_start > self.timeout_seconds:
-                logging.error("Timeout waiting for command acknowledgment")
-                self.state = TransferState.ERROR
+        if self.state == TransferState.WAIT_START_ACK and time.time() - self.timer_start > self.timeout_seconds:
+            logging.error("Timeout waiting for command acknowledgment")
+            self.state = TransferState.ERROR
 
     def run(self) -> bool:
         """Send the command and wait for the device acknowledgment."""
@@ -1341,8 +1340,8 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
                 # Order: OTA firmware upload → USB provisioning/flash → file transfers → commands.
                 file_map    = {f.name: f for f in selected_device.files}
                 command_map = {c.display_name: c for c in selected_project.commands}
-                action_options = ([_FW_OPTION, _PROVISION_OPTION, _SERIAL_FLASH_OPTION]
-                                  + list(file_map) + list(command_map))
+                action_options = [_FW_OPTION, _PROVISION_OPTION, _SERIAL_FLASH_OPTION,
+                                  *file_map, *command_map]
 
                 choice = menu.select(f"Select action  [{selected_device.display_name}]", action_options, show_back=True)
 
