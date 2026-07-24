@@ -8,7 +8,13 @@
 [tool.ruff]
 line-length = 120
 
-# Default rule set (pyflakes F + pycodestyle E4/E7/E9); E501 line-length is not enabled.
+[tool.ruff.lint]
+# Pin the rule set explicitly to what was ruff's historical default (pyflakes F + pycodestyle
+# E4/E7/E9); E501 line-length is deliberately not enabled. Ruff 0.16 massively expanded its
+# *implicit* default select, so relying on it silently turned on dozens of new rule categories
+# on a version bump — pinning select here keeps the lint surface stable across ruff upgrades.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.ruff.lint.per-file-ignores]
 # PlatformIO SCons build scripts: Import("env") injects names ruff cannot see, and the
 # import of project helpers legitimately follows that call (so F821 + E402 are expected).
