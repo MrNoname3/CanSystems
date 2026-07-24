@@ -16,7 +16,7 @@
 clang-format==22.1.8        # format_check.py (check only). Dependabot may bump it; if a new version
                             # reformats anything, the gate fails the PR — review, then match the VS
                             # Code cpptools version so format-on-save agrees.
-ruff==0.15.22               # lint_check.py (lint only; ruff format is never run)
+ruff==0.16.0               # lint_check.py (lint only; ruff format is never run)
 pyright==1.1.411            # typecheck_check.py (strict)
 pytest==9.1.1               # pytest_check.py
 gcovr==8.6                  # CI coverage job (native_test line coverage over lib/)
