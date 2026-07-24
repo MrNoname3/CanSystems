@@ -22,7 +22,7 @@ pytest.importorskip("tqdm")
 pytest.importorskip("yaml")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # ota/ for `import otaUpdate`
-import otaUpdate as ota  # noqa: E402
+import otaUpdate as ota
 
 
 def _write(tmp_path: Path, name: str, data: bytes) -> Path:
@@ -381,10 +381,10 @@ def test_rendered_transfer_start_message(tmp_path: Path) -> None:
 class _FakeSSLContext:
     """Stands in for the ssl context: a fixed two-root 'trust store'."""
 
-    _STORE = [
+    _STORE = (
         ({"subject": ((("commonName", "ISRG Root X1"),),)}, b"der-x1"),
         ({"subject": ((("countryName", "US"),), (("commonName", "ISRG Root X2"),))}, b"der-x2"),
-    ]
+    )
 
     def get_ca_certs(self, binary_form: bool = False) -> Any:
         return [der if binary_form else info for info, der in self._STORE]

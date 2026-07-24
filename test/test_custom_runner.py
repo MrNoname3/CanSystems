@@ -1,7 +1,6 @@
 import re
 
 import click
-
 from platformio.test.result import TestCase, TestStatus
 from platformio.test.runners.base import TestRunnerBase
 

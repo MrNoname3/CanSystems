@@ -18,7 +18,7 @@ def patch_elf2bin():
         return
 
     # Read the file
-    with open(elf2bin_path, 'r', encoding='utf-8') as f:
+    with open(elf2bin_path, encoding='utf-8') as f:
         content = f.read()
 
     # Check if patch needs to be applied

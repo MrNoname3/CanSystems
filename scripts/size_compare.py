@@ -22,7 +22,6 @@ import tempfile
 from dataclasses import dataclass
 from typing import cast
 
-
 _SIZE_RE = re.compile(
     r"(Flash|RAM):\s+\[.*?\]\s+[\d.]+%\s+\(used\s+(\d+)\s+bytes\s+from\s+(\d+)\s+bytes\)",
 )

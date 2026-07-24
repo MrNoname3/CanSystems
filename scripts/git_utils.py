@@ -1,5 +1,6 @@
 import subprocess
 
+
 def get_git_hash():
     # Retrieve the short commit hash
     try:
