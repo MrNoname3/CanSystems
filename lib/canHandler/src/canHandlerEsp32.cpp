@@ -94,7 +94,7 @@ bool CanHandlerEsp32::run() {
     if(xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE) {
       const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
       if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-      // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
+        // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
         for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
           if(d->getClientCanId() == nodeCanId) {
             d->canFrameArrivedCallback(frameIn);
