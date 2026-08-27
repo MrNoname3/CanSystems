@@ -37,7 +37,7 @@
 #elif defined(RPI) // Raspberry Pi
 #define RaspberryPi
 
-  // Include libraries for RPi:
+// Include libraries for RPi:
 #include <string.h> /* memcpy */
 #include <stdlib.h> /* abs */
 #include <wiringPi.h>
@@ -49,15 +49,15 @@
 #include <stdint.h>
 
 #ifdef RaspberryPi
-  // PROGMEM and _P functions are for AVR based microprocessors,
-  // so we must normalize these for the ARM processor:
+// PROGMEM and _P functions are for AVR based microprocessors,
+// so we must normalize these for the ARM processor:
 #define PROGMEM
 #define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
 #endif
 
 #if defined(ESP8266)
-  // interrupt handler and related code must be in RAM on ESP8266,
-  // according to issue #46.
+// interrupt handler and related code must be in RAM on ESP8266,
+// according to issue #46.
 #define RECEIVE_ATTR IRAM_ATTR
 #define VAR_ISR_ATTR
 #elif defined(ESP32)

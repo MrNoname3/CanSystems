@@ -711,16 +711,16 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
   unsigned int BeginData = 0;
   if(pro.HeaderFactor > 0) {
     BeginData = (pro.invertedSignal) ? (2) : (1);
-      // Header pulse count correction for more than one
+    // Header pulse count correction for more than one
     if(pro.HeaderFactor > 1) {
       BeginData += (pro.HeaderFactor - 1) * 2;
     }
   }
-    // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
-    //  берем наибольшее значение из Header
+  // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
+  //  берем наибольшее значение из Header
   const unsigned int syncLengthInPulses = ((pro.Header.low) > (pro.Header.high)) ? (pro.Header.low) : (pro.Header.high);
-    // определяем длительность Te как длительность первого импульса header деленную на количество импульсов в нем
-    // или как длительность импульса preamble деленную на количество Te в нем
+  // определяем длительность Te как длительность первого импульса header деленную на количество импульсов в нем
+  // или как длительность импульса preamble деленную на количество Te в нем
   unsigned int sdelay = 0;
   if(syncLengthInPulses > 0) {
     sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
@@ -731,17 +731,17 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
   if(delay == 0) {
     return false;
   }
-    // nReceiveTolerance = 60
-    // допустимое отклонение длительностей импульсов на 60 %
+  // nReceiveTolerance = 60
+  // допустимое отклонение длительностей импульсов на 60 %
   const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
 
-    // 0 - sync перед preamble или data
-    // BeginData - сдвиг на 1 или 2 от sync к preamble/data
-    // FirstTiming - сдвиг на preamble к header
-    // firstDataTiming первый импульс data
-    // bitChangeCount - количество импульсов в data
+  // 0 - sync перед preamble или data
+  // BeginData - сдвиг на 1 или 2 от sync к preamble/data
+  // FirstTiming - сдвиг на preamble к header
+  // firstDataTiming первый импульс data
+  // bitChangeCount - количество импульсов в data
 
-    /* For protocols that start low, the sync period looks like
+  /* For protocols that start low, the sync period looks like
    *               _________
    * _____________|         |XXXXXXXXXXXX|
    *
@@ -758,9 +758,9 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
    *
    * The 2nd saved duration starts the data
    */
-    // если invertedSignal=false, то сигнал начинается с 1 элемента массива (высокий уровень)
-    // если invertedSignal=true, то сигнал начинается со 2 элемента массива (низкий уровень)
-    // добавляем поправку на Преамбулу и Хедер
+  // если invertedSignal=false, то сигнал начинается с 1 элемента массива (высокий уровень)
+  // если invertedSignal=true, то сигнал начинается со 2 элемента массива (низкий уровень)
+  // добавляем поправку на Преамбулу и Хедер
   const unsigned int firstDataTiming = BeginData + FirstTiming;
   unsigned int bitChangeCount = changeCount - firstDataTiming - 1U + static_cast<unsigned int>(pro.invertedSignal);
   if(bitChangeCount > 128U) {
@@ -771,13 +771,13 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) { // NOLIN
     code <<= 1;
     if(diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.zero.high)) < delayTolerance &&
        diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.zero.low)) < delayTolerance) {
-            // zero
+      // zero
     } else if(diff(static_cast<int>(RCSwitch::timings[i]), static_cast<int>(delay * pro.one.high)) < delayTolerance &&
               diff(static_cast<int>(RCSwitch::timings[i + 1]), static_cast<int>(delay * pro.one.low)) < delayTolerance) {
-            // one
+      // one
       code |= 1;
     } else {
-            // Failed
+      // Failed
       return false;
     }
   }
