@@ -302,7 +302,7 @@ private:
   static constexpr const char PROGMEM mqttServerCertLocation[] = "/config/mosq-ca.crt";   // File location for the MQTT server certificate.
   static constexpr const char PROGMEM mqttServerCredLocation[] = "/config/server.json";   // File location for the MQTT server credentials.
   static constexpr const char PROGMEM tubeConfigLocation[]     = "/config/tube.json";     // File location for the radiation tube type configuration.
-  // clang-format off
+  // clang-format on
 #endif
 };
 
