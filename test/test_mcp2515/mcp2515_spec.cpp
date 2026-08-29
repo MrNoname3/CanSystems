@@ -1,5 +1,5 @@
 #include "MCP2515.h"
-#include "canRxPump.hpp"
+#include "canFramePump.hpp"
 #include "Arduino.h"
 #include "SPI.h"
 #include "BDDTest.h"
@@ -213,12 +213,12 @@ bool test_one_parse_per_pass_leaves_the_controller_backed_up() {
 }
 
 bool test_the_rx_pump_drains_the_controller_in_one_pass() {
-  IT("CanRxPump::drain() empties both buffers in a single pass");
+  IT("CanFramePump::drain() empties both buffers in a single pass");
   IS_TRUE(startController());
   const uint8_t payload[1] = { 0x77U };
   mcp2515.deliverExtendedFrame(0U, 0x0000006FU, payload, 1U);
   mcp2515.deliverExtendedFrame(1U, 0x00000070U, payload, 1U);
-  const CanRxPump::Result result = CanRxPump::drain(takeOneFrame, []() -> bool { return true; }, 8U);
+  const CanFramePump::Result result = CanFramePump::drain(takeOneFrame, []() -> bool { return true; }, 8U);
   IS_EQUAL(result.handled, 2U);
   IS_FALSE(result.failed);
   IS_EQUAL(mcp2515.reg(Mcp2515Model::regCanIntf) & 0x03U, 0x00U);
@@ -226,11 +226,11 @@ bool test_the_rx_pump_drains_the_controller_in_one_pass() {
 }
 
 bool test_the_rx_pump_dispatches_nothing_on_an_empty_controller() {
-  IT("CanRxPump::drain() dispatches no frame when the controller is empty");
+  IT("CanFramePump::drain() dispatches no frame when the controller is empty");
   IS_TRUE(startController());
   static uint8_t dispatched;
   dispatched = 0U;
-  const CanRxPump::Result result = CanRxPump::drain(takeOneFrame, []() -> bool { ++dispatched; return true; }, 8U);
+  const CanFramePump::Result result = CanFramePump::drain(takeOneFrame, []() -> bool { ++dispatched; return true; }, 8U);
   IS_EQUAL(result.handled, 0U);
   IS_EQUAL(dispatched, 0U);                  // no frame is never mistaken for command 0x1FF
   END_IT

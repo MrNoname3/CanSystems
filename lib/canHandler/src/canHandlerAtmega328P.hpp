@@ -6,7 +6,7 @@
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
-#include "canRxPump.hpp"                                            /// Bounded receive-buffer drain.
+#include "canFramePump.hpp"                                            /// Bounded receive-buffer drain.
 
 /// @brief Handles CAN communication, OTA updates, and peripheral interactions.
 class CanHandlerAtmega328P final : public CanHandlerBase {

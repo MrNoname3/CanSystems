@@ -93,37 +93,52 @@ bool CanHandlerEsp32::run() {
     Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
     CAN.recoverFromBusOff();
   }
-  { // Handle received CAN frame.
-    CanFrame frameIn;
-    if(xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
-      if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-        // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
-        for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
-          if(d->getClientCanId() == nodeCanId) {
-            d->canFrameArrivedCallback(frameIn);
-            break;
-          }
-        }
-        xSemaphoreGive(canDevicesListMutex);
-      }
+  { // Handle received CAN frames.
+    // The mutex is taken around the whole pass rather than per frame: it guards the device list,
+    // which only changes at registration time. Taking it first also means a timeout leaves the
+    // frames queued instead of dequeueing one and dropping it.
+    if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
+      CanFrame frameIn;
+      (void)CanFramePump::drain(
+          [&frameIn]() -> bool { return xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE; },
+          [this, &frameIn]() -> bool { dispatchRxFrame(frameIn); return true; },
+          maxFramesPerRun);
+      xSemaphoreGive(canDevicesListMutex);
     }
   }
   { // Handle CAN frame sending.
     CanFrame frameOut;
-    if(xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
-      const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U);
-      const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
-      if(!endPacketResult) {
-        // The frame is already consumed from the queue, so a TX failure would otherwise vanish
-        // silently (the mains discard the runTasks() failure mask).
-        Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
-        return false;
-      }
-      // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
+    const CanFramePump::Result txResult = CanFramePump::drain(
+        [this, &frameOut]() -> bool { return xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE; },
+        [this, &frameOut]() -> bool { return transmitFrame(frameOut); },
+        maxFramesPerRun);
+    if(txResult.failed) { return false; }
+  }
+  return true;
+}
+
+void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const {
+  const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
+  // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
+  for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
+    if(d->getClientCanId() == nodeCanId) {
+      d->canFrameArrivedCallback(frameIn);
+      break;
     }
   }
+}
+
+bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
+  const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
+  const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U);
+  const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
+  if(!endPacketResult) {
+    // The frame is already consumed from the queue, so a TX failure would otherwise vanish
+    // silently (the mains discard the runTasks() failure mask).
+    Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
+    return false;
+  }
+  // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
   return true;
 }
 

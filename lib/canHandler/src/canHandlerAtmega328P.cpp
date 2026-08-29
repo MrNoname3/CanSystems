@@ -132,7 +132,7 @@ bool CanHandlerAtmega328P::run() {
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount = 0U; }
     eventTimer = actualTime;
     DebugLedHandler::ledOff();
-    const CanRxPump::Result rxResult = CanRxPump::drain(
+    const CanFramePump::Result rxResult = CanFramePump::drain(
         []() -> bool { return (CAN.parsePacket() != 0U) || (CAN.packetId() != CANController::noId); },
         [this]() -> bool { return handleRxFrame(); },
         maxRxFramesPerRun);

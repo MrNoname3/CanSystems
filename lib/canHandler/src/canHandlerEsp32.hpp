@@ -1,6 +1,7 @@
 #pragma once
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
+#include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -19,6 +20,7 @@ private:
   static constexpr uint8_t canTxQueueSize = 100U;                         // Size of the TX queue for outgoing CAN frames.
   static constexpr TickType_t canTxQueueTimeout = pdMS_TO_TICKS(50U);     // Timeout for TX queue operations (50 ms).
   static constexpr TickType_t semaphoreTimeout = pdMS_TO_TICKS(5U);       // Timeout for semaphore operations (5 ms).
+  static constexpr uint8_t maxFramesPerRun = 8U;                          // Frame budget per run() and direction.
 
 public:
   /// @brief Constructor for CanHandlerEsp32.
@@ -67,6 +69,16 @@ private:
   /// @brief Interrupt service routine for CAN RX events.
   /// @param packetsNum Number of packets available in the RX buffer.
   static IRAM_ATTR void rxInterrupt(int packetsNum);
+
+  /// @brief Hands one received frame to the device registered for its sender id.
+  /// @param frameIn Frame taken from the receive queue.
+  /// @note The caller must hold `canDevicesListMutex`.
+  void dispatchRxFrame(const CanFrame& frameIn) const;
+
+  /// @brief Puts one frame on the bus.
+  /// @param frameOut Frame taken from the transmit queue.
+  /// @return `true` when the controller accepted and sent it.
+  [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const; // NOLINT(readability-convert-member-functions-to-static)
 
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
 

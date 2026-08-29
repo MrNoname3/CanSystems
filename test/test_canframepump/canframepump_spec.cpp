@@ -1,4 +1,4 @@
-#include "canRxPump.hpp"
+#include "canFramePump.hpp"
 #include "BDDTest.h"
 
 // A controller stand-in: hands out `pending` frames, then reports empty.
@@ -21,16 +21,16 @@ struct FakeController {
   }
 };
 
-static CanRxPump::Result runPump(FakeController& controller, uint8_t maxFrames) {
-  return CanRxPump::drain([&controller]() -> bool { return controller.take(); },
-                          [&controller]() -> bool { return controller.handle(); },
-                          maxFrames);
+static CanFramePump::Result runPump(FakeController& controller, uint8_t maxFrames) {
+  return CanFramePump::drain([&controller]() -> bool { return controller.take(); },
+                             [&controller]() -> bool { return controller.handle(); },
+                             maxFrames);
 }
 
 bool test_empty_controller_handles_nothing() {
   IT("an empty controller is asked once and nothing is handled");
   FakeController controller;
-  const CanRxPump::Result result = runPump(controller, 8U);
+  const CanFramePump::Result result = runPump(controller, 8U);
   IS_EQUAL(result.handled, 0U);
   IS_FALSE(result.failed);
   IS_EQUAL(controller.takeCalls, 1U);
@@ -42,7 +42,7 @@ bool test_single_frame_is_handled() {
   IT("a single pending frame is taken and handled");
   FakeController controller;
   controller.pending = 1U;
-  const CanRxPump::Result result = runPump(controller, 8U);
+  const CanFramePump::Result result = runPump(controller, 8U);
   IS_EQUAL(result.handled, 1U);
   IS_FALSE(result.failed);
   IS_EQUAL(controller.takeCalls, 2U);        // one for the frame, one that finds the controller empty
@@ -53,7 +53,7 @@ bool test_every_pending_frame_is_drained_in_one_pass() {
   IT("all pending frames are drained in a single pass");
   FakeController controller;
   controller.pending = 3U;
-  const CanRxPump::Result result = runPump(controller, 8U);
+  const CanFramePump::Result result = runPump(controller, 8U);
   IS_EQUAL(result.handled, 3U);
   IS_EQUAL(controller.pending, 0U);
   IS_EQUAL(controller.takeCalls, 4U);
@@ -64,7 +64,7 @@ bool test_the_frame_budget_bounds_one_pass() {
   IT("the frame budget stops the pass and leaves the rest for the next one");
   FakeController controller;
   controller.pending = 10U;
-  const CanRxPump::Result result = runPump(controller, 4U);
+  const CanFramePump::Result result = runPump(controller, 4U);
   IS_EQUAL(result.handled, 4U);
   IS_FALSE(result.failed);
   IS_EQUAL(controller.pending, 6U);          // the burst cannot starve the other tasks
@@ -75,7 +75,7 @@ bool test_a_zero_budget_takes_nothing() {
   IT("a zero frame budget touches the controller at all");
   FakeController controller;
   controller.pending = 5U;
-  const CanRxPump::Result result = runPump(controller, 0U);
+  const CanFramePump::Result result = runPump(controller, 0U);
   IS_EQUAL(result.handled, 0U);
   IS_EQUAL(controller.takeCalls, 0U);
   IS_EQUAL(controller.pending, 5U);
@@ -87,7 +87,7 @@ bool test_a_rejected_frame_stops_the_pass() {
   FakeController controller;
   controller.pending = 3U;
   controller.rejectAt = 2U;                  // the second frame fails to handle
-  const CanRxPump::Result result = runPump(controller, 8U);
+  const CanFramePump::Result result = runPump(controller, 8U);
   IS_EQUAL(result.handled, 1U);
   IS_TRUE(result.failed);
   IS_EQUAL(controller.handleCalls, 2U);
@@ -96,7 +96,7 @@ bool test_a_rejected_frame_stops_the_pass() {
 }
 
 int main() {
-  SUITE("CanRxPump");
+  SUITE("CanFramePump");
   test_empty_controller_handles_nothing();
   test_single_frame_is_handled();
   test_every_pending_frame_is_drained_in_one_pass();
