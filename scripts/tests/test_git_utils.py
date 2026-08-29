@@ -85,6 +85,34 @@ def test_staged_new_file_is_dirty(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert git_utils.get_git_dirty() == 1
 
 
+def test_hash_and_count_are_read_from_the_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.chdir(repo)
+    short = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    assert git_utils.get_git_hash() == int(short, 16)
+    assert git_utils.get_git_commit_count() == 1
+
+
+def test_missing_git_falls_back_to_zeros(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("PATH", "")  # git is no longer resolvable -> FileNotFoundError
+    assert git_utils.get_git_hash() == 0
+    assert git_utils.get_git_commit_count() == 0
+    # Nothing can be verified, so the tree counts as dirty rather than silently clean.
+    assert git_utils.get_git_dirty() == 1
+
+
+def test_outside_a_repository_falls_back_to_zeros(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)  # never initialised as a repository
+    assert git_utils.get_git_hash() == 0
+    assert git_utils.get_git_commit_count() == 0
+    assert git_utils.get_git_dirty() == 1
+
+
 def test_committing_returns_to_clean(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo(tmp_path)
     monkeypatch.chdir(repo)
