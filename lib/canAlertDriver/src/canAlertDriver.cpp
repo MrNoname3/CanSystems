@@ -84,7 +84,9 @@ void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLIN
 void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame) {
   switch(canFrame.cmd) {
     case static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR): {
-      const float temperature = static_cast<float>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U)) / 100.0F + tempOffset;
+      // Signed on the wire: the node sends int16_t hundredths of a degree (see ambientSensor.cpp).
+      const int16_t rawTemperature = static_cast<int16_t>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U));
+      const float temperature = static_cast<float>(rawTemperature) / 100.0F + tempOffset;
       const uint16_t humidity = static_cast<uint16_t>(canFrame.data[2]) | (static_cast<uint16_t>(canFrame.data[3]) << 8U);
       const uint16_t light = static_cast<uint16_t>(canFrame.data[4]) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
       char dataOut[dataOutBufSize] = { '\0' };

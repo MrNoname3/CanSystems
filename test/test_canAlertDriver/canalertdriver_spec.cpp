@@ -103,6 +103,16 @@ bool test_malformed_colors_drops_message() {
 
 // ---- CAN frame -> MQTT message mapping ----
 
+// Feeds one raw int16 temperature (hundredths of a degree, as the node packs it) through the
+// driver and returns the JSON it published. Humidity and light are left at zero so the caller's
+// expected string shows the temperature decode on its own.
+static std::string publishTemperature(CanAlertDriver& driver, int16_t rawTemperature) {
+  const uint16_t raw = static_cast<uint16_t>(rawTemperature);
+  const uint8_t data[8] = { static_cast<uint8_t>(raw & 0xFFU), static_cast<uint8_t>((raw >> 8U) & 0xFFU), 0U, 0U, 0U, 0U, 0U, 0U };
+  injectFrame(driver, CanCmd::READ_HUM_TEMP_LDR, data);
+  return MqttBase::lastMessage;
+}
+
 bool test_hum_temp_ldr_frame_publishes_json() {
   IT("a READ_HUM_TEMP_LDR frame publishes temperature (with offset), humidity and light");
   resetEnv();
@@ -114,6 +124,22 @@ bool test_hum_temp_ldr_frame_publishes_json() {
   injectFrame(driver, CanCmd::READ_HUM_TEMP_LDR, data);
   IS_EQUAL(MqttBase::messageCount, 1);
   IS_TRUE(MqttBase::lastMessage == R"({"Temperature":22.95,"Humidity":55,"Light":1023})");
+  END_IT
+}
+
+bool test_temperature_decode_spans_the_int16_range() {
+  IT("the temperature is decoded as int16_t over the whole range, including zero and negatives");
+  resetEnv();
+  static CanHandler can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 33U, conn, "alert8");  // No offset: the raw value maps straight through.
+  IS_TRUE(publishTemperature(driver, 2345) == R"({"Temperature":23.45,"Humidity":0,"Light":0})");
+  IS_TRUE(publishTemperature(driver, 0) == R"({"Temperature":0.00,"Humidity":0,"Light":0})");
+  IS_TRUE(publishTemperature(driver, -1) == R"({"Temperature":-0.01,"Humidity":0,"Light":0})");        // 0xFFFF: every bit set.
+  IS_TRUE(publishTemperature(driver, -250) == R"({"Temperature":-2.50,"Humidity":0,"Light":0})");
+  IS_TRUE(publishTemperature(driver, INT16_MAX) == R"({"Temperature":327.67,"Humidity":0,"Light":0})");  // 0x7FFF: largest positive.
+  IS_TRUE(publishTemperature(driver, INT16_MIN) == R"({"Temperature":-327.68,"Humidity":0,"Light":0})"); // 0x8000: sign bit only.
+  IS_EQUAL(MqttBase::messageCount, 6);                    // Every case published; none was dropped.
   END_IT
 }
 
@@ -155,6 +181,7 @@ int main() {
   test_sound_without_colors_plays_with_dark_leds();
   test_malformed_colors_drops_message();
   test_hum_temp_ldr_frame_publishes_json();
+  test_temperature_decode_spans_the_int16_range();
   test_unknown_frame_is_ignored();
   test_publish_discovery_covers_all_entities();
   FINISH
