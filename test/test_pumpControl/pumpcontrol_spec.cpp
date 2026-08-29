@@ -334,6 +334,35 @@ bool test_skip_all_irrigations_clears_queue() {
   END_IT
 }
 
+bool test_skip_all_irrigations_defers_an_overdue_safety_irrigation() {
+  IT("skipAllIrrigations() restarts the safety clocks instead of firing an overdue one at once");
+  Wire.reset();
+  Wire.setEndTransmissionResult(0U);
+  PCF8574 pcf(5000U, 0x27U);
+  (void)pcf.init();
+  RgbLedWrapper led(1U, 6U);
+  PumpControl pc(pcf, led, kPwmPin, kIntPin, kCurrentPin, onError);
+  driveToIdle(pc, 512U);                                       // millis() == 6000
+  resetErr();
+  pc.addSafetyIrrigation(1U, 0U, 1U, false, false, 200U, 0U);  // every 1 min, channel 0
+  // A manual irrigation on another channel keeps the queue busy: handleIdle() only looks at the
+  // safety list while the queue is empty, so channel 0's timer keeps ageing untouched.
+  pc.createIrrigation(1U, 10U, false, false, 120U, 0U);
+  setFakeMillis(6000U + 60001U);
+  (void)pc.run();                                              // IDLE -> RUN (the manual one)
+  IS_EQUAL(getDigitalWriteValue(kPwmPin), 120U);
+  // The operator stops everything while channel 0's safety window is elapsed but never started.
+  pc.skipAllIrrigations();
+  (void)pc.run();                                              // ERROR -> IDLE, pump off
+  IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
+  (void)pc.run();                                              // IDLE: must not re-enqueue
+  (void)pc.run();                                              // IDLE: nothing left to start
+  IS_EQUAL(getDigitalWriteValue(kPwmPin), 0U);
+  IS_EQUAL(g_errCount, 0U);
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_limit_switch_stops_run() {
   IT("a triggered limit switch stops the irrigation");
   Wire.reset();
@@ -420,6 +449,7 @@ int main() {
   test_overcurrent_reports_error();
   test_skip_actual_irrigation_stops_run();
   test_skip_all_irrigations_clears_queue();
+  test_skip_all_irrigations_defers_an_overdue_safety_irrigation();
   test_limit_switch_stops_run();
   test_repeat_irrigation_runs_again();
   test_safety_irrigation_triggers();

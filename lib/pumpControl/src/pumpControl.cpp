@@ -238,6 +238,14 @@ void PumpControl::skipActualIrrigation() {
 
 void PumpControl::skipAllIrrigations() {
   irrigationQueue.clear();
+  // Restart every safety clock from now. A safety element only has its timer reset when its
+  // irrigation actually starts, so one that fell due while the queue was busy is still overdue
+  // here — and handleIdle() re-queues overdue elements as soon as the queue empties. Without
+  // this, stopping everything would start a pump again two passes later.
+  const uint32_t actualTime = millis();
+  for(SafetyIrrigationElement& element : safetyIrrigation) {
+    element.timer = actualTime;
+  }
   irrigationState = IrrigationState::ERROR;
 }
 
