@@ -55,7 +55,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     uint8_t deviceIndex = 0U;
-    for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
+    for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNextDevice()) {
       Logger::get()->printf_P(PSTR("  %hhu. %hu\r\n"), deviceIndex++, d->getClientCanId());
     }
     xSemaphoreGive(canDevicesListMutex);
@@ -117,15 +117,10 @@ bool CanHandlerEsp32::run() {
   return true;
 }
 
-void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const {
-  const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
+void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT(readability-convert-member-functions-to-static)
   // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
-  for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
-    if(d->getClientCanId() == nodeCanId) {
-      d->canFrameArrivedCallback(frameIn);
-      break;
-    }
-  }
+  CanBase* device = deviceList.find(static_cast<uint16_t>(frameIn.from));
+  if(device != nullptr) { device->canFrameArrivedCallback(frameIn); }
 }
 
 bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
@@ -143,17 +138,9 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(
 }
 
 bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(canBasePtr == nullptr) { return false; }
-  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    if(deviceListTail != nullptr) {
-      deviceListTail->setNextDevice(canBasePtr);
-    } else {
-      deviceListHead = canBasePtr;
-    }
-    deviceListTail = canBasePtr;
-    xSemaphoreGive(canDevicesListMutex);
-    return true;
-  }
-  return false;
+  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
+  const bool appendResult = deviceList.append(canBasePtr);
+  xSemaphoreGive(canDevicesListMutex);
+  return appendResult;
 }
 #endif // ESP32

@@ -2,6 +2,7 @@
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
+#include "canDeviceList.hpp"                                        /// Intrusive list of the registered CAN devices.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -83,8 +84,7 @@ private:
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
 
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
-  CanBase* deviceListHead = nullptr;                                      // Head of the intrusive linked list of registered CAN devices.
-  CanBase* deviceListTail = nullptr;                                      // Tail of the intrusive linked list, kept for O(1) append.
+  CanDeviceList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
