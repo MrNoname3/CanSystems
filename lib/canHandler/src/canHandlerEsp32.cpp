@@ -6,6 +6,8 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
+volatile uint32_t CanHandlerEsp32::rxIncompleteFrames = 0U;
+volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
 CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
@@ -79,11 +81,15 @@ void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-conver
   if(!CAN.packetRtr()) {
     const uint8_t canDataDlc = CAN.packetDlc();
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(rxCanData.data, canDataDlc));
-    if(canDataDlc != bytesReaded) { return; }
+    if(canDataDlc != bytesReaded) {
+      ++rxIncompleteFrames;
+      return;
+    }
   }
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   if(xQueueSendFromISR(canRxQueue, &rxCanData, &xHigherPriorityTaskWoken) != pdTRUE) {
-    return;
+    ++rxQueueFullFrames;
+    return;                                                         // No yield: nothing was queued, so no task became ready.
   }
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
@@ -93,6 +99,7 @@ bool CanHandlerEsp32::run() {
     Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
     CAN.recoverFromBusOff();
   }
+  reportDroppedRxFrames();
   { // Handle received CAN frames.
     // The mutex is taken around the whole pass rather than per frame: it guards the device list,
     // which only changes at registration time. Taking it first also means a timeout leaves the
@@ -115,6 +122,13 @@ bool CanHandlerEsp32::run() {
     if(txResult.failed) { return false; }
   }
   return true;
+}
+
+void CanHandlerEsp32::reportDroppedRxFrames() {
+  const uint32_t incomplete = rxIncompleteReporter.takeGrowth(rxIncompleteFrames);
+  const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
+  if((incomplete == 0U) && (queueFull == 0U)) { return; }
+  Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
 }
 
 void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT(readability-convert-member-functions-to-static)

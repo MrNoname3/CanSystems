@@ -3,6 +3,7 @@
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
 #include "intrusiveList.hpp"                                        /// Intrusive list of the registered CAN devices.
+#include "deltaCounter.hpp"                                         /// Growth of a free-running interrupt counter.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -81,10 +82,20 @@ private:
   /// @return `true` when the controller accepted and sent it.
   [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const; // NOLINT(readability-convert-member-functions-to-static)
 
+  /// @brief Logs how many received frames the interrupt had to drop since the previous pass.
+  void reportDroppedRxFrames();
+
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
+  // Written only by rxInterrupt(), read only by reportDroppedRxFrames(). Free-running: the
+  // reader keeps its own mark, so the interrupt never competes with a reset. A dropped frame
+  // leaves no other trace - the interrupt cannot log, and the frame simply never arrives.
+  static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
+  static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
 
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
   IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
+  DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
+  DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
