@@ -8,7 +8,7 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   4. format_check.py            (clang-format + final-newline check; ANY violation fails)
   5. lint_check.py              (ruff check over the Python; skipped if ruff is absent)
   6. typecheck_check.py         (pyright over the Python; skipped if pyright is absent)
-  7. pytest_check.py            (pytest over ota/tests; skipped if pytest is absent)
+  7. pytest_check.py            (pytest over ota/tests + scripts/tests; skipped if pytest is absent)
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.

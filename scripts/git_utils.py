@@ -18,9 +18,12 @@ def get_git_commit_count():
     return git_commit_count
 
 def get_git_uncommitted_changes():
-    # Check for uncommitted changes
+    # Check for uncommitted changes, staged ones included. A bare `git diff` compares the index
+    # with the working tree, so it goes quiet again the moment a change is staged - which is
+    # exactly the state right before a commit. Diffing against HEAD is what actually answers
+    # "does this tree differ from the last commit".
     try:
-        subprocess.check_call(["git", "diff", "--quiet"])
+        subprocess.check_call(["git", "diff", "--quiet", "HEAD"])
         git_uncommitted_changes = False
     except subprocess.CalledProcessError:
         git_uncommitted_changes = True
