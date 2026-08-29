@@ -66,10 +66,26 @@ bool test_infoPayloadBufSize() {
   END_IT
 }
 
+bool test_diagPayloadBufSize() {
+  IT("diagPayloadBufSize fits the maximum-length diagnostics payload");
+  char buf[MqttTopics::getDiagPayloadBufSize()];
+  // Longest cause string published by Connectivity plus maximal numeric fields.
+  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttDiagPayload(), "MQTT_CONNECT_BAD_CREDENTIALS", "2026-08-29T10:12:33Z", 4294967295U, 4294967295U);
+  TEST(n > 0 && static_cast<size_t>(n) < sizeof(buf));
+  IS_EQUAL(strcmp(buf, R"({"cause":"MQTT_CONNECT_BAD_CREDENTIALS","at":"2026-08-29T10:12:33Z","downSec":4294967295,"n":4294967295})"), 0);
+  END_IT
+}
+
 bool test_availPayloads() {
   IT("availability payloads have the correct content");
   IS_EQUAL(strcmp(MqttTopics::availOnlinePayload, R"({"state":"online"})"), 0);
   IS_EQUAL(strcmp(MqttTopics::availOfflinePayload, R"({"state":"offline"})"), 0);
+  END_IT
+}
+
+bool test_diagSubtopic() {
+  IT("diagnostics subtopic has the correct content");
+  IS_EQUAL(strcmp(MqttTopics::getDiagSubtopic(), "diag"), 0);
   END_IT
 }
 
@@ -82,6 +98,8 @@ int main() {
   test_infoTopicBufSize();
   test_subtopicOffset();
   test_infoPayloadBufSize();
+  test_diagPayloadBufSize();
   test_availPayloads();
+  test_diagSubtopic();
   FINISH
 }
