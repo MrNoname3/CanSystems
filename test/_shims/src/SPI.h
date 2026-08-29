@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "Arduino.h"
 
 enum : uint8_t {
   MSBFIRST = 1U,
@@ -30,6 +31,13 @@ public:
   static constexpr uint8_t registerCount = 128U;
   static constexpr uint8_t flagIde = 0x08U;                       // SIDL: extended identifier.
   static constexpr uint8_t flagRtr = 0x40U;                       // DLC: remote transmission request.
+  static constexpr uint8_t flagTxReq = 0x08U;                     // TXBnCTRL: transmit request pending.
+
+  /// @brief How the modelled controller finishes a frame handed to a transmit buffer.
+  enum class TxBehaviour : uint8_t {
+    Completes,   // The frame goes out: TXREQ clears by the time the buffer is polled.
+    NeverEnds    // Nothing on the bus takes the frame: TXREQ stays set until software clears it.
+  };
 
   /// @brief Clears every register, as the RESET command does.
   void reset() {
@@ -38,7 +46,15 @@ public:
     address = 0U;
     byteIndex = 0U;
     bitModifyMask = 0U;
+    txBehaviour = TxBehaviour::Completes;
+    pollDurationMs = 0U;
   }
+
+  void setTxBehaviour(TxBehaviour behaviour) { txBehaviour = behaviour; }
+
+  /// @brief Advances the fake clock by this many milliseconds whenever a transmit buffer's
+  /// control register is polled, standing in for the time a real poll costs. 0 leaves it alone.
+  void setPollDurationMs(uint32_t milliseconds) { pollDurationMs = milliseconds; }
 
   /// @brief Direct register access for test setup and assertions.
   [[nodiscard]] uint8_t& reg(uint8_t regAddress) { return registers[regAddress & 0x7FU]; }
@@ -88,7 +104,9 @@ public:
       const uint8_t offset = static_cast<uint8_t>(byteIndex - 2U);
       switch(command) {
         case cmdRead: {
-          result = registers[static_cast<uint8_t>(address + offset) & 0x7FU];
+          const uint8_t target = static_cast<uint8_t>(address + offset) & 0x7FU;
+          applyTxBehaviour(target);
+          result = registers[target];
         } break;
         case cmdWrite: {
           registers[static_cast<uint8_t>(address + offset) & 0x7FU] = out;
@@ -110,6 +128,15 @@ public:
   }
 
 private:
+  /// @brief Runs the transmit behaviour when a transmit buffer's control register is polled.
+  void applyTxBehaviour(uint8_t target) {
+    if((target != txCtrl(0U)) && (target != txCtrl(1U)) && (target != txCtrl(2U))) { return; }
+    if(pollDurationMs != 0U) { setFakeMillis(millis() + pollDurationMs); }
+    if(txBehaviour == TxBehaviour::Completes) {
+      registers[target] = static_cast<uint8_t>(registers[target] & static_cast<uint8_t>(~flagTxReq));
+    }
+  }
+
   static constexpr uint8_t cmdWrite = 0x02U;
   static constexpr uint8_t cmdRead = 0x03U;
   static constexpr uint8_t cmdBitModify = 0x05U;
@@ -120,6 +147,8 @@ private:
   uint8_t address = 0U;
   uint8_t byteIndex = 0U;
   uint8_t bitModifyMask = 0U;
+  TxBehaviour txBehaviour = TxBehaviour::Completes;
+  uint32_t pollDurationMs = 0U;
 };
 
 extern Mcp2515Model mcp2515;

@@ -29,6 +29,23 @@ bool test_begin_configures_the_controller() {
   END_IT
 }
 
+// Queues one 1-byte extended frame. The identifier's low byte lands in the transmit buffer's
+// EID0 register, which is what the ordering assertions read back.
+static bool queueFrame(uint8_t marker) {
+  const uint8_t payload[1] = { 0x11U };
+  if(CAN.beginExtendedPacket(0x1FF00000U | marker, 1U) == 0U) { return false; }
+  if(CAN.write(payload, 1U) != 1U) { return false; }
+  return CAN.endPacket() != 0U;
+}
+
+// TXBnCTRL / TXBnEID0 register addresses, spelled out so a failing line names its buffer.
+static constexpr uint8_t kTxb0Ctrl = 0x30U;
+static constexpr uint8_t kTxb1Ctrl = 0x40U;
+static constexpr uint8_t kTxb2Ctrl = 0x50U;
+static constexpr uint8_t kTxb0Eid0 = 0x34U;
+static constexpr uint8_t kTxb1Eid0 = 0x44U;
+static constexpr uint8_t kTxb2Eid0 = 0x54U;
+
 bool test_parse_packet_reports_nothing_when_no_frame_arrived() {
   IT("parsePacket() returns 0 and an invalid id when no receive flag is set");
   IS_TRUE(startController());
@@ -101,6 +118,55 @@ bool test_on_receive_drains_every_pending_frame() {
   END_IT
 }
 
+// ---- transmit path ----
+
+bool test_queued_frames_keep_their_sending_order() {
+  IT("frames queued back to back are held oldest-first across the three transmit buffers");
+  IS_TRUE(startController());
+  IS_TRUE(queueFrame(0x01U));
+  IS_TRUE(queueFrame(0x02U));
+  IS_TRUE(queueFrame(0x03U));
+  // At equal transmit priority the MCP2515 sends the highest-numbered buffer first, so the
+  // oldest frame has to sit in TXB2 and the newest in TXB0 for insertion order to survive.
+  IS_EQUAL(mcp2515.reg(kTxb2Eid0), 0x01U);
+  IS_EQUAL(mcp2515.reg(kTxb1Eid0), 0x02U);
+  IS_EQUAL(mcp2515.reg(kTxb0Eid0), 0x03U);
+  // Equal priority is what makes the buffer number the tie-breaker.
+  IS_EQUAL(mcp2515.reg(kTxb2Ctrl) & 0x03U, 0x00U);
+  IS_EQUAL(mcp2515.reg(kTxb1Ctrl) & 0x03U, 0x00U);
+  IS_EQUAL(mcp2515.reg(kTxb0Ctrl) & 0x03U, 0x00U);
+  END_IT
+}
+
+bool test_transmit_gives_up_when_the_bus_never_takes_a_frame() {
+  IT("endPacket() gives up instead of polling forever once no buffer frees up");
+  IS_TRUE(startController());
+  mcp2515.setTxBehaviour(Mcp2515Model::TxBehaviour::NeverEnds);
+  setFakeMillis(0U);
+  mcp2515.setPollDurationMs(1U);                 // one modelled millisecond per buffer poll
+  IS_TRUE(queueFrame(0x01U));
+  IS_TRUE(queueFrame(0x02U));
+  IS_TRUE(queueFrame(0x03U));
+  IS_FALSE(queueFrame(0x04U));                   // every buffer is full and none empties
+  // The stuck frames are dropped rather than left blocking every later send.
+  IS_EQUAL(mcp2515.reg(kTxb2Ctrl) & Mcp2515Model::flagTxReq, 0x00U);
+  IS_EQUAL(mcp2515.reg(kTxb1Ctrl) & Mcp2515Model::flagTxReq, 0x00U);
+  IS_EQUAL(mcp2515.reg(kTxb0Ctrl) & Mcp2515Model::flagTxReq, 0x00U);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_the_buffer_cycle_restarts_once_the_frames_are_gone() {
+  IT("the fourth frame goes back to the top of the cycle once the first three have left");
+  IS_TRUE(startController());                    // frames complete by default
+  IS_TRUE(queueFrame(0x01U));
+  IS_TRUE(queueFrame(0x02U));
+  IS_TRUE(queueFrame(0x03U));
+  IS_TRUE(queueFrame(0x04U));
+  IS_EQUAL(mcp2515.reg(kTxb2Eid0), 0x04U);
+  END_IT
+}
+
 // ---- receive strategies a CAN handler can build on top of parsePacket() ----
 
 // True when parsePacket() actually produced a frame. A zero-length frame returns 0 but leaves a
@@ -154,6 +220,9 @@ int main() {
   test_parse_packet_drains_one_buffer_per_call();
   test_zero_length_frame_is_still_a_frame();
   test_on_receive_drains_every_pending_frame();
+  test_queued_frames_keep_their_sending_order();
+  test_transmit_gives_up_when_the_bus_never_takes_a_frame();
+  test_the_buffer_cycle_restarts_once_the_frames_are_gone();
   test_one_parse_per_pass_leaves_the_controller_backed_up();
   test_the_rx_pump_drains_the_controller_in_one_pass();
   test_the_rx_pump_dispatches_nothing_on_an_empty_controller();

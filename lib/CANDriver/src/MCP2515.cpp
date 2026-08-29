@@ -19,6 +19,7 @@ namespace {
   constexpr uint8_t flagExide = 0x08U;
   constexpr uint8_t flagRxm0  = 0x20U;
   constexpr uint8_t flagRxm1  = 0x40U;
+  constexpr uint8_t flagTxReq = 0x08U;
   // clang-format on
 
   constexpr uint8_t flagRxnIe(uint8_t n) { return static_cast<uint8_t>(0x01U << n); }
@@ -116,6 +117,8 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
   writeRegister(regCanCtrl, 0x00U);
   if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
 
+  txBuffersLeft = txBufferCount;
+
   return 1U;
 }
 
@@ -127,7 +130,8 @@ void MCP2515::end() {
 uint8_t MCP2515::endPacket() {
   if(CANController::endPacket() == 0U) { return 0U; }
 
-  const uint8_t n = 0U;
+  const uint8_t n = takeTxBuffer();
+  if(n >= txBufferCount) { return 0U; }
 
   // Build frame header + data into a contiguous buffer and send in one SPI burst.
   // TX buffer registers are consecutive: SIDH, SIDL, EID8, EID0, DLC, D0..D7
@@ -156,28 +160,40 @@ uint8_t MCP2515::endPacket() {
 
   writeBurst(regTxBnSidh(n), frame, frameLen);
 
-  writeRegister(regTxBnCtrl(n), 0x08U);
+  modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
+  // Transmit priority is left at 0 for every buffer, which is what keeps insertion order:
+  // the controller then breaks the tie by buffer number, highest first, and takeTxBuffer()
+  // hands the buffers out from the top down.
+  writeRegister(regTxBnCtrl(n), flagTxReq);
 
-  bool aborted = false;
+  return 1U;
+}
 
-  uint8_t ctrl = readRegister(regTxBnCtrl(n));
-  while((ctrl & 0x08U) != 0U) {
-    if((ctrl & 0x10U) != 0U) {
-      aborted = true;
-      modifyRegister(regCanCtrl, 0x10U, 0x10U);
+uint8_t MCP2515::takeTxBuffer() {
+  if(txBuffersLeft == 0U) {
+    if(!drainTxBuffers()) { return txBufferCount; }
+    txBuffersLeft = txBufferCount;
+  }
+  --txBuffersLeft;
+  return txBuffersLeft;
+}
+
+bool MCP2515::drainTxBuffers() const { // NOLINT(readability-convert-member-functions-to-static)
+  const uint32_t startTime = millis();
+  for(;;) {
+    uint8_t pending = 0U;
+    for(uint8_t n = 0U; n < txBufferCount; n++) {
+      if((readRegister(regTxBnCtrl(n)) & flagTxReq) != 0U) { pending |= static_cast<uint8_t>(1U << n); }
+    }
+    if(pending == 0U) { return true; }
+    if((millis() - startTime) >= txDrainTimeoutMs) {
+      for(uint8_t n = 0U; n < txBufferCount; n++) {
+        if((pending & static_cast<uint8_t>(1U << n)) != 0U) { modifyRegister(regTxBnCtrl(n), flagTxReq, 0x00U); }
+      }
+      return false;
     }
     yield();
-    ctrl = readRegister(regTxBnCtrl(n));
   }
-
-  if(aborted) {
-    modifyRegister(regCanCtrl, 0x10U, 0x00U);
-  }
-
-  modifyRegister(regCanIntf, flagTxnIf(n), 0x00U);
-
-  // Use the cached ctrl value from the loop — avoids a redundant SPI read.
-  return ((ctrl & 0x70U) != 0U) ? 0U : 1U;
 }
 
 uint8_t MCP2515::parsePacket() {
