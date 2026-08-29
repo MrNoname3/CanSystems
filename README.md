@@ -57,6 +57,11 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
 - Device → server: `iot/dtos/<mac>/<subtopic>`; server → device: `iot/stod/<mac>/<subtopic>`.
 - Every node publishes a retained `availability` topic (LWT) and a retained `info` topic
   (fw version = git commit count, git hash, dirty flag, reset reason).
+- After every reconnect the node publishes a retained `diag` topic: the cause of the last
+  disconnect (MQTT status or `NETWORK_LOST`), its UTC timestamp, the offline duration in
+  seconds (measured from client-side detection, i.e. up to ~2x keepalive after the actual
+  drop) and a since-boot reconnect counter. Kept in RAM only: an outage that ends in the
+  offline-watchdog MCU reset is reported by the `info` topic's reset reason instead.
 - CAN sub-devices get their own sub-tree: `iot/dtos/<mac>/alert1/{availability,info,ota,button}`.
 - Home Assistant MQTT discovery is opt-in via `"haDiscovery": true` in `server.json`;
   when disabled, the nodes actively retract their previously published entities.

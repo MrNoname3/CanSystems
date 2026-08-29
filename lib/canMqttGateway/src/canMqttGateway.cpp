@@ -220,7 +220,7 @@ bool CanMqttGateway::init() {
   // clientOfflineTimer is intentionally NOT reset here so handlePing() continues to base
   // its decision on the last real CAN activity, not on a forced timestamp.
   const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
-  (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOfflinePayload);
+  (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::getAvailOfflinePayload());
   clientOnline = false;
   return initLocal();
 }
@@ -243,7 +243,7 @@ void CanMqttGateway::handlePing() {
     Logger::get()->printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
                             Str::getOnlineStateStr(clientOnline));
     const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
-    (void)MqttBase::sendRetainedSubtopic(availSubtopic, clientOnline ? MqttTopics::availOnlinePayload : MqttTopics::availOfflinePayload);
+    (void)MqttBase::sendRetainedSubtopic(availSubtopic, clientOnline ? MqttTopics::getAvailOnlinePayload() : MqttTopics::getAvailOfflinePayload());
   }
 }
 
@@ -277,8 +277,8 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       // even if the device came back before the ping timeout would have caught the outage.
       // clientOnline is forced true so handlePing() does not publish a duplicate online.
       const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
-      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOfflinePayload);
-      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
+      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::getAvailOfflinePayload());
+      (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::getAvailOnlinePayload());
       clientOnline = true;
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
@@ -301,7 +301,7 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       }
       if(!clientOnline) {
         const char* availSubtopic = canAvailTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
-        (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::availOnlinePayload);
+        (void)MqttBase::sendRetainedSubtopic(availSubtopic, MqttTopics::getAvailOnlinePayload());
         clientOnline = true;
       }
       (void)publishDiscovery();

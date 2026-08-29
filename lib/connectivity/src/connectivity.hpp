@@ -50,6 +50,7 @@ private:
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
+  static constexpr const char PROGMEM networkLostStr[]                = "NETWORK_LOST";                   // Diagnostic cause when the local network link dropped.
   // clang-format on
 public:
   /// @brief Constructs a Connectivity instance.
@@ -163,6 +164,20 @@ private:
   /// @return A human-readable string describing the state
   [[nodiscard]] static const char* getMqttStatusStr(PubSubClient::State status);
 
+  /// @brief Records a disconnect for later diagnostics publishing.
+  /// Captures the cause, the current UTC time and the millis() timestamp; called once per
+  /// outage on the online -> offline transition, so the first (root) cause is kept.
+  /// @param cause PROGMEM cause string (MQTT status or `networkLostStr`).
+  /// @param actualTime Current millis() timestamp.
+  void recordDisconnect(const char* cause, uint32_t actualTime);
+
+  /// @brief Publishes the retained disconnect diagnostics message after a reconnect.
+  /// No-op when no disconnect has been recorded (e.g. the first connect after boot).
+  /// Diagnostics live in RAM only: an outage ended by the offline MCU reset loses its record
+  /// (the reset reason in the info topic covers that case).
+  /// @param actualTime Current millis() timestamp, used to compute the offline duration.
+  void publishDisconnectDiag(uint32_t actualTime);
+
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
@@ -175,6 +190,10 @@ private:
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.
   void (*resetWdt)();                                               // Function pointer for resetting the watchdog timer.
   uint32_t reconnectTimer;                                          // Timer for managing MQTT reconnections.
+  const char* dropCause;                                            // Cause of the last disconnect (PROGMEM string); nullptr when no diagnostics are pending.
+  char dropTimeStr[dateTimeStrBufSize];                             // ISO8601 UTC time when the disconnect was detected.
+  uint32_t dropDetectedTimer;                                       // millis() timestamp of the disconnect detection, for the offline duration.
+  uint32_t reconnectCount;                                          // Number of successful reconnects since boot (diagnostics "n").
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
