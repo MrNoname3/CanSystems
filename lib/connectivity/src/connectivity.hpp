@@ -17,6 +17,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "intrusiveList.hpp"                                        /// Intrusive list of the registered MQTT handlers.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
@@ -197,8 +198,7 @@ private:
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
-  MqttBase* handlerListHead = nullptr;                              // Head of the intrusive linked list of registered MQTT message handlers.
-  MqttBase* handlerListTail = nullptr;                              // Tail of the intrusive linked list, kept for O(1) append.
+  IntrusiveList<MqttBase> handlerList;                              // Registered MQTT message handlers, keyed by subtopic.
   HADiscovery haDiscovery;                                          // HA auto-discovery handler; holds device name and all HA infrastructure.
 };
 
@@ -321,10 +321,10 @@ public:
   [[nodiscard]] const char* getClientNameStr() const { return connectivity.getClientName(); }
 
   /// @brief Returns the next handler in the intrusive linked list managed by Connectivity.
-  [[nodiscard]] MqttBase* getNextHandler() const { return nextHandler; }
+  [[nodiscard]] MqttBase* getNext() const { return nextHandler; }
 
   /// @brief Sets the next handler pointer. Used internally by Connectivity to build the handler list.
-  void setNextHandler(MqttBase* next) { nextHandler = next; }
+  void setNext(MqttBase* next) { nextHandler = next; }
 
   MqttBase(const MqttBase&) = delete;                       // Delete copy constructor.
   MqttBase& operator=(const MqttBase&) = delete;            // Delete copy assignment operator.

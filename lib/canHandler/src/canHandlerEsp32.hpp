@@ -2,7 +2,7 @@
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
 #include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
-#include "canDeviceList.hpp"                                        /// Intrusive list of the registered CAN devices.
+#include "intrusiveList.hpp"                                        /// Intrusive list of the registered CAN devices.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -84,7 +84,7 @@ private:
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
 
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
-  CanDeviceList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
+  IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
@@ -167,10 +167,10 @@ public:
   }
 
   /// @brief Returns the next device in the intrusive linked list managed by CanHandlerEsp32.
-  [[nodiscard]] CanBase* getNextDevice() const { return nextDevice; }
+  [[nodiscard]] CanBase* getNext() const { return nextDevice; }
 
   /// @brief Sets the next device pointer. Used internally by CanHandlerEsp32 to build the device list.
-  void setNextDevice(CanBase* next) { nextDevice = next; }
+  void setNext(CanBase* next) { nextDevice = next; }
 
   CanBase(const CanBase&) = delete;                       // Define copy constructor.
   CanBase& operator=(const CanBase&) = delete;            // Define copy assignment operator.

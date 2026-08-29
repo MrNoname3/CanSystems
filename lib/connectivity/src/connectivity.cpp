@@ -147,24 +147,24 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = topic + MqttTopics::getSubtopicOffset();
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
-    for(MqttBase* currentMessageHandler = handlerListHead; currentMessageHandler != nullptr; currentMessageHandler = currentMessageHandler->getNextHandler()) {
-      if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
-        JsonDocument payloadJson;
-        DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
-        if(parsingError != DeserializationError::Code::Ok) {
-          Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
-          return;
-        }
-        currentMessageHandler->messageArrivedCallback(payloadJson);
-        return;
-      }
+    MqttBase* messageHandler = handlerList.findIf(
+        [subtopic](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), subtopic) == 0; });
+    if(messageHandler == nullptr) {
+      Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+      return;
     }
-    Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+    JsonDocument payloadJson;
+    DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
+    if(parsingError != DeserializationError::Code::Ok) {
+      Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), messageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+      return;
+    }
+    messageHandler->messageArrivedCallback(payloadJson);
   });
   // List message handlers.
   Logger::get()->printf_P(PSTR("[MQTT] Message handlers:\r\n"));
   uint8_t handlerIndex = 0U;
-  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+  for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     Logger::get()->printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
   resetWatchdogTimer();
@@ -225,7 +225,7 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
 
   (void)haDiscovery.publishConnectivity();
-  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+  for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     if(!h->publishDiscovery()) {
       Logger::get()->printf_P(PSTR("[MQTT] Discovery failed: %s\r\n"), h->getSubtopic());
     }
@@ -374,14 +374,7 @@ bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const H
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(mqttBasePtr == nullptr) { return false; } // NOLINT(readability-simplify-boolean-expr)
-  if(handlerListTail != nullptr) {
-    handlerListTail->setNextHandler(mqttBasePtr);
-  } else {
-    handlerListHead = mqttBasePtr;
-  }
-  handlerListTail = mqttBasePtr;
-  return true;
+  return handlerList.append(mqttBasePtr);
 }
 
 const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {  // NOLINT(readability-convert-member-functions-to-static)
