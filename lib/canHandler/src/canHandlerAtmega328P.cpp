@@ -67,8 +67,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     Logger::get()->println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
-  { // Send startup info.
-    const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion();
+  { // Send startup info. The flush is what separates a live bus from a dead one: the sends
+    // above only reach a transmit buffer, and it is the bus that empties it.
+    const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion() && CAN.flushTx();
     if(!sendResult) { return false; }
   }
   { // Check SPI FLASH modul.
@@ -156,7 +157,10 @@ bool CanHandlerAtmega328P::run() {
     case OtaCanResponse::Action::NONE: {
     } break;
   }
-  if(otaDecision.reboot) { ResetHandler::restartMCU(); }
+  if(otaDecision.reboot) {
+    (void)CAN.flushTx();                                            // The ack above is only queued; let it out before the reset.
+    ResetHandler::restartMCU();
+  }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
     DebugLedHandler::ledOn();

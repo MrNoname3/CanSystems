@@ -167,6 +167,30 @@ bool test_the_buffer_cycle_restarts_once_the_frames_are_gone() {
   END_IT
 }
 
+bool test_flush_confirms_the_queued_frames_are_gone() {
+  IT("flushTx() reports success once the controller has emptied its transmit buffers");
+  IS_TRUE(startController());                    // frames complete by default
+  IS_TRUE(queueFrame(0x01U));
+  IS_TRUE(CAN.flushTx());
+  END_IT
+}
+
+bool test_flush_reports_a_bus_that_takes_nothing() {
+  IT("flushTx() reports failure and drops the stuck frame when the bus takes nothing");
+  IS_TRUE(startController());
+  mcp2515.setTxBehaviour(Mcp2515Model::TxBehaviour::NeverEnds);
+  setFakeMillis(0U);
+  mcp2515.setPollDurationMs(1U);                 // one modelled millisecond per buffer poll
+  IS_TRUE(queueFrame(0x01U));
+  IS_FALSE(CAN.flushTx());
+  IS_EQUAL(mcp2515.reg(kTxb2Ctrl) & Mcp2515Model::flagTxReq, 0x00U);
+  // Tens of milliseconds, not the unbounded spin it replaced: this is what an AVR main loop
+  // pays once for a dead bus, and it has to stay far below the node's loop-time budget.
+  IS_TRUE(millis() < 30U);
+  clearFakeMillis();
+  END_IT
+}
+
 // ---- receive strategies a CAN handler can build on top of parsePacket() ----
 
 // True when parsePacket() actually produced a frame. A zero-length frame returns 0 but leaves a
@@ -223,6 +247,8 @@ int main() {
   test_queued_frames_keep_their_sending_order();
   test_transmit_gives_up_when_the_bus_never_takes_a_frame();
   test_the_buffer_cycle_restarts_once_the_frames_are_gone();
+  test_flush_confirms_the_queued_frames_are_gone();
+  test_flush_reports_a_bus_that_takes_nothing();
   test_one_parse_per_pass_leaves_the_controller_backed_up();
   test_the_rx_pump_drains_the_controller_in_one_pass();
   test_the_rx_pump_dispatches_nothing_on_an_empty_controller();

@@ -22,6 +22,10 @@ public:
   using CANController::filterExtended;
   [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask) override;
 
+  /// @brief Waits until no transmit buffer holds a queued frame any more.
+  /// @return `false` on timeout, after aborting the frames that were still stuck.
+  [[nodiscard]] bool flushTx() const; // NOLINT(readability-convert-member-functions-to-static)
+
   [[nodiscard]] uint8_t observe() override;
   [[nodiscard]] uint8_t loopback() override;
   [[nodiscard]] uint8_t sleep() override;
@@ -45,16 +49,13 @@ private:
   static constexpr uint32_t defaultClockFrequency = 16'000'000U;
   static constexpr uint8_t txBufferCount = 3U;                      // TXB0..TXB2.
   // Backstop for a bus that never lets a queued frame out, not a per-frame budget: the
-  // controller retransmits on its own, so a healthy bus never reaches this.
-  static constexpr uint32_t txDrainTimeoutMs = 100U;
+  // controller retransmits on its own, so a healthy bus never reaches this. Three frames take
+  // about a millisecond at 500 kbit/s, which is the rate this driver is used at.
+  static constexpr uint32_t txDrainTimeoutMs = 20U;
 
   /// @brief Reserves the transmit buffer the next frame belongs in.
   /// @return Buffer index, or `txBufferCount` when no buffer could be freed.
   [[nodiscard]] uint8_t takeTxBuffer();
-
-  /// @brief Waits until no transmit buffer holds a pending frame.
-  /// @return `false` on timeout, after aborting the frames that were still stuck.
-  [[nodiscard]] bool drainTxBuffers() const;
 
   void reset() const; // NOLINT(readability-convert-member-functions-to-static)
   void handleInterrupt();

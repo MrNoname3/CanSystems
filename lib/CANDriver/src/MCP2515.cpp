@@ -171,14 +171,14 @@ uint8_t MCP2515::endPacket() {
 
 uint8_t MCP2515::takeTxBuffer() {
   if(txBuffersLeft == 0U) {
-    if(!drainTxBuffers()) { return txBufferCount; }
+    if(!flushTx()) { return txBufferCount; }
     txBuffersLeft = txBufferCount;
   }
   --txBuffersLeft;
   return txBuffersLeft;
 }
 
-bool MCP2515::drainTxBuffers() const { // NOLINT(readability-convert-member-functions-to-static)
+bool MCP2515::flushTx() const { // NOLINT(readability-convert-member-functions-to-static)
   const uint32_t startTime = millis();
   for(;;) {
     uint8_t pending = 0U;
