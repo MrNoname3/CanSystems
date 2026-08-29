@@ -82,6 +82,20 @@ bool test_init_fails_when_si7021_not_found() {
   END_IT
 }
 
+bool test_init_configures_the_bus_after_opening_it() {
+  IT("init() sets the I2C clock after begin(), so the setting survives");
+  Wire.reset();
+  Wire.setEndTransmissionResult(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  IS_TRUE(s.init());
+  IS_TRUE(Wire.isClockSetAfterBegin());
+  IS_EQUAL(Wire.getClock(), 100000U);
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_init_succeeds_when_si7021_present() {
   IT("init() returns true when SI7021 ACKs on I2C");
   preloadInit();
@@ -273,6 +287,7 @@ bool test_run_always_returns_true() {
 int main() {
   SUITE("AmbientSensor");
   test_init_fails_when_si7021_not_found();
+  test_init_configures_the_bus_after_opening_it();
   test_init_succeeds_when_si7021_present();
   test_no_send_before_measure_period();
   test_first_cycle_sends_values();

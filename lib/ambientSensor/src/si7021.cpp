@@ -1,15 +1,16 @@
 #include "si7021.hpp"
 
 SI7021::SI7021(uint32_t timeoutUs, uint8_t address, TwoWire& wire) :
+  timeoutUs(timeoutUs),
   address(address),
   wire(wire),
-  deviceExists(false) {
-  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
-  this->wire.setWireTimeout(timeoutUs, true);             // Set I2C timeout.
-}
+  deviceExists(false) {}
 
 bool SI7021::init() { // NOLINT(readability-make-member-function-const)
   wire.begin();
+  // After begin(): it runs twi_init(), which rewrites TWBR and drops an earlier setClock().
+  wire.setClock(clockSpeed);                              // Set I2C bus speed.
+  wire.setWireTimeout(timeoutUs, true);                   // Set I2C timeout.
   wire.beginTransmission(address);
   deviceExists = (wire.endTransmission() == 0U);
   return deviceExists;
