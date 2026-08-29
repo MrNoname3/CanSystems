@@ -19,6 +19,10 @@ CanOta::~CanOta() {
 
 CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storageNumber) {
   ErrorState<OtaStartError, OtaStartErrorType> otaStartErrState;
+  if(isOtaInProgress()) {
+    otaStartErrState.setError(OtaStartError::ALREADY_IN_PROGRESS);
+    return otaStartErrState.getRawErrorState();
+  }
   if(fileName == nullptr) {
     otaStartErrState.setError(OtaStartError::FILE_NAME_NULLPTR);
     return otaStartErrState.getRawErrorState();
@@ -52,6 +56,7 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
 }
 
 void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLINT(readability-convert-member-functions-to-static)
+  if(transferState != TransferState::WAIT_FOR_ACK) { return; }
   const uint16_t cmd = static_cast<uint16_t>(canFrame.cmd);
   const CanHandler::Response response = static_cast<CanHandler::Response>(canFrame.data[0]);
   if((cmd == static_cast<uint16_t>(CanCmd::OTA_START)) || (cmd == static_cast<uint16_t>(CanCmd::OTA_SEND))) {
