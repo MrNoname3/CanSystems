@@ -167,6 +167,15 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     Logger::get()->printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
+  { // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
+    // publish* calls retract any previously-created entities (empty retained payload) instead of
+    // creating them. Set "haDiscovery": true to publish the discovery config.
+    bool haEnabled = false;
+    (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
+    haDiscovery.setDiscoveryEnabled(haEnabled);
+    // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
+    Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
+  }
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
   { // Publish retained device info once at startup.
@@ -215,15 +224,6 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttClient.disconnect();
     return false;
   }
-  // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
-  // publish* calls below retract any previously-created entities (empty retained payload) instead
-  // of creating them. Set "haDiscovery": true to publish the discovery config.
-  bool haEnabled = false;
-  (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
-  haDiscovery.setDiscoveryEnabled(haEnabled);
-  // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
-  Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
-
   (void)haDiscovery.publishConnectivity();
   for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     if(!h->publishDiscovery()) {
