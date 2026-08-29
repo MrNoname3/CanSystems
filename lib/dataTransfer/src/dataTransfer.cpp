@@ -270,6 +270,7 @@ void DataTransfer::runValidityCheck() {
       if(receivedFile) {
         receivedFile.close();
       }
+      (void)LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
       transferState = TransferState::IDLE;
       if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
         checkOkCallback(false);

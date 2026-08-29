@@ -343,6 +343,27 @@ bool test_md5_mismatch_fails_and_keeps_no_file() {
   END_IT
 }
 
+bool test_aborted_transfer_frees_the_temporary_file() {
+  IT("an aborted transfer removes the temporary file so the next one still fits");
+  resetEnv();
+  setFakeMillis(0U);
+  LittleFS.setCapacity(20U);                        // room for one 12-byte file, not two
+  const std::string raw = "abcdefghijkl";
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));
+  IS_TRUE(LittleFS.exists(tempName()));
+
+  setFakeMillis(15U * 60U * 1000U + 1U);            // transfer timeout -> CLEANUP in the same call
+  dt.runValidityCheck();
+  IS_FALSE(LittleFS.exists(tempName()));
+
+  // The reclaimed space is what lets an identical transfer start again.
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));
+  clearFakeMillis();
+  END_IT
+}
+
 // ---- firmware (Update) path ----
 
 bool test_firmware_transfer_succeeds() {
@@ -492,6 +513,7 @@ int main() {
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
   test_md5_mismatch_fails_and_keeps_no_file();
+  test_aborted_transfer_frees_the_temporary_file();
   test_firmware_transfer_succeeds();
   test_firmware_begin_failure();
   test_firmware_write_failure();

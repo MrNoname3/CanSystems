@@ -117,6 +117,10 @@ public:
     return found;
   }
 
+  // Mutates files_; clang-tidy's const/static hints here are false positives.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
+  bool remove(const char* path) { return files_.erase(path) > 0U; }
+
   [[nodiscard]] size_t totalBytes() const { return capacity_; }
   [[nodiscard]] size_t usedBytes() const {
     size_t used = 0U;
