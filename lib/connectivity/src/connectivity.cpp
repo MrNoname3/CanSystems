@@ -188,7 +188,7 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   const bool mqttConResult = mqttClient.connect(
       mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
-      mqttCredentials.availabilityTopic, 1U, true, MqttTopics::availOfflinePayload);
+      mqttCredentials.availabilityTopic, 1U, true, MqttTopics::getAvailOfflinePayload());
   Logger::get()->printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
                           mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) {
@@ -209,7 +209,7 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttClient.disconnect();
     return false;
   }
-  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOnlinePayload, true);
+  const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::getAvailOnlinePayload(), true);
   Logger::get()->printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
   if(!availResult) {
     mqttClient.disconnect();
@@ -310,7 +310,7 @@ void Connectivity::publishDisconnectDiag(uint32_t actualTime) {
 
 void Connectivity::shutdownMqtt() {
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
-  (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::availOfflinePayload, true);
+  (void)mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::getAvailOfflinePayload(), true);
   mqttClient.disconnect();
 }
 

@@ -27,12 +27,11 @@ private:
   static constexpr uint8_t diagPayloadBufSize = 105U;                                                     // 36 fixed chars + cause (28: "MQTT_CONNECT_BAD_CREDENTIALS") + ISO time (20) + 2x uint32 (10 each) + null.
   // Disconnect diagnostics subtopic (RAM; publishRetained's strlcat requires a non-PROGMEM pointer).
   static constexpr const char diagSubtopic[] = "diag";
-
-public:
   // Availability state payloads (RAM; PubSubClient::publish and connect require non-PROGMEM pointers).
   static constexpr const char availOnlinePayload[] = R"({"state":"online"})";
   static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";
 
+public:
   static constexpr uint8_t getMacHexLen() { return macHexLen; }
   static constexpr const char* getMqttClientName() { return mqttClientName; }
   static constexpr const char* getMqttOutTopic() { return mqttOutTopic; }
@@ -49,5 +48,7 @@ public:
   static constexpr uint8_t getInfoPayloadBufSize() { return infoPayloadBufSize; }
   static constexpr uint8_t getDiagPayloadBufSize() { return diagPayloadBufSize; }
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
+  static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }
+  static constexpr const char* getAvailOfflinePayload() { return availOfflinePayload; }
 };
 #endif // MQTTTOPICS_HPP

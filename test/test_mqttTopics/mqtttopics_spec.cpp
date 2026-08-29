@@ -78,8 +78,8 @@ bool test_diagPayloadBufSize() {
 
 bool test_availPayloads() {
   IT("availability payloads have the correct content");
-  IS_EQUAL(strcmp(MqttTopics::availOnlinePayload, R"({"state":"online"})"), 0);
-  IS_EQUAL(strcmp(MqttTopics::availOfflinePayload, R"({"state":"offline"})"), 0);
+  IS_EQUAL(strcmp(MqttTopics::getAvailOnlinePayload(), R"({"state":"online"})"), 0);
+  IS_EQUAL(strcmp(MqttTopics::getAvailOfflinePayload(), R"({"state":"offline"})"), 0);
   END_IT
 }
 
