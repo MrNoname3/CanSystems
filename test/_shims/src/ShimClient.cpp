@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ctime>
 #include <string.h>
+#include "SPI.h"
 
 static uint32_t fakeMillisValue = 0U;
 static bool fakeMillisActive = false;
@@ -205,3 +206,7 @@ void ShimClient::expectConnect(const char* host, uint16_t port) {
   this->_expectedHost = host;
   this->_expectedPort = port;
 }
+
+// --- SPI stand-in (SPI.h) ---
+Mcp2515Model mcp2515;
+SPIClass SPI;

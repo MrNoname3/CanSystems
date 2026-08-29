@@ -28,7 +28,10 @@ public:
   /// @return DLC (0..8) on success, 0 if no packet.
   [[nodiscard]] virtual uint8_t parsePacket();
 
-  /// @brief Return the ID of the last received packet.
+  /// @brief Identifier reported by packetId() when no packet was received.
+  static constexpr uint32_t noId = UINT32_MAX;
+
+  /// @brief Return the ID of the last received packet, or `noId` if there was none.
   [[nodiscard]] uint32_t packetId() const;
 
   /// @brief Return whether the last received packet was extended (29-bit).
@@ -45,10 +48,10 @@ public:
   virtual size_t write(const uint8_t* buffer, size_t size);
 
   // from Stream
-  virtual int available();
-  virtual int read();
-  virtual int peek();
-  virtual void flush();
+  int available() override;
+  int read() override;
+  int peek() override;
+  void flush() override;
 
   /// @brief Set the receive interrupt callback.
   virtual void onReceive(void (*callback)(int));
@@ -70,7 +73,6 @@ protected:
   void (*onReceiveCb)(int);
 
   bool packetBegun;
-  static constexpr uint32_t noId = UINT32_MAX;
 
   uint32_t txId;
   bool txExtended;

@@ -6,12 +6,14 @@
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "canRxPump.hpp"                                            /// Bounded receive-buffer drain.
 
 /// @brief Handles CAN communication, OTA updates, and peripheral interactions.
 class CanHandlerAtmega328P final : public CanHandlerBase {
 private:
   static constexpr uint16_t pingTime = Time::secToMs(2U);           // Ping timeout in milliseconds.
   static constexpr uint16_t flashJedecId = 0xEF40U;                 // JEDEC ID for Winbond 64Mbit flash.
+  static constexpr uint8_t maxRxFramesPerRun = 4U;                  // Frame budget per run(): two receive buffers plus headroom.
 
 public:
   using CanHandlerBase::send;                                       // Bring the send methods of the base class into scope.

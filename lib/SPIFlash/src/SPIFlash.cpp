@@ -94,8 +94,8 @@ void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
   SPI.transfer(0U);
   SPI.transfer(0U);
   SPI.transfer(0U);
-  for(uint8_t i = 0U; i < 8U; i++) {
-    buf[i] = SPI.transfer(0U);
+  for(uint8_t& value : buf) {
+    value = SPI.transfer(0U);
   }
   unselect();
 }
@@ -222,6 +222,6 @@ void SPIFlash::wakeup() {
   unselect();
 }
 
-void SPIFlash::end() {
+void SPIFlash::end() { // NOLINT(readability-convert-member-functions-to-static) mirrors the instance API
   SPI.end();
 }

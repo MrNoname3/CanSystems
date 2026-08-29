@@ -125,7 +125,7 @@ void MCP2515::end() {
 }
 
 uint8_t MCP2515::endPacket() {
-  if(!CANController::endPacket()) { return 0U; }
+  if(CANController::endPacket() == 0U) { return 0U; }
 
   const uint8_t n = 0U;
 

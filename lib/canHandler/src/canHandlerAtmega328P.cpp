@@ -82,13 +82,10 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
 }
 
 bool CanHandlerAtmega328P::handleRxFrame() {
-  // The decrement is a non-atomic read-modify-write; an rxInterrupt between the load and the
-  // store would lose its increment (and with edge-triggered INT, the pending frame with it).
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount--; }
-  const uint8_t canDataDlc = CAN.parsePacket();
   CanFrame canFrame;
   canFrame.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
+    const uint8_t canDataDlc = CAN.packetDlc();
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(canFrame.data, canDataDlc));
     if(canDataDlc != bytesReaded) { return false; }
   }
@@ -129,9 +126,16 @@ bool CanHandlerAtmega328P::handleRxFrame() {
 bool CanHandlerAtmega328P::run() {
   const uint32_t actualTime = millis();
   if(intCount > 0U) {
+    // Cleared before the drain, not after: a frame landing mid-drain is either picked up by the
+    // loop below or raises a fresh edge once the controller empties and INT returns high.
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount = 0U; }
     eventTimer = actualTime;
     DebugLedHandler::ledOff();
-    if(!handleRxFrame()) { return false; }
+    const CanRxPump::Result rxResult = CanRxPump::drain(
+        []() -> bool { return (CAN.parsePacket() != 0U) || (CAN.packetId() != CANController::noId); },
+        [this]() -> bool { return handleRxFrame(); },
+        maxRxFramesPerRun);
+    if(rxResult.failed) { return false; }
   }
   const OTA::OtaState otaState = ota.run();
   const OtaCanResponse::Decision otaDecision = OtaCanResponse::decide(lastOtaState, otaState, ota.isOwnFw());

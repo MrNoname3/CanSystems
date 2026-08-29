@@ -79,6 +79,7 @@ extern uint8_t EIFR;                       // AVR external interrupt flag regist
 #endif
 // clang-format off
 #define yield(x) {}
+#define delayMicroseconds(x) {}
 // clang-format on
 
 // The real Arduino.h provides Stream and the global Serial; mirror that for vendored
