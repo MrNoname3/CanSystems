@@ -529,6 +529,54 @@ bool test_publishCanDeviceEntity_overflow_returns_false() {
   END_IT
 }
 
+bool test_a_later_payload_carries_nothing_from_an_earlier_one() {
+  IT("a long entity followed by a short one leaves nothing of the long payload behind");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_smoke");
+
+  static char longTemplate[120];
+  memset(longTemplate, 'Z', sizeof(longTemplate) - 1U);
+  longTemplate[sizeof(longTemplate) - 1U] = '\0';
+  const auto longCfg = HADiscovery::EntityConfig::sensor(
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+      nullptr, longTemplate);
+  IS_TRUE(f.had.publishEntity("temperature", longCfg));
+  f.cap.resetCapture();
+
+  const auto shortCfg = HADiscovery::EntityConfig::sensor("Humidity", "{{ value_json.h }}");
+  IS_TRUE(f.had.publishEntity("humidity", shortCfg));
+
+  const PublishRecord rec = f.capture();
+  IS_TRUE(rec.valid);
+  IS_TRUE(strstr(rec.payload, "ZZZZ") == nullptr);        // no tail of the previous payload
+  IS_TRUE(strstr(rec.payload, "Humidity") != nullptr);
+  const size_t payloadLen = strlen(rec.payload);
+  IS_TRUE(payloadLen > 2U);
+  IS_EQUAL(rec.payload[payloadLen - 1U], '}');            // ends where the device block closes
+  END_IT
+}
+
+bool test_publishEntity_keeps_its_own_smaller_payload_budget() {
+  IT("publishEntity rejects a payload that only a CAN entity's larger budget would hold");
+  Fixture f;
+  // A plain entity's payload is capped at discoveryPayloadBufSize, a CAN entity's at the larger
+  // canDiscoveryPayloadBufSize. This template lands between the two: the entity body comes to
+  // roughly 710 bytes, over the plain budget and under the CAN one. The two budgets share their
+  // storage, so nothing but this pins them apart.
+  static char midTemplate[250];
+  memset(midTemplate, 'x', sizeof(midTemplate) - 1U);
+  midTemplate[sizeof(midTemplate) - 1U] = '\0';
+  const auto cfg = HADiscovery::EntityConfig::sensor(
+      "Temperature", "{{ value_json.t }}", nullptr,
+      HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
+      nullptr, midTemplate);
+  IS_FALSE(f.had.publishEntity("temperature", cfg));
+  IS_EQUAL(f.cap.capLen, 0U);
+  END_IT
+}
+
 int main() {
   SUITE("HADiscovery");
   test_buildDeviceName_appears_in_payload();
@@ -550,5 +598,7 @@ int main() {
   test_publishCanDeviceEntity_disabled_retracts_with_empty_payload();
   test_publishEntity_overflow_returns_false();
   test_publishCanDeviceEntity_overflow_returns_false();
+  test_a_later_payload_carries_nothing_from_an_earlier_one();
+  test_publishEntity_keeps_its_own_smaller_payload_budget();
   FINISH
 }

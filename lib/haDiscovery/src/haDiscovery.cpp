@@ -145,8 +145,9 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
   }
   const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
 
-  char payload[canDiscoveryPayloadBufSize] = { '\0' };
-  PayloadWriter pw(payload, sizeof(payload));
+  // Each entity kind keeps its own budget over the shared buffer; PayloadWriter writes from the
+  // start and terminates, so nothing of a previous payload survives into this one.
+  PayloadWriter pw(payloadBuffer, canDiscoveryPayloadBufSize);
 
   appendP(pw, fmtUniqueId, canDevConfig.deviceId, subtopic, config.name);
   if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
@@ -176,7 +177,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
           canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
 
   if(!pw.ok()) { return false; }
-  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
+  return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.
 }
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
@@ -211,8 +212,7 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
 
   // Build payload incrementally — only set fields appear in the JSON output.
-  char payload[discoveryPayloadBufSize] = { '\0' };
-  PayloadWriter pw(payload, sizeof(payload));
+  PayloadWriter pw(payloadBuffer, discoveryPayloadBufSize);
 
   appendP(pw, fmtUniqueId, clientName, subtopic, config.name);
   if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
@@ -236,5 +236,5 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }
-  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
+  return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.
 }
