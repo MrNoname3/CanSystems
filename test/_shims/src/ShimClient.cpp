@@ -5,6 +5,8 @@
 #include <ctime>
 #include <string.h>
 #include "SPI.h"
+#include "esp32CanModel.h"
+#include "esp_intr_alloc.h"
 
 static uint32_t fakeMillisValue = 0U;
 static bool fakeMillisActive = false;
@@ -210,3 +212,9 @@ void ShimClient::expectConnect(const char* host, uint16_t port) {
 // --- SPI stand-in (SPI.h) ---
 Mcp2515Model mcp2515;
 SPIClass SPI;
+
+// --- ESP32 CAN peripheral stand-in (esp32CanModel.h, esp_intr_alloc.h) ---
+Esp32CanModel esp32Can;
+Esp32IntrRegistration esp32Intr;
+uint32_t* esp32CanRegisterFile() { return esp32Can.file(); }
+void esp32CanOnAccess(uint8_t address, bool isWrite) { esp32Can.onAccess(address, isWrite); }

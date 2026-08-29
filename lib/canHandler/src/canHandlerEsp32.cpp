@@ -89,6 +89,10 @@ void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-conver
 }
 
 bool CanHandlerEsp32::run() {
+  if(CAN.isBusOff()) {
+    Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
+    CAN.recoverFromBusOff();
+  }
   { // Handle received CAN frame.
     CanFrame frameIn;
     if(xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE) {
