@@ -31,7 +31,6 @@ void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetSh
 #ifdef ESP8266
   if((interface == Interface::ENC28J60) && (ethernetShieldCsPin != invalidPin)) {
     ethernetEnc28j60.emplace(ethernetShieldCsPin);
-    if(!ethernetEnc28j60.has_value()) { return; }
   }
 #endif
   networkInterface = interface;
@@ -188,6 +187,7 @@ bool NetworkManager::isNetworkAvailable() {
     } break;
 #ifdef ESP8266
     case Interface::ENC28J60: {
+      if(!ethernetEnc28j60.has_value()) { return false; }
       actualInterfaceStatus = ethernetEnc28j60.value().status();
     } break;
 #elif defined ESP32
