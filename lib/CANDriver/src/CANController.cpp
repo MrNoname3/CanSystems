@@ -80,8 +80,6 @@ uint8_t CANController::endPacket() {
   return 1U;
 }
 
-uint8_t CANController::parsePacket() { return 0U; }
-
 uint32_t CANController::packetId() const { return rxId; }
 bool CANController::packetExtended() const { return rxExtended; }
 bool CANController::packetRtr() const { return rxRtr; }
@@ -122,10 +120,3 @@ void CANController::flush() {}
 void CANController::onReceive(void (*callback)(int)) {
   onReceiveCb = callback;
 }
-
-uint8_t CANController::filter(uint16_t /*id*/, uint16_t /*mask*/) { return 0U; }
-uint8_t CANController::filterExtended(uint32_t /*id*/, uint32_t /*mask*/) { return 0U; }
-uint8_t CANController::observe() { return 0U; }
-uint8_t CANController::loopback() { return 0U; }
-uint8_t CANController::sleep() { return 0U; }
-uint8_t CANController::wakeup() { return 0U; }

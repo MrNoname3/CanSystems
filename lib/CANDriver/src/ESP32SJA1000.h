@@ -10,23 +10,21 @@ public:
   ESP32SJA1000() = default;
   ~ESP32SJA1000() override = default;
 
-  [[nodiscard]] uint8_t begin(uint32_t baudRate) override;
-  void end() override;
+  [[nodiscard]] uint8_t begin(uint32_t baudRate);
+  void end();
 
-  [[nodiscard]] uint8_t endPacket() override;
-  [[nodiscard]] uint8_t parsePacket() override;
+  [[nodiscard]] uint8_t endPacket();
+  [[nodiscard]] uint8_t parsePacket();
 
-  void onReceive(void (*callback)(int)) override;
+  void onReceive(void (*callback)(int));
 
-  using CANController::filter;
-  [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask) override;
-  using CANController::filterExtended;
-  [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask) override;
+  [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask);
+  [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask);
 
-  [[nodiscard]] uint8_t observe() override;
-  [[nodiscard]] uint8_t loopback() override;
-  [[nodiscard]] uint8_t sleep() override;
-  [[nodiscard]] uint8_t wakeup() override;
+  [[nodiscard]] uint8_t observe();
+  [[nodiscard]] uint8_t loopback();
+  [[nodiscard]] uint8_t sleep();
+  [[nodiscard]] uint8_t wakeup();
 
   /// @brief Reports whether the controller is bus-off and therefore no longer on the bus.
   [[nodiscard]] bool isBusOff() const;

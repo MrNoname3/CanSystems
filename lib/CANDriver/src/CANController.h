@@ -2,15 +2,20 @@
 
 #include <Arduino.h>
 
-/// @brief Abstract base class for CAN controllers.
+/// @brief Base class holding the packet state a CAN controller driver builds on.
+/// @details The CAN operations are deliberately non-virtual. CAN.h picks one implementation at
+/// compile time, the controller object is a concrete global, and nothing ever reaches a driver
+/// through a base pointer - so virtual dispatch bought nothing while pinning every method into
+/// the vtable, where the linker cannot drop the ones a firmware never calls. Only what Stream
+/// and Print require stays virtual.
 class CANController : public Stream {
 public:
   /// @brief Initialize the CAN controller at the given baud rate.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] virtual uint8_t begin(uint32_t baudRate);
+  [[nodiscard]] uint8_t begin(uint32_t baudRate);
 
   /// @brief Deinitialize the CAN controller.
-  virtual void end();
+  void end();
 
   /// @brief Begin a standard 11-bit CAN packet.
   /// @return 1 on success, 0 on failure.
@@ -22,11 +27,7 @@ public:
 
   /// @brief Finalize and transmit the current CAN packet.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] virtual uint8_t endPacket();
-
-  /// @brief Parse the next received CAN packet.
-  /// @return DLC (0..8) on success, 0 if no packet.
-  [[nodiscard]] virtual uint8_t parsePacket();
+  [[nodiscard]] uint8_t endPacket();
 
   /// @brief Identifier reported by packetId() when no packet was received.
   static constexpr uint32_t noId = UINT32_MAX;
@@ -54,17 +55,7 @@ public:
   void flush() override;
 
   /// @brief Set the receive interrupt callback.
-  virtual void onReceive(void (*callback)(int));
-
-  [[nodiscard]] virtual uint8_t filter(uint16_t id) { return filter(id, 0x7FFU); }
-  [[nodiscard]] virtual uint8_t filter(uint16_t id, uint16_t mask);
-  [[nodiscard]] virtual uint8_t filterExtended(uint32_t id) { return filterExtended(id, 0x1FFFFFFFU); }
-  [[nodiscard]] virtual uint8_t filterExtended(uint32_t id, uint32_t mask);
-
-  [[nodiscard]] virtual uint8_t observe();
-  [[nodiscard]] virtual uint8_t loopback();
-  [[nodiscard]] virtual uint8_t sleep();
-  [[nodiscard]] virtual uint8_t wakeup();
+  void onReceive(void (*callback)(int));
 
 protected:
   CANController();

@@ -9,27 +9,25 @@ public:
   MCP2515() = default;
   ~MCP2515() override = default;
 
-  [[nodiscard]] uint8_t begin(uint32_t baudRate) override;
-  void end() override;
+  [[nodiscard]] uint8_t begin(uint32_t baudRate);
+  void end();
 
-  [[nodiscard]] uint8_t endPacket() override;
-  [[nodiscard]] uint8_t parsePacket() override;
+  [[nodiscard]] uint8_t endPacket();
+  [[nodiscard]] uint8_t parsePacket();
 
-  void onReceive(void (*callback)(int)) override;
+  void onReceive(void (*callback)(int));
 
-  using CANController::filter;
-  [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask) override;
-  using CANController::filterExtended;
-  [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask) override;
+  [[nodiscard]] uint8_t filter(uint16_t id, uint16_t mask);
+  [[nodiscard]] uint8_t filterExtended(uint32_t id, uint32_t mask);
 
   /// @brief Waits until no transmit buffer holds a queued frame any more.
   /// @return `false` on timeout, after aborting the frames that were still stuck.
   [[nodiscard]] bool flushTx() const; // NOLINT(readability-convert-member-functions-to-static)
 
-  [[nodiscard]] uint8_t observe() override;
-  [[nodiscard]] uint8_t loopback() override;
-  [[nodiscard]] uint8_t sleep() override;
-  [[nodiscard]] uint8_t wakeup() override;
+  [[nodiscard]] uint8_t observe();
+  [[nodiscard]] uint8_t loopback();
+  [[nodiscard]] uint8_t sleep();
+  [[nodiscard]] uint8_t wakeup();
 
 #if defined(ARDUINO_ARCH_SAMD) && defined(PIN_SPI_MISO) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_SCK) && (PIN_SPI_MISO == 10) && (PIN_SPI_MOSI == 8) && (PIN_SPI_SCK == 9)
   static constexpr uint8_t defaultCsPin = 3U;

@@ -274,7 +274,7 @@ void ESP32SJA1000::onReceive(void (*callback)(int)) {
   }
 }
 
-uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
+uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   id &= 0x7FFU;
   const uint16_t amr = static_cast<uint16_t>(~(mask & 0x7FFU));
 
@@ -295,7 +295,7 @@ uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
   return 1U;
 }
 
-uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) {
+uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   id &= 0x1FFFFFFFU;
   const uint32_t amr = ~(mask & 0x1FFFFFFFU);
 
@@ -316,13 +316,13 @@ uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) {
   return 1U;
 }
 
-uint8_t ESP32SJA1000::observe() {
+uint8_t ESP32SJA1000::observe() { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   modifyRegister(regMod, 0x17U, 0x01U); // reset
   modifyRegister(regMod, 0x17U, 0x02U); // observe
   return 1U;
 }
 
-uint8_t ESP32SJA1000::loopback() {
+uint8_t ESP32SJA1000::loopback() { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   loopbackEnabled = true;
 
   modifyRegister(regMod, 0x17U, 0x01U); // reset
@@ -331,12 +331,12 @@ uint8_t ESP32SJA1000::loopback() {
   return 1U;
 }
 
-uint8_t ESP32SJA1000::sleep() {
+uint8_t ESP32SJA1000::sleep() { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   modifyRegister(regMod, 0x1FU, 0x10U);
   return 1U;
 }
 
-uint8_t ESP32SJA1000::wakeup() {
+uint8_t ESP32SJA1000::wakeup() { // NOLINT(readability-convert-member-functions-to-static) instance API kept in step with the MCP2515 driver, which does use instance state
   modifyRegister(regMod, 0x1FU, 0x00U);
   return 1U;
 }
