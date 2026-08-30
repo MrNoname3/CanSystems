@@ -128,8 +128,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30   # only ~3min even on the laptop; a generous ceiling that still catches a hang
     steps:
-      - name: Checkout
+      - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0    # same as the other two jobs; a shallow clone builds with a count of 1
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
