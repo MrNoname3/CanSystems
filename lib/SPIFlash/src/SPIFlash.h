@@ -145,8 +145,6 @@ private:
   static constexpr uint32_t busyTimeoutMs = 5U;
 
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
-  uint8_t spcr;                                                     // Saved SPCR register value.
-  uint8_t spsr;                                                     // Saved SPSR register value.
 #ifdef SPI_HAS_TRANSACTION
   SPISettings settings;                                             // SPI transaction settings.
 #endif

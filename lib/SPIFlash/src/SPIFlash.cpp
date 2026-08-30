@@ -3,18 +3,11 @@
 
 SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
-  jedecID(jedecID),
-  spcr(0U),
-  spsr(0U) {}
+  jedecID(jedecID) {}
 
 void SPIFlash::select() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
-  // Save current SPI settings.
 #ifndef SPI_HAS_TRANSACTION
   noInterrupts();
-#endif
-#if defined(SPCR) && defined(SPSR)
-  spcr = SPCR;
-  spsr = SPSR;
 #endif
 #ifdef SPI_HAS_TRANSACTION
   SPI.beginTransaction(settings);
@@ -34,17 +27,9 @@ void SPIFlash::unselect() { // NOLINT(readability-convert-member-functions-to-st
 #else
   interrupts();
 #endif
-#if defined(SPCR) && defined(SPSR)
-  SPCR = spcr;
-  SPSR = spsr;
-#endif
 }
 
 bool SPIFlash::initialize() {
-#if defined(SPCR) && defined(SPSR)
-  spcr = SPCR;
-  spsr = SPSR;
-#endif
   pinMode(slaveSelectPin, OUTPUT);
   SPI.begin();
 #ifdef SPI_HAS_TRANSACTION
@@ -133,10 +118,6 @@ bool SPIFlash::waitUntilReady() {
 }
 
 bool SPIFlash::command(uint8_t cmd, bool isWrite) {
-#if defined(__AVR_ATmega32U4__)
-  DDRB |= 0x01U;
-  PORTB |= 0x01U;
-#endif
   if(isWrite) {
     if(!command(CMD_WRITE_ENABLE)) { return false; }
     unselect();
