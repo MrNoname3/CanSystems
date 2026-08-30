@@ -5,14 +5,6 @@ common:
       cmd: "reboot"
 
 projects:
-  - name: "Smoke detector"
-    pio_project: project_esp8266_smoke
-    commands:
-      - name: Clear config
-        description: Deletes the stored configuration file
-        cmd: "clearConfig"
-    devices: []   # No hardware deployed yet; the project entry is kept on purpose.
-
   - name: "Radiation detector"
     pio_project: project_esp8266_rad
     devices:

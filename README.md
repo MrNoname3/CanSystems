@@ -23,9 +23,8 @@ even the CAN devices' firmware — is updatable over the air through MQTT.
 ┌──────────────────┐                  ┌─────────────────────────┐
 │ Mosquitto broker │◄────────────────►│ ESP8266 nodes           │
 │ Home Assistant   │                  │  • rad    (ENC28J60 LAN)│
-│ ota/otaUpdate.py │                  │  • smoke  (Wi-Fi)       │
-└──────────────────┘                  │  • thermo (Wi-Fi)       │
-                                      ├─────────────────────────┤
+│ ota/otaUpdate.py │                  │  • thermo (Wi-Fi)       │
+└──────────────────┘                  ├─────────────────────────┤
                                       │ ESP32 CAN gateway       │
                                       │  (LAN8720 Ethernet)     │
                                       └───────────┬─────────────┘
@@ -44,7 +43,6 @@ even the CAN devices' firmware — is updatable over the air through MQTT.
 | `nanoatmega328_alert`      | ATmega328P | CAN alert node: WS2812 strip, DFPlayer MP3, Si7021 + LDR, pushbutton |
 | `nanoatmega328_irrigation` | ATmega328P | CAN irrigation node: 4 pump channels, flow/current safety checks, moisture sensors |
 | `project_esp8266_rad`      | ESP8266    | Geiger counter (CPM → µSv/h) + 433 MHz RF transceiver, ENC28J60 Ethernet |
-| `project_esp8266_smoke`    | ESP8266    | Air quality node: ADS1115 + MQ-135 |
 | `project_esp8266_thermo`   | ESP8266    | DS18B20 multi-probe thermometer (works with zero probes — handy as a test board) |
 | `project_esp32_can`        | ESP32      | CAN↔MQTT gateway for the alert nodes, LAN8720 Ethernet |
 | `native_test`              | host       | Native unit-test suite (custom runner + shims) |

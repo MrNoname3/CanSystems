@@ -160,7 +160,7 @@ bool test_buildDeviceName_appears_in_payload() {
   IT("buildDeviceName formats prefix+mac correctly and it appears in the device block");
   Fixture f;
   const uint8_t mac[6] = { 0x00U, 0x11U, 0x22U, 0xAAU, 0xBBU, 0xCCU };
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor(
       "Temperature", "{{ value_json.t }}", nullptr,
@@ -170,7 +170,7 @@ bool test_buildDeviceName_appears_in_payload() {
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
   // Device name: uppercased prefix + space + lowercase MAC (system-wide lowercase MAC convention).
-  IS_TRUE(strstr(rec.payload, "\"name\":\"SMOKE aabbcc\"") != nullptr);
+  IS_TRUE(strstr(rec.payload, "\"name\":\"THERMO aabbcc\"") != nullptr);
   END_IT
 }
 
@@ -178,7 +178,7 @@ bool test_publishEntity_sensor_discovery_topic() {
   IT("publishEntity builds the correct HA discovery topic for a sensor");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
   IS_TRUE(f.had.publishEntity("temperature", cfg));
@@ -194,7 +194,7 @@ bool test_publishEntity_sensor_state_topic() {
   IT("publishEntity sets state_topic to senderTopic+subtopic");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor(
       "Temperature", "{{ value_json.t }}", nullptr,
@@ -213,7 +213,7 @@ bool test_publishEntity_sensor_attributes_topic() {
   IT("publishEntity adds json_attributes_topic for state-topic entities");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
   IS_TRUE(f.had.publishEntity("data", cfg));
@@ -228,7 +228,7 @@ bool test_publishEntity_button_command_topic() {
   IT("publishEntity uses command_topic and payload_press for button entities");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::button("Restart", "reboot", HADiscovery::DeviceClass::restart);
   IS_TRUE(f.had.publishEntity("restart", cfg));
@@ -248,7 +248,7 @@ bool test_publishConnectivity_skips_availability_block() {
   IT("publishConnectivity omits availability and json_attributes_topic");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   IS_TRUE(f.had.publishConnectivity());
 
@@ -371,7 +371,7 @@ bool test_publishEntity_button_command_topic_url() {
   IT("publishEntity command_topic uses trimmed receiverTopic, not senderTopic");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::button("Restart", "reboot");
   IS_TRUE(f.had.publishEntity("restart", cfg));
@@ -387,7 +387,7 @@ bool test_publishEntity_sw_version_in_device_block() {
   IT("publishEntity device block contains a non-empty sw_version");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
   IS_TRUE(f.had.publishEntity("data", cfg));
@@ -403,7 +403,7 @@ bool test_publishEntity_no_via_device() {
   IT("publishEntity device block does not contain via_device");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   const auto cfg = HADiscovery::EntityConfig::sensor("S", "{{ value_json.v }}");
   IS_TRUE(f.had.publishEntity("data", cfg));
@@ -457,7 +457,7 @@ bool test_publishEntity_disabled_retracts_with_empty_payload() {
   IT("publishEntity sends an empty retained payload to the discovery topic when discovery is disabled");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
   f.had.setDiscoveryEnabled(false);
 
   const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
@@ -533,7 +533,7 @@ bool test_a_later_payload_carries_nothing_from_an_earlier_one() {
   IT("a long entity followed by a short one leaves nothing of the long payload behind");
   Fixture f;
   const uint8_t mac[6] = {};
-  f.had.buildDeviceName(mac, "mcu_smoke");
+  f.had.buildDeviceName(mac, "mcu_thermo");
 
   static char longTemplate[120];
   memset(longTemplate, 'Z', sizeof(longTemplate) - 1U);

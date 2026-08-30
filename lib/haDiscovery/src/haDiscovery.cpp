@@ -60,7 +60,7 @@ void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
 }
 
 void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
-  // Start after the first underscore to get just "smoke".
+  // Start after the first underscore to get just "thermo".
   uint8_t start = 0U;
   for(uint8_t i = 0U; deviceId[i] != '\0'; ++i) {
     if(deviceId[i] == '_') {
