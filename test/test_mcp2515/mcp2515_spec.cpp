@@ -46,6 +46,25 @@ static constexpr uint8_t kTxb0Eid0 = 0x34U;
 static constexpr uint8_t kTxb1Eid0 = 0x44U;
 static constexpr uint8_t kTxb2Eid0 = 0x54U;
 
+bool test_the_first_receive_buffer_rolls_over_into_the_second() {
+  IT("receive buffer 0 is set to roll a frame over into buffer 1 when it is full");
+  IS_TRUE(startController());
+  // Without the rollover bit the second of two frames arriving back to back is lost even though
+  // buffer 1 is empty. The bit exists on buffer 0's control register only.
+  IS_EQUAL(mcp2515.reg(Mcp2515Model::rxCtrl(0U)) & 0x04U, 0x04U);
+  IS_EQUAL(mcp2515.reg(Mcp2515Model::rxCtrl(1U)) & 0x04U, 0x00U);
+  END_IT
+}
+
+bool test_setting_an_extended_filter_keeps_the_rollover() {
+  IT("installing an extended filter rewrites the control register but keeps the rollover");
+  IS_TRUE(startController());
+  IS_EQUAL(CAN.filterExtended(0x12345678U, 0x1FFFFFFFU), 1U);
+  IS_EQUAL(mcp2515.reg(Mcp2515Model::rxCtrl(0U)) & 0x04U, 0x04U);
+  IS_EQUAL(mcp2515.reg(Mcp2515Model::rxCtrl(1U)) & 0x04U, 0x00U);
+  END_IT
+}
+
 bool test_parse_packet_reports_nothing_when_no_frame_arrived() {
   IT("parsePacket() returns 0 and an invalid id when no receive flag is set");
   IS_TRUE(startController());
@@ -239,6 +258,8 @@ bool test_the_rx_pump_dispatches_nothing_on_an_empty_controller() {
 int main() {
   SUITE("MCP2515");
   test_begin_configures_the_controller();
+  test_the_first_receive_buffer_rolls_over_into_the_second();
+  test_setting_an_extended_filter_keeps_the_rollover();
   test_parse_packet_reports_nothing_when_no_frame_arrived();
   test_parse_packet_reads_an_extended_frame();
   test_parse_packet_drains_one_buffer_per_call();

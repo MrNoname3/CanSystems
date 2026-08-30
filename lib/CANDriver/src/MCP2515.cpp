@@ -19,6 +19,7 @@ namespace {
   constexpr uint8_t flagExide = 0x08U;
   constexpr uint8_t flagRxm0  = 0x20U;
   constexpr uint8_t flagRxm1  = 0x40U;
+  constexpr uint8_t flagBukt  = 0x04U;
   constexpr uint8_t flagTxReq = 0x08U;
   // clang-format on
 
@@ -40,6 +41,13 @@ namespace {
   constexpr uint8_t regTxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x31U + n * 0x10U); }
 
   constexpr uint8_t regRxBnCtrl(uint8_t n) { return static_cast<uint8_t>(0x60U + n * 0x10U); }
+
+  // BUKT lives in RXB0CTRL only. With it set, a frame arriving while receive buffer 0 is still
+  // full rolls over into buffer 1 instead of being dropped; every write of the control register
+  // has to carry it, since each write replaces the whole register.
+  constexpr uint8_t rxCtrlMode(uint8_t n, uint8_t mode) {
+    return static_cast<uint8_t>(mode | ((n == 0U) ? flagBukt : 0U));
+  }
   constexpr uint8_t regRxBnSidh(uint8_t n) { return static_cast<uint8_t>(0x61U + n * 0x10U); }
   constexpr uint8_t regRxBnD0(uint8_t n) { return static_cast<uint8_t>(0x66U + n * 0x10U); }
 } // namespace
@@ -111,8 +119,8 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
   writeRegister(regCanInte, static_cast<uint8_t>(flagRxnIe(1U) | flagRxnIe(0U)));
   writeRegister(regBfpCtrl, 0x00U);
   writeRegister(regTxRtsCtrl, 0x00U);
-  writeRegister(regRxBnCtrl(0U), static_cast<uint8_t>(flagRxm1 | flagRxm0));
-  writeRegister(regRxBnCtrl(1U), static_cast<uint8_t>(flagRxm1 | flagRxm0));
+  writeRegister(regRxBnCtrl(0U), rxCtrlMode(0U, static_cast<uint8_t>(flagRxm1 | flagRxm0)));
+  writeRegister(regRxBnCtrl(1U), rxCtrlMode(1U, static_cast<uint8_t>(flagRxm1 | flagRxm0)));
 
   writeRegister(regCanCtrl, 0x00U);
   if(readRegister(regCanCtrl) != 0x00U) { return 0U; }
@@ -279,7 +287,7 @@ uint8_t MCP2515::filter(uint16_t id, uint16_t mask) {
   if(readRegister(regCanCtrl) != 0x80U) { return 0U; }
 
   for(uint8_t n = 0U; n < 2U; n++) {
-    writeRegister(regRxBnCtrl(n), flagRxm0);
+    writeRegister(regRxBnCtrl(n), rxCtrlMode(n, flagRxm0));
 
     writeRegister(regRxMnSidh(n), static_cast<uint8_t>(mask >> 3));
     writeRegister(regRxMnSidl(n), static_cast<uint8_t>(mask << 5));
@@ -308,7 +316,7 @@ uint8_t MCP2515::filterExtended(uint32_t id, uint32_t mask) {
   if(readRegister(regCanCtrl) != 0x80U) { return 0U; }
 
   for(uint8_t n = 0U; n < 2U; n++) {
-    writeRegister(regRxBnCtrl(n), flagRxm1);
+    writeRegister(regRxBnCtrl(n), rxCtrlMode(n, flagRxm1));
 
     writeRegister(regRxMnSidh(n), static_cast<uint8_t>(mask >> 21));
     writeRegister(regRxMnSidl(n), static_cast<uint8_t>((((mask >> 18) & 0x03U) << 5) | flagExide | ((mask >> 16) & 0x03U)));
