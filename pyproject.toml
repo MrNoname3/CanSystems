@@ -33,7 +33,7 @@ select = [
 "scripts/elf_to_bin.py" = ["F821", "E402"]
 "scripts/git_commit_info.py" = ["F821", "E402"]
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
-"scripts/patch_new_lib.py" = ["F821", "E402"]
+"scripts/relax_core_warnings.py" = ["F821", "E402"]
 
 # Static type checking (run by scripts/typecheck_check.py, enforced in CI). Strict over the OTA
 # tool, the dev scripts and the OTA tests. Excluded: the four SCons build scripts (Import("env")
@@ -51,7 +51,7 @@ exclude = [
     "scripts/elf_to_bin.py",
     "scripts/git_commit_info.py",
     "scripts/patch_elf2bin.py",
-    "scripts/patch_new_lib.py",
+    "scripts/relax_core_warnings.py",
 ]
 typeCheckingMode = "strict"
 
