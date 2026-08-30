@@ -394,7 +394,10 @@ void MCP2515::reset() const { // NOLINT(readability-convert-member-functions-to-
   digitalWrite(csPin, HIGH);
   SPI.endTransaction();
 
-  delayMicroseconds(10);
+  // Milliseconds, not microseconds: after a RESET the controller re-runs its oscillator start-up,
+  // and on a cold boot the crystal needs longer than a few microseconds to be stable. Reading
+  // CANCTRL too early makes begin() report failure, which costs the node a restart cycle.
+  delay(10);
 }
 
 void MCP2515::handleInterrupt() {
