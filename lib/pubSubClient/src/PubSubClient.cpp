@@ -210,10 +210,16 @@ bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(reada
   return false;
 }
 
+uint32_t PubSubClient::abortIncompletePacket() {
+  connectionState = State::CONNECTION_TIMEOUT;
+  tcpClient->stop();
+  return 0U;
+}
+
 uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readability-function-cognitive-complexity)
   uint16_t len = 0U;
   if(!readByte(this->buffer, &len)) {
-    return 0U;
+    return abortIncompletePacket();
   }
   const bool isPublish = (this->buffer[0] & 0xF0U) == MQTTPUBLISH;
   uint32_t multiplier = 1U;
@@ -229,7 +235,7 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
       return 0U;
     }
     if(!readByte(&digit)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     this->buffer[len++] = digit;
     length += (digit & 127U) * multiplier;
@@ -240,10 +246,10 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   if(isPublish) {
     // Read in topic length to calculate bytes to skip over for Stream writing
     if(!readByte(this->buffer, &len)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     if(!readByte(this->buffer, &len)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     skip = static_cast<uint16_t>((this->buffer[*lengthLength + 1U] << 8U) + this->buffer[*lengthLength + 2U]);
     if((this->buffer[0] & MQTTQOS1) != 0U) {
@@ -257,7 +263,7 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   for(uint32_t i = start; i < length; i++) {
     uint8_t dataByte = 0U;
     if(!readByte(&dataByte)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     if(this->stream != nullptr && isPublish && idx - *lengthLength - 2U > skip) {
       this->stream->write(dataByte);

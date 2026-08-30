@@ -390,6 +390,13 @@ private:
   /// @brief Reads one complete MQTT packet into the internal buffer.
   /// @param lengthLength Output: set to the number of bytes in the variable-length field.
   /// @return Total number of bytes in the packet; 0 on error or oversized packet.
+  /// @brief Drops the connection after a read that did not complete the packet.
+  /// @details A timed-out read leaves the rest of the packet in the socket. Carrying on would
+  /// read that remainder as the next packet's header, and nothing resynchronises the stream
+  /// again; a closed connection is recoverable, a misaligned one is not.
+  /// @return Always 0, so callers can `return abortIncompletePacket();`.
+  uint32_t abortIncompletePacket();
+
   uint32_t readPacket(uint8_t* lengthLength);
 
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.

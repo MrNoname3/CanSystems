@@ -194,6 +194,36 @@ bool test_drop_invalid_remaining_length_message() {
   END_IT
 }
 
+bool test_truncated_message_drops_the_connection() {
+  IT("a message that stops halfway drops the connection instead of leaving the stream out of step");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setSocketTimeout(1U);                      // keep the read timeout out of the suite's runtime
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // A PUBLISH header announcing 14 more bytes, with only 8 of them delivered. Whatever the
+  // broker sends next would otherwise be read as the missing tail and then as a packet header.
+  const uint8_t truncated[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U };
+  shimClient.respond(truncated, 10U);
+
+  rc = client.loop();
+
+  IS_FALSE(rc);
+  IS_FALSE(callback_called);
+  IS_FALSE(client.connected());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+
+  END_IT
+}
+
 bool test_resize_buffer() {
   IT("receives a message larger than the default maximum");
   reset_callback();
@@ -327,6 +357,7 @@ int main() {
   test_receive_stream();
   test_receive_max_sized_message();
   test_drop_invalid_remaining_length_message();
+  test_truncated_message_drops_the_connection();
   test_receive_oversized_message();
   test_resize_buffer();
   test_receive_oversized_stream_message();
