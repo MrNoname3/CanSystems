@@ -1,9 +1,9 @@
-#ifndef RFHANDLER_HPP
-#define RFHANDLER_HPP
+#pragma once
 
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "RCSwitch.h"                                               /// RF driver library.
+#include "CircularBuffer.hpp"                                       /// Fixed-size queue for pending transmissions.
 
 /// @brief Class for handling RF communication and integrating with MQTT.
 /// This class supports receiving and transmitting RF signals, filtering duplicate data, and sending the processed data via MQTT.
@@ -11,6 +11,7 @@ class RfHandler final : public MqttBase {
 private:
   static constexpr uint8_t dataOutBufSize = 116U;                   // Size of the buffer used for outgoing MQTT data messages.
   static constexpr uint8_t dataCheckTime = 100U;                    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
+  static constexpr uint16_t pendingTxQueueSize = 4U;                // Commands that may wait for their turn to be transmitted.
 
   // Format string for the MQTT message containing RF data.
   static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";
@@ -76,10 +77,14 @@ private:
       pulseLength(pulseLength) {}
   };
 
+  /// @brief Applies one queued command to the transceiver, transmitting when it carries data.
+  /// @param command Command taken from the pending queue.
+  void transmitCommand(const RfData& command);
+
   RCSwitch rfTransceiver;                                     // RF driver object for sending and receiving RF signals.
   const uint8_t rfRxPin;                                      // GPIO pin connected to the RF receiver.
   const uint8_t rfTxPin;                                      // GPIO pin connected to the RF transmitter.
   RfData lastRfData;                                          // Last received RF data for duplicate filtering.
   uint32_t dataCheckTimer;                                    // Timer for filtering out repeated RF data.
+  CircularBuffer<RfData, pendingTxQueueSize> pendingTx;       // Commands waiting to be transmitted from run().
 };
-#endif // RFHANDLER_HPP

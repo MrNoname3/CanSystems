@@ -91,7 +91,7 @@ bool test_different_frame_within_window_passes() {
 // ---- transmit path (messageArrivedCallback) ----
 
 bool test_mqtt_message_transmits_rf() {
-  IT("a complete MQTT message sets protocol, pulse length and transmits");
+  IT("a complete MQTT message sets protocol, pulse length and transmits on the next run()");
   resetEnv();
   Connectivity conn;
   RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
@@ -99,11 +99,56 @@ bool test_mqtt_message_transmits_rf() {
   JsonDocument doc;
   IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
   mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
   IS_EQUAL(RCSwitch::lastProtocol, 2);
   IS_EQUAL(RCSwitch::lastPulseLength, 400);
   IS_EQUAL(RCSwitch::sendCount, 1);
   IS_EQUAL(RCSwitch::lastSentCode, 4096ULL);
   IS_EQUAL(RCSwitch::lastSentLength, 24U);
+  END_IT
+}
+
+bool test_the_callback_itself_does_not_touch_the_transceiver() {
+  IT("the MQTT callback only queues: nothing reaches the transceiver until run()");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument doc;
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  // The callback runs inside PubSubClient::loop(); a transmit there blocks the MQTT client for
+  // the whole air time of the frame, so the work has to belong to the task instead.
+  IS_EQUAL(RCSwitch::sendCount, 0);
+  IS_EQUAL(RCSwitch::lastProtocol, 0);
+  IS_EQUAL(RCSwitch::lastPulseLength, 0);
+  END_IT
+}
+
+bool test_queued_commands_transmit_in_arrival_order() {
+  IT("two commands arriving before a run() are transmitted one per run, in order");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument first;
+  JsonDocument second;
+  IS_TRUE(deserializeJson(first, R"({"Data":1111,"Bits":24,"Protocol":1,"Pulse":350})") == DeserializationError::Ok);
+  IS_TRUE(deserializeJson(second, R"({"Data":2222,"Bits":32,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(first);
+  mqttSide.messageArrivedCallback(second);
+  IS_EQUAL(RCSwitch::sendCount, 0);                  // neither went out from the callback
+
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 1);                  // one frame per pass, so a burst cannot
+  IS_EQUAL(RCSwitch::lastSentCode, 1111ULL);         // hold the loop for several air times
+  IS_EQUAL(RCSwitch::lastProtocol, 1);
+
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 2);
+  IS_EQUAL(RCSwitch::lastSentCode, 2222ULL);
+  IS_EQUAL(RCSwitch::lastSentLength, 32U);
+  IS_EQUAL(RCSwitch::lastProtocol, 2);
   END_IT
 }
 
@@ -116,7 +161,8 @@ bool test_mqtt_message_without_data_does_not_transmit() {
   JsonDocument doc;
   IS_TRUE(deserializeJson(doc, R"({"Data":0,"Bits":24,"Protocol":2,"Pulse":400})") == DeserializationError::Ok);
   mqttSide.messageArrivedCallback(doc);
-  IS_EQUAL(RCSwitch::lastProtocol, 2);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::lastProtocol, 2);               // a configure-only message still applies
   IS_EQUAL(RCSwitch::lastPulseLength, 400);
   IS_EQUAL(RCSwitch::sendCount, 0);                  // data == 0 -> no send
   END_IT
@@ -131,6 +177,7 @@ bool test_mqtt_message_missing_fields_is_ignored() {
   JsonDocument doc;
   IS_TRUE(deserializeJson(doc, R"({"Data":4096})") == DeserializationError::Ok);
   mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
   IS_EQUAL(RCSwitch::sendCount, 0);
   IS_EQUAL(RCSwitch::lastProtocol, 0);
   END_IT
@@ -144,6 +191,8 @@ int main() {
   test_duplicate_after_window_passes();
   test_different_frame_within_window_passes();
   test_mqtt_message_transmits_rf();
+  test_the_callback_itself_does_not_touch_the_transceiver();
+  test_queued_commands_transmit_in_arrival_order();
   test_mqtt_message_without_data_does_not_transmit();
   test_mqtt_message_missing_fields_is_ignored();
   FINISH
