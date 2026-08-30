@@ -123,6 +123,26 @@ HADiscovery::EntityConfig::binarySensor(
   return c;
 }
 
+template<typename Writer>
+void HADiscovery::appendCommonFields(Writer& pw, const EntityConfig& config, const char* uniqueIdOwner, const char* subtopic) {
+  appendP(pw, fmtUniqueId, uniqueIdOwner, subtopic, config.name);
+  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
+  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
+  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
+  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
+  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
+  {
+    const char* sc = getStateClassStr(config.stateClass);
+    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
+  }
+  {
+    const char* dc = getDeviceClassStr(config.deviceClass);
+    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
+  }
+  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+}
+
 bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
                                          const EntityConfig& config,
                                          const CanDeviceConfig& canDevConfig) {
@@ -149,22 +169,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
   // start and terminates, so nothing of a previous payload survives into this one.
   PayloadWriter pw(payloadBuffer, canDiscoveryPayloadBufSize);
 
-  appendP(pw, fmtUniqueId, canDevConfig.deviceId, subtopic, config.name);
-  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
-  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
-  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
-  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
-  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
-  {
-    const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
-  }
-  {
-    const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
-  }
-  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendCommonFields(pw, config, canDevConfig.deviceId, subtopic);
   appendP(pw, fmtTopicField, topicField, topicBase, canDevConfig.dataSubtopic);
   if(!config.isCommandTopic) { appendP(pw, fmtAttrTopic, topicBase, canDevConfig.dataSubtopic); }
   if(canDevConfig.skipCanAvailability) {
@@ -214,22 +219,7 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   // Build payload incrementally — only set fields appear in the JSON output.
   PayloadWriter pw(payloadBuffer, discoveryPayloadBufSize);
 
-  appendP(pw, fmtUniqueId, clientName, subtopic, config.name);
-  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
-  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
-  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
-  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
-  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
-  {
-    const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
-  }
-  {
-    const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
-  }
-  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendCommonFields(pw, config, clientName, subtopic);
   appendP(pw, fmtTopicField, topicField, topicBase, subtopic);
   if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, fmtAttrTopic, topicBase, subtopic); }
   if(!config.skipAvailability) { appendP(pw, fmtAvailSingle, availabilityTopic); }

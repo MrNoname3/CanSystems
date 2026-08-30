@@ -173,6 +173,20 @@ private:
   // HA discovery topic format string (PROGMEM).
   static constexpr const char PROGMEM mqttDiscoveryTopic[] = "homeassistant/%s/%s_%s/config";
 
+  /// @brief Appends the fields every entity kind carries, in the order Home Assistant expects.
+  /// @details Both publish paths build this same run of fields; keeping it in one place is what
+  /// stops a newly supported field from reaching only one of them. Only the fields the config
+  /// actually sets are emitted.
+  /// @tparam Writer Payload writer. A template because the writer is an implementation detail
+  ///         of haDiscovery.cpp, where this is defined and where both callers live.
+  /// @param pw Writer receiving the fields.
+  /// @param config Entity configuration.
+  /// @param uniqueIdOwner What the entity's unique_id is built from: the MQTT client for a local
+  ///        entity, the CAN device for one behind the gateway.
+  /// @param subtopic Entity subtopic, the second half of its unique_id.
+  template<typename Writer>
+  static void appendCommonFields(Writer& pw, const EntityConfig& config, const char* uniqueIdOwner, const char* subtopic);
+
   static constexpr const char* getTypeStr(EntityType t) {
     switch(t) {
       case EntityType::sensor: return typeStrSensor;

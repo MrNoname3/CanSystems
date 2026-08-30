@@ -577,6 +577,59 @@ bool test_publishEntity_keeps_its_own_smaller_payload_budget() {
   END_IT
 }
 
+bool test_both_entity_kinds_carry_the_same_shared_fields() {
+  IT("a local and a CAN entity built from one config carry the same shared fields");
+  Fixture f;
+  const uint8_t mac[6] = {};
+  f.had.buildDeviceName(mac, "mcu_thermo");
+
+  // Every field that is not part of the availability or device block, set at once. The two
+  // publish paths build these from one shared helper; without this, a field added to only one
+  // of them would go unnoticed.
+  HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
+      "Temp", "{{ value_json.t }}", "C",
+      HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature,
+      "mdi:x", "{{a}}");
+  cfg.payloadOn = "on";
+  cfg.payloadOff = "off";
+  cfg.payloadPress = "r";
+
+  IS_TRUE(f.had.publishEntity("temperature", cfg));
+  const PublishRecord local = f.capture();
+  IS_TRUE(local.valid);
+
+  f.cap.resetCapture();
+  // Single availability, so the fields under test fit the CAN entity's budget: the availability
+  // and device blocks are the part that legitimately differs, and other tests cover those.
+  const HADiscovery::CanDeviceConfig dev = {
+    "esp32_can_AABBCCDDEEFF_alert1", "ALERT1 DDEEFF", "1 (deadbeef)",
+    "iot/dtos/AABBCCDDEEFF/alert1/availability", "alert1", "ATmega328P", true
+  };
+  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+  const PublishRecord canDev = f.capture();
+  IS_TRUE(canDev.valid);
+
+  IS_TRUE(strstr(local.payload, "\"value_template\":\"{{ value_json.t }}\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"value_template\":\"{{ value_json.t }}\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"payload_on\":\"on\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"payload_on\":\"on\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"payload_off\":\"off\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"payload_off\":\"off\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"payload_press\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"payload_press\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"unit_of_measurement\":\"C\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"unit_of_measurement\":\"C\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"state_class\":\"measurement\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"state_class\":\"measurement\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"device_class\":\"temperature\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"device_class\":\"temperature\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"icon\":\"mdi:x\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"icon\":\"mdi:x\"") != nullptr);
+  IS_TRUE(strstr(local.payload, "\"json_attributes_template\":\"{{a}}\"") != nullptr);
+  IS_TRUE(strstr(canDev.payload, "\"json_attributes_template\":\"{{a}}\"") != nullptr);
+  END_IT
+}
+
 int main() {
   SUITE("HADiscovery");
   test_buildDeviceName_appears_in_payload();
@@ -599,6 +652,7 @@ int main() {
   test_publishEntity_overflow_returns_false();
   test_publishCanDeviceEntity_overflow_returns_false();
   test_a_later_payload_carries_nothing_from_an_earlier_one();
+  test_both_entity_kinds_carry_the_same_shared_fields();
   test_publishEntity_keeps_its_own_smaller_payload_budget();
   FINISH
 }
