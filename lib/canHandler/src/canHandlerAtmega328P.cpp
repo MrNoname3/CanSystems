@@ -5,7 +5,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
 #include "otaCanResponse.hpp"                                       /// Host-testable OTA state -> CAN response decision.
-#include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
 
 // The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
 // otherwise unpackSend() would hand storeNextData() a wrongly-sized array.
@@ -15,18 +14,19 @@ namespace {
   constexpr const char PROGMEM storingStr[] = "Storing: ";
 } // namespace
 
-volatile uint8_t CanHandlerAtmega328P::intCount = 0U;
-
 CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
   debugLed(debugLed),
   flash(flashCsPin, flashJedecId),
   ota(flash),
   canCallback(nullptr),
   eventTimer(0U),
+  canIntPin(canIntPin),
   lastOtaState(OTA::OtaState::IDLE) {
+  // 0xFF tells the driver it has no interrupt pin, so onReceive() cannot attach its own handler:
+  // that one reads the controller over SPI from inside the ISR, and the same bus carries the
+  // W25Q64 the OTA writes. This handler polls the line in run() instead.
   CAN.setPins(canCsPin, 0xFFU);
-  pinMode(canIntPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(canIntPin), rxInterrupt, FALLING);
+  pinMode(this->canIntPin, INPUT);
 }
 
 bool CanHandlerAtmega328P::init(uint32_t canBaud) {
@@ -126,10 +126,9 @@ bool CanHandlerAtmega328P::handleRxFrame() {
 
 bool CanHandlerAtmega328P::run() {
   const uint32_t actualTime = millis();
-  if(intCount > 0U) {
-    // Cleared before the drain, not after: a frame landing mid-drain is either picked up by the
-    // loop below or raises a fresh edge once the controller empties and INT returns high.
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount = 0U; }
+  // The MCP2515 holds INT low while any enabled flag is set, so the level itself says whether
+  // there is a frame waiting - no edge to miss, and nothing to remember between passes.
+  if(digitalRead(canIntPin) == LOW) {
     eventTimer = actualTime;
     DebugLedHandler::ledOff();
     const CanFramePump::Result rxResult = CanFramePump::drain(

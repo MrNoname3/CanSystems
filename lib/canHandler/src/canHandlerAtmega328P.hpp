@@ -66,20 +66,16 @@ private:
   /// @return `true` if successful, `false` otherwise.
   bool handleRxFrame();
 
-  /// @brief Interrupt handler for tracking received CAN frames.
-  static inline void rxInterrupt() { intCount++; }
-
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.
   bool sendFwVersion() const; // NOLINT(modernize-use-nodiscard)
-
-  static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
 
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
   SPIFlash flash;                                                           // SPI flash module driver object.
   OTA ota;                                                                  // OTA update handler.
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  const uint8_t canIntPin;                                                  // MCP2515 INT line; low while the controller holds a frame.
   OTA::OtaState lastOtaState;                                               // Store last known OTA state.
 };
 using CanHandler = CanHandlerAtmega328P;                                    // Alias `CanHandler` to `CanHandlerAtmega328P`.
