@@ -1,4 +1,5 @@
 #include "SPIFlash.h"
+#include <string.h>                                                 /// memset() for the failure paths.
 
 SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
@@ -52,7 +53,7 @@ bool SPIFlash::initialize() {
   unselect();
   wakeup();
   if(jedecID == 0U || readDeviceId() == jedecID) {
-    command(CMD_STATUS_WRITE, true); // Write Status Register.
+    if(!command(CMD_STATUS_WRITE, true)) { return false; }        // Write Status Register.
     SPI.transfer(0U);                // Global Unprotect.
     unselect();
     return true;
@@ -89,7 +90,10 @@ uint32_t SPIFlash::capacity() {
 }
 
 void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
-  command(CMD_READ_MAC);
+  if(!command(CMD_READ_MAC)) {
+    memset(buf, 0, sizeof(buf));
+    return;
+  }
   SPI.transfer(0U);
   SPI.transfer(0U);
   SPI.transfer(0U);
@@ -101,7 +105,7 @@ void SPIFlash::readUniqueId(uint8_t (&buf)[8]) {
 }
 
 uint8_t SPIFlash::readByte(uint32_t addr) {
-  command(CMD_ARRAY_READ_LF);
+  if(!command(CMD_ARRAY_READ_LF)) { return 0U; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -111,7 +115,10 @@ uint8_t SPIFlash::readByte(uint32_t addr) {
 }
 
 void SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
-  command(CMD_ARRAY_READ);
+  if(!command(CMD_ARRAY_READ)) {
+    memset(buf, 0, len);
+    return;
+  }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -123,23 +130,32 @@ void SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
   unselect();
 }
 
-void SPIFlash::command(uint8_t cmd, bool isWrite) {
+bool SPIFlash::waitUntilReady() {
+  const uint32_t startTime = millis();
+  for(;;) {
+    const uint8_t status = readStatus();
+    // All ones means nothing is driving MISO - an absent or unresponsive chip. The busy bit on
+    // its own cannot tell that apart from a genuine write in progress, which is why the wait
+    // used to run forever and the header recommended a pull-down on MISO as the cure.
+    if(status == statusNotResponding) { return false; }
+    if((status & 1U) == 0U) { return true; }
+    if((millis() - startTime) > busyTimeoutMs) { return false; }
+  }
+}
+
+bool SPIFlash::command(uint8_t cmd, bool isWrite) {
 #if defined(__AVR_ATmega32U4__)
   DDRB |= 0x01U;
   PORTB |= 0x01U;
 #endif
   if(isWrite) {
-    command(CMD_WRITE_ENABLE);
+    if(!command(CMD_WRITE_ENABLE)) { return false; }
     unselect();
   }
-  // Wait for any write/erase to complete. A timeout cannot be added here because chip-erase
-  // can take several seconds. If the chip is absent, a weak pull-down on MISO is recommended
-  // to avoid hanging.
-  if(cmd != CMD_WAKE) {
-    while(busy()) {}
-  }
+  if((cmd != CMD_WAKE) && !waitUntilReady()) { return false; }
   select();
   SPI.transfer(cmd);
+  return true;
 }
 
 bool SPIFlash::busy() {
@@ -155,7 +171,7 @@ uint8_t SPIFlash::readStatus() {
 }
 
 void SPIFlash::writeByte(uint32_t addr, uint8_t byt) {
-  command(CMD_BYTE_PROGRAM, true);
+  if(!command(CMD_BYTE_PROGRAM, true)) { return; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -168,7 +184,7 @@ void SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
   const uint8_t* ptr = static_cast<const uint8_t*>(buf);
   while(len > 0U) {
     const uint16_t n = (len <= maxBytes) ? len : maxBytes;
-    command(CMD_BYTE_PROGRAM, true);
+    if(!command(CMD_BYTE_PROGRAM, true)) { return; }
     SPI.transfer(static_cast<uint8_t>(addr >> 16U));
     SPI.transfer(static_cast<uint8_t>(addr >> 8U));
     SPI.transfer(static_cast<uint8_t>(addr));
@@ -184,12 +200,12 @@ void SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
 }
 
 void SPIFlash::chipErase() {
-  command(CMD_ERASE_CHIP, true);
+  if(!command(CMD_ERASE_CHIP, true)) { return; }
   unselect();
 }
 
 void SPIFlash::blockErase4K(uint32_t addr) {
-  command(CMD_ERASE_4K, true);
+  if(!command(CMD_ERASE_4K, true)) { return; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -197,7 +213,7 @@ void SPIFlash::blockErase4K(uint32_t addr) {
 }
 
 void SPIFlash::blockErase32K(uint32_t addr) {
-  command(CMD_ERASE_32K, true);
+  if(!command(CMD_ERASE_32K, true)) { return; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -205,7 +221,7 @@ void SPIFlash::blockErase32K(uint32_t addr) {
 }
 
 void SPIFlash::blockErase64K(uint32_t addr) {
-  command(CMD_ERASE_64K, true);
+  if(!command(CMD_ERASE_64K, true)) { return; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
@@ -213,12 +229,12 @@ void SPIFlash::blockErase64K(uint32_t addr) {
 }
 
 void SPIFlash::sleep() {
-  command(CMD_SLEEP);
+  if(!command(CMD_SLEEP)) { return; }
   unselect();
 }
 
 void SPIFlash::wakeup() {
-  command(CMD_WAKE);
+  (void)command(CMD_WAKE);                                          // CMD_WAKE skips the ready wait, so this cannot fail.
   unselect();
 }
 

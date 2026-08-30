@@ -125,9 +125,23 @@ private:
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.
   /// @param isWrite Set to `true` for write/erase commands.
-  void command(uint8_t cmd, bool isWrite = false);
+  /// @brief Waits for the chip to leave its busy state.
+  /// @return `false` when no chip answers, or when it stays busy past `busyTimeoutMs`.
+  [[nodiscard]] bool waitUntilReady();
+
+  /// @brief Waits for readiness, then selects the chip and sends one command byte.
+  /// @param cmd Command opcode.
+  /// @param isWrite Sends WRITE ENABLE first when `true`.
+  /// @return `false` when the chip never became ready; the chip is then left unselected and
+  /// the command is not sent.
+  [[nodiscard]] bool command(uint8_t cmd, bool isWrite = false);
 
   uint8_t slaveSelectPin;                                           // SPI chip-select pin.
+  static constexpr uint8_t statusNotResponding = 0xFFU;             // All ones: nothing is driving MISO.
+  // Generous for the only operation this ever waits on - a page program takes 3 ms at worst.
+  // The long erases are polled by the caller (OTA::run) rather than waited for here.
+  static constexpr uint32_t busyTimeoutMs = 500U;
+
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
   uint8_t spcr;                                                     // Saved SPCR register value.
   uint8_t spsr;                                                     // Saved SPSR register value.
