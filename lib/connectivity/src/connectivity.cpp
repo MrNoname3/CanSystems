@@ -237,7 +237,7 @@ bool Connectivity::run() {
     networkState = actualNetworkState;
     if(networkState) {
       resetWatchdogTimer();
-      connectToMqttServer();
+      (void)connectToMqttServer();
     } else {
       shutdownMqtt();
     }
@@ -254,7 +254,7 @@ bool Connectivity::run() {
     if(networkState && Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
       reconnectTimer = actualTime;
       resetWatchdogTimer();
-      connectToMqttServer();
+      (void)connectToMqttServer();
     }
   }
 

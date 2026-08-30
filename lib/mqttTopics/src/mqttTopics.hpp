@@ -50,5 +50,12 @@ public:
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
   static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }
   static constexpr const char* getAvailOfflinePayload() { return availOfflinePayload; }
+
+  MqttTopics() = delete;                                              // Delete constructor.
+  ~MqttTopics() = delete;                                             // Delete destructor.
+  MqttTopics(const MqttTopics&) = delete;                             // Define copy constructor.
+  MqttTopics& operator=(const MqttTopics&) = delete;                  // Define copy assignment operator.
+  MqttTopics(MqttTopics&&) = delete;                                  // Define move constructor.
+  MqttTopics& operator=(MqttTopics&&) = delete;                       // Define move assignment operator.
 };
 #endif // MQTTTOPICS_HPP
