@@ -11,19 +11,19 @@ public:
   RCSwitch() = default;
 
   // ---- receiver ----
-  void enableReceive(int /*interrupt*/) {}                          // NOLINT(readability-convert-member-functions-to-static)
+  void enableReceive(int32_t /*interrupt*/) {}                          // NOLINT(readability-convert-member-functions-to-static)
   [[nodiscard]] bool available() const { return rxAvailable; }     // NOLINT(readability-convert-member-functions-to-static)
   void resetAvailable() { rxAvailable = false; }                   // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] unsigned long long getReceivedValue() const { return rxValue; }       // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] unsigned int getReceivedBitlength() const { return rxBitLength; }      // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] unsigned int getReceivedProtocol() const { return rxProtocol; }        // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] unsigned int getReceivedDelay() const { return rxDelay; }              // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] uint64_t getReceivedValue() const { return rxValue; }       // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] uint32_t getReceivedBitlength() const { return rxBitLength; }      // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] uint32_t getReceivedProtocol() const { return rxProtocol; }        // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] uint32_t getReceivedDelay() const { return rxDelay; }              // NOLINT(readability-convert-member-functions-to-static)
 
   // ---- transmitter ----
-  void enableTransmit(int /*pin*/) {}                              // NOLINT(readability-convert-member-functions-to-static)
-  void setProtocol(int protocol) { lastProtocol = protocol; }     // NOLINT(readability-convert-member-functions-to-static)
-  void setPulseLength(int pulseLength) { lastPulseLength = pulseLength; }  // NOLINT(readability-convert-member-functions-to-static)
-  void send(unsigned long long code, unsigned int length) {       // NOLINT(readability-convert-member-functions-to-static)
+  void enableTransmit(int32_t /*pin*/) {}                              // NOLINT(readability-convert-member-functions-to-static)
+  void setProtocol(int32_t protocol) { lastProtocol = protocol; }     // NOLINT(readability-convert-member-functions-to-static)
+  void setPulseLength(int32_t pulseLength) { lastPulseLength = pulseLength; }  // NOLINT(readability-convert-member-functions-to-static)
+  void send(uint64_t code, uint32_t length) {       // NOLINT(readability-convert-member-functions-to-static)
     lastSentCode = code;
     lastSentLength = length;
     ++sendCount;
@@ -31,8 +31,8 @@ public:
 
   // ---- test hooks (static so tests can drive them without a handle) ----
   // Queues a received frame and marks it available, as the ISR would on the real hardware.
-  static void injectReceived(unsigned long long value, unsigned int bitLength,
-                             unsigned int protocol, unsigned int delay) {
+  static void injectReceived(uint64_t value, uint32_t bitLength,
+                             uint32_t protocol, uint32_t delay) {
     rxValue = value;
     rxBitLength = bitLength;
     rxProtocol = protocol;
@@ -53,13 +53,13 @@ public:
   }
 
   static inline bool rxAvailable = false;
-  static inline unsigned long long rxValue = 0U;
-  static inline unsigned int rxBitLength = 0U;
-  static inline unsigned int rxProtocol = 0U;
-  static inline unsigned int rxDelay = 0U;
-  static inline int lastProtocol = 0;
-  static inline int lastPulseLength = 0;
-  static inline unsigned long long lastSentCode = 0U;
-  static inline unsigned int lastSentLength = 0U;
-  static inline int sendCount = 0;
+  static inline uint64_t rxValue = 0U;
+  static inline uint32_t rxBitLength = 0U;
+  static inline uint32_t rxProtocol = 0U;
+  static inline uint32_t rxDelay = 0U;
+  static inline int32_t lastProtocol = 0;
+  static inline int32_t lastPulseLength = 0;
+  static inline uint64_t lastSentCode = 0U;
+  static inline uint32_t lastSentLength = 0U;
+  static inline int32_t sendCount = 0;
 };

@@ -55,10 +55,10 @@ bool RfHandler::run() {
 
 void RfHandler::transmitCommand(const RfData& command) {
   if(command.protocol > 0U) {
-    rfTransceiver.setProtocol(static_cast<int>(command.protocol));
+    rfTransceiver.setProtocol(static_cast<int32_t>(command.protocol));
   }
   if(command.pulseLength > 0U) {
-    rfTransceiver.setPulseLength(static_cast<int>(command.pulseLength));
+    rfTransceiver.setPulseLength(static_cast<int32_t>(command.pulseLength));
   }
   if(command.data > 0U && command.bitLength > 0U) {
     rfTransceiver.send(command.data, command.bitLength);

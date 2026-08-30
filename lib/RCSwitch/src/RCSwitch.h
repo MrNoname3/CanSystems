@@ -30,30 +30,8 @@
 #ifndef RC_SWITCH_H
 #define RC_SWITCH_H
 
-#if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
-#elif defined(ENERGIA) // LaunchPad, FraunchPad and StellarPad specific
-#include "Energia.h"
-#elif defined(RPI) // Raspberry Pi
-#define RaspberryPi
-
-// Include libraries for RPi:
-#include <string.h> /* memcpy */
-#include <stdlib.h> /* abs */
-#include <wiringPi.h>
-#elif defined(SPARK)
-#include "application.h"
-#else
-#include "WProgram.h"
-#endif
 #include <stdint.h>
-
-#ifdef RaspberryPi
-// PROGMEM and _P functions are for AVR based microprocessors,
-// so we must normalize these for the ARM processor:
-#define PROGMEM
-#define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
-#endif
 
 #if defined(ESP8266)
 // interrupt handler and related code must be in RAM on ESP8266,
@@ -76,7 +54,7 @@
 
 // Number of maximum high/Low changes per packet.
 // We can handle up to 36 bit * 2 H/L changes per bit + 2 for sync
-// Для keeloq нужно увеличить RCSWITCH_MAX_CHANGES до 23+1+66*2+1=157
+// keeloq would need RCSWITCH_MAX_CHANGES raised to 23+1+66*2+1=157
 // #define RCSWITCH_MAX_CHANGES 75        // default 75 - longest protocol that requires this buffer size is 38/nexus
 #define RCSWITCH_MAX_CHANGES 131        // default 75 - Supports 64 too
 
@@ -89,44 +67,34 @@
 class RCSwitch {
 public:
   RCSwitch();
-  void switchOn(int nAddressCode, int nChannelCode);
-  void switchOff(int nAddressCode, int nChannelCode);
-  void switchOn(const char* sGroup, int nChannel);
-  void switchOff(const char* sGroup, int nChannel);
-  void switchOn(char sFamily, int nGroup, int nDevice);
-  void switchOff(char sFamily, int nGroup, int nDevice);
-  void switchOn(const char* sGroup, const char* sDevice);
-  void switchOff(const char* sGroup, const char* sDevice);
-  void switchOn(char sGroup, int nDevice);
-  void switchOff(char sGroup, int nDevice);
+  ~RCSwitch() = default;
 
-  void sendTriState(const char* sCodeWord);
-  void send(unsigned long long code, unsigned int length);
-  void send(const char* sCodeWord);
+  RCSwitch(const RCSwitch&) = delete;                               // Define copy constructor.
+  RCSwitch& operator=(const RCSwitch&) = delete;                    // Define copy assignment operator.
+  RCSwitch(RCSwitch&&) = delete;                                    // Define move constructor.
+  RCSwitch& operator=(RCSwitch&&) = delete;                         // Define move assignment operator.
+
+  void send(uint64_t code, uint32_t length);
 
 #if not defined(RCSwitchDisableReceiving)
-  void enableReceive(int interrupt);
+  void enableReceive(int32_t interrupt);
   void enableReceive();
-  void resumeReceive(int interrupt);
+  void resumeReceive(int32_t interrupt);
   void disableReceive();
   bool available();
   void resetAvailable();
 
-  unsigned long long getReceivedValue();
-  unsigned int getReceivedBitlength();
-  unsigned int getReceivedDelay();
-  unsigned int getReceivedProtocol();
-  unsigned int* getReceivedRawdata();
+  uint64_t getReceivedValue();
+  uint32_t getReceivedBitlength();
+  uint32_t getReceivedDelay();
+  uint32_t getReceivedProtocol();
   uint8_t getNumProtos();
 #endif
 
-  void enableTransmit(int nTransmitterPin);
-  void disableTransmit();
-  void setPulseLength(int nPulseLength);
-  void setRepeatTransmit(int nRepeatTransmit);
+  void enableTransmit(int32_t nTransmitterPin);
+  void setPulseLength(int32_t nPulseLength);
+  void setRepeatTransmit(int32_t nRepeatTransmit);
 #if not defined(RCSwitchDisableReceiving)
-  void setReceiveTolerance(int nPercent);
-  bool setReceiveProtocolMask(unsigned long long mask);
 #endif
 
   /**
@@ -176,42 +144,36 @@ public:
   };
 
   void setProtocol(Protocol protocol);
-  void setProtocol(int nProtocol);
-  void setProtocol(int nProtocol, int nPulseLength);
+  void setProtocol(int32_t nProtocol);
 
 private:
-  const char* getCodeWordA(const char* sGroup, const char* sDevice, bool bStatus);
-  const char* getCodeWordB(int nAddressCode, int nChannelCode, bool bStatus);
-  const char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
-  const char* getCodeWordD(char group, int nDevice, bool bStatus);
-  void transmit(HighLow pulses);
+  void transmit(HighLow pulses) const;
   void attachReceiveInterrupt() const;
 
 #if not defined(RCSwitchDisableReceiving)
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
-  inline static RECEIVE_ATTR bool receiveProtocol(int p, unsigned int changeCount) __attribute__((optimize("-O3")));
-  static inline unsigned int diff(int A, int B) __attribute__((optimize("-O3")));
-  static bool updateSeparationLimit();
-  int nReceiverInterrupt;
+  inline static RECEIVE_ATTR bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
+  static inline uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
+  int32_t nReceiverInterrupt;
 #endif
-  int nTransmitterPin;
-  int nRepeatTransmit;
+  int32_t nTransmitterPin;
+  int32_t nRepeatTransmit;
   Protocol protocol;
 
 #if not defined(RCSwitchDisableReceiving)
-  static int nReceiveTolerance;
-  volatile static unsigned long long nReceivedValue;
-  volatile static unsigned long long nReceiveProtocolMask;
-  volatile static unsigned int nReceivedBitlength;
-  volatile static unsigned int nReceivedDelay;
-  volatile static unsigned int nReceivedProtocol;
-  static unsigned int nSeparationLimit;
+  static int32_t nReceiveTolerance;
+  volatile static uint64_t nReceivedValue;
+  volatile static uint64_t nReceiveProtocolMask;
+  volatile static uint32_t nReceivedBitlength;
+  volatile static uint32_t nReceivedDelay;
+  volatile static uint32_t nReceivedProtocol;
+  static uint32_t nSeparationLimit;
   /*
    * timings[0] contains sync timing, followed by a number of bits
    */
-  static unsigned int timings[RCSWITCH_MAX_CHANGES];
-  // буфер длительностей последних четырех пакетов, [0] - последний
-  static unsigned int buftimings[4];
+  static uint32_t timings[RCSWITCH_MAX_CHANGES];
+  // Durations of the last four packets; [0] is the most recent.
+  static uint32_t buftimings[4];
 #endif
 };
 #endif // RC_SWITCH_H
