@@ -23,10 +23,11 @@ import subprocess
 import sys
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType
-from typing import Any, Callable, ClassVar, Dict, List, Optional, cast
+from typing import Any, Callable, ClassVar, Deque, Dict, List, Optional, cast
 
 import paho.mqtt.client as mqtt
 import yaml
@@ -36,6 +37,12 @@ from tqdm import tqdm
 # ---------------------------------------------------------------------------
 # Enums & Data classes
 # ---------------------------------------------------------------------------
+
+# Device-side DataTransferError bit (lib/dataTransfer/src/dataTransfer.hpp): the piece number was
+# not the expected one. On a repeated piece it means the device already stored it and only the
+# acknowledgment went missing.
+WRONG_FILE_PIECE_NUMBER = 1 << 8
+
 
 class TransferState(enum.Enum):
     """States for the OTA update / file transfer / command process"""
@@ -975,11 +982,18 @@ class _BaseTransfer:
         self.timer_start = 0.0
         self.piece_size = 100
         self.timeout_seconds = 25
+        self.max_piece_retries = 3
         self.progress_bar: Optional[tqdm[Any]] = None
 
+        # The piece last put on the wire (number, offset, length), so a lost acknowledgment can
+        # be answered by repeating it rather than failing the whole transfer.
+        self._last_piece: Optional[tuple[int, int, int]] = None
+        self._piece_retries = 0
+
         # Queue for incoming MQTT messages to avoid race conditions between
-        # the MQTT callback thread and the main loop
-        self._pending_messages: List[Dict[str, Any]] = []
+        # the MQTT callback thread and the main loop. A deque because append and popleft are
+        # each atomic, so draining cannot discard a message the callback thread just added.
+        self._pending_messages: Deque[Dict[str, Any]] = deque()
 
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1053,10 +1067,12 @@ class _BaseTransfer:
             self.state = TransferState.SENDING_FW
 
         elif self.state == TransferState.WAIT_PIECE_ACK and ack:
-            if self.remaining_bytes > 0:
-                self.state = TransferState.SENDING_FW
-            else:
-                self._finish_sending()
+            self._advance_after_piece()
+
+        elif (self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries > 0
+              and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER):
+            logging.info(f"Piece {self.piece_number - 1} was already stored; the lost acknowledgment is confirmed")
+            self._advance_after_piece()
 
         elif self.state == TransferState.WAIT_CHECK_ACK and ack:
             self.state = TransferState.DONE
@@ -1065,18 +1081,31 @@ class _BaseTransfer:
             logging.error(f"Received NACK in state {self.state}, error code: {message.get('err', 0)}")
             self.state = TransferState.ERROR
 
+    def _advance_after_piece(self):
+        """Move past the acknowledged piece: send the next one, or finish."""
+        self._piece_retries = 0
+        if self.remaining_bytes > 0:
+            self.state = TransferState.SENDING_FW
+        else:
+            self._finish_sending()
+
+    def _publish_piece(self, piece_number: int, offset: int, read_size: int):
+        """Put one piece on the wire and start waiting for its acknowledgment."""
+        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({
+            "piece": piece_number,
+            "data": base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
+        }))
+        self.state = TransferState.WAIT_PIECE_ACK
+        self.timer_start = time.time()
+
     def _send_piece(self):
         """Send the next data piece to the device."""
         offset = self.size - self.remaining_bytes
         read_size = min(self.remaining_bytes, self.piece_size)
 
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({
-            "piece": self.piece_number,
-            "data": base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
-        }))
-
-        self.state = TransferState.WAIT_PIECE_ACK
-        self.timer_start = time.time()
+        self._last_piece = (self.piece_number, offset, read_size)
+        self._piece_retries = 0
+        self._publish_piece(self.piece_number, offset, read_size)
         self.piece_number += 1
         self.remaining_bytes -= read_size
 
@@ -1100,9 +1129,8 @@ class _BaseTransfer:
         """Process current transfer state.
         Pending messages are handled first to ensure the state machine has
         fully transitioned before acting on incoming ACKs."""
-        for message in self._pending_messages:
-            self._process_response(message)
-        self._pending_messages.clear()
+        while self._pending_messages:
+            self._process_response(self._pending_messages.popleft())
 
         if self.state == TransferState.SENDING_FW:
             if self.remaining_bytes > 0:
@@ -1112,8 +1140,14 @@ class _BaseTransfer:
 
         elif (self.state in {TransferState.WAIT_START_ACK, TransferState.WAIT_PIECE_ACK, TransferState.WAIT_CHECK_ACK}
               and time.time() - self.timer_start > self.timeout_seconds):
-            logging.error(f"Timeout occurred in state: {self.state.name}")
-            self.state = TransferState.ERROR
+            if self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries < self.max_piece_retries and self._last_piece:
+                self._piece_retries += 1
+                logging.warning(f"No acknowledgment for piece {self._last_piece[0]}; "
+                                f"resending ({self._piece_retries}/{self.max_piece_retries})")
+                self._publish_piece(*self._last_piece)
+            else:
+                logging.error(f"Timeout occurred in state: {self.state.name}")
+                self.state = TransferState.ERROR
 
     def cleanup(self) -> None:
         """Clean up resources."""

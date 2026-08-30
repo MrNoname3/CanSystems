@@ -870,10 +870,83 @@ def test_response_without_type_is_ignored(tmp_path: Path) -> None:
 
 
 def test_timeout_in_wait_state_errors(tmp_path: Path) -> None:
-    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    # WAIT_START_ACK has no retry: nothing has been sent yet that could be repeated.
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_START_ACK, remaining=50)
     updater.timer_start = time.time() - (updater.timeout_seconds + 1)
     updater._process_state()
     assert updater.state == ota.TransferState.ERROR
+
+
+# --- Lost-acknowledgment recovery -------------------------------------------
+
+def _updater_awaiting_piece_ack(tmp_path: Path) -> "ota.OTAUpdater":
+    """Sends the first piece, so the transfer sits in WAIT_PIECE_ACK with a piece to repeat."""
+    updater = _make_updater(tmp_path, b"x" * 250)
+    updater.remaining_bytes = updater.size
+    updater._send_piece()
+    return updater
+
+
+def _expire(updater: "ota.OTAUpdater") -> None:
+    updater.timer_start = time.time() - (updater.timeout_seconds + 1)
+    updater._process_state()
+
+
+def test_a_piece_ack_timeout_resends_the_same_piece(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    recorder = cast(_RecordingMQTT, updater.mqtt_client)
+    first = json.loads(recorder.published[0][1])
+    piece_number, remaining = updater.piece_number, updater.remaining_bytes
+
+    _expire(updater)
+
+    # The same piece goes out again, byte for byte: the transfer must not skip ahead, and the
+    # position it would resume from must not move either.
+    assert updater.state == ota.TransferState.WAIT_PIECE_ACK
+    assert json.loads(recorder.published[1][1]) == first
+    assert (updater.piece_number, updater.remaining_bytes) == (piece_number, remaining)
+
+
+def test_piece_resends_are_bounded(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    recorder = cast(_RecordingMQTT, updater.mqtt_client)
+    for _ in range(updater.max_piece_retries):
+        _expire(updater)
+        assert updater.state == ota.TransferState.WAIT_PIECE_ACK
+    _expire(updater)
+    assert updater.state == ota.TransferState.ERROR
+    assert len(recorder.published) == 1 + updater.max_piece_retries
+
+
+def test_a_resent_piece_the_device_already_stored_continues(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)
+    # Only the acknowledgment was lost: the device has the piece and rejects the repeat as
+    # out of sequence. That is confirmation it arrived, not a failure.
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.SENDING_FW
+
+
+def test_a_wrong_piece_number_without_a_resend_still_errors(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    # Nothing was repeated, so the device is genuinely out of step with the sender.
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.ERROR
+
+
+def test_a_message_arriving_during_the_drain_is_not_lost(tmp_path: Path) -> None:
+    updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
+    seen: list[dict[str, Any]] = []
+
+    def record(message: dict[str, Any]) -> None:
+        seen.append(message)
+        if len(seen) == 1:                       # arrives from the MQTT thread mid-drain
+            updater._pending_messages.append({"type": 1, "late": True})
+
+    updater._process_response = record          # type: ignore[method-assign]
+    updater._pending_messages.append({"type": 1})
+    updater._process_state()
+    assert len(seen) == 2
 
 
 def test_no_timeout_within_window(tmp_path: Path) -> None:
