@@ -211,9 +211,9 @@ bool test_unknown_frame_goes_to_derived_handler() {
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   const uint8_t data[8] = { 0U };
-  injectFrame(gateway, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR), data);
+  injectFrame(gateway, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR), data);
   IS_EQUAL(TestGateway::customFrames, 1);
-  IS_EQUAL(TestGateway::lastCustomCmd, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR));
+  IS_EQUAL(TestGateway::lastCustomCmd, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR));
   END_IT
 }
 

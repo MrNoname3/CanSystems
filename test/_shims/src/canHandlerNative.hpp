@@ -70,7 +70,9 @@ public:
     return canHandler.send(CanHandler::CanFrame{ getClientCanId(), command, canHandler.getLocalCanId(), data });
   }
 
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command, const uint8_t (&data)[8]) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command), data);
   }
 
@@ -79,7 +81,9 @@ public:
     return sendCanFrame(command, data);
   }
 
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command));
   }
 
@@ -88,7 +92,9 @@ public:
     return sendCanFrame(command, data);
   }
 
-  [[nodiscard]] bool sendCanResponse(CanCmd command, bool response) const {
+  template<typename Cmd>
+  [[nodiscard]] bool sendCanResponse(Cmd command, bool response) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanResponse() takes a CAN command enum, not a raw value");
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 

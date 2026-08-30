@@ -136,7 +136,7 @@ bool test_first_cycle_sends_values() {
   s.init();
   runCycle(s, kMeasPeriod + 1U);
   IS_EQUAL(ch.sendCount, 1U);
-  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR));
+  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR));
   // Verify temperature bytes in payload: 2500 = 0x09C4
   IS_EQUAL(ch.lastData[0], static_cast<uint8_t>(0xC4U)); // low byte
   IS_EQUAL(ch.lastData[1], static_cast<uint8_t>(0x09U)); // high byte
@@ -267,7 +267,7 @@ bool test_sensor_error_sends_error_command() {
   s.init();
   runCycle(s, kMeasPeriod + 1U);
   IS_EQUAL(ch.sendCount, 1U);
-  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(CanCmd::HUM_TEMP_SENSOR_ERROR));
+  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(AlertCmd::HUM_TEMP_SENSOR_ERROR));
   clearFakeMillis();
   END_IT
 }

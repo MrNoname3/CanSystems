@@ -97,7 +97,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       rgbLed.setColor(data[0], data[1], data[2], true);
       canHandler.send(command);
     } break;
-    case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
+    case static_cast<uint16_t>(AlertCmd::PLAY_MP3): {
       const uint16_t songNum = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8U) | data[0]);
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       canHandler.send(command);

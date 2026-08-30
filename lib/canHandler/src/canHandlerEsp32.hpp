@@ -140,7 +140,9 @@ public:
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command, const uint8_t (&data)[8]) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command), data);
   }
 
@@ -155,7 +157,9 @@ public:
   /// @brief Sends a CAN frame with a command and an empty data payload, using a `CanCmd` enum for the command.
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command));
   }
 
@@ -173,7 +177,9 @@ public:
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @param response Boolean value indicating the response to the command (`true` or `false`).
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] bool sendCanResponse(CanCmd command, bool response) const {
+  template<typename Cmd>
+  [[nodiscard]] bool sendCanResponse(Cmd command, bool response) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanResponse() takes a CAN command enum, not a raw value");
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 
