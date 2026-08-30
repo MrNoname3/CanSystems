@@ -140,7 +140,7 @@ void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT
 
 bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
   const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
-  const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U);
+  const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) == sizeof(frameOut.data));
   const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
   if(!endPacketResult) {
     // The frame is already consumed from the queue, so a TX failure would otherwise vanish

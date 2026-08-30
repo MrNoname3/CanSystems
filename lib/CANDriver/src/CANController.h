@@ -7,8 +7,10 @@
 /// compile time, the controller object is a concrete global, and nothing ever reaches a driver
 /// through a base pointer - so virtual dispatch bought nothing while pinning every method into
 /// the vtable, where the linker cannot drop the ones a firmware never calls. Only what Stream
-/// and Print require stays virtual.
-class CANController : public Stream {
+/// and Print required stays behind, now as ordinary members: a CAN controller is not a byte
+/// stream, and inheriting one brought Stream::readBytes() with its timed reads into a path that
+/// runs from an interrupt on the ESP32.
+class CANController {
 public:
   /// @brief Initialize the CAN controller at the given baud rate.
   /// @return 1 on success, 0 on failure.
@@ -44,22 +46,35 @@ public:
   /// @brief Return the DLC of the last received packet.
   [[nodiscard]] uint8_t packetDlc() const;
 
-  // from Print
-  virtual size_t write(uint8_t b);
-  virtual size_t write(const uint8_t* buffer, size_t size);
+  /// @brief Appends one byte to the packet being built.
+  /// @return 1 when it fit, 0 when no packet is open or the payload is already full.
+  size_t write(uint8_t b);
 
-  // from Stream
-  int available() override;
-  int read() override;
-  int peek() override;
-  void flush() override;
+  /// @brief Appends bytes to the packet being built.
+  /// @return How many bytes were appended; less than `size` when the payload filled up.
+  size_t write(const uint8_t* buffer, size_t size);
+
+  /// @brief Bytes of the received packet not read yet.
+  [[nodiscard]] int available() const;
+
+  /// @brief Takes the next byte of the received packet, or -1 when there is none.
+  int read();
+
+  /// @brief Returns the next byte of the received packet without taking it, or -1.
+  [[nodiscard]] int peek() const;
+
+  /// @brief Copies up to `length` unread bytes of the received packet into `buffer`.
+  /// @return How many bytes were copied; less than `length` when the packet holds fewer.
+  /// @note Returns what is already there and does not wait, so it is safe to call from an
+  /// interrupt - unlike the timed read this replaced.
+  size_t readBytes(uint8_t* buffer, size_t length);
 
   /// @brief Set the receive interrupt callback.
   void onReceive(void (*callback)(int));
 
 protected:
   CANController();
-  virtual ~CANController() = default;
+  ~CANController() = default;
 
   void (*onReceiveCb)(int);
 

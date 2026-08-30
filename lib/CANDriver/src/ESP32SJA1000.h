@@ -8,7 +8,7 @@
 class ESP32SJA1000 final : public CANController {
 public:
   ESP32SJA1000() = default;
-  ~ESP32SJA1000() override = default;
+  ~ESP32SJA1000() = default;
 
   [[nodiscard]] uint8_t begin(uint32_t baudRate);
   void end();

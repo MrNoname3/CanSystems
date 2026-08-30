@@ -7,7 +7,7 @@
 class MCP2515 final : public CANController {
 public:
   MCP2515() = default;
-  ~MCP2515() override = default;
+  ~MCP2515() = default;
 
   [[nodiscard]] uint8_t begin(uint32_t baudRate);
   void end();

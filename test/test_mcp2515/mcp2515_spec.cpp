@@ -46,6 +46,17 @@ static constexpr uint8_t kTxb0Eid0 = 0x34U;
 static constexpr uint8_t kTxb1Eid0 = 0x44U;
 static constexpr uint8_t kTxb2Eid0 = 0x54U;
 
+bool test_writing_past_the_payload_reports_what_fit() {
+  IT("writing more than a CAN frame holds reports how much was taken, not success");
+  IS_TRUE(startController());
+  const uint8_t tooMuch[9] = { 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U };
+  IS_EQUAL(CAN.beginExtendedPacket(0x1FF00001U, 8U), 1U);
+  // The payload is eight bytes; the ninth is dropped. A caller that only checks for a non-zero
+  // return would treat this as a full write.
+  IS_EQUAL(CAN.write(tooMuch, sizeof(tooMuch)), 8U);
+  END_IT
+}
+
 bool test_the_first_receive_buffer_rolls_over_into_the_second() {
   IT("receive buffer 0 is set to roll a frame over into buffer 1 when it is full");
   IS_TRUE(startController());
@@ -258,6 +269,7 @@ bool test_the_rx_pump_dispatches_nothing_on_an_empty_controller() {
 int main() {
   SUITE("MCP2515");
   test_begin_configures_the_controller();
+  test_writing_past_the_payload_reports_what_fit();
   test_the_first_receive_buffer_rolls_over_into_the_second();
   test_setting_an_extended_filter_keeps_the_rollover();
   test_parse_packet_reports_nothing_when_no_frame_arrived();

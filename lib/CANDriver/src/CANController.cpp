@@ -15,9 +15,7 @@ CANController::CANController() :
   rxDlc(0U),
   rxLength(0U),
   rxIndex(0U),
-  rxData{} {
-  setTimeout(0);
-}
+  rxData{} {}
 
 uint8_t CANController::begin(uint32_t /*baudRate*/) {
   packetBegun = false;
@@ -103,19 +101,26 @@ size_t CANController::write(const uint8_t* buffer, size_t size) {
   return size;
 }
 
-int CANController::available() { return static_cast<int>(rxLength) - rxIndex; }
+int CANController::available() const { return static_cast<int>(rxLength) - rxIndex; }
 
-int CANController::read() {
+int CANController::read() { // NOLINT(readability-make-member-function-const) rxIndex advances with every byte taken
   if(available() == 0) { return -1; }
   return rxData[rxIndex++];
 }
 
-int CANController::peek() {
+int CANController::peek() const {
   if(available() == 0) { return -1; }
   return rxData[rxIndex];
 }
 
-void CANController::flush() {}
+size_t CANController::readBytes(uint8_t* buffer, size_t length) {
+  size_t count = 0U;
+  while((count < length) && (available() > 0)) {
+    buffer[count] = rxData[rxIndex++];
+    count++;
+  }
+  return count;
+}
 
 void CANController::onReceive(void (*callback)(int)) {
   onReceiveCb = callback;
