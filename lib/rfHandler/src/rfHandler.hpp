@@ -12,6 +12,11 @@ private:
   static constexpr uint8_t dataOutBufSize = 116U;                   // Size of the buffer used for outgoing MQTT data messages.
   static constexpr uint8_t dataCheckTime = 100U;                    // Minimum time interval (in milliseconds) for considering redundant RF data as new one.
   static constexpr uint16_t pendingTxQueueSize = 4U;                // Commands that may wait for their turn to be transmitted.
+  // Range a 433 MHz remote's pulse can plausibly take. A transmission is a bit-banged blocking
+  // delay, so an unchecked value from an MQTT payload would decide how long the node stops
+  // serving anything else. 0 keeps whatever is currently set.
+  static constexpr uint32_t minPulseLength = 50U;
+  static constexpr uint32_t maxPulseLength = 1000U;
 
   // Format string for the MQTT message containing RF data.
   static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";

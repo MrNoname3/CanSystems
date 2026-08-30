@@ -168,6 +168,58 @@ bool test_mqtt_message_without_data_does_not_transmit() {
   END_IT
 }
 
+bool test_an_implausible_pulse_length_is_rejected() {
+  IT("a pulse length no 433 MHz remote could use is rejected instead of transmitted");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument doc;
+  // The transmission is a bit-banged blocking delay, so the payload would decide how long the
+  // node stops responding - here 6 seconds per pulse.
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":1,"Pulse":6000000})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 0);
+  IS_EQUAL(RCSwitch::lastPulseLength, 0);
+  END_IT
+}
+
+bool test_a_too_short_pulse_length_is_rejected() {
+  IT("a pulse length below the usable range is rejected too");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument doc;
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":1,"Pulse":3})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 0);
+  END_IT
+}
+
+bool test_a_zero_pulse_length_keeps_the_current_one() {
+  IT("a zero pulse length still means keep the current setting, not reject the command");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument first;
+  IS_TRUE(deserializeJson(first, R"({"Data":1111,"Bits":24,"Protocol":1,"Pulse":400})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(first);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::lastPulseLength, 400);
+
+  JsonDocument second;
+  IS_TRUE(deserializeJson(second, R"({"Data":2222,"Bits":24,"Protocol":1,"Pulse":0})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(second);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 2);                  // the command went out
+  IS_EQUAL(RCSwitch::lastPulseLength, 400);          // with the pulse length left as it was
+  END_IT
+}
+
 bool test_mqtt_message_missing_fields_is_ignored() {
   IT("an MQTT message missing required fields transmits nothing");
   resetEnv();
@@ -193,6 +245,9 @@ int main() {
   test_mqtt_message_transmits_rf();
   test_the_callback_itself_does_not_touch_the_transceiver();
   test_queued_commands_transmit_in_arrival_order();
+  test_an_implausible_pulse_length_is_rejected();
+  test_a_too_short_pulse_length_is_rejected();
+  test_a_zero_pulse_length_keeps_the_current_one();
   test_mqtt_message_without_data_does_not_transmit();
   test_mqtt_message_missing_fields_is_ignored();
   FINISH

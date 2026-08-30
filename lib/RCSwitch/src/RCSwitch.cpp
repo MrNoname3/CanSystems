@@ -623,11 +623,11 @@ void RCSwitch::transmit(HighLow pulses) {
 
   if(pulses.high > 0) {
     digitalWrite(this->nTransmitterPin, firstLogicLevel);
-    delayMicroseconds(this->protocol.pulseLength * pulses.high);
+    safeDelayMicroseconds(static_cast<unsigned long>(this->protocol.pulseLength) * pulses.high);
   }
   if(pulses.low > 0) {
     digitalWrite(this->nTransmitterPin, secondLogicLevel);
-    delayMicroseconds(this->protocol.pulseLength * pulses.low);
+    safeDelayMicroseconds(static_cast<unsigned long>(this->protocol.pulseLength) * pulses.low);
   }
 }
 

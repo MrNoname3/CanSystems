@@ -71,12 +71,17 @@ void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(re
   JsonVariant protocolJsonVar = payloadJson[F("Protocol")];
   JsonVariant pulseJsonVar = payloadJson[F("Pulse")];
   if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() && protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
+    const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
+    if((rfOutPulseLength != 0U) && ((rfOutPulseLength < minPulseLength) || (rfOutPulseLength > maxPulseLength))) {
+      Logger::get()->printf_P(PSTR("[RF] Pulse length %u out of range, command ignored\r\n"), rfOutPulseLength);
+      return;
+    }
     // Queued rather than transmitted here: this callback runs inside PubSubClient::loop(), and
     // the transmission blocks for the frame's whole air time.
     if(pendingTx.isFull()) {
       Logger::get()->printf_P(PSTR("[RF] Transmit queue full, dropping the oldest command\r\n"));
     }
     pendingTx.put(RfData(dataJsonVar.as<uint64_t>(), bitsJsonVar.as<uint32_t>(),
-                         protocolJsonVar.as<uint32_t>(), pulseJsonVar.as<uint32_t>()));
+                         protocolJsonVar.as<uint32_t>(), rfOutPulseLength));
   }
 }
