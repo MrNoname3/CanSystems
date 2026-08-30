@@ -135,7 +135,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_OVEFLOW);
     return false;
   }
-  uint8_t decodedData[filePieceSize];
+  uint8_t decodedData[maxFilePieceLength];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > filePieceSize || decodedPreSize == 0U) {
     Logger::get()->printf_P(PSTR("[FT] File piece size error!\r\n"));
