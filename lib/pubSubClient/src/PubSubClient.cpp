@@ -9,32 +9,6 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) {
   setServer(addr, port);
   setClient(client);
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream& stream) {
-  setServer(addr, port);
-  setClient(client);
-  setStream(stream);
-}
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client) {
-  setServer(addr, port);
-  setCallback(callback);
-  setClient(client);
-}
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
-  setServer(addr, port);
-  setCallback(callback);
-  setClient(client);
-  setStream(stream);
-}
-
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, Client& client) {
-  setServer(ip, port);
-  setClient(client);
-}
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, Client& client, Stream& stream) {
-  setServer(ip, port);
-  setClient(client);
-  setStream(stream);
-}
 PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client) {
   setServer(ip, port);
   setCallback(callback);
@@ -47,27 +21,11 @@ PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callba
   setStream(stream);
 }
 
-PubSubClient::PubSubClient(const char* domain, uint16_t port, Client& client) {
-  setServer(domain, port);
-  setClient(client);
-}
-PubSubClient::PubSubClient(const char* domain, uint16_t port, Client& client, Stream& stream) {
-  setServer(domain, port);
-  setClient(client);
-  setStream(stream);
-}
 PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) {
   setServer(domain, port);
   setCallback(callback);
   setClient(client);
 }
-PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
-  setServer(domain, port);
-  setCallback(callback);
-  setClient(client);
-  setStream(stream);
-}
-
 bool PubSubClient::connect(const char* id) {  // NOLINT(readability-convert-member-functions-to-static)
   return connect(id, nullptr, nullptr, nullptr, 0U, false, nullptr, true);
 }

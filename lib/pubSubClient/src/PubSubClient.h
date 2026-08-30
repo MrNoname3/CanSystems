@@ -106,41 +106,6 @@ public:
   /// @param client Reference to the TCP client.
   PubSubClient(IPAddress addr, uint16_t port, Client& client);
 
-  /// @brief Constructs a PubSubClient with a server IP address and stream.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream& stream);
-
-  /// @brief Constructs a PubSubClient with a server IP address and callback.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server IP address, callback and stream.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
-
-  /// @brief Constructs a PubSubClient with a server IP given as a byte array.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  PubSubClient(const uint8_t* ip, uint16_t port, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server IP byte array and stream.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const uint8_t* ip, uint16_t port, Client& client, Stream& stream);
-
   /// @brief Constructs a PubSubClient with a server IP byte array and callback.
   /// @param ip Pointer to a 4-byte array holding the server IP address.
   /// @param port Server port number.
@@ -156,33 +121,12 @@ public:
   /// @param stream Reference to the stream for large payload passthrough.
   PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
-  /// @brief Constructs a PubSubClient with a server domain name.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  PubSubClient(const char* domain, uint16_t port, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server domain name and stream.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const char* domain, uint16_t port, Client& client, Stream& stream);
-
   /// @brief Constructs a PubSubClient with a server domain name and callback.
   /// @param domain Null-terminated server domain name string.
   /// @param port Server port number.
   /// @param callback Callback invoked when a message is received.
   /// @param client Reference to the TCP client.
   PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server domain name, callback and stream.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
   /// @brief Default destructor.
   ~PubSubClient() = default;
