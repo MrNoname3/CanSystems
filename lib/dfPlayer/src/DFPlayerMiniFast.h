@@ -335,6 +335,12 @@ private:
 
   /// @brief Calculate the two's-complement checksum and write it into the packet struct.
   /// @param _stack Reference to the packet to checksum.
+  /// @brief Computes the checksum a packet's fields require, without touching the packet.
+  /// @param _stack Packet whose fields are summed.
+  /// @return The 16-bit checksum.
+  [[nodiscard]] static uint16_t computeChecksum(const Stack& _stack);
+
+  /// @brief Writes the checksum its fields require into a packet about to be sent.
   static void findChecksum(Stack& _stack);
 
   /// @brief Send the current sendStack packet over serial.

@@ -28,6 +28,19 @@ static uint8_t packetCmd(size_t index) { return Stream::captured[index * 10U + 3
 static uint8_t packetMsb(size_t index) { return Stream::captured[index * 10U + 5U]; }
 static uint8_t packetLsb(size_t index) { return Stream::captured[index * 10U + 6U]; }
 
+// Checksum the module expects: two's complement of bytes 1..6 (version..paramLSB).
+static uint16_t expectedChecksum(size_t index) {
+  uint16_t sum = 0U;
+  for(size_t byteIndex = 1U; byteIndex <= 6U; ++byteIndex) {
+    sum = static_cast<uint16_t>(sum + Stream::captured[index * 10U + byteIndex]);
+  }
+  return static_cast<uint16_t>(~sum + 1U);
+}
+
+static uint16_t packetChecksum(size_t index) {
+  return static_cast<uint16_t>((static_cast<uint16_t>(Stream::captured[index * 10U + 7U]) << 8U) | Stream::captured[index * 10U + 8U]);
+}
+
 // Advances the fake clock and runs the task once.
 static void step(Task& task, uint32_t& now, uint32_t advanceMs) {
   now += advanceMs;
@@ -171,6 +184,24 @@ bool test_volume_is_masked_into_range() {
   END_IT
 }
 
+bool test_every_packet_carries_its_own_checksum() {
+  IT("every packet sent carries the checksum of its own fields");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(7U, 20U, 1U, 2U, 3U);
+  (void)walkToPlaying(task);
+
+  IS_TRUE(packetCount() > 1U);
+  bool allMatch = true;
+  for(size_t index = 0U; index < packetCount(); ++index) {
+    if(packetChecksum(index) != expectedChecksum(index)) { allMatch = false; }
+  }
+  IS_TRUE(allMatch);
+  END_IT
+}
+
 int main() {
   SUITE("DFPlayer");
   test_idle_without_queue_does_nothing();
@@ -179,5 +210,6 @@ int main() {
   test_busy_timeout_sends_stop();
   test_queue_capacity_drops_sixth_track();
   test_volume_is_masked_into_range();
+  test_every_packet_carries_its_own_checksum();
   FINISH
 }
