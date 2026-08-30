@@ -46,8 +46,11 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
   which **push-mirrors to GitHub** automatically — no second remote needed).
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
-  jobs, and Dependabot opens weekly PRs for GitHub Actions and pip dev-tooling version bumps;
-  **Gitea CI is intentionally off**.
+  jobs; **Gitea CI is intentionally off**.
+- Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
+  GitHub Actions and pip ecosystems. Dependabot is deliberately not used: it only runs on GitHub,
+  and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
+  pins in `platformio.ini` stay manual.
 - End commit messages with the `Co-Authored-By` trailer.
 
 ## Dependencies
