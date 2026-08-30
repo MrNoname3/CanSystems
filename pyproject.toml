@@ -37,11 +37,13 @@ select = [
 
 # Static type checking (run by scripts/typecheck_check.py, enforced in CI). Strict over the OTA
 # tool, the dev scripts and the OTA tests. Excluded: the four SCons build scripts (Import("env")
-# injects names pyright cannot see, same reason they are ruff per-file-ignored above). The OTA
-# tool's third-party deps are resolved via the interpreter the runner passes with --pythonpath
+# injects names pyright cannot see, same reason they are ruff per-file-ignored above), and the
+# PlatformIO test runner, which subclasses an API that lives in PlatformIO's own penv rather
+# than the .venv pyright runs against. ruff still covers all of them. The OTA tool's
+# third-party deps are resolved via the interpreter the runner passes with --pythonpath
 # (the project-root .venv locally, the CI interpreter in CI).
 [tool.pyright]
-include = ["ota", "scripts"]
+include = ["ota", "scripts", "test"]
 # ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime).
 extraPaths = ["ota"]
 exclude = [
@@ -52,6 +54,7 @@ exclude = [
     "scripts/git_commit_info.py",
     "scripts/patch_elf2bin.py",
     "scripts/relax_core_warnings.py",
+    "test/test_custom_runner.py",
 ]
 typeCheckingMode = "strict"
 
@@ -60,6 +63,7 @@ typeCheckingMode = "strict"
 [[tool.pyright.executionEnvironments]]
 root = "ota/tests"
 reportPrivateUsage = false
+
 
 # pytest unit tests for the OTA tool and the build helpers (run by scripts/pytest_check.py,
 # enforced in CI).
