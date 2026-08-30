@@ -17,10 +17,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
   reconnectTimer(0U),
-  dropCause(nullptr),
-  dropTimeStr{ '\0' },
-  dropDetectedTimer(0U),
-  reconnectCount(0U),
 #ifdef ESP8266
   serverCert{},
 #endif
@@ -273,8 +269,7 @@ bool Connectivity::run() {
     if(onlineState) {
       publishDisconnectDiag(actualTime);
     } else {
-      // networkState is already refreshed above: a link drop wins over the (already torn down) MQTT state.
-      recordDisconnect(networkState ? getMqttStatusStr(mqttState) : networkLostStr, actualTime);
+      recordDisconnect(actualTime);
     }
   }
 
@@ -285,27 +280,28 @@ bool Connectivity::run() {
   return true;
 }
 
-void Connectivity::recordDisconnect(const char* cause, uint32_t actualTime) {
-  dropCause = cause;
-  dropDetectedTimer = actualTime;
+void Connectivity::recordDisconnect(uint32_t actualTime) { // NOLINT(readability-convert-member-functions-to-static)
+  char dropTimeStr[dateTimeStrBufSize] = { '\0' };
   if(!Time::getIsoUtcString(dropTimeStr, sizeof(dropTimeStr))) {
     dropTimeStr[0] = '\0';
   }
-  Logger::get()->printf_P(PSTR("[DIAG] Disconnect recorded: %s at %s\r\n"), cause, dropTimeStr);
+  // networkState is already refreshed by run(): a link drop wins over the (already torn down)
+  // MQTT state, which DisconnectDiag decides from the flag.
+  disconnectDiag.recordDisconnect(networkState, getMqttStatusStr(mqttState), dropTimeStr, actualTime);
+  Logger::get()->printf_P(PSTR("[DIAG] Disconnect recorded at %s\r\n"), dropTimeStr);
 }
 
 void Connectivity::publishDisconnectDiag(uint32_t actualTime) {
-  if(dropCause == nullptr) { return; }                              // Nothing recorded (first connect after boot).
-  reconnectCount++;
+  DisconnectDiag::Report report;
+  if(!disconnectDiag.takeReport(actualTime, report)) { return; }    // Nothing recorded (first connect after boot).
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
-  const uint32_t downSec = (actualTime - dropDetectedTimer) / 1000U;
-  const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(), dropCause, dropTimeStr, downSec, reconnectCount);
+  const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
+                                             report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount);
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
     const bool diagResult = publishRetained(MqttTopics::getDiagSubtopic(), diagPayload);
     Logger::get()->printf_P(PSTR("[DIAG] Disconnect diagnostics: %s\r\n"), Str::getStateStr(diagResult));
   }
-  dropCause = nullptr;
 }
 
 void Connectivity::shutdownMqtt() {
