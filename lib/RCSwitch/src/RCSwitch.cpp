@@ -607,9 +607,9 @@ void RCSwitch::send(unsigned long long code, unsigned int length) {
   digitalWrite(this->nTransmitterPin, LOW);
 
 #if not defined(RCSwitchDisableReceiving)
-  // enable receiver again if we just disabled it
+  // enable receiver again if we just disabled it, keeping any frame that arrived beforehand
   if(nReceiverInterrupt_backup != -1) {
-    this->enableReceive(nReceiverInterrupt_backup);
+    this->resumeReceive(nReceiverInterrupt_backup);
   }
 #endif
 }
@@ -642,14 +642,31 @@ void RCSwitch::enableReceive(int interrupt) {
 
 void RCSwitch::enableReceive() { // NOLINT(readability-make-member-function-const)
   if(this->nReceiverInterrupt != -1) {
+    // Starting reception discards whatever the previous session left behind.
     RCSwitch::nReceivedValue = 0;
     RCSwitch::nReceivedBitlength = 0;
-#if defined(RaspberryPi) // Raspberry Pi
-    wiringPiISR(this->nReceiverInterrupt, INT_EDGE_BOTH, &handleInterrupt);
-#else // Arduino
-    attachInterrupt(this->nReceiverInterrupt, handleInterrupt, CHANGE);
-#endif
+    this->attachReceiveInterrupt();
   }
+}
+
+/**
+ * Re-attach the receive interrupt without discarding an already received frame. Used after a
+ * transmission, which turns the receiver off and back on: a frame that arrived before the
+ * transmission has not been read yet and is still the caller's to collect.
+ */
+void RCSwitch::resumeReceive(int interrupt) { // NOLINT(readability-make-member-function-const)
+  this->nReceiverInterrupt = interrupt;
+  if(this->nReceiverInterrupt != -1) {
+    this->attachReceiveInterrupt();
+  }
+}
+
+void RCSwitch::attachReceiveInterrupt() const {
+#if defined(RaspberryPi) // Raspberry Pi
+  wiringPiISR(this->nReceiverInterrupt, INT_EDGE_BOTH, &handleInterrupt);
+#else // Arduino
+  attachInterrupt(this->nReceiverInterrupt, handleInterrupt, CHANGE);
+#endif
 }
 
 /**

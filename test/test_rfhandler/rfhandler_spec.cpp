@@ -168,6 +168,27 @@ bool test_mqtt_message_without_data_does_not_transmit() {
   END_IT
 }
 
+bool test_a_received_frame_survives_a_transmit_in_the_same_pass() {
+  IT("a frame waiting to be read is published before the pass transmits anything");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+
+  // A command is queued and a frame arrives before the task gets its turn. Transmitting turns
+  // the receiver off and back on, so anything not read by then is gone.
+  JsonDocument doc;
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":1,"Pulse":350})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  RCSwitch::injectReceived(0x1234U, 24U, 1U, 350U);
+
+  IS_TRUE(rf.run());
+
+  IS_EQUAL(MqttBase::messageCount, 1U);              // the received frame was published
+  IS_EQUAL(RCSwitch::sendCount, 1);                  // and the queued command still went out
+  END_IT
+}
+
 bool test_an_implausible_pulse_length_is_rejected() {
   IT("a pulse length no 433 MHz remote could use is rejected instead of transmitted");
   resetEnv();
@@ -245,6 +266,7 @@ int main() {
   test_mqtt_message_transmits_rf();
   test_the_callback_itself_does_not_touch_the_transceiver();
   test_queued_commands_transmit_in_arrival_order();
+  test_a_received_frame_survives_a_transmit_in_the_same_pass();
   test_an_implausible_pulse_length_is_rejected();
   test_a_too_short_pulse_length_is_rejected();
   test_a_zero_pulse_length_keeps_the_current_one();

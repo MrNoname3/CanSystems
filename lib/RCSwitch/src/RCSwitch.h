@@ -107,6 +107,7 @@ public:
 #if not defined(RCSwitchDisableReceiving)
   void enableReceive(int interrupt);
   void enableReceive();
+  void resumeReceive(int interrupt);
   void disableReceive();
   bool available();
   void resetAvailable();
@@ -184,6 +185,7 @@ private:
   const char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
   const char* getCodeWordD(char group, int nDevice, bool bStatus);
   void transmit(HighLow pulses);
+  void attachReceiveInterrupt() const;
 
 #if not defined(RCSwitchDisableReceiving)
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
