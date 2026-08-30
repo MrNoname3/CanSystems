@@ -124,9 +124,8 @@ bool SPIFlash::waitUntilReady() {
   const uint32_t startTime = millis();
   for(;;) {
     const uint8_t status = readStatus();
-    // All ones means nothing is driving MISO - an absent or unresponsive chip. The busy bit on
-    // its own cannot tell that apart from a genuine write in progress, which is why the wait
-    // used to run forever and the header recommended a pull-down on MISO as the cure.
+    // All ones means nothing is driving MISO: an absent or unresponsive chip. The busy bit on
+    // its own reads as set in that case, indistinguishable from a write in progress.
     if(status == statusNotResponding) { return false; }
     if((status & 1U) == 0U) { return true; }
     if((millis() - startTime) > busyTimeoutMs) { return false; }

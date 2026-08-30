@@ -138,9 +138,11 @@ private:
 
   uint8_t slaveSelectPin;                                           // SPI chip-select pin.
   static constexpr uint8_t statusNotResponding = 0xFFU;             // All ones: nothing is driving MISO.
-  // Generous for the only operation this ever waits on - a page program takes 3 ms at worst.
-  // The long erases are polled by the caller (OTA::run) rather than waited for here.
-  static constexpr uint32_t busyTimeoutMs = 500U;
+  // Upper bound for one readiness wait. Covers the programming this class waits on - a byte or
+  // short page program, tens of microseconds - and stays short because a single caller
+  // operation can perform several waits back to back. Erases are not waited for here: they run
+  // for orders of magnitude longer, so poll busy() for those instead.
+  static constexpr uint32_t busyTimeoutMs = 5U;
 
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
   uint8_t spcr;                                                     // Saved SPCR register value.
