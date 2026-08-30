@@ -18,11 +18,11 @@ static constexpr uint8_t LED_PIN                    = 2U;           // Pin of th
 // clang-format on
 
 //--- Functions ---//
-void maxLoopTimeCallback(uint32_t maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime);
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
-Performance performance(2U, maxLoopTimeCallback);
+Performance performance(2U, maxRoundTimeCallback);
 NetworkManager networkManager(NetworkManager::Interface::LAN8720);
 Connectivity iotConn(
     networkManager,
@@ -52,6 +52,6 @@ void loop() {
   AppBootstrap::runLoop(taskHandler);
 }
 
-void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get()->printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime) {
+  Logger::get()->printf_P(PSTR("Max round time: %ums\r\n"), maxRoundTime);
 }

@@ -41,11 +41,17 @@ even the CAN devices' firmware — is updatable over the air through MQTT.
 | Environment                | MCU        | Role |
 |----------------------------|------------|------|
 | `nanoatmega328_alert`      | ATmega328P | CAN alert node: WS2812 strip, DFPlayer MP3, Si7021 + LDR, pushbutton |
-| `nanoatmega328_irrigation` | ATmega328P | CAN irrigation node: 4 pump channels, flow/current safety checks, moisture sensors |
+| `nanoatmega328_irrigation` | ATmega328P | CAN irrigation node: 4 pump channels, flow/current safety checks, moisture sensors (CAN-only — see below) |
 | `project_esp8266_rad`      | ESP8266    | Geiger counter (CPM → µSv/h) + 433 MHz RF transceiver, ENC28J60 Ethernet |
 | `project_esp8266_thermo`   | ESP8266    | DS18B20 multi-probe thermometer (works with zero probes — handy as a test board) |
 | `project_esp32_can`        | ESP32      | CAN↔MQTT gateway for the alert nodes, LAN8720 Ethernet |
 | `native_test`              | host       | Native unit-test suite (custom runner + shims) |
+
+The irrigation node is **CAN-only for now**: it publishes `MOISTURE_DATA` and
+`IRRIGATION_ERROR` on the bus, but the gateway has no driver registered for its CAN ID, so
+those frames are dropped and nothing reaches MQTT or Home Assistant. The node is dormant and a
+`CanIrrigationDriver` is future work; `CanMqttGateway` already carries the shared parts
+(availability, info, OTA, discovery), so only `processCanFrameArrived()` would need writing.
 
 The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader and fuses
 (see [`bootloader/README.md`](bootloader/README.md) for the variants, fuses and rebuild steps).

@@ -22,7 +22,7 @@ enum class CanCmd : uint16_t {
   OTA_SEND,                                   // Send firmware data chunks for OTA updates.
   OTA_END,                                    // Signal the end of the OTA update process.
   RGB_LED,                                    // Set the color of WS2812 RGB LEDs.
-  LOOP_TIME_MAX,                              // Send maximum loop time in milliseconds.
+  ROUND_TIME_MAX,                             // Longest gap between two turns of an ordinary task, in ms.
 };
 
 /// @brief Commands only the ATmega328P alert node understands.

@@ -150,7 +150,7 @@ bool test_unknown_frame_is_ignored() {
   static Connectivity conn;
   static CanAlertDriver driver(can, 31U, conn, "alert6");
   const uint8_t data[8] = { 0U };
-  injectFrame(driver, static_cast<uint16_t>(CanCmd::LOOP_TIME_MAX), data);
+  injectFrame(driver, static_cast<uint16_t>(CanCmd::ROUND_TIME_MAX), data);
   IS_EQUAL(MqttBase::messageCount, 0);
   IS_EQUAL(MqttBase::subtopicMessages.size(), 0U);
   END_IT

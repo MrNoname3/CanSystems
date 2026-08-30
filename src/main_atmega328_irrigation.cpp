@@ -36,7 +36,7 @@ static constexpr uint8_t MOISTURE_CH_NUM = arraySize(MOISTURE_CH);  // Number of
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void maxLoopTimeCallback(uint32_t maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime);
 
 //--- Asserts ---//
 static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
@@ -67,7 +67,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     [](const uint8_t (&data)[8]) -> void {
       canHandler.send(IrrigationCmd::MOISTURE_DATA, data);
     });
-Performance performance(2U, maxLoopTimeCallback);
+Performance performance(2U, maxRoundTimeCallback);
 
 //--- Handling tasks ---//
 Task* task[] = { &canHandler, &buttonHandler, &pcf, &pc, &moistureReader, &performance };
@@ -150,15 +150,15 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   }
 }
 
-void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get()->print(F("Max loop time: "));
-  Logger::get()->println(maxLoopTime);
-  const uint8_t loopTimeBytes[8] = {
-    static_cast<uint8_t>(maxLoopTime & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFFU),
+void maxRoundTimeCallback(uint32_t maxRoundTime) {
+  Logger::get()->print(F("Max round time: "));
+  Logger::get()->println(maxRoundTime);
+  const uint8_t roundTimeBytes[8] = {
+    static_cast<uint8_t>(maxRoundTime & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 8U) & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 16U) & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 24U) & 0xFFU),
     0U, 0U, 0U, 0U
   };
-  canHandler.send(CanCmd::LOOP_TIME_MAX, loopTimeBytes);
+  canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
 }

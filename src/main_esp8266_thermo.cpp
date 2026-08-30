@@ -20,11 +20,11 @@ static constexpr uint32_t MEASURE_PERIOD_MS = Time::minToMs(5U);  // Interval be
 // clang-format on
 
 //--- Functions ---//
-void maxLoopTimeCallback(uint32_t maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime);
 
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, LOW);
-Performance performance(1U, maxLoopTimeCallback);
+Performance performance(1U, maxRoundTimeCallback);
 NetworkManager networkManager(NetworkManager::Interface::WIFI);
 Connectivity iotConn(
     networkManager,
@@ -50,6 +50,6 @@ void loop() {
   AppBootstrap::runLoop(taskHandler);
 }
 
-void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get()->printf_P(PSTR("Max loop time: %ums\r\n"), maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime) {
+  Logger::get()->printf_P(PSTR("Max round time: %ums\r\n"), maxRoundTime);
 }
