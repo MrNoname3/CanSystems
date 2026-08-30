@@ -1,5 +1,6 @@
 #include "otaRegistry.hpp"
 #include <string.h>                                                 /// String comparison utilities.
+#include <pgmspace.h>                                               /// strcmp_P for the PROGMEM file names.
 
 OtaTarget* OtaRegistry::head = nullptr;
 
@@ -23,7 +24,7 @@ void OtaRegistry::triggerForFile(const char* fileName) {
   if(fileName == nullptr) { return; }
   for(OtaTarget* current = head; current != nullptr; current = current->next) {
     const char* targetFile = current->getFwFileName();
-    if(targetFile != nullptr && strcmp(fileName, targetFile) == 0) {
+    if(targetFile != nullptr && strcmp_P(fileName, targetFile) == 0) {
       current->triggerOta();
     }
   }

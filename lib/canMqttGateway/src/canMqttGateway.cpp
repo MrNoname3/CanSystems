@@ -258,7 +258,7 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLI
   if(commandJsonVar.is<uint16_t>() && dataJsonVar.is<const char*>()) {
     const uint16_t command = commandJsonVar.as<uint16_t>();
     const char* canDataStr = dataJsonVar.as<const char*>();
-    if(canDataStr == nullptr) { return; }
+    if(canDataStr == nullptr || *canDataStr == '\0') { return; }
     char* endPtr = nullptr;
     const uint64_t canData64 = std::strtoull(canDataStr, &endPtr, 16);
     if(*endPtr != '\0') { return; }

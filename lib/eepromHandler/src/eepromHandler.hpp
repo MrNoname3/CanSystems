@@ -105,7 +105,7 @@ private:
   static inline bool init() {
     // cppcheck-suppress knownConditionTrueFalse
     if(eepromInitialised) { return true; }
-    eepromInitialised = EEPROM.begin(sizeof(EEPROMData));
+    eepromInitialised = EEPROM.begin(eepromAddress + sizeof(EEPROMData));
     return eepromInitialised;
   }
 #endif
