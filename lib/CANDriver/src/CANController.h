@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include <Arduino.h>                                                /// Arduino types and Stream.
 
 /// @brief Base class holding the packet state a CAN controller driver builds on.
 /// @details The CAN operations are deliberately non-virtual: CAN.h picks one implementation at
