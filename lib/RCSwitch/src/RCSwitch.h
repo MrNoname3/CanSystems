@@ -30,8 +30,8 @@
 #ifndef RC_SWITCH_H
 #define RC_SWITCH_H
 
-#include "Arduino.h"
-#include <stdint.h>
+#include "Arduino.h"                                                /// Arduino core types and pin functions.
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 #if defined(ESP8266)
 // interrupt handler and related code must be in RAM on ESP8266,
@@ -74,47 +74,75 @@ public:
   RCSwitch(RCSwitch&&) = delete;                                    // Define move constructor.
   RCSwitch& operator=(RCSwitch&&) = delete;                         // Define move assignment operator.
 
+  /// @brief Transmits one code, repeated as many times as setRepeatTransmit() asks for.
+  /// @param code Code word to send.
+  /// @param length Number of bits of `code` to send, counted from the least significant end.
+  /// @note Blocks for the whole transmission - the pulses are bit-banged - and turns the
+  /// receiver off for its duration, without discarding an already received frame.
   void send(uint64_t code, uint32_t length);
 
 #if not defined(RCSwitchDisableReceiving)
+  /// @brief Starts reception on an interrupt, discarding any frame held from before.
+  /// @param interrupt Interrupt number the receiver pin is attached to.
   void enableReceive(int32_t interrupt);
+
+  /// @brief Starts reception on the interrupt a previous enableReceive() selected.
   void enableReceive();
+
+  /// @brief Re-attaches the receive interrupt, keeping a frame that arrived before it was
+  /// detached.
+  /// @param interrupt Interrupt number the receiver pin is attached to.
+  /// @note Used after a transmission, which turns the receiver off and back on: a frame that
+  /// arrived beforehand has not been read yet and is still the caller's to collect.
   void resumeReceive(int32_t interrupt);
+
+  /// @brief Stops reception by detaching the interrupt.
   void disableReceive();
-  bool available();
+
+  /// @brief Reports whether a decoded frame is waiting to be collected.
+  [[nodiscard]] bool available();
+
+  /// @brief Discards the frame currently held, so the next one can be received.
   void resetAvailable();
 
-  uint64_t getReceivedValue();
-  uint32_t getReceivedBitlength();
-  uint32_t getReceivedDelay();
-  uint32_t getReceivedProtocol();
-  uint8_t getNumProtos();
+  /// @brief Code word of the frame currently held, or 0 when there is none.
+  [[nodiscard]] uint64_t getReceivedValue();
+
+  /// @brief Number of bits the held frame carries.
+  [[nodiscard]] uint32_t getReceivedBitlength();
+
+  /// @brief Base pulse length of the held frame, in microseconds.
+  [[nodiscard]] uint32_t getReceivedDelay();
+
+  /// @brief Number of the protocol the held frame was decoded with, counted from 1.
+  [[nodiscard]] uint32_t getReceivedProtocol();
+
+  /// @brief Number of protocols the decoder knows, which is the highest valid protocol number.
+  [[nodiscard]] uint8_t getNumProtos();
 #endif
 
+  /// @brief Selects the pin the transmitter is wired to and enables transmission.
+  /// @param nTransmitterPin Digital output pin driving the transmitter.
   void enableTransmit(int32_t nTransmitterPin);
-  void setPulseLength(int32_t nPulseLength);
-  void setRepeatTransmit(int32_t nRepeatTransmit);
-#if not defined(RCSwitchDisableReceiving)
-#endif
 
-  /**
-   * Description of a single pule, which consists of a high signal
-   * whose duration is "high" times the base pulse length, followed
-   * by a low signal lasting "low" times the base pulse length.
-   * Thus, the pulse overall lasts (high+low)*pulseLength
-   */
+  /// @brief Overrides the base pulse length the current protocol brought with it.
+  /// @param nPulseLength Pulse length in microseconds.
+  void setPulseLength(int32_t nPulseLength);
+
+  /// @brief Sets how many times send() repeats each code.
+  /// @param nRepeatTransmit Repeat count; repeats are what make a lossy 433 MHz link arrive.
+  void setRepeatTransmit(int32_t nRepeatTransmit);
+
+  /// @brief One pulse: a high signal lasting `high` base pulse lengths, then a low signal
+  /// lasting `low` of them, so the pulse takes (high + low) * pulseLength altogether.
   struct HighLow {
     uint8_t high;
     uint8_t low;
   };
 
-  /**
-   * A "protocol" describes how zero and one bits are encoded into high/low
-   * pulses.
-   */
+  /// @brief How zero and one bits are encoded into high/low pulses.
   struct Protocol {
-    /** base pulse length in microseconds, e.g. 350 */
-    uint16_t pulseLength;
+    uint16_t pulseLength;                             // Base pulse length in microseconds, e.g. 350.
     uint8_t PreambleFactor;
     HighLow Preamble;
     uint8_t HeaderFactor;
@@ -123,27 +151,22 @@ public:
     HighLow zero;
     HighLow one;
 
-    /**
-     * If true, interchange high and low logic levels in all transmissions.
-     *
-     * By default, RCSwitch assumes that any signals it sends or receives
-     * can be broken down into pulses which start with a high signal level,
-     * followed by a a low signal level. This is e.g. the case for the
-     * popular PT 2260 encoder chip, and thus many switches out there.
-     *
-     * But some devices do it the other way around, and start with a low
-     * signal level, followed by a high signal level, e.g. the HT6P20B. To
-     * accommodate this, one can set invertedSignal to true, which causes
-     * RCSwitch to change how it interprets any HighLow struct FOO: It will
-     * then assume transmissions start with a low signal lasting
-     * FOO.high*pulseLength microseconds, followed by a high signal lasting
-     * FOO.low*pulseLength microseconds.
-     */
+    /// @brief Swaps the high and low levels of every pulse.
+    /// @details A pulse normally starts high and then goes low, as the widespread PT2260
+    /// encoder does it. Some devices, the HT6P20B among them, start low instead; with this set
+    /// a HighLow's `high` field times the pulse length becomes the low part and `low` the high
+    /// part.
     bool invertedSignal;
     uint16_t Guard;
   };
 
+  /// @brief Uses a protocol description of the caller's own.
+  /// @param protocol Protocol to send and decode with.
   void setProtocol(Protocol protocol);
+
+  /// @brief Selects one of the built-in protocols.
+  /// @param nProtocol Protocol number, counted from 1; anything outside the table falls back
+  /// to protocol 1.
   void setProtocol(int32_t nProtocol);
 
 private:

@@ -142,7 +142,7 @@ void RCSwitch::setProtocol(Protocol protocol) {
  */
 void RCSwitch::setProtocol(int32_t nProtocol) { // NOLINT(readability-convert-member-functions-to-static)
   if(nProtocol < 1 || nProtocol > numProto) {
-    nProtocol = 1;  // TODO: trigger an error, e.g. "bad protocol" ???
+    nProtocol = 1;  // Out of range: fall back to the first protocol.
   }
 #if defined(ESP8266) || defined(ESP32)
   this->protocol = proto[nProtocol - 1];
@@ -283,11 +283,6 @@ void RCSwitch::enableReceive() { // NOLINT(readability-make-member-function-cons
   }
 }
 
-/**
- * Re-attach the receive interrupt without discarding an already received frame. Used after a
- * transmission, which turns the receiver off and back on: a frame that arrived before the
- * transmission has not been read yet and is still the caller's to collect.
- */
 void RCSwitch::resumeReceive(int32_t interrupt) { // NOLINT(readability-make-member-function-const)
   this->nReceiverInterrupt = interrupt;
   if(this->nReceiverInterrupt != -1) {
