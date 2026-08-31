@@ -51,7 +51,11 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
   jobs; **Gitea CI is intentionally off**.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
-  GitHub Actions and pip ecosystems. Dependabot is deliberately not used: it only runs on GitHub,
+  pip and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and
+  the `atmelavr` platform pin through a custom manager. Patch/pin/digest automerge after a 3-day
+  soak (plus minor for Actions); everything else waits on the dashboard. The urboot image is
+  excluded from automerge - the bootloader `.hex` files are committed, so a base-image change
+  wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). Dependabot is deliberately not used: it only runs on GitHub,
   and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
   pins in `platformio.ini` stay manual.
 - End commit messages with the `Co-Authored-By` trailer.
