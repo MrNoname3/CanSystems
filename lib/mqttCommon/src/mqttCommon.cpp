@@ -74,7 +74,9 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   if(fileNamePresented && fileSizePresented && fileMd5Presented) {
     if(binIdPresented) {
       const char* binId = binIdJsonVar.as<const char*>();
-      if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
+      // The terminator is part of the comparison: without it every id that merely starts with this
+      // environment's name would pass, and getPioEnv() is a plain RAM string, not a PROGMEM one.
+      if(strncmp(binId, Build::getPioEnv(), Build::getPioEnvLength() + 1U) != 0) {
         Logger::get()->printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
         sendResponse(false);
         return;
