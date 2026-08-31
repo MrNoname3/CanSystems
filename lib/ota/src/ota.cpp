@@ -7,6 +7,7 @@ OTA::OTA(SPIFlash& flash) :
   fwCrc(0),
   flashPointer(0),
   flashBlockBeginAddress(0),
+  stallTimer(0),
   otaState(OtaState::IDLE) {}
 
 bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
@@ -24,6 +25,7 @@ bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   // 32-bit multiply: with AVR's 16-bit int the product would wrap for flashBlockNumber >= 2.
   flashBlockBeginAddress = static_cast<uint32_t>(flashBlockNumber) * flashBlockTobytes;
   flashPointer = 0;                                               // Reset flash pointer.
+  stallTimer = millis();
   otaState = OtaState::START;
   return true;                                                    // Return success.
 }
@@ -52,10 +54,21 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
     flashPointer++;
     if(flashPointer > fwSize) { return false; }              // Check for overwrites.
   }
+  stallTimer = millis();                                     // The sender is still there.
   return true;
 }
 
 OTA::OtaState OTA::run() {
+  // Nothing else ends a transfer the gateway walked away from: STORE only advances on the next
+  // piece, and START only on a chip that comes ready. Both would otherwise hold the stale image
+  // until the next reset.
+  const bool waitingOnSomebody = (otaState == OtaState::START) || (otaState == OtaState::STORE);
+  if(waitingOnSomebody && Time::hasElapsed(millis(), stallTimer, stallTimeoutTime)) {
+    // Returned rather than fallen through, like the CRC mismatch below: the caller has to see
+    // INVALID to NACK the transfer, and the next pass does the cleanup.
+    otaState = OtaState::INVALID;
+    return otaState;
+  }
   switch(otaState) {
     case OtaState::IDLE: {
     } break;

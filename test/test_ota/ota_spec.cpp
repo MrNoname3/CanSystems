@@ -255,6 +255,54 @@ bool test_run_read_back_failure_goes_invalid() {
   END_IT
 }
 
+bool test_run_store_stall_times_out() {
+  IT("STORE ends as INVALID when no further piece arrives");
+  setFakeMillis(0U);
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t chunk[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  IS_TRUE(ota.start(0U, 8U, 0U));         // 8 bytes expected, only 4 will arrive
+  IS_TRUE(ota.storeNextData(0U, chunk));
+  IS_EQUAL(ota.run(), OtaState::STORE);
+  setFakeMillis(4U * 60U * 1000U);        // > 3 min stall timeout
+  IS_EQUAL(ota.run(), OtaState::INVALID);
+  IS_EQUAL(ota.run(), OtaState::IDLE);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_run_start_stall_times_out() {
+  IT("START ends as INVALID when the chip never reports itself ready");
+  setFakeMillis(0U);
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  flash.setBusy(true);                    // erase that never finishes, e.g. an unresponsive chip
+  IS_EQUAL(ota.run(), OtaState::START);
+  setFakeMillis(4U * 60U * 1000U);
+  IS_EQUAL(ota.run(), OtaState::INVALID);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_run_progress_keeps_the_transfer_alive() {
+  IT("each accepted piece restarts the stall timeout, so a long transfer is not cut off");
+  setFakeMillis(0U);
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t chunk[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  IS_TRUE(ota.start(0U, 12U, 0U));
+  // Pieces arrive 2 minutes apart: six minutes in total, none of the gaps past the timeout.
+  for(uint8_t i = 0U; i < 3U; i++) {
+    setFakeMillis((static_cast<uint32_t>(i) * 2U * 60U * 1000U) + 1U);
+    IS_TRUE(ota.storeNextData(static_cast<uint32_t>(i) * OTA::fwPieceSize, chunk));
+    IS_TRUE(ota.run() != OtaState::INVALID);
+  }
+  IS_EQUAL(ota.run(), OtaState::CHECK);   // all 12 bytes in: moved on rather than timing out
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_run_invalid_clears_flash() {
   IT("INVALID state calls chipErase so flash bytes return to the erased 0xFF state");
   SPIFlash flash(0U);
@@ -368,6 +416,9 @@ int main() {
   test_run_start_stays_when_busy();
   test_run_full_valid_flow();
   test_run_crc_mismatch_goes_invalid();
+  test_run_store_stall_times_out();
+  test_run_start_stall_times_out();
+  test_run_progress_keeps_the_transfer_alive();
   test_start_rejects_when_erase_cannot_be_issued();
   test_store_reports_a_failed_flash_write();
   test_run_read_back_failure_goes_invalid();
