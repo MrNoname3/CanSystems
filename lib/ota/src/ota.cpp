@@ -16,7 +16,9 @@ bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   // reports 0 for an absent/unreadable chip, which rejects every transfer (fail-safe: never
   // write to a flash we cannot size).
   if(static_cast<uint32_t>(flashBlockNumber) * flashBlockTobytes + fwSize > flash.capacity()) { return false; }
-  flash.chipErase();                                              // Attempt to erase the FLASH block.
+  // A chip still running an earlier erase cannot take this image: writing into cells that were
+  // never cleared would only be caught by the CRC, after the whole firmware has crossed the bus.
+  if(!flash.chipErase()) { return false; }
   this->fwSize = fwSize;                                          // Save FW size.
   this->fwCrc = fwCrc;                                            // Store FW CRC.
   // 32-bit multiply: with AVR's 16-bit int the product would wrap for flashBlockNumber >= 2.
@@ -42,7 +44,10 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
       firstFwBytes[i] = fwData[i];
     } else {
       // Save the other bytes to the FLASH.
-      flash.writeByte(flashBlockBeginAddress + flashPointer, fwData[i]);
+      if(!flash.writeByte(flashBlockBeginAddress + flashPointer, fwData[i])) {
+        otaState = OtaState::INVALID;   // stop now instead of streaming the rest into a dead chip
+        return false;
+      }
     }
     flashPointer++;
     if(flashPointer > fwSize) { return false; }              // Check for overwrites.
@@ -85,12 +90,12 @@ OTA::OtaState OTA::run() {
         }
         // If everything is good, write the remaining bytes from memory to FLASH and read it back.
         uint8_t dataReadBack[sizeof(firstFwBytes)] = { 0 };
-        flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
-        flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
-        // Compares the read-back bytes with the original. A failed write is the one thing SPIFlash
-        // cannot report back, so this comparison is the only signal there is - and leaving the state
-        // alone here would re-run the same write on every pass instead of ending the transfer.
-        if(memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0) {
+        const bool writeBackOk = flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
+        const bool readBackOk = flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
+        // The read-back stays even though the write now reports itself: a program the chip accepted
+        // still lands wrong on cells that were not erased. Leaving the state alone on a mismatch
+        // would re-run the same write on every pass instead of ending the transfer.
+        if(writeBackOk && readBackOk && (memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0)) {
           otaState = OtaState::VALID;
         } else {
           otaState = OtaState::INVALID;
@@ -101,7 +106,7 @@ OTA::OtaState OTA::run() {
       otaState = OtaState::IDLE;
     } break;
     case OtaState::INVALID: {
-      flash.chipErase();
+      (void)flash.chipErase();   // nothing left to report to: the next start() finds the chip busy and refuses
       fwSize = 0;
       fwCrc = 0;
       flashPointer = 0;

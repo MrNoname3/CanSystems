@@ -50,7 +50,7 @@ bool test_start_erases_flash() {
   IT("start calls chipErase so pre-existing flash bytes read back as 0xFF");
   SPIFlash flash(0U);
   OTA ota(flash);
-  flash.writeByte(5U, 0xABU);
+  IS_TRUE(flash.writeByte(5U, 0xABU));
   IS_EQUAL(flash.readByte(5U), 0xABU);
   IS_TRUE(ota.start(0U, 4U, 0U));
   IS_EQUAL(flash.readByte(5U), 0xFFU);
@@ -215,6 +215,46 @@ bool test_run_write_back_failure_does_not_loop() {
   END_IT
 }
 
+bool test_start_rejects_when_erase_cannot_be_issued() {
+  IT("start returns false when the chip is still busy with an earlier erase");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  flash.setFailErase(true);
+  IS_FALSE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), 0U));
+  END_IT
+}
+
+bool test_store_reports_a_failed_flash_write() {
+  IT("storeNextData fails on the piece the flash refused, instead of only at the closing CRC");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.start(0U, 8U, 0U));
+  uint8_t chunk[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  IS_TRUE(ota.storeNextData(0U, chunk));  // bytes 0-1 stay in RAM, 2-3 reach the flash
+  flash.setFailWrite(true);
+  IS_FALSE(ota.storeNextData(4U, chunk)); // second piece is all flash, so the refusal shows up here
+  IS_EQUAL(ota.run(), OtaState::IDLE);    // INVALID cleanup ran, rather than waiting for the CRC
+  END_IT
+}
+
+bool test_run_read_back_failure_goes_invalid() {
+  IT("a read-back the flash refuses ends the check as INVALID");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  IS_TRUE(ota.storeNextData(0U, fw));
+  IS_EQUAL(ota.run(), OtaState::STORE);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  flash.setFailRead(true);                // the write lands, but the verification read does not
+  IS_EQUAL(ota.run(), OtaState::INVALID);
+  END_IT
+}
+
 bool test_run_invalid_clears_flash() {
   IT("INVALID state calls chipErase so flash bytes return to the erased 0xFF state");
   SPIFlash flash(0U);
@@ -328,6 +368,9 @@ int main() {
   test_run_start_stays_when_busy();
   test_run_full_valid_flow();
   test_run_crc_mismatch_goes_invalid();
+  test_start_rejects_when_erase_cannot_be_issued();
+  test_store_reports_a_failed_flash_write();
+  test_run_read_back_failure_goes_invalid();
   test_run_write_back_failure_goes_invalid();
   test_run_write_back_failure_does_not_loop();
   test_run_invalid_clears_flash();

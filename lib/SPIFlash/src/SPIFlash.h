@@ -35,39 +35,46 @@ public:
   /// @param addr 24-bit start address.
   /// @param buf Destination buffer.
   /// @param len Number of bytes to read.
-  void readBytes(uint32_t addr, void* buf, uint16_t len);
+  /// @return `false` when the chip never came ready; `buf` is zero-filled in that case.
+  [[nodiscard]] bool readBytes(uint32_t addr, void* buf, uint16_t len);
 
   /// @brief Writes one byte to flash memory.
   /// @param addr 24-bit flash address (must be pre-erased, i.e. all bits 1).
   /// @param byt Byte value to write.
-  void writeByte(uint32_t addr, uint8_t byt);
+  /// @return `false` when the chip never came ready, i.e. nothing was written.
+  [[nodiscard]] bool writeByte(uint32_t addr, uint8_t byt);
 
   /// @brief Writes multiple bytes to flash memory, handling page boundaries automatically.
   /// @param addr 24-bit start address (must be pre-erased, i.e. all bits 1).
   /// @param buf Source buffer.
   /// @param len Number of bytes to write (up to 64 K).
-  void writeBytes(uint32_t addr, const void* buf, uint16_t len);
+  /// @return `false` when the chip never came ready; the write may then be partial.
+  [[nodiscard]] bool writeBytes(uint32_t addr, const void* buf, uint16_t len);
 
   /// @brief Checks whether the chip is busy with a write or erase operation.
   /// @return `true` if the chip is busy, `false` otherwise.
   [[nodiscard]] bool busy();
 
   /// @brief Erases the entire flash chip (non-blocking).
-  /// @note May take several seconds; poll busy() to wait for completion.
-  ///       Any subsequent command will also wait for the chip automatically.
-  void chipErase();
+  /// @note May take several seconds; poll busy() to wait for completion. A command issued before
+  ///       that only waits `busyTimeoutMs` for the chip and then reports failure.
+  /// @return `false` when the erase could not be issued, e.g. an earlier erase is still running.
+  [[nodiscard]] bool chipErase();
 
-  /// @brief Erases a 4 KB block at the given address.
+  /// @brief Erases a 4 KB block at the given address (non-blocking; see chipErase()).
   /// @param addr Address within the target block.
-  void blockErase4K(uint32_t addr);
+  /// @return `false` when the erase could not be issued.
+  [[nodiscard]] bool blockErase4K(uint32_t addr);
 
-  /// @brief Erases a 32 KB block at the given address.
+  /// @brief Erases a 32 KB block at the given address (non-blocking; see chipErase()).
   /// @param addr Address within the target block.
-  void blockErase32K(uint32_t addr);
+  /// @return `false` when the erase could not be issued.
+  [[nodiscard]] bool blockErase32K(uint32_t addr);
 
-  /// @brief Erases a 64 KB block at the given address.
+  /// @brief Erases a 64 KB block at the given address (non-blocking; see chipErase()).
   /// @param addr Address within the target block.
-  void blockErase64K(uint32_t addr);
+  /// @return `false` when the erase could not be issued.
+  [[nodiscard]] bool blockErase64K(uint32_t addr);
 
   /// @brief Reads the JEDEC manufacturer and device ID.
   /// @return 16-bit JEDEC ID.

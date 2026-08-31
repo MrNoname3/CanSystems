@@ -89,10 +89,10 @@ uint8_t SPIFlash::readByte(uint32_t addr) {
   return result;
 }
 
-void SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
+bool SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
   if(!command(CMD_ARRAY_READ)) {
     memset(buf, 0, len);
-    return;
+    return false;
   }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
@@ -103,6 +103,7 @@ void SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
     dest[i] = SPI.transfer(0U);
   }
   unselect();
+  return true;
 }
 
 bool SPIFlash::waitUntilReady() {
@@ -140,21 +141,22 @@ uint8_t SPIFlash::readStatus() {
   return status;
 }
 
-void SPIFlash::writeByte(uint32_t addr, uint8_t byt) {
-  if(!command(CMD_BYTE_PROGRAM, true)) { return; }
+bool SPIFlash::writeByte(uint32_t addr, uint8_t byt) {
+  if(!command(CMD_BYTE_PROGRAM, true)) { return false; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
   SPI.transfer(byt);
   unselect();
+  return true;
 }
 
-void SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
+bool SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
   uint16_t maxBytes = static_cast<uint16_t>(256U - (addr % 256U)); // Keep the first write within the first page.
   const uint8_t* ptr = static_cast<const uint8_t*>(buf);
   while(len > 0U) {
     const uint16_t n = (len <= maxBytes) ? len : maxBytes;
-    if(!command(CMD_BYTE_PROGRAM, true)) { return; }
+    if(!command(CMD_BYTE_PROGRAM, true)) { return false; }
     SPI.transfer(static_cast<uint8_t>(addr >> 16U));
     SPI.transfer(static_cast<uint8_t>(addr >> 8U));
     SPI.transfer(static_cast<uint8_t>(addr));
@@ -167,35 +169,40 @@ void SPIFlash::writeBytes(uint32_t addr, const void* buf, uint16_t len) {
     len -= n;
     maxBytes = 256U; // Subsequent iterations can use a full page.
   }
+  return true;
 }
 
-void SPIFlash::chipErase() {
-  if(!command(CMD_ERASE_CHIP, true)) { return; }
+bool SPIFlash::chipErase() {
+  if(!command(CMD_ERASE_CHIP, true)) { return false; }
   unselect();
+  return true;
 }
 
-void SPIFlash::blockErase4K(uint32_t addr) {
-  if(!command(CMD_ERASE_4K, true)) { return; }
+bool SPIFlash::blockErase4K(uint32_t addr) {
+  if(!command(CMD_ERASE_4K, true)) { return false; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
+  return true;
 }
 
-void SPIFlash::blockErase32K(uint32_t addr) {
-  if(!command(CMD_ERASE_32K, true)) { return; }
+bool SPIFlash::blockErase32K(uint32_t addr) {
+  if(!command(CMD_ERASE_32K, true)) { return false; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
+  return true;
 }
 
-void SPIFlash::blockErase64K(uint32_t addr) {
-  if(!command(CMD_ERASE_64K, true)) { return; }
+bool SPIFlash::blockErase64K(uint32_t addr) {
+  if(!command(CMD_ERASE_64K, true)) { return false; }
   SPI.transfer(static_cast<uint8_t>(addr >> 16U));
   SPI.transfer(static_cast<uint8_t>(addr >> 8U));
   SPI.transfer(static_cast<uint8_t>(addr));
   unselect();
+  return true;
 }
 
 void SPIFlash::sleep() {

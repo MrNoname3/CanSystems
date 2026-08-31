@@ -1,9 +1,9 @@
 #pragma once
 // Native-test shim for the W25Q64 SPI flash driver: an address -> byte map where a write only
-// clears bits and an erase restores 0xFF. setFailWrite() reproduces the real class's
-// silent failure mode: SPIFlash::writeByte() returns without writing when command() cannot get the
-// chip ready, and tells the caller nothing - so the OTA state machine only learns about it from
-// the read-back that follows.
+// clears bits and an erase restores 0xFF. The real class routes every operation through
+// command() -> waitUntilReady(), which gives up after busyTimeoutMs and reports false; the three
+// setFail*() hooks reproduce that refusal per operation kind, so each OTA failure branch can be
+// reached on its own.
 #include <stdint.h>
 #include <cassert>
 #include <cstring>
@@ -29,42 +29,61 @@ public:
     return (it != memory.end()) ? it->second : 0xFFU;
   }
 
-  void readBytes(uint32_t addr, void* buf, uint16_t len) const {
+  bool readBytes(uint32_t addr, void* buf, uint16_t len) const {
     uint8_t* bytes = static_cast<uint8_t*>(buf);
+    if(failRead) {
+      memset(buf, 0, len);               // the real class zero-fills what it could not read
+      return false;
+    }
     for(uint16_t i = 0U; i < len; i++) {
       bytes[i] = readByte(addr + static_cast<uint32_t>(i));
     }
+    return true;
   }
 
-  void writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
+  bool writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
     assert(addr < flashCapacity);
-    if(failWrite) { return; }            // injected write failure: the real class also just returns
+    if(failWrite) { return false; }      // chip never came ready: nothing is written
     memory[addr] = readByte(addr) & byt; // NOR: write can only clear bits (1→0); erase resets to 0xFF
+    return true;
   }
 
-  void writeBytes(uint32_t addr, const void* buf, uint16_t len) {
+  bool writeBytes(uint32_t addr, const void* buf, uint16_t len) {
     const uint8_t* bytes = static_cast<const uint8_t*>(buf);
     for(uint16_t i = 0U; i < len; i++) {
-      writeByte(addr + static_cast<uint32_t>(i), bytes[i]);
+      if(!writeByte(addr + static_cast<uint32_t>(i), bytes[i])) { return false; }
     }
+    return true;
   }
 
   [[nodiscard]] bool busy() const { return busyFlag; }
   void setBusy(bool b) { busyFlag = b; }
-  void setFailWrite(bool fail) { failWrite = fail; }   // test hook: make every write silently do nothing
+  void setFailWrite(bool fail) { failWrite = fail; }   // test hook: writes report a chip that never came ready
+  void setFailRead(bool fail) { failRead = fail; }     // test hook: reads report a chip that never came ready
+  void setFailErase(bool fail) { failErase = fail; }   // test hook: erases report a chip that never came ready
 
-  void chipErase() { memory.clear(); }
+  bool chipErase() {
+    if(failErase) { return false; }
+    memory.clear();
+    return true;
+  }
 
-  void blockErase4K(uint32_t addr) {
+  bool blockErase4K(uint32_t addr) {
+    if(failErase) { return false; }
     eraseRange(addr & ~static_cast<uint32_t>(0xFFFU), 4096U);
+    return true;
   }
 
-  void blockErase32K(uint32_t addr) {
+  bool blockErase32K(uint32_t addr) {
+    if(failErase) { return false; }
     eraseRange(addr & ~static_cast<uint32_t>(0x7FFFU), 32768U);
+    return true;
   }
 
-  void blockErase64K(uint32_t addr) {
+  bool blockErase64K(uint32_t addr) {
+    if(failErase) { return false; }
     eraseRange(addr & ~static_cast<uint32_t>(0xFFFFU), 65536U);
+    return true;
   }
 
   [[nodiscard]] uint16_t readDeviceId() const { return jedecId; }
@@ -93,4 +112,6 @@ private:
   uint32_t flashCapacity;
   bool busyFlag = false;
   bool failWrite = false;
+  bool failRead = false;
+  bool failErase = false;
 };
