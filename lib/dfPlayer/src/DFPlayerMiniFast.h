@@ -1,5 +1,4 @@
-#ifndef DFPLAYERMINIFAST_H
-#define DFPLAYERMINIFAST_H
+#pragma once
 
 #include <Arduino.h>                                                /// Arduino framework header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
@@ -384,5 +383,3 @@ private:
   Stack sendStack = {};                                             // Outgoing packet buffer.
   Stack recStack = {};                                             // Incoming packet buffer.
 };
-
-#endif // DFPLAYERMINIFAST_H

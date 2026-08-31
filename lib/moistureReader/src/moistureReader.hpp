@@ -1,5 +1,4 @@
-#ifndef MOISTURE_READER_HPP
-#define MOISTURE_READER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
@@ -138,4 +137,3 @@ void MoistureReader<N>::triggerImmediateMeasurement() {
     eventTimer = millis() - readTime;
   }
 }
-#endif // MOISTURE_READER_HPP

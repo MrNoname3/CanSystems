@@ -1,5 +1,4 @@
-#ifndef HADISCOVERY_HPP
-#define HADISCOVERY_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <pgmspace.h>                                               /// PROGMEM storage and the _P string functions.
@@ -231,4 +230,3 @@ private:
   // second build can start while this one is in flight.
   char payloadBuffer[canDiscoveryPayloadBufSize] = { '\0' };
 };
-#endif // HADISCOVERY_HPP

@@ -1,5 +1,4 @@
-#ifndef SPIFLASH_H
-#define SPIFLASH_H
+#pragma once
 
 #include <Arduino.h>                                                /// Arduino framework header.
 #include <SPI.h>                                                    /// Arduino SPI library.
@@ -149,5 +148,3 @@ private:
   SPISettings settings;                                             // SPI transaction settings.
 #endif
 };
-
-#endif // SPIFLASH_H

@@ -1,5 +1,4 @@
-#ifndef PUSHBUTTONCLICKS_HPP
-#define PUSHBUTTONCLICKS_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -45,4 +44,3 @@ private:
   bool longPressflag;                                   // Flag indicating whether a long press event has been triggered.
   uint8_t shortPressedCnt;                              // Counter for short presses (used for multi-tap detection).
 };
-#endif // PUSHBUTTONCLICKS_HPP

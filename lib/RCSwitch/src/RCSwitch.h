@@ -27,8 +27,7 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef RC_SWITCH_H
-#define RC_SWITCH_H
+#pragma once
 
 #include "Arduino.h"                                                /// Arduino core types and pin functions.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
@@ -52,17 +51,15 @@
 #define RCSwitchDisableReceiving
 #endif
 
-// Number of maximum high/Low changes per packet.
-// We can handle up to 36 bit * 2 H/L changes per bit + 2 for sync
-// keeloq would need RCSWITCH_MAX_CHANGES raised to 23+1+66*2+1=157
-// #define RCSWITCH_MAX_CHANGES 75        // default 75 - longest protocol that requires this buffer size is 38/nexus
-#define RCSWITCH_MAX_CHANGES 131        // default 75 - Supports 64 too
+// Maximum high/low changes one packet may hold: 36 bits at 2 changes per bit, plus 2 for sync.
+// Upstream's default is 75, which is enough for the longest protocol that needs this buffer
+// (38/nexus); 131 also covers 64-bit codes. Keeloq would need 23 + 1 + 66 * 2 + 1 = 157.
+static constexpr uint32_t rcSwitchMaxChanges = 131U;
 
-// separationLimit: minimum microseconds between received codes, closer codes are ignored.
-// according to discussion on issue #14 it might be more suitable to set the separation
-// limit to the same time as the 'low' part of the sync signal for the current protocol.
-// should be set to the minimum value of pulselength * the sync signal
-#define RCSWITCH_SEPARATION_LIMIT 3600
+// Minimum microseconds between two received codes; anything closer is taken as noise and
+// ignored. Ideally the 'low' part of the current protocol's sync signal, which is its pulse
+// length times the sync low factor.
+static constexpr uint32_t rcSwitchSeparationLimit = 3600U;
 
 class RCSwitch {
 public:
@@ -194,9 +191,8 @@ private:
   /*
    * timings[0] contains sync timing, followed by a number of bits
    */
-  static uint32_t timings[RCSWITCH_MAX_CHANGES];
+  static uint32_t timings[rcSwitchMaxChanges];
   // Durations of the last four packets; [0] is the most recent.
   static uint32_t buftimings[4];
 #endif
 };
-#endif // RC_SWITCH_H

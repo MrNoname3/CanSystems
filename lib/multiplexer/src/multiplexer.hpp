@@ -1,5 +1,4 @@
-#ifndef MULTIPLEXER_HPP
-#define MULTIPLEXER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -54,4 +53,3 @@ private:
   const uint8_t enablePin;                                // Digital pin to enable/disable the multiplexer.
   const uint8_t (&chSelectPins)[numSelectPins];           // Array of pins used for channel selection.
 };
-#endif // MULTIPLEXER_HPP

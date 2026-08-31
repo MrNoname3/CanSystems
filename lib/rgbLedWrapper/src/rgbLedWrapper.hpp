@@ -1,5 +1,4 @@
-#ifndef RGB_LED_WRAPPER_HPP
-#define RGB_LED_WRAPPER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <NeoPixelBus.h>                                            /// WS2812 LED driver library.
@@ -46,4 +45,3 @@ private:
   uint8_t greenColor;                                         // Saved green component value (0-255).
   uint8_t blueColor;                                          // Saved blue component value (0-255).
 };
-#endif // RGB_LED_WRAPPER_HPP

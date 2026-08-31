@@ -1,5 +1,4 @@
-#ifndef TASK_HANDLER_HPP
-#define TASK_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -143,4 +142,3 @@ private:
   Task* (&taskList)[taskNum];                                     // Reference to an array of task pointers.
   uint8_t currentTask = 0U;                                       // Index of the currently executing task.
 };
-#endif // TASK_HANDLER_HPP

@@ -1,5 +1,4 @@
-#ifndef CONNECTIVITY_HPP
-#define CONNECTIVITY_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <string.h>                                                 /// Methods for string handling.
@@ -347,4 +346,3 @@ private:
   char subtopic[subtopicSize]{};    // Buffer storing the subtopic associated with the MQTT base instance.
   MqttBase* nextHandler = nullptr;  // Intrusive linked list pointer, managed by Connectivity.
 };
-#endif

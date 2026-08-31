@@ -1,5 +1,4 @@
-#ifndef PCF8574_HPP
-#define PCF8574_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Wire.h>                                                   /// I2C driver library.
@@ -76,4 +75,3 @@ private:
   uint8_t registerValue;                          // Cached register value to track the current pin states.
   bool deviceExists;                              // Indicates if the device is present on the I2C bus.
 };
-#endif // PCF8574_HPP

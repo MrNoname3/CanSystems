@@ -1,5 +1,4 @@
-#ifndef WDT_HANDLER_HPP
-#define WDT_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #if defined(__AVR_ATmega328P__)
@@ -126,4 +125,3 @@ public:
   WdtHandler(WdtHandler&&) = delete;                            // Define move constructor.
   WdtHandler& operator=(WdtHandler&&) = delete;                 // Define move assignment operator.
 };
-#endif // WDT_HANDLER_HPP

@@ -1,5 +1,4 @@
-#ifndef EEPROM_HANDLER_HPP
-#define EEPROM_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <EEPROM.h>                                                 /// EEPROM access library.
@@ -123,4 +122,3 @@ private:
 
   T* data;                                          // Pointer to the user-defined data type.
 };
-#endif // EEPROM_HANDLER_HPP

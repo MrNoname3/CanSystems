@@ -1,5 +1,4 @@
-#ifndef BASE64_HPP
-#define BASE64_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #if (defined(__AVR__) || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_SAM))
@@ -75,4 +74,3 @@ private:
   static bool processFullBlock(uint8_t (&A4)[4], uint8_t output[], uint32_t& decodedLength);
   static bool processPartialBlock(uint8_t (&A4)[4], uint32_t count, uint8_t output[], uint32_t& decodedLength);
 };
-#endif // BASE64_HPP

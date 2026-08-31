@@ -1,5 +1,4 @@
-#ifndef RESET_HANDLER_HPP
-#define RESET_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -25,4 +24,3 @@ public:
   ResetHandler(ResetHandler&&) = delete;                            // Define move constructor.
   ResetHandler& operator=(ResetHandler&&) = delete;                 // Define move assignment operator.
 };
-#endif // RESET_HANDLER_HPP

@@ -1,5 +1,4 @@
-#ifndef SI7021_HPP
-#define SI7021_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Wire.h>                                                   /// I2C driver library.
@@ -84,4 +83,3 @@ private:
   TwoWire& wire;                                  // Reference to the I2C bus used for communication.
   bool deviceExists;                              // Indicates if the device is present on the I2C bus.
 };
-#endif // SI7021_HPP

@@ -109,8 +109,8 @@ volatile uint32_t RCSwitch::nReceivedBitlength = 0;
 volatile uint32_t RCSwitch::nReceivedDelay = 0;
 volatile uint32_t RCSwitch::nReceivedProtocol = 0;
 int32_t RCSwitch::nReceiveTolerance = 60;
-uint32_t RCSwitch::nSeparationLimit = RCSWITCH_SEPARATION_LIMIT;
-uint32_t RCSwitch::timings[RCSWITCH_MAX_CHANGES];
+uint32_t RCSwitch::nSeparationLimit = rcSwitchSeparationLimit;
+uint32_t RCSwitch::timings[rcSwitchMaxChanges];
 uint32_t RCSwitch::buftimings[4];
 #endif
 
@@ -496,7 +496,7 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-function
   }
 
   // detect overflow
-  if(changeCount >= RCSWITCH_MAX_CHANGES) {
+  if(changeCount >= rcSwitchMaxChanges) {
     changeCount = 0;
     repeatCount = 0;
   }

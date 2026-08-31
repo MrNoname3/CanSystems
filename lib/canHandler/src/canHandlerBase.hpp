@@ -1,5 +1,4 @@
-#ifndef CAN_HANDLER_BASE_HPP
-#define CAN_HANDLER_BASE_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
@@ -238,4 +237,3 @@ private:
   CanId canId;                                // Stores the master and local CAN IDs.
   EEPROMHandler<CanId, 0U> eepromHandler;     // EEPROM handler for address persistence.
 };
-#endif // CAN_HANDLER_BASE_HPP

@@ -1,5 +1,4 @@
-#ifndef PUSHBUTTON_HANDLER_HPP
-#define PUSHBUTTON_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "PushButtonClicks.hpp"                                     /// Push button handling class.
@@ -63,4 +62,3 @@ private:
   PushButton button;                                    // Instance of the `PushButton` class to handle button press events.
   void (*btnCallback)(BtnEvent btnEvent);               // Function pointer for the button event callback (if set).
 };
-#endif // PUSHBUTTON_HANDLER_HPP

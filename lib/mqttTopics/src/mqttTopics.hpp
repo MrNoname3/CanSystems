@@ -1,5 +1,4 @@
-#ifndef MQTTTOPICS_HPP
-#define MQTTTOPICS_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <pgmspace.h>                                               /// PROGMEM storage for the format strings.
@@ -61,4 +60,3 @@ public:
   MqttTopics(MqttTopics&&) = delete;                                  // Define move constructor.
   MqttTopics& operator=(MqttTopics&&) = delete;                       // Define move assignment operator.
 };
-#endif // MQTTTOPICS_HPP

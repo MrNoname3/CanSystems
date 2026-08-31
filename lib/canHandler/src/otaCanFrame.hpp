@@ -1,5 +1,4 @@
-#ifndef OTA_CAN_FRAME_HPP
-#define OTA_CAN_FRAME_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -84,4 +83,3 @@ namespace OtaCanFrame {
     return fields;
   }
 } // namespace OtaCanFrame
-#endif // OTA_CAN_FRAME_HPP

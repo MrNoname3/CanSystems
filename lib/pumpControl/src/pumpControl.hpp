@@ -1,5 +1,4 @@
-#ifndef PUMP_CONTROL_HPP
-#define PUMP_CONTROL_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
@@ -250,4 +249,3 @@ private:
   int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
   SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
 };
-#endif // PUMP_CONTROL_HPP

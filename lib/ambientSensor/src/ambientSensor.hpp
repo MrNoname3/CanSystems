@@ -1,5 +1,4 @@
-#ifndef AMBIENT_SENSOR_HPP
-#define AMBIENT_SENSOR_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "canHandler.hpp"                                           /// CAN handler library.
@@ -63,4 +62,3 @@ private:
   uint32_t sendThrottleTimer;                                               // Timer for the 30-minute forced-send period.
   Event event;                                                              // Current state of the sensor task.
 };
-#endif // AMBIENT_SENSOR_HPP
