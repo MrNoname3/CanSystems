@@ -19,7 +19,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
-- Individual guards: `scripts/deps_check.py` (.venv matches the pins; `--sync` installs them),
+- Individual guards: `scripts/deps_check.py` (the .venv - or CI's own Python - matches the
+  pins; `--sync` installs them),
   `scripts/format_check.py` (clang-format + final newline),
   `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
@@ -48,8 +49,12 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - Build features on a branch; merge to `master` only when done, reviewed, and CI-green, then
   delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
   which **push-mirrors to GitHub** automatically — no second remote needed).
-- GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
-  jobs; **Gitea CI is intentionally off**.
+- CI runs the release gate plus non-blocking firmware size-diff and native-coverage jobs, and a
+  weekly PlatformIO outdated report. **Gitea Actions and GitHub Actions both run the same
+  workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
+  runner-specific steps. The one exception is `actions/cache`, skipped off github.com because the
+  self-hosted runner's cache API is v1 while `actions/cache@v6` speaks v2; that only costs a cold
+  (slower) run.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
   pip and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and
   the `atmelavr` platform pin through a custom manager. Patch/pin/digest automerge after a 3-day

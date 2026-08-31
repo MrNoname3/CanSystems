@@ -10,6 +10,10 @@ rather than by a regex of our own; only the `-r` include is handled here, since 
 pip requirements-file feature and not part of the requirement syntax. Constraints are checked
 through the parsed specifier, so a `>=` pin is compared rather than skipped.
 
+The environment checked is the one the other guards will use, found the same way they find their
+tools: the project-root .venv when there is one, otherwise the interpreter this runs under - which
+is how CI has it, installing the pins into the runner's own Python.
+
 requirements-ci.txt is deliberately not read: platformio and intelhex are installed only in CI,
 and PlatformIO itself runs from its own penv.
 
@@ -46,10 +50,14 @@ def read_requirements(path: Path, seen: set[Path] | None = None) -> list[str]:
     return lines
 
 
-def sync() -> int:
-    print(f"deps: installing {REQUIREMENTS.name} into .venv", flush=True)
-    pip = PROJECT_DIR / ".venv" / "bin" / "pip"
-    return subprocess.run([str(pip), "install", "-r", str(REQUIREMENTS)],
+def target_python() -> Path:
+    """The interpreter the other guards will run their tools from."""
+    return VENV_PYTHON if VENV_PYTHON.exists() else Path(sys.executable)
+
+
+def sync(python: Path) -> int:
+    print(f"deps: installing {REQUIREMENTS.name} into {python}", flush=True)
+    return subprocess.run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS)],
                           cwd=PROJECT_DIR, check=False).returncode
 
 
@@ -59,14 +67,11 @@ def main() -> int:
                         help="install the pinned set first instead of only reporting")
     args = parser.parse_args()
 
-    if not VENV_PYTHON.exists():
-        sys.exit(f"deps: no .venv at {PROJECT_DIR / '.venv'} "
-                 f"(python -m venv .venv && .venv/bin/pip install -r {REQUIREMENTS.name})")
-
-    # Re-run under the .venv interpreter, so both `packaging` and the metadata lookup below
-    # answer for the environment the other guards actually use.
-    if Path(sys.executable).resolve() != VENV_PYTHON.resolve():
-        return subprocess.run([str(VENV_PYTHON), __file__, *sys.argv[1:]], check=False).returncode
+    # Re-run under that interpreter, so both `packaging` and the metadata lookup below answer for
+    # the environment the other guards actually use.
+    python = target_python()
+    if Path(sys.executable).resolve() != python.resolve():
+        return subprocess.run([str(python), __file__, *sys.argv[1:]], check=False).returncode
 
     from importlib.metadata import PackageNotFoundError, version
 
@@ -74,7 +79,7 @@ def main() -> int:
     from packaging.utils import canonicalize_name
 
     if args.sync:
-        failure = sync()
+        failure = sync(python)
         if failure != 0:
             return failure
 
@@ -93,13 +98,13 @@ def main() -> int:
             drifted.append(f"  {requirement}: installed {installed}")
 
     if drifted:
-        print(f"deps: {len(drifted)} of {len(requirements)} requirement(s) not satisfied by .venv:")
+        print(f"deps: {len(drifted)} of {len(requirements)} requirement(s) not satisfied by {python}:")
         print("\n".join(drifted))
-        print(f"\nFix with: .venv/bin/pip install -r {REQUIREMENTS.name}"
+        print(f"\nFix with: {python} -m pip install -r {REQUIREMENTS.name}"
               f"  /  scripts/release_check.py --sync")
         return 1
 
-    print(f"deps: all {len(requirements)} pinned package(s) match .venv", flush=True)
+    print(f"deps: all {len(requirements)} pinned package(s) match {python}", flush=True)
     return 0
 
 
