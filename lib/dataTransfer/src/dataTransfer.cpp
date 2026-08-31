@@ -184,6 +184,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     if(writtenBytes != decodedPostSize) {
       Logger::get()->printf_P(PSTR("[FT] Writing failed: %s\r\n"), FileName::getTempFileLocation());
       dataTransferErrState.setError(DataTransferError::TEMP_FILE_WRITING_ERROR);
+      transferState = TransferState::CLEANUP;
       return false;
     }
   }

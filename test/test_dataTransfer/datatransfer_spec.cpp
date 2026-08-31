@@ -487,6 +487,23 @@ bool test_temp_write_failure() {
   END_IT
 }
 
+bool test_temp_write_failure_ends_the_transfer() {
+  IT("a short write ends the transfer, as the firmware path already did");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  LittleFS.setFailWrite(true);
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
+  LittleFS.setFailWrite(false);
+  dt.runValidityCheck();                            // CLEANUP runs here
+  // Left in STORING the transfer would sit on the open temp file for the whole 15 minute
+  // timeout, and accept further pieces meanwhile.
+  IS_EQUAL(g_cbCount, 1);                           // cleanup reported the failure to the owner
+  IS_FALSE(g_lastValid);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));      // back to IDLE: a fresh transfer starts
+  END_IT
+}
+
 bool test_rename_failure() {
   IT("a verified file that cannot be renamed reports TEMP_FILE_RENAMING_ERROR");
   resetEnv();
@@ -564,6 +581,7 @@ int main() {
   test_firmware_md5_mismatch_rejected();
   test_temp_open_failure();
   test_temp_write_failure();
+  test_temp_write_failure_ends_the_transfer();
   test_rename_failure();
   test_fw_set_md5_failure();
   FINISH
