@@ -9,10 +9,8 @@
 #endif
 
 namespace {
-  // Throws away a firmware image that will never be finished, releasing the sector buffer the
-  // Updater allocated. The ESP32 class has abort() for exactly this; its end(false) performs the
-  // same reset but reports the unfinished image as an error first. The ESP8266 class has no
-  // abort(), and its end(false) resets quietly.
+  // Throws away a firmware image that will never be finished. The ESP8266 Updater has no abort();
+  // its end(false) resets quietly, while the ESP32 one logs the unfinished image as an error.
   void abortFirmwareUpdate() {
 #if defined(ESP8266)
     (void)Update.end(false);
@@ -94,6 +92,14 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
       return false;
     }
   } else {
+    // Opened before the free space is measured: "w" truncates, so a temp file an interrupted
+    // transfer left behind is reclaimed rather than counted against this one.
+    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "w");
+    if(!receivedFile) {
+      Logger::get()->printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
+      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      return false;
+    }
 #ifdef ESP8266
     FSInfo fsInfo;
     LittleFS.info(fsInfo);
@@ -107,12 +113,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     if(!isEnoughFreeSpace) {
       Logger::get()->printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), freeSpace, fileSizeLocal);
       dataTransferErrState.setError(DataTransferError::NOT_ENOUGH_STORAGE);
-      return false;
-    }
-    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "w");
-    if(!receivedFile) {
-      Logger::get()->printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
-      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      receivedFile.close();
       return false;
     }
   }
@@ -278,8 +279,7 @@ void DataTransfer::runValidityCheck() {
 }
 
 void DataTransfer::cleanupTransfer() {
-  // The Updater is the one resource that used to survive this state: an image left half-written by
-  // an abandoned or timed-out transfer keeps its sector buffer until the next begin().
+  // An image left half-written holds the Updater's sector buffer until the next begin().
   if(isFwTransfer && (remainingFileSizeLocal > 0U)) {
     abortFirmwareUpdate();
   }
@@ -291,7 +291,7 @@ void DataTransfer::cleanupTransfer() {
   if(receivedFile) {
     receivedFile.close();
   }
-  (void)LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
+  // The temp file is left where it is; begin() truncates it before measuring the free space.
   transferState = TransferState::IDLE;
   if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
     checkOkCallback(false);

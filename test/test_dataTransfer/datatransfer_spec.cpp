@@ -343,8 +343,8 @@ bool test_md5_mismatch_fails_and_keeps_no_file() {
   END_IT
 }
 
-bool test_aborted_transfer_frees_the_temporary_file() {
-  IT("an aborted transfer removes the temporary file so the next one still fits");
+bool test_aborted_transfer_does_not_block_the_next_one() {
+  IT("the space an aborted transfer used is reclaimed, so the next one still fits");
   resetEnv();
   setFakeMillis(0U);
   LittleFS.setCapacity(20U);                        // room for one 12-byte file, not two
@@ -356,9 +356,9 @@ bool test_aborted_transfer_frees_the_temporary_file() {
 
   setFakeMillis(15U * 60U * 1000U + 1U);            // transfer timeout -> CLEANUP in the same call
   dt.runValidityCheck();
-  IS_FALSE(LittleFS.exists(tempName()));
+  IS_TRUE(LittleFS.exists(tempName()));             // deliberately left; begin() truncates it
 
-  // The reclaimed space is what lets an identical transfer start again.
+  // Reclaiming that space is what lets an identical transfer start again.
   IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5, fileName()));
   clearFakeMillis();
   END_IT
@@ -376,6 +376,17 @@ bool test_firmware_transfer_succeeds() {
   IS_EQUAL(g_cbCount, 1);
   IS_TRUE(g_lastValid);
   IS_EQUAL(Update.written(), raw.size());
+  END_IT
+}
+
+bool test_a_temp_file_left_by_a_reset_does_not_block_the_next_transfer() {
+  IT("a temp file a reset left behind is reclaimed, not counted against the next transfer");
+  resetEnv();
+  setFakeMillis(0U);
+  LittleFS.setCapacity(20U);
+  LittleFS.setFile(tempName(), std::string(12U, 'x'));   // what a reset interrupted, with no cleanup to follow
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(12U, kMd5, fileName()));              // only fits once those 12 bytes are back
   END_IT
 }
 
@@ -542,8 +553,9 @@ int main() {
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
   test_md5_mismatch_fails_and_keeps_no_file();
-  test_aborted_transfer_frees_the_temporary_file();
+  test_aborted_transfer_does_not_block_the_next_one();
   test_firmware_transfer_succeeds();
+  test_a_temp_file_left_by_a_reset_does_not_block_the_next_transfer();
   test_firmware_transfer_can_be_restarted();
   test_cleanup_releases_an_unfinished_firmware_image();
   test_firmware_begin_failure();
