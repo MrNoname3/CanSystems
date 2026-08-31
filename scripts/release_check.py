@@ -2,16 +2,19 @@
 """Release gate: build all environments, run the native test suite, then static analysis.
 
 Runs the commands a release would need anyway, fail-fast, in this order:
-  1. pio run                    (build every default environment)
-  2. pio test -e native_test    (native unit-test suite)
-  3. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
-  4. format_check.py            (clang-format + final-newline check; ANY violation fails)
-  5. lint_check.py              (ruff check over the Python; ANY finding fails)
-  6. typecheck_check.py         (pyright strict over the Python; ANY error fails)
-  7. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+  1. deps_check.py              (the .venv matches requirements-dev.txt; ANY drift fails)
+  2. pio run                    (build every default environment)
+  3. pio test -e native_test    (native unit-test suite)
+  4. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
+  5. format_check.py            (clang-format + final-newline check; ANY violation fails)
+  6. lint_check.py              (ruff check over the Python; ANY finding fails)
+  7. typecheck_check.py         (pyright strict over the Python; ANY error fails)
+  8. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
 
 Every guard is required: a missing tool fails the gate rather than skipping its step, so a
-green run means all seven actually ran.
+green run means all eight actually ran. The dependency step comes first because the guards
+after it run out of the .venv: a drifted one reports on versions the project does not pin.
+`--sync` installs the pinned set instead of only reporting the drift.
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.
@@ -89,6 +92,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Pre-release gate: build + test + check.")
     parser.add_argument("--strict", action="store_true",
                         help="fail on a dirty git tree instead of warning")
+    parser.add_argument("--sync", action="store_true",
+                        help="install the pinned tooling into .venv before checking it")
     args = parser.parse_args()
 
     os.chdir(PROJECT_DIR)
@@ -103,7 +108,12 @@ def main() -> int:
         print("RELEASE CHECK: FAIL (step: git status)")
         return 1
 
+    deps_cmd = [sys.executable, str(PROJECT_DIR / "scripts" / "deps_check.py")]
+    if args.sync:
+        deps_cmd.append("--sync")
+
     steps = [
+        Step("deps", deps_cmd),
         Step("build", [pio, "run"]),
         Step("test",  [pio, "test", "-e", "native_test"]),
         Step("check", [pio, "check", "--skip-packages",

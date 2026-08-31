@@ -162,18 +162,22 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 
 ### Release gate
 
-`scripts/release_check.py` chains seven steps fail-fast: build all environments, run the native
-test suite, static analysis (`pio check` — where a **single defect of any severity** via
+`scripts/release_check.py` chains eight steps fail-fast: check that the `.venv` matches the
+pinned tooling (`deps_check.py`), build all environments, run the native test suite, static
+analysis (`pio check` — where a **single defect of any severity** via
 `--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
 SUCCESS even with findings), then the Python guards — clang-format + final-newline
 (`format_check.py`), ruff lint (`lint_check.py`), pyright strict (`typecheck_check.py`), and
 pytest (`pytest_check.py`). Every guard is **required**: a missing tool fails the gate rather
-than skipping, so set up the dev venv (above) before running it. Step 0 checks the git tree with
-the same rule the firmware uses for its `GIT_DIRTY` flag.
+than skipping, so set up the dev venv (above) before running it. The dependency check comes
+first because every guard after it runs out of the `.venv`: one that has drifted from the pins
+reports on versions the project does not pin, and the run still passes. Step 0 checks the git
+tree with the same rule the firmware uses for its `GIT_DIRTY` flag.
 
 ```sh
 python3 scripts/release_check.py            # build + test + check; dirty tree is a warning
 python3 scripts/release_check.py --strict   # release mode: a dirty tree fails immediately
+python3 scripts/release_check.py --sync     # install the pinned tooling into .venv first
 ```
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
