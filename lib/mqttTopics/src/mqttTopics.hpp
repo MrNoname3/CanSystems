@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <string.h>                                                 /// strnlen for the subtopic split.
 #include <pgmspace.h>                                               /// PROGMEM storage for the format strings.
 
 /// @brief MQTT topic format strings and derived buffer sizes, shared between Connectivity and HADiscovery.
@@ -52,6 +53,19 @@ public:
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
   static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }
   static constexpr const char* getAvailOfflinePayload() { return availOfflinePayload; }
+
+  /// @brief Splits the subtopic off a received topic.
+  /// @details The subscription is `iot/stod/<mac>/#`, and MQTT's `#` matches the parent level as
+  /// well, so `iot/stod/<mac>` - one character shorter than the offset - is delivered here too.
+  /// Stepping over it blindly would read past the topic's terminator and into the payload that
+  /// follows it in the client's buffer.
+  /// @param topic Topic as received.
+  /// @return Pointer to the subtopic within `topic`, or `nullptr` when the topic is too short.
+  [[nodiscard]] static const char* getSubtopicOf(const char* topic) {
+    if(topic == nullptr) { return nullptr; }
+    if(strnlen(topic, subtopicOffset) < subtopicOffset) { return nullptr; }
+    return topic + subtopicOffset;
+  }
 
   MqttTopics() = delete;                                              // Delete constructor.
   ~MqttTopics() = delete;                                             // Delete destructor.

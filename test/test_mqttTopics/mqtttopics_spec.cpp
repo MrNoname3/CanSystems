@@ -89,6 +89,34 @@ bool test_diagSubtopic() {
   END_IT
 }
 
+bool test_subtopicOf_splits_a_normal_topic() {
+  IT("getSubtopicOf returns the part after \"iot/stod/<mac>/\"");
+  IS_EQUAL(strcmp(MqttTopics::getSubtopicOf("iot/stod/aabbccddeeff/common"), "common"), 0);
+  IS_EQUAL(strcmp(MqttTopics::getSubtopicOf("iot/stod/aabbccddeeff/alert1/ota"), "alert1/ota"), 0);
+  END_IT
+}
+
+bool test_subtopicOf_rejects_the_parent_topic() {
+  IT("getSubtopicOf returns nullptr for the parent topic that '#' also matches");
+  // MQTT 3.1.1: "iot/stod/<mac>/#" matches "iot/stod/<mac>" as well, and that topic is one
+  // character shorter than the offset - stepping over it would read past its terminator.
+  IS_TRUE(MqttTopics::getSubtopicOf("iot/stod/aabbccddeeff") == nullptr);
+  IS_TRUE(MqttTopics::getSubtopicOf("iot/stod/") == nullptr);
+  IS_TRUE(MqttTopics::getSubtopicOf("") == nullptr);
+  IS_TRUE(MqttTopics::getSubtopicOf(nullptr) == nullptr);
+  END_IT
+}
+
+bool test_subtopicOf_accepts_an_empty_subtopic() {
+  IT("getSubtopicOf returns the empty string for a topic that ends at the separator");
+  // Long enough to index safely, so the pointer is handed back; the empty subtopic is then
+  // rejected by MqttBase::isSubtopicValid rather than here.
+  const char* sub = MqttTopics::getSubtopicOf("iot/stod/aabbccddeeff/");
+  IS_TRUE(sub != nullptr);
+  IS_EQUAL(strlen(sub), 0U);
+  END_IT
+}
+
 int main() {
   SUITE("MqttTopics");
   test_macHexLen();
@@ -101,5 +129,8 @@ int main() {
   test_diagPayloadBufSize();
   test_availPayloads();
   test_diagSubtopic();
+  test_subtopicOf_splits_a_normal_topic();
+  test_subtopicOf_rejects_the_parent_topic();
+  test_subtopicOf_accepts_an_empty_subtopic();
   FINISH
 }

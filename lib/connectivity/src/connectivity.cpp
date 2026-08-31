@@ -141,7 +141,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
-    const char* subtopic = topic + MqttTopics::getSubtopicOffset();
+    const char* subtopic = MqttTopics::getSubtopicOf(topic);
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
     MqttBase* messageHandler = handlerList.findIf(
         [subtopic](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), subtopic) == 0; });
