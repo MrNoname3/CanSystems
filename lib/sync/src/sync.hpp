@@ -1,22 +1,12 @@
 #pragma once
-//
-// Minimal cross-platform synchronization primitives.
-//
-// On ESP32 (FreeRTOS, multi-task) `RecursiveMutex` wraps a FreeRTOS recursive mutex. On every other
-// platform (ESP8266 NONOS, AVR, native) the code runs single-threaded and cooperatively, so the
-// primitives compile to nothing: empty inline methods that the optimizer removes entirely — no flash,
-// no CPU, and (aside from the empty member itself) no RAM cost. This lets shared libraries such as
-// `connectivity` add locking for the ESP32 task model without affecting the ESP8266 build.
-//
-// Recursive (re-entrant) by design: the MQTT RX callback runs inside PubSubClient::loop() and may
-// publish a response on the same thread, which would otherwise self-deadlock a plain mutex.
-//
 
 #if defined(ESP32)
 #include "freertos/FreeRTOS.h"                                      /// FreeRTOS base.
 #include "freertos/semphr.h"                                        /// FreeRTOS semaphores/mutexes.
 
 /// @brief Recursive mutex backed by a FreeRTOS recursive mutex (ESP32).
+/// @details Recursive by design: the MQTT receive callback runs inside PubSubClient::loop() and
+/// may publish a response on the same task, which a plain mutex would deadlock on.
 class RecursiveMutex final {
 public:
   RecursiveMutex() = default;
@@ -47,11 +37,18 @@ private:
 #else  // Single-threaded platforms: no-op primitives that compile away.
 
 /// @brief No-op recursive mutex for single-threaded platforms (ESP8266 NONOS / AVR / native).
+/// @details The methods are empty and inline, so the optimizer removes them entirely. A shared
+/// library such as `connectivity` can therefore lock for the ESP32 task model without the other
+/// platforms paying anything for it.
 class RecursiveMutex final {
 public:
   RecursiveMutex() = default;
-  void lock() {}     // Compiles to nothing.
-  void unlock() {}   // Compiles to nothing.
+
+  /// @brief Takes the lock. Nothing to take here, so this compiles away.
+  void lock() {}
+
+  /// @brief Releases one level of the lock. Nothing to release here, so this compiles away.
+  void unlock() {}
 
   RecursiveMutex(const RecursiveMutex&) = delete;                   // Define copy constructor.
   RecursiveMutex& operator=(const RecursiveMutex&) = delete;        // Define copy assignment operator.

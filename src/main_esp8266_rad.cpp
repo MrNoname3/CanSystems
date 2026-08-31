@@ -9,8 +9,8 @@
 #include "networkManager.hpp"   /// Manages the network connection.
 #include "connectivity.hpp"     /// Handles the MQTT connection.
 #include "mqttCommon.hpp"       /// Handles the basic interaction between server and client.
-#include "radiation.hpp"
-#include "rfHandler.hpp"
+#include "radiation.hpp"      /// Reads the radiation meter.
+#include "rfHandler.hpp"      /// Handles the 433 MHz transceiver.
 
 //--- Constants ---//
 // clang-format off

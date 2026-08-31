@@ -70,7 +70,7 @@ private:
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
 
 #if defined(ESP8266) || defined(ESP32)
-#include <functional>
+#include <functional>                                               /// std::function for the message callback.
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
 #else
   using MqttCallback = void (*)(char*, uint8_t*, uint32_t);  // Callback type for received MQTT messages.

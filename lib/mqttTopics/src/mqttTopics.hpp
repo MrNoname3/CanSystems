@@ -1,8 +1,8 @@
 #ifndef MQTTTOPICS_HPP
 #define MQTTTOPICS_HPP
 
-#include <stdint.h>
-#include <pgmspace.h>
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <pgmspace.h>                                               /// PROGMEM storage for the format strings.
 
 /// @brief MQTT topic format strings and derived buffer sizes, shared between Connectivity and HADiscovery.
 class MqttTopics {
@@ -32,6 +32,9 @@ private:
   static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";
 
 public:
+  /// @brief Read-only access to the topic strings, payload templates and buffer sizes above.
+  /// Each accessor returns the constant its name carries; the constants themselves say what
+  /// they are for.
   static constexpr uint8_t getMacHexLen() { return macHexLen; }
   static constexpr const char* getMqttClientName() { return mqttClientName; }
   static constexpr const char* getMqttOutTopic() { return mqttOutTopic; }

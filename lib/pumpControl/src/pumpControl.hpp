@@ -177,10 +177,26 @@ private:
     // clang-format on
   };
 
+  /// @brief IDLE state: starts the queued irrigation, or watches for a pump or flow meter
+  /// that is active while nothing should be running.
+  /// @param actualTime Current millis() timestamp.
   void handleIdle(uint32_t actualTime);
+
+  /// @brief RUN state: ends the irrigation on its duration or limit switch, and checks flow
+  /// and pump current in between.
+  /// @param actualTime Current millis() timestamp.
   void handleRun(uint32_t actualTime);
+
+  /// @brief STOP state: takes the finished irrigation off the queue, re-queues it while it has
+  /// repeats left, and switches the pump off unless the next one is on the same channel.
   void handleStop();
+
+  /// @brief ERROR state: switches the pump off and drops the irrigation that failed.
   void handleError();
+
+  /// @brief CALIBRATION state: records the current sensor's zero offset once the reading has
+  /// had time to settle.
+  /// @param actualTime Current millis() timestamp.
   void handleCalibration(uint32_t actualTime);
 
   /// @brief Interrupt handler to update flow count when flow sensor is triggered.

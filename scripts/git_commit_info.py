@@ -1,3 +1,5 @@
+"""Hands the build the git facts it stamps into the firmware."""
+
 Import("env")
 from git_utils import get_git_commit_count, get_git_dirty, get_git_hash
 

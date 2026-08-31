@@ -140,6 +140,7 @@ class DeviceEntry:
 
     @property
     def display_name(self) -> str:
+        """Return the formatted menu label: the friendly name and MAC, or the MAC alone."""
         if self.friendly_name:
             return f"{self.friendly_name}  ({self.mac})"
         return self.mac
@@ -194,6 +195,7 @@ class DeviceManager:
         self.devices_file = self.script_dir / 'devices.yaml'
 
     def load(self) -> List[ProjectEntry]:
+        """Read devices.yaml and return the projects it lists."""
         if not self.devices_file.exists():
             raise FileNotFoundError(
                 f"Device list file not found: {self.devices_file}\n"

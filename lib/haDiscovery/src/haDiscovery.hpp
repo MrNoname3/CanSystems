@@ -1,9 +1,9 @@
 #ifndef HADISCOVERY_HPP
 #define HADISCOVERY_HPP
 
-#include <stdint.h>
-#include <pgmspace.h>
-#include "mqttTopics.hpp"
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <pgmspace.h>                                               /// PROGMEM storage and the _P string functions.
+#include "mqttTopics.hpp"                                           /// Topic formats and the buffer sizes derived from them.
 
 /// @brief Handles Home Assistant MQTT auto-discovery.
 /// All HA-specific strings, enums, and publish logic live here; handlers provide only typed data.

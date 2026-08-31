@@ -1,3 +1,5 @@
+"""Writes a plain .bin next to the .elf after every build."""
+
 Import("env")
 
 # Function to convert .elf to .bin
