@@ -4,8 +4,8 @@
 #include <SPI.h>                                                    /// Arduino SPI library.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
-/// @brief Driver for read/write access to SPI flash memory chips (256-byte page, NAND-type).
-/// @note NAND flash requires erase before write: cells can only transition from 1→0;
+/// @brief Driver for read/write access to SPI flash memory chips (256-byte page, NOR-type).
+/// @note NOR flash requires erase before write: cells can only transition from 1→0;
 ///       only the erase commands reset all bits back to 1. Smallest erasable unit: 4 KB sector.
 /// @note The WP (write-protect) pin must be pulled HIGH to enable write/erase operations.
 ///       The WEL (Write Enable Latch) bit is set automatically before each write/erase command
