@@ -20,3 +20,4 @@ ruff==0.16.5               # lint_check.py (lint only; ruff format is never run)
 pyright==1.1.411            # typecheck_check.py (strict)
 pytest==9.1.1               # pytest_check.py
 gcovr==8.6                  # CI coverage job (native_test line coverage over lib/)
+packaging==26.2             # deps_check.py parses the requirement lines with it (also a pytest dep)

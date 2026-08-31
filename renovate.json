@@ -29,6 +29,28 @@
       ],
       "automerge": true,
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "The urboot build image stays manual: the bootloader .hex files are committed, so a base-image change wants a rebuild and a diff against them",
+      "matchFileNames": [
+        "bootloader/urboot.Dockerfile"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "PlatformIO has no Renovate manager; the atmelavr platform releases as GitHub tags",
+      "managerFilePatterns": [
+        "/^platformio\\.ini$/"
+      ],
+      "matchStrings": [
+        "platform\\s*=\\s*atmelavr@(?<currentValue>[0-9][^\\s;]*)"
+      ],
+      "depNameTemplate": "platformio/platform-atmelavr",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
     }
   ]
 }

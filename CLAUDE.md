@@ -18,8 +18,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Native tests: `… pio test -e native_test` (under a minute)
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
-  `python scripts/release_check.py` (`--strict` fails on a dirty tree)
-- Individual guards: `scripts/format_check.py` (clang-format + final newline),
+  `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
+- Individual guards: `scripts/deps_check.py` (.venv matches the pins; `--sync` installs them),
+  `scripts/format_check.py` (clang-format + final newline),
   `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
@@ -50,7 +51,11 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
   jobs; **Gitea CI is intentionally off**.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
-  GitHub Actions and pip ecosystems. Dependabot is deliberately not used: it only runs on GitHub,
+  pip and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and
+  the `atmelavr` platform pin through a custom manager. Patch/pin/digest automerge after a 3-day
+  soak (plus minor for Actions); everything else waits on the dashboard. The urboot image is
+  excluded from automerge - the bootloader `.hex` files are committed, so a base-image change
+  wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). Dependabot is deliberately not used: it only runs on GitHub,
   and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
   pins in `platformio.ini` stay manual.
 - End commit messages with the `Co-Authored-By` trailer.

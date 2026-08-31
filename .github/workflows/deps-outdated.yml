@@ -1,0 +1,63 @@
+name: Dependencies
+
+# The PlatformIO pins in platformio.ini - platforms, tools and libraries - have no Renovate
+# manager, so nothing opens a pull request when one falls behind. `pio pkg outdated` answers with
+# PlatformIO's own registry knowledge, which needs no name mapping and no regex, so this reports
+# weekly instead. Renovate covers the pip, GitHub Actions and Dockerfile side (see renovate.json).
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'     # Monday 06:00 UTC
+  workflow_dispatch:        # allow manual runs from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  platformio-outdated:
+    # Reports only: nothing here gates a release, and `pio pkg outdated` exits 0 either way.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Cache PlatformIO toolchains and pip
+        # Same rule as ci.yml: only on github.com, where actions/cache@v6's API is served.
+        # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all.
+        if: ${{ github.server_url == 'https://github.com' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install -r requirements-ci.txt
+
+      - name: Report outdated PlatformIO packages
+        # `pio pkg outdated` exits 0 whether or not anything is behind, so the table itself is the
+        # signal: a body under the header means there is something to look at. The report always
+        # reaches the job summary; an annotation makes it visible without opening the run.
+        run: |
+          pio pkg outdated | tee outdated.txt
+          {
+            echo "## PlatformIO packages"
+            echo ""
+            echo '```text'
+            cat outdated.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE '^[a-z0-9-]+ +[0-9]' outdated.txt; then
+            echo "::warning title=PlatformIO packages are behind::$(grep -cE '^[a-z0-9-]+ +[0-9]' outdated.txt) package(s); see the job summary"
+          else
+            echo "::notice title=PlatformIO packages::all pins are current"
+          fi
