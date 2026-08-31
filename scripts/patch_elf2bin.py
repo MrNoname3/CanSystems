@@ -1,3 +1,5 @@
+"""Fixes an invalid escape sequence in the ESP8266 framework's elf2bin.py tool."""
+
 import os
 
 Import("env")

@@ -1,5 +1,4 @@
-#ifndef OTA_CAN_RESPONSE_HPP
-#define OTA_CAN_RESPONSE_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "ota.hpp"                                                  /// OTA::OtaState.
@@ -46,4 +45,3 @@ namespace OtaCanResponse {
     return decision;
   }
 } // namespace OtaCanResponse
-#endif // OTA_CAN_RESPONSE_HPP

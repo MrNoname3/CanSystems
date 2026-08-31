@@ -1,5 +1,4 @@
-#ifndef CONNECTIVITY_HPP
-#define CONNECTIVITY_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <string.h>                                                 /// Methods for string handling.
@@ -17,6 +16,8 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include <WiFiClientSecure.h>                                       /// Provides a TCP client with SSL/TLS support.
 #include <PubSubClient.h>                                           /// Lightweight MQTT client library for embedded systems.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "intrusiveList.hpp"                                        /// Intrusive list of the registered MQTT handlers.
+#include "disconnectDiag.hpp"                                       /// Outage bookkeeping behind the [DIAG] message.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
@@ -50,7 +51,6 @@ private:
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
-  static constexpr const char PROGMEM networkLostStr[]                = "NETWORK_LOST";                   // Diagnostic cause when the local network link dropped.
   // clang-format on
 public:
   /// @brief Constructs a Connectivity instance.
@@ -165,11 +165,10 @@ private:
   [[nodiscard]] static const char* getMqttStatusStr(PubSubClient::State status);
 
   /// @brief Records a disconnect for later diagnostics publishing.
-  /// Captures the cause, the current UTC time and the millis() timestamp; called once per
+  /// Stamps the current UTC time and hands the outage to `disconnectDiag`; called once per
   /// outage on the online -> offline transition, so the first (root) cause is kept.
-  /// @param cause PROGMEM cause string (MQTT status or `networkLostStr`).
   /// @param actualTime Current millis() timestamp.
-  void recordDisconnect(const char* cause, uint32_t actualTime);
+  void recordDisconnect(uint32_t actualTime);
 
   /// @brief Publishes the retained disconnect diagnostics message after a reconnect.
   /// No-op when no disconnect has been recorded (e.g. the first connect after boot).
@@ -190,15 +189,11 @@ private:
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.
   void (*resetWdt)();                                               // Function pointer for resetting the watchdog timer.
   uint32_t reconnectTimer;                                          // Timer for managing MQTT reconnections.
-  const char* dropCause;                                            // Cause of the last disconnect (PROGMEM string); nullptr when no diagnostics are pending.
-  char dropTimeStr[dateTimeStrBufSize];                             // ISO8601 UTC time when the disconnect was detected.
-  uint32_t dropDetectedTimer;                                       // millis() timestamp of the disconnect detection, for the offline duration.
-  uint32_t reconnectCount;                                          // Number of successful reconnects since boot (diagnostics "n").
+  DisconnectDiag disconnectDiag;                                    // Outage cause, duration and reconnect count for the [DIAG] message.
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
-  MqttBase* handlerListHead = nullptr;                              // Head of the intrusive linked list of registered MQTT message handlers.
-  MqttBase* handlerListTail = nullptr;                              // Tail of the intrusive linked list, kept for O(1) append.
+  IntrusiveList<MqttBase> handlerList;                              // Registered MQTT message handlers, keyed by subtopic.
   HADiscovery haDiscovery;                                          // HA auto-discovery handler; holds device name and all HA infrastructure.
 };
 
@@ -321,10 +316,10 @@ public:
   [[nodiscard]] const char* getClientNameStr() const { return connectivity.getClientName(); }
 
   /// @brief Returns the next handler in the intrusive linked list managed by Connectivity.
-  [[nodiscard]] MqttBase* getNextHandler() const { return nextHandler; }
+  [[nodiscard]] MqttBase* getNext() const { return nextHandler; }
 
   /// @brief Sets the next handler pointer. Used internally by Connectivity to build the handler list.
-  void setNextHandler(MqttBase* next) { nextHandler = next; }
+  void setNext(MqttBase* next) { nextHandler = next; }
 
   MqttBase(const MqttBase&) = delete;                       // Delete copy constructor.
   MqttBase& operator=(const MqttBase&) = delete;            // Delete copy assignment operator.
@@ -351,4 +346,3 @@ private:
   char subtopic[subtopicSize]{};    // Buffer storing the subtopic associated with the MQTT base instance.
   MqttBase* nextHandler = nullptr;  // Intrusive linked list pointer, managed by Connectivity.
 };
-#endif

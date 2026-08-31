@@ -1,16 +1,20 @@
 #pragma once
 
-#include <Arduino.h>
+#include <Arduino.h>                                                /// Arduino types and Stream.
 
-/// @brief Abstract base class for CAN controllers.
-class CANController : public Stream {
+/// @brief Base class holding the packet state a CAN controller driver builds on.
+/// @details The CAN operations are deliberately non-virtual: CAN.h picks one implementation at
+/// compile time, the controller object is a concrete global, and no caller reaches a driver
+/// through a base pointer. Virtual dispatch would only pin every method into the vtable, where
+/// the linker cannot drop the ones a firmware never calls.
+class CANController {
 public:
   /// @brief Initialize the CAN controller at the given baud rate.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] virtual uint8_t begin(uint32_t baudRate);
+  [[nodiscard]] uint8_t begin(uint32_t baudRate);
 
   /// @brief Deinitialize the CAN controller.
-  virtual void end();
+  void end();
 
   /// @brief Begin a standard 11-bit CAN packet.
   /// @return 1 on success, 0 on failure.
@@ -22,13 +26,12 @@ public:
 
   /// @brief Finalize and transmit the current CAN packet.
   /// @return 1 on success, 0 on failure.
-  [[nodiscard]] virtual uint8_t endPacket();
+  [[nodiscard]] uint8_t endPacket();
 
-  /// @brief Parse the next received CAN packet.
-  /// @return DLC (0..8) on success, 0 if no packet.
-  [[nodiscard]] virtual uint8_t parsePacket();
+  /// @brief Identifier reported by packetId() when no packet was received.
+  static constexpr uint32_t noId = UINT32_MAX;
 
-  /// @brief Return the ID of the last received packet.
+  /// @brief Return the ID of the last received packet, or `noId` if there was none.
   [[nodiscard]] uint32_t packetId() const;
 
   /// @brief Return whether the last received packet was extended (29-bit).
@@ -40,37 +43,39 @@ public:
   /// @brief Return the DLC of the last received packet.
   [[nodiscard]] uint8_t packetDlc() const;
 
-  // from Print
-  virtual size_t write(uint8_t b);
-  virtual size_t write(const uint8_t* buffer, size_t size);
+  /// @brief Appends one byte to the packet being built.
+  /// @return 1 when it fit, 0 when no packet is open or the payload is already full.
+  size_t write(uint8_t b);
 
-  // from Stream
-  virtual int available();
-  virtual int read();
-  virtual int peek();
-  virtual void flush();
+  /// @brief Appends bytes to the packet being built.
+  /// @return How many bytes were appended; less than `size` when the payload filled up.
+  size_t write(const uint8_t* buffer, size_t size);
+
+  /// @brief Bytes of the received packet not read yet.
+  [[nodiscard]] int available() const;
+
+  /// @brief Takes the next byte of the received packet, or -1 when there is none.
+  int read();
+
+  /// @brief Returns the next byte of the received packet without taking it, or -1.
+  [[nodiscard]] int peek() const;
+
+  /// @brief Copies up to `length` unread bytes of the received packet into `buffer`.
+  /// @return How many bytes were copied; less than `length` when the packet holds fewer.
+  /// @note Returns what is already buffered and never waits, so it is safe to call from an
+  /// interrupt.
+  size_t readBytes(uint8_t* buffer, size_t length);
 
   /// @brief Set the receive interrupt callback.
-  virtual void onReceive(void (*callback)(int));
-
-  [[nodiscard]] virtual uint8_t filter(uint16_t id) { return filter(id, 0x7FFU); }
-  [[nodiscard]] virtual uint8_t filter(uint16_t id, uint16_t mask);
-  [[nodiscard]] virtual uint8_t filterExtended(uint32_t id) { return filterExtended(id, 0x1FFFFFFFU); }
-  [[nodiscard]] virtual uint8_t filterExtended(uint32_t id, uint32_t mask);
-
-  [[nodiscard]] virtual uint8_t observe();
-  [[nodiscard]] virtual uint8_t loopback();
-  [[nodiscard]] virtual uint8_t sleep();
-  [[nodiscard]] virtual uint8_t wakeup();
+  void onReceive(void (*callback)(int));
 
 protected:
   CANController();
-  virtual ~CANController() = default;
+  ~CANController() = default;
 
   void (*onReceiveCb)(int);
 
   bool packetBegun;
-  static constexpr uint32_t noId = UINT32_MAX;
 
   uint32_t txId;
   bool txExtended;

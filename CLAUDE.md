@@ -15,7 +15,7 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 ```
 
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
-- Native tests: `… pio test -e native_test` (~30 s, ~444 cases)
+- Native tests: `… pio test -e native_test` (under a minute)
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree)
@@ -24,7 +24,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
   -r requirements-dev.txt`) — every gate guard finds it there. pio is unaffected by the root
-  `.venv` (it runs from its own penv). `ota/requirements.txt` holds only the OTA tool's runtime deps.
+  `.venv` (it runs from its own penv). `ota/requirements.txt` holds only the OTA tool's runtime
+  deps, and `requirements-ci.txt` the two CI-only ones (platformio, intelhex). All three are
+  pinned exact.
 - urboot bootloader: `scripts/build_urboot.sh [771|800|801]` (podman/docker; see `bootloader/README.md`)
 
 The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it that way.
@@ -46,8 +48,11 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
   which **push-mirrors to GitHub** automatically — no second remote needed).
 - GitHub Actions runs the release gate plus non-blocking firmware size-diff and native-coverage
-  jobs, and Dependabot opens weekly PRs for GitHub Actions and pip dev-tooling version bumps;
-  **Gitea CI is intentionally off**.
+  jobs; **Gitea CI is intentionally off**.
+- Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
+  GitHub Actions and pip ecosystems. Dependabot is deliberately not used: it only runs on GitHub,
+  and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
+  pins in `platformio.ini` stay manual.
 - End commit messages with the `Co-Authored-By` trailer.
 
 ## Dependencies
@@ -67,8 +72,7 @@ Python tooling.
 
 ## Gotchas
 
-See README.md "Gotchas" (cross-project `binId` reflash, CAN IDs in EEPROM). Also: the MQ-135
-smoke node is WIP and likely to be dropped — don't flag its dead calibration path or missing
-tests as defects. Per-deployment secrets live in the git-ignored `ota/secrets.yaml` — never
+See README.md "Gotchas" (cross-project `binId` reflash, CAN IDs in EEPROM). Also:
+per-deployment secrets live in the git-ignored `ota/secrets.yaml` — never
 commit or print its contents (the git-ignored `ota/mosq-ca.crt` is just the public CA bundle,
 regenerated from the system trust store when missing).

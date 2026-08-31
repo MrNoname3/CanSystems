@@ -8,6 +8,18 @@
 #include <Update.h>                                                 /// Native unit-test shim (test/_shims).
 #endif
 
+namespace {
+  // Throws away a firmware image that will never be finished. The ESP8266 Updater has no abort();
+  // its end(false) resets quietly, while the ESP32 one logs the unfinished image as an error.
+  void abortFirmwareUpdate() {
+#if defined(ESP8266)
+    (void)Update.end(false);
+#else
+    Update.abort();
+#endif
+  }
+} // namespace
+
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   checkOkCallback(checkOkCallback),
   fileSizeLocal(0U),
@@ -66,7 +78,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   }
   isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
   if(isFwTransfer) {
-    Update.end(false);
+    abortFirmwareUpdate();                                          // begin() refuses while an unfinished image is still open.
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get()->printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
     if(!updateBeginResult) {
@@ -76,10 +88,18 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     if(!Update.setMD5(fileMd5Local)) {
       Logger::get()->printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_SET_MD5_FAILED);
-      Update.end(false);
+      abortFirmwareUpdate();                                        // This path does not reach CLEANUP.
       return false;
     }
   } else {
+    // Opened before the free space is measured: "w" truncates, so a temp file an interrupted
+    // transfer left behind is reclaimed rather than counted against this one.
+    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "w");
+    if(!receivedFile) {
+      Logger::get()->printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
+      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      return false;
+    }
 #ifdef ESP8266
     FSInfo fsInfo;
     LittleFS.info(fsInfo);
@@ -93,12 +113,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     if(!isEnoughFreeSpace) {
       Logger::get()->printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), freeSpace, fileSizeLocal);
       dataTransferErrState.setError(DataTransferError::NOT_ENOUGH_STORAGE);
-      return false;
-    }
-    receivedFile = LittleFS.open(FPSTR(FileName::getTempFileLocation()), "w");
-    if(!receivedFile) {
-      Logger::get()->printf_P(PSTR("[FT] Opening failed for write: %s\r\n"), FileName::getTempFileLocation());
-      dataTransferErrState.setError(DataTransferError::TEMP_FILE_OPENING_ERROR);
+      receivedFile.close();
       return false;
     }
   }
@@ -135,7 +150,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     dataTransferErrState.setError(DataTransferError::FILE_PIECE_SIZE_OVEFLOW);
     return false;
   }
-  uint8_t decodedData[filePieceSize];
+  uint8_t decodedData[maxFilePieceLength];
   const uint32_t decodedPreSize = Base64::decodedLength(reinterpret_cast<const uint8_t*>(fileData), filePieceB64Size);
   if(decodedPreSize > filePieceSize || decodedPreSize == 0U) {
     Logger::get()->printf_P(PSTR("[FT] File piece size error!\r\n"));
@@ -153,9 +168,6 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   if(decodedPostSize > remainingFileSizeLocal) {
     Logger::get()->printf_P(PSTR("[FT] Received more data than the declared file size!\r\n"));
     dataTransferErrState.setError(DataTransferError::RECEIVED_DATA_OVERRUN);
-    if(isFwTransfer) {
-      Update.end(false);
-    }
     transferState = TransferState::CLEANUP;
     return false;
   }
@@ -164,7 +176,6 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     if(writtenBytes != decodedPostSize) {
       Logger::get()->printf_P(PSTR("[FT] Firmware write failed!\r\n"));
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_WRITE_FAILED);
-      Update.end(false);
       transferState = TransferState::CLEANUP;
       return false;
     }
@@ -262,19 +273,28 @@ void DataTransfer::runValidityCheck() {
       }
     } break;
     case TransferState::CLEANUP: {
-      fileSizeLocal = 0U;
-      memset(fileMd5Local, '\0', sizeof(fileMd5Local));
-      nextFilePieceNumberLocal = invalidFilePieceNumber;
-      remainingFileSizeLocal = 0U;
-      isFwTransfer = false;
-      if(receivedFile) {
-        receivedFile.close();
-      }
-      transferState = TransferState::IDLE;
-      if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
-        checkOkCallback(false);
-      }
+      cleanupTransfer();
     } break;
+  }
+}
+
+void DataTransfer::cleanupTransfer() {
+  // An image left half-written holds the Updater's sector buffer until the next begin().
+  if(isFwTransfer && (remainingFileSizeLocal > 0U)) {
+    abortFirmwareUpdate();
+  }
+  fileSizeLocal = 0U;
+  memset(fileMd5Local, '\0', sizeof(fileMd5Local));
+  nextFilePieceNumberLocal = invalidFilePieceNumber;
+  remainingFileSizeLocal = 0U;
+  isFwTransfer = false;
+  if(receivedFile) {
+    receivedFile.close();
+  }
+  // The temp file is left where it is; begin() truncates it before measuring the free space.
+  transferState = TransferState::IDLE;
+  if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
+    checkOkCallback(false);
   }
 }
 

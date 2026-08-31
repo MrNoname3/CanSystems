@@ -1,5 +1,4 @@
-#ifndef EEPROM_HANDLER_HPP
-#define EEPROM_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <EEPROM.h>                                                 /// EEPROM access library.
@@ -105,7 +104,7 @@ private:
   static inline bool init() {
     // cppcheck-suppress knownConditionTrueFalse
     if(eepromInitialised) { return true; }
-    eepromInitialised = EEPROM.begin(sizeof(EEPROMData));
+    eepromInitialised = EEPROM.begin(eepromAddress + sizeof(EEPROMData));
     return eepromInitialised;
   }
 #endif
@@ -123,4 +122,3 @@ private:
 
   T* data;                                          // Pointer to the user-defined data type.
 };
-#endif // EEPROM_HANDLER_HPP

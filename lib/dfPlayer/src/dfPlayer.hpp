@@ -1,5 +1,4 @@
-#ifndef DFPLAYER_HPP
-#define DFPLAYER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <SoftwareSerial.h>                                         /// Arduino software serial lib.
@@ -128,4 +127,3 @@ private:
   PlayingStates playingState;                                               // Current state of the playback state machine.
   CircularBuffer<PlayQueueItem, 5U> playingQueue;                           // Playback queue for tracks.
 };
-#endif // DFPLAYER_HPP

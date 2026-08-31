@@ -446,9 +446,14 @@ void DFPlayerMiniFast<Debug>::printError() const {
 }
 
 template<bool Debug>
-void DFPlayerMiniFast<Debug>::findChecksum(Stack& _stack) {
+uint16_t DFPlayerMiniFast<Debug>::computeChecksum(const Stack& _stack) {
   // Two's complement negation of the sum of bytes: version, length, cmd, feedback, MSB param, LSB param.
-  const uint16_t checksum = static_cast<uint16_t>(~(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB) + 1);
+  return static_cast<uint16_t>(~(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB) + 1);
+}
+
+template<bool Debug>
+void DFPlayerMiniFast<Debug>::findChecksum(Stack& _stack) {
+  const uint16_t checksum = computeChecksum(_stack);
   _stack.checksumMSB = static_cast<uint8_t>(checksum >> 8U);
   _stack.checksumLSB = static_cast<uint8_t>(checksum & 0xFFU);
 }
@@ -531,8 +536,7 @@ void DFPlayerMiniFast<Debug>::debugLog([[maybe_unused]] const __FlashStringHelpe
 template<bool Debug>
 bool DFPlayerMiniFast<Debug>::verifyChecksum() {
   const uint16_t recChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
-  findChecksum(recStack);
-  const uint16_t calcChecksum = (static_cast<uint16_t>(recStack.checksumMSB) << 8U) | recStack.checksumLSB;
+  const uint16_t calcChecksum = computeChecksum(recStack);
 
   if(recChecksum != calcChecksum) {
     if constexpr(Debug) {

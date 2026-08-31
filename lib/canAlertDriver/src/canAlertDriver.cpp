@@ -71,20 +71,26 @@ void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLIN
         }
       }
       if(validArray) {
-        (void)CanBase::sendCanFrame((colorsOffset == 0U) ? CanCmd::RGB_LED : CanCmd::PLAY_MP3, canData);
+        // The two commands come from different enums - RGB_LED is understood by any node, PLAY_MP3
+        // only by an alert one - so the choice is made on the wire value they share.
+        const uint16_t command = (colorsOffset == 0U) ? static_cast<uint16_t>(CanCmd::RGB_LED)
+                                                      : static_cast<uint16_t>(AlertCmd::PLAY_MP3);
+        (void)CanBase::sendCanFrame(command, canData);
       }
     }
   } else if((colorsOffset == 3U) && colorsJsonVar.isNull()) {
     // "Colors" omitted entirely: play the sound with the LEDs left dark (color bytes stay 0).
     // A present but malformed "Colors" (wrong type/size/element) still drops the whole message.
-    (void)CanBase::sendCanFrame(CanCmd::PLAY_MP3, canData);
+    (void)CanBase::sendCanFrame(AlertCmd::PLAY_MP3, canData);
   }
 }
 
 void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame) {
   switch(canFrame.cmd) {
-    case static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR): {
-      const float temperature = static_cast<float>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U)) / 100.0F + tempOffset;
+    case static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR): {
+      // Signed on the wire: the node sends int16_t hundredths of a degree (see ambientSensor.cpp).
+      const int16_t rawTemperature = static_cast<int16_t>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U));
+      const float temperature = static_cast<float>(rawTemperature) / 100.0F + tempOffset;
       const uint16_t humidity = static_cast<uint16_t>(canFrame.data[2]) | (static_cast<uint16_t>(canFrame.data[3]) << 8U);
       const uint16_t light = static_cast<uint16_t>(canFrame.data[4]) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
       char dataOut[dataOutBufSize] = { '\0' };

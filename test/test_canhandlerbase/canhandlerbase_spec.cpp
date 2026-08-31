@@ -203,6 +203,20 @@ bool test_send_response_nack() {
   END_IT
 }
 
+bool test_the_device_command_blocks_share_the_wire_range() {
+  IT("the alert and irrigation blocks start at the same wire value, which is why they are separate enums");
+  // Shared block: every node understands these, so the values must stay put.
+  IS_EQUAL(static_cast<uint16_t>(CanCmd::PING), 0U);
+  IS_EQUAL(static_cast<uint16_t>(CanCmd::ROUND_TIME_MAX), 8U);
+  // Above the separator the same number means different things depending on the node type. That
+  // is the protocol, not an accident - and it is why one enum could not hold both blocks.
+  IS_EQUAL(static_cast<uint16_t>(AlertCmd::PLAY_MP3), 32U);
+  IS_EQUAL(static_cast<uint16_t>(IrrigationCmd::ADD_IRRIGATION), 32U);
+  IS_EQUAL(static_cast<uint16_t>(AlertCmd::HUM_TEMP_SENSOR_ERROR), 34U);
+  IS_EQUAL(static_cast<uint16_t>(IrrigationCmd::MOISTURE_DATA), 36U);
+  END_IT
+}
+
 int main() {
   SUITE("CanHandlerBase");
   test_canframe_default_constructor();

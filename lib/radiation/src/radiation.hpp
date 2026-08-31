@@ -1,5 +1,4 @@
-#ifndef RADIATION_HPP
-#define RADIATION_HPP
+#pragma once
 
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include <Arduino.h>                                                /// Arduino libraries header.
@@ -91,4 +90,3 @@ private:
   const uint8_t sensorPin;                      // GPIO pin connected to the radiation sensor.
   TubeType tubeType = TubeType::Unknown;        // Tube type read from config at init; determines sievert/radian calculation.
 };
-#endif // RADIATION_HPP

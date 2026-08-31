@@ -54,12 +54,9 @@ jobs:
       - name: Install PlatformIO + tooling
         # requirements-dev.txt is the single source of truth for the pinned gate tooling
         # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
-        # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need. The two
-        # things NOT in that file are added here on top:
-        #   platformio — runs from its own penv locally, so it is a CI-only install;
-        #   intelhex   — the ESP32 esptool (tool-esptoolpy) imports it when creating the
-        #                bootloader/firmware .bin (ships with neither PlatformIO nor the platform).
-        run: pip install --upgrade platformio intelhex -r requirements-dev.txt
+        # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
+        # requirements-ci.txt adds the two that are not installed locally: platformio and intelhex.
+        run: pip install -r requirements-ci.txt -r requirements-dev.txt
 
       - name: Release gate (build all envs + native tests + static analysis)
         run: python scripts/release_check.py
@@ -98,7 +95,7 @@ jobs:
             pio-${{ runner.os }}-
 
       - name: Install PlatformIO + intelhex
-        run: pip install --upgrade platformio intelhex   # intelhex: ESP32 esptool needs it (see release-gate)
+        run: pip install -r requirements-ci.txt
 
       - name: Determine baseline commit
         id: base
@@ -131,8 +128,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30   # only ~3min even on the laptop; a generous ceiling that still catches a hang
     steps:
-      - name: Checkout
+      - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0    # same as the other two jobs; a shallow clone builds with a count of 1
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -155,8 +154,8 @@ jobs:
             pio-${{ runner.os }}-
 
       - name: Install PlatformIO + gcovr
-        # gcovr is pinned in requirements-dev.txt (single source); platformio is CI-only (see release-gate).
-        run: pip install --upgrade platformio -r requirements-dev.txt
+        # gcovr comes from requirements-dev.txt, platformio from requirements-ci.txt (see release-gate).
+        run: pip install -r requirements-ci.txt -r requirements-dev.txt
 
       - name: Native tests with coverage instrumentation
         run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test

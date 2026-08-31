@@ -1,5 +1,4 @@
-#ifndef CONFIG_HANDLER_HPP
-#define CONFIG_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <type_traits>                                              /// For static_assert type checks in getJsonValue.
@@ -164,4 +163,3 @@ private:
     // clang-format on
   };
 };
-#endif // CONFIG_HANDLER_HPP

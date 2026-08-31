@@ -6,6 +6,8 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
+volatile uint32_t CanHandlerEsp32::rxIncompleteFrames = 0U;
+volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
 CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
@@ -55,7 +57,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     uint8_t deviceIndex = 0U;
-    for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
+    for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
       Logger::get()->printf_P(PSTR("  %hhu. %hu\r\n"), deviceIndex++, d->getClientCanId());
     }
     xSemaphoreGive(canDevicesListMutex);
@@ -79,62 +81,81 @@ void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-conver
   if(!CAN.packetRtr()) {
     const uint8_t canDataDlc = CAN.packetDlc();
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(rxCanData.data, canDataDlc));
-    if(canDataDlc != bytesReaded) { return; }
+    if(canDataDlc != bytesReaded) {
+      ++rxIncompleteFrames;
+      return;
+    }
   }
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   if(xQueueSendFromISR(canRxQueue, &rxCanData, &xHigherPriorityTaskWoken) != pdTRUE) {
-    return;
+    ++rxQueueFullFrames;
+    return;                                                         // No yield: nothing was queued, so no task became ready.
   }
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 bool CanHandlerEsp32::run() {
-  { // Handle received CAN frame.
-    CanFrame frameIn;
-    if(xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
-      if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-        // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
-        for(CanBase* d = deviceListHead; d != nullptr; d = d->getNextDevice()) {
-          if(d->getClientCanId() == nodeCanId) {
-            d->canFrameArrivedCallback(frameIn);
-            break;
-          }
-        }
-        xSemaphoreGive(canDevicesListMutex);
-      }
+  if(CAN.isBusOff()) {
+    Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
+    CAN.recoverFromBusOff();
+  }
+  reportDroppedRxFrames();
+  { // Handle received CAN frames.
+    // The mutex is taken around the whole pass rather than per frame: it guards the device list,
+    // which only changes at registration time. Taking it first also means a timeout leaves the
+    // frames queued instead of dequeueing one and dropping it.
+    if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
+      CanFrame frameIn;
+      (void)CanFramePump::drain(
+          [&frameIn]() -> bool { return xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE; },
+          [this, &frameIn]() -> bool { dispatchRxFrame(frameIn); return true; },
+          maxFramesPerRun);
+      xSemaphoreGive(canDevicesListMutex);
     }
   }
   { // Handle CAN frame sending.
     CanFrame frameOut;
-    if(xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE) {
-      const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
-      const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) != 0U);
-      const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
-      if(!endPacketResult) {
-        // The frame is already consumed from the queue, so a TX failure would otherwise vanish
-        // silently (the mains discard the runTasks() failure mask).
-        Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
-        return false;
-      }
-      // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
-    }
+    const CanFramePump::Result txResult = CanFramePump::drain(
+        [this, &frameOut]() -> bool { return xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE; },
+        [this, &frameOut]() -> bool { return transmitFrame(frameOut); },
+        maxFramesPerRun);
+    if(txResult.failed) { return false; }
   }
   return true;
 }
 
-bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(canBasePtr == nullptr) { return false; }
-  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    if(deviceListTail != nullptr) {
-      deviceListTail->setNextDevice(canBasePtr);
-    } else {
-      deviceListHead = canBasePtr;
-    }
-    deviceListTail = canBasePtr;
-    xSemaphoreGive(canDevicesListMutex);
-    return true;
+void CanHandlerEsp32::reportDroppedRxFrames() {
+  const uint32_t incomplete = rxIncompleteReporter.takeGrowth(rxIncompleteFrames);
+  const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
+  if((incomplete == 0U) && (queueFull == 0U)) { return; }
+  Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
+}
+
+void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT(readability-convert-member-functions-to-static)
+  // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
+  const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
+  CanBase* device = deviceList.findIf([nodeCanId](const CanBase* d) -> bool { return d->getClientCanId() == nodeCanId; });
+  if(device != nullptr) { device->canFrameArrivedCallback(frameIn); }
+}
+
+bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
+  const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
+  const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) == sizeof(frameOut.data));
+  const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
+  if(!endPacketResult) {
+    // The frame is already consumed from the queue, so a TX failure would otherwise vanish
+    // silently (the mains discard the runTasks() failure mask).
+    Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
+    return false;
   }
-  return false;
+  // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
+  return true;
+}
+
+bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
+  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
+  const bool appendResult = deviceList.append(canBasePtr);
+  xSemaphoreGive(canDevicesListMutex);
+  return appendResult;
 }
 #endif // ESP32

@@ -97,6 +97,7 @@ public:
   [[nodiscard]] File open(const char* path, const char* mode) {
     if((mode != nullptr) && (mode[0] == 'w')) {
       if(failWriteOpen_) { return {}; }          // injected open-for-write failure
+      files_[path].clear();                      // "w" truncates straight away, as fopen does
       return File(&files_, path);
     }
     const auto it = files_.find(path);
@@ -117,6 +118,14 @@ public:
     return found;
   }
 
+  [[nodiscard]] bool exists(const char* path) const { return files_.count(path) > 0U; }
+
+  // Mutates files_; clang-tidy's const/static hints here are false positives.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
+  bool remove(const char* path) {
+    return files_.erase(path) > 0U;
+  }
+
   [[nodiscard]] size_t totalBytes() const { return capacity_; }
   [[nodiscard]] size_t usedBytes() const {
     size_t used = 0U;
@@ -127,7 +136,6 @@ public:
 
   // ---- test helpers ----
   void setFile(const char* path, const std::string& content) { files_[path] = content; }
-  [[nodiscard]] bool exists(const char* path) const { return files_.count(path) > 0U; }
   [[nodiscard]] std::string fileContent(const char* path) const {
     const auto it = files_.find(path);
     return (it == files_.end()) ? std::string() : it->second;

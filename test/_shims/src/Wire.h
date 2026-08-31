@@ -4,9 +4,19 @@
 
 class TwoWire {
 public:
-  void begin() {}
-  void setClock(uint32_t /*hz*/) {}
-  void setWireTimeout(uint32_t /*timeout*/, bool /*reset*/) {}
+  // begin() reinitialises the peripheral. On AVR it runs twi_init(), which rewrites TWBR from
+  // TWI_FREQ and so discards any clock configured beforehand; the timeout is left alone.
+  void begin() {
+    clockHz = defaultClockHz;
+    clockSetAfterBegin = false;
+  }
+
+  void setClock(uint32_t hz) {
+    clockHz = hz;
+    clockSetAfterBegin = true;
+  }
+
+  void setWireTimeout(uint32_t timeout, bool /*reset*/) { timeoutUs = timeout; }
   void beginTransmission(uint8_t /*addr*/) {}
 
   [[nodiscard]] uint8_t endTransmission() const { return txResult; }
@@ -31,14 +41,29 @@ public:
     for(uint8_t i = 0U; i < n; ++i) { readQueue.push_back(d[i]); }
   }
   void setEndTransmissionResult(uint8_t r) { txResult = r; }
+
+  // ---- bus configuration observers ----
+  [[nodiscard]] uint32_t getClock() const { return clockHz; }
+  [[nodiscard]] uint32_t getWireTimeout() const { return timeoutUs; }
+  /// @brief True when the clock was configured after begin(), i.e. it actually took effect.
+  [[nodiscard]] bool isClockSetAfterBegin() const { return clockSetAfterBegin; }
+
   void reset() {
     readQueue.clear();
     txResult = 0U;
+    clockHz = defaultClockHz;
+    timeoutUs = 0U;
+    clockSetAfterBegin = false;
   }
 
 private:
+  static constexpr uint32_t defaultClockHz = 100000U;   // AVR TWI_FREQ, applied by twi_init().
+
   std::deque<uint8_t> readQueue;
   uint8_t txResult = 0U;
+  uint32_t clockHz = defaultClockHz;
+  uint32_t timeoutUs = 0U;
+  bool clockSetAfterBegin = false;
 };
 
 inline TwoWire Wire;

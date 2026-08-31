@@ -1,5 +1,4 @@
-#ifndef SPIFLASH_H
-#define SPIFLASH_H
+#pragma once
 
 #include <Arduino.h>                                                /// Arduino framework header.
 #include <SPI.h>                                                    /// Arduino SPI library.
@@ -125,15 +124,27 @@ private:
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.
   /// @param isWrite Set to `true` for write/erase commands.
-  void command(uint8_t cmd, bool isWrite = false);
+  /// @brief Waits for the chip to leave its busy state.
+  /// @return `false` when no chip answers, or when it stays busy past `busyTimeoutMs`.
+  [[nodiscard]] bool waitUntilReady();
+
+  /// @brief Waits for readiness, then selects the chip and sends one command byte.
+  /// @param cmd Command opcode.
+  /// @param isWrite Sends WRITE ENABLE first when `true`.
+  /// @return `false` when the chip never became ready; the chip is then left unselected and
+  /// the command is not sent.
+  [[nodiscard]] bool command(uint8_t cmd, bool isWrite = false);
 
   uint8_t slaveSelectPin;                                           // SPI chip-select pin.
+  static constexpr uint8_t statusNotResponding = 0xFFU;             // All ones: nothing is driving MISO.
+  // Upper bound for one readiness wait. Covers the programming this class waits on - a byte or
+  // short page program, tens of microseconds - and stays short because a single caller
+  // operation can perform several waits back to back. Erases are not waited for here: they run
+  // for orders of magnitude longer, so poll busy() for those instead.
+  static constexpr uint32_t busyTimeoutMs = 5U;
+
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
-  uint8_t spcr;                                                     // Saved SPCR register value.
-  uint8_t spsr;                                                     // Saved SPSR register value.
 #ifdef SPI_HAS_TRANSACTION
   SPISettings settings;                                             // SPI transaction settings.
 #endif
 };
-
-#endif // SPIFLASH_H

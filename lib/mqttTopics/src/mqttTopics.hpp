@@ -1,8 +1,7 @@
-#ifndef MQTTTOPICS_HPP
-#define MQTTTOPICS_HPP
+#pragma once
 
-#include <stdint.h>
-#include <pgmspace.h>
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <pgmspace.h>                                               /// PROGMEM storage for the format strings.
 
 /// @brief MQTT topic format strings and derived buffer sizes, shared between Connectivity and HADiscovery.
 class MqttTopics {
@@ -32,6 +31,9 @@ private:
   static constexpr const char availOfflinePayload[] = R"({"state":"offline"})";
 
 public:
+  /// @brief Read-only access to the topic strings, payload templates and buffer sizes above.
+  /// Each accessor returns the constant its name carries; the constants themselves say what
+  /// they are for.
   static constexpr uint8_t getMacHexLen() { return macHexLen; }
   static constexpr const char* getMqttClientName() { return mqttClientName; }
   static constexpr const char* getMqttOutTopic() { return mqttOutTopic; }
@@ -50,5 +52,11 @@ public:
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
   static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }
   static constexpr const char* getAvailOfflinePayload() { return availOfflinePayload; }
+
+  MqttTopics() = delete;                                              // Delete constructor.
+  ~MqttTopics() = delete;                                             // Delete destructor.
+  MqttTopics(const MqttTopics&) = delete;                             // Define copy constructor.
+  MqttTopics& operator=(const MqttTopics&) = delete;                  // Define copy assignment operator.
+  MqttTopics(MqttTopics&&) = delete;                                  // Define move constructor.
+  MqttTopics& operator=(MqttTopics&&) = delete;                       // Define move assignment operator.
 };
-#endif // MQTTTOPICS_HPP

@@ -1,5 +1,4 @@
-#ifndef CIRCULAR_BUFFER_HPP
-#define CIRCULAR_BUFFER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -119,4 +118,3 @@ uint16_t CircularBuffer<T, buffSize>::getSize() const {
   if(head >= tail) { return head - tail; }
   return buffSize + head - tail;
 }
-#endif // CIRCULAR_BUFFER_HPP

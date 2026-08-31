@@ -35,7 +35,7 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
-void maxLoopTimeCallback(uint32_t maxLoopTime);
+void maxRoundTimeCallback(uint32_t maxRoundTime);
 
 //--- Asserts ---//
 static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul interrupt input pin is not interrupt capable!");
@@ -50,7 +50,7 @@ RgbLedWrapper rgbLed(RGB_LED_NUM, RGB_PIN);
 AmbientSensor ambientSensor(canHandler, LDR_PIN, Time::minToMs(1U));
 DFPlayer mp3Player(rgbLed, DFP_RX, DFP_TX, DFP_EN, DFP_BUSY);
 const ExternalSensor extSensor(EXT_SENSOR_EN);
-Performance performance(3U, maxLoopTimeCallback);
+Performance performance(3U, maxRoundTimeCallback);
 
 //--- Handling tasks ---//
 Task* task[] = { &canHandler, &buttonHandler, &ambientSensor, &mp3Player, &performance };
@@ -97,7 +97,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       rgbLed.setColor(data[0], data[1], data[2], true);
       canHandler.send(command);
     } break;
-    case static_cast<uint16_t>(CanCmd::PLAY_MP3): {
+    case static_cast<uint16_t>(AlertCmd::PLAY_MP3): {
       const uint16_t songNum = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8U) | data[0]);
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       canHandler.send(command);
@@ -119,15 +119,15 @@ void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   }
 }
 
-void maxLoopTimeCallback(uint32_t maxLoopTime) {
-  Logger::get()->print(F("Max loop time: "));
-  Logger::get()->println(maxLoopTime);
-  const uint8_t loopTimeBytes[8] = {
-    static_cast<uint8_t>(maxLoopTime & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 8U) & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 16U) & 0xFFU),
-    static_cast<uint8_t>((maxLoopTime >> 24U) & 0xFFU),
+void maxRoundTimeCallback(uint32_t maxRoundTime) {
+  Logger::get()->print(F("Max round time: "));
+  Logger::get()->println(maxRoundTime);
+  const uint8_t roundTimeBytes[8] = {
+    static_cast<uint8_t>(maxRoundTime & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 8U) & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 16U) & 0xFFU),
+    static_cast<uint8_t>((maxRoundTime >> 24U) & 0xFFU),
     0U, 0U, 0U, 0U
   };
-  canHandler.send(CanCmd::LOOP_TIME_MAX, loopTimeBytes);
+  canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
 }

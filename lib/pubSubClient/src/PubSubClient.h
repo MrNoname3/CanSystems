@@ -70,7 +70,7 @@ private:
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
 
 #if defined(ESP8266) || defined(ESP32)
-#include <functional>
+#include <functional>                                               /// std::function for the message callback.
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
 #else
   using MqttCallback = void (*)(char*, uint8_t*, uint32_t);  // Callback type for received MQTT messages.
@@ -106,41 +106,6 @@ public:
   /// @param client Reference to the TCP client.
   PubSubClient(IPAddress addr, uint16_t port, Client& client);
 
-  /// @brief Constructs a PubSubClient with a server IP address and stream.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream& stream);
-
-  /// @brief Constructs a PubSubClient with a server IP address and callback.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server IP address, callback and stream.
-  /// @param addr Server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
-
-  /// @brief Constructs a PubSubClient with a server IP given as a byte array.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  PubSubClient(const uint8_t* ip, uint16_t port, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server IP byte array and stream.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const uint8_t* ip, uint16_t port, Client& client, Stream& stream);
-
   /// @brief Constructs a PubSubClient with a server IP byte array and callback.
   /// @param ip Pointer to a 4-byte array holding the server IP address.
   /// @param port Server port number.
@@ -156,33 +121,12 @@ public:
   /// @param stream Reference to the stream for large payload passthrough.
   PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
-  /// @brief Constructs a PubSubClient with a server domain name.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  PubSubClient(const char* domain, uint16_t port, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server domain name and stream.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const char* domain, uint16_t port, Client& client, Stream& stream);
-
   /// @brief Constructs a PubSubClient with a server domain name and callback.
   /// @param domain Null-terminated server domain name string.
   /// @param port Server port number.
   /// @param callback Callback invoked when a message is received.
   /// @param client Reference to the TCP client.
   PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server domain name, callback and stream.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
   /// @brief Default destructor.
   ~PubSubClient() = default;
@@ -390,6 +334,13 @@ private:
   /// @brief Reads one complete MQTT packet into the internal buffer.
   /// @param lengthLength Output: set to the number of bytes in the variable-length field.
   /// @return Total number of bytes in the packet; 0 on error or oversized packet.
+  /// @brief Drops the connection after a read that did not complete the packet.
+  /// @details A timed-out read leaves the rest of the packet in the socket. Carrying on would
+  /// read that remainder as the next packet's header, and nothing resynchronises the stream
+  /// again; a closed connection is recoverable, a misaligned one is not.
+  /// @return Always 0, so callers can `return abortIncompletePacket();`.
+  uint32_t abortIncompletePacket();
+
   uint32_t readPacket(uint8_t* lengthLength);
 
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.

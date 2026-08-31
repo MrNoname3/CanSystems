@@ -17,10 +17,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
   reconnectTimer(0U),
-  dropCause(nullptr),
-  dropTimeStr{ '\0' },
-  dropDetectedTimer(0U),
-  reconnectCount(0U),
 #ifdef ESP8266
   serverCert{},
 #endif
@@ -147,25 +143,34 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = topic + MqttTopics::getSubtopicOffset();
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
-    for(MqttBase* currentMessageHandler = handlerListHead; currentMessageHandler != nullptr; currentMessageHandler = currentMessageHandler->getNextHandler()) {
-      if(strcmp(currentMessageHandler->getSubtopic(), subtopic) == 0) {
-        JsonDocument payloadJson;
-        DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
-        if(parsingError != DeserializationError::Code::Ok) {
-          Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), currentMessageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
-          return;
-        }
-        currentMessageHandler->messageArrivedCallback(payloadJson);
-        return;
-      }
+    MqttBase* messageHandler = handlerList.findIf(
+        [subtopic](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), subtopic) == 0; });
+    if(messageHandler == nullptr) {
+      Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+      return;
     }
-    Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
+    JsonDocument payloadJson;
+    DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
+    if(parsingError != DeserializationError::Code::Ok) {
+      Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), messageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+      return;
+    }
+    messageHandler->messageArrivedCallback(payloadJson);
   });
   // List message handlers.
   Logger::get()->printf_P(PSTR("[MQTT] Message handlers:\r\n"));
   uint8_t handlerIndex = 0U;
-  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+  for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     Logger::get()->printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
+  }
+  { // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
+    // publish* calls retract any previously-created entities (empty retained payload) instead of
+    // creating them. Set "haDiscovery": true to publish the discovery config.
+    bool haEnabled = false;
+    (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
+    haDiscovery.setDiscoveryEnabled(haEnabled);
+    // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
+    Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
   }
   resetWatchdogTimer();
   if(!connectToMqttServer()) { return false; }
@@ -215,17 +220,8 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
     mqttClient.disconnect();
     return false;
   }
-  // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
-  // publish* calls below retract any previously-created entities (empty retained payload) instead
-  // of creating them. Set "haDiscovery": true to publish the discovery config.
-  bool haEnabled = false;
-  (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
-  haDiscovery.setDiscoveryEnabled(haEnabled);
-  // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
-  Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
-
   (void)haDiscovery.publishConnectivity();
-  for(MqttBase* h = handlerListHead; h != nullptr; h = h->getNextHandler()) {
+  for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     if(!h->publishDiscovery()) {
       Logger::get()->printf_P(PSTR("[MQTT] Discovery failed: %s\r\n"), h->getSubtopic());
     }
@@ -241,7 +237,7 @@ bool Connectivity::run() {
     networkState = actualNetworkState;
     if(networkState) {
       resetWatchdogTimer();
-      connectToMqttServer();
+      (void)connectToMqttServer();
     } else {
       shutdownMqtt();
     }
@@ -258,7 +254,7 @@ bool Connectivity::run() {
     if(networkState && Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
       reconnectTimer = actualTime;
       resetWatchdogTimer();
-      connectToMqttServer();
+      (void)connectToMqttServer();
     }
   }
 
@@ -273,8 +269,7 @@ bool Connectivity::run() {
     if(onlineState) {
       publishDisconnectDiag(actualTime);
     } else {
-      // networkState is already refreshed above: a link drop wins over the (already torn down) MQTT state.
-      recordDisconnect(networkState ? getMqttStatusStr(mqttState) : networkLostStr, actualTime);
+      recordDisconnect(actualTime);
     }
   }
 
@@ -285,27 +280,26 @@ bool Connectivity::run() {
   return true;
 }
 
-void Connectivity::recordDisconnect(const char* cause, uint32_t actualTime) {
-  dropCause = cause;
-  dropDetectedTimer = actualTime;
+void Connectivity::recordDisconnect(uint32_t actualTime) { // NOLINT(readability-convert-member-functions-to-static)
+  char dropTimeStr[dateTimeStrBufSize] = { '\0' };
   if(!Time::getIsoUtcString(dropTimeStr, sizeof(dropTimeStr))) {
     dropTimeStr[0] = '\0';
   }
-  Logger::get()->printf_P(PSTR("[DIAG] Disconnect recorded: %s at %s\r\n"), cause, dropTimeStr);
+  disconnectDiag.recordDisconnect(networkState, getMqttStatusStr(mqttClient.state()), dropTimeStr, actualTime);
+  Logger::get()->printf_P(PSTR("[DIAG] Disconnect recorded at %s\r\n"), dropTimeStr);
 }
 
 void Connectivity::publishDisconnectDiag(uint32_t actualTime) {
-  if(dropCause == nullptr) { return; }                              // Nothing recorded (first connect after boot).
-  reconnectCount++;
+  DisconnectDiag::Report report;
+  if(!disconnectDiag.takeReport(actualTime, report)) { return; }    // Nothing recorded (first connect after boot).
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
-  const uint32_t downSec = (actualTime - dropDetectedTimer) / 1000U;
-  const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(), dropCause, dropTimeStr, downSec, reconnectCount);
+  const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
+                                             report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount);
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
     const bool diagResult = publishRetained(MqttTopics::getDiagSubtopic(), diagPayload);
     Logger::get()->printf_P(PSTR("[DIAG] Disconnect diagnostics: %s\r\n"), Str::getStateStr(diagResult));
   }
-  dropCause = nullptr;
 }
 
 void Connectivity::shutdownMqtt() {
@@ -374,14 +368,7 @@ bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const H
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(mqttBasePtr == nullptr) { return false; } // NOLINT(readability-simplify-boolean-expr)
-  if(handlerListTail != nullptr) {
-    handlerListTail->setNextHandler(mqttBasePtr);
-  } else {
-    handlerListHead = mqttBasePtr;
-  }
-  handlerListTail = mqttBasePtr;
-  return true;
+  return handlerList.append(mqttBasePtr);
 }
 
 const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {  // NOLINT(readability-convert-member-functions-to-static)

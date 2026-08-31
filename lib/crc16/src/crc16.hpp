@@ -1,5 +1,4 @@
-#ifndef CRC16_HPP
-#define CRC16_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -63,4 +62,3 @@ private:
   const uint16_t initValue_;                          // Initial value for the CRC computation.
   const uint16_t polynomial_;                         // Polynomial used for the CRC computation.
 };
-#endif // CRC16_HPP

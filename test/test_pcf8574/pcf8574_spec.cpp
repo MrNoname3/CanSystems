@@ -32,6 +32,17 @@ bool test_init_succeeds_when_device_acks() {
   END_IT
 }
 
+bool test_init_configures_the_bus_after_opening_it() {
+  IT("init() sets the I2C clock after begin(), so the setting survives");
+  resetBusAck();
+  PCF8574 pcf(kTimeout, kAddr);
+  IS_TRUE(pcf.init());
+  IS_TRUE(Wire.isClockSetAfterBegin());
+  IS_EQUAL(Wire.getClock(), 100000U);
+  IS_EQUAL(Wire.getWireTimeout(), kTimeout);
+  END_IT
+}
+
 bool test_init_fails_when_device_nacks() {
   IT("init() returns false when the device does not ACK");
   Wire.reset();
@@ -231,6 +242,7 @@ int main() {
   SUITE("PCF8574");
   test_register_starts_all_high();
   test_init_succeeds_when_device_acks();
+  test_init_configures_the_bus_after_opening_it();
   test_init_fails_when_device_nacks();
   test_write_fails_before_init();
   test_write_updates_cached_register();

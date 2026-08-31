@@ -77,8 +77,12 @@ extern uint8_t EIFR;                       // AVR external interrupt flag regist
 #ifndef pgm_read_byte_near
 #define pgm_read_byte_near(x) *(x)
 #endif
+// Waiting has no meaning on the host: tests drive time through setFakeMillis() instead, so
+// these do nothing rather than actually stalling the suite.
 // clang-format off
 #define yield(x) {}
+#define delayMicroseconds(x) {}
+#define delay(x) {}
 // clang-format on
 
 // The real Arduino.h provides Stream and the global Serial; mirror that for vendored

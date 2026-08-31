@@ -1,6 +1,9 @@
 #pragma once
 #ifdef ESP32
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
+#include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
+#include "intrusiveList.hpp"                                        /// Intrusive list of the registered CAN devices.
+#include "deltaCounter.hpp"                                         /// Growth of a free-running interrupt counter.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -19,6 +22,7 @@ private:
   static constexpr uint8_t canTxQueueSize = 100U;                         // Size of the TX queue for outgoing CAN frames.
   static constexpr TickType_t canTxQueueTimeout = pdMS_TO_TICKS(50U);     // Timeout for TX queue operations (50 ms).
   static constexpr TickType_t semaphoreTimeout = pdMS_TO_TICKS(5U);       // Timeout for semaphore operations (5 ms).
+  static constexpr uint8_t maxFramesPerRun = 8U;                          // Frame budget per run() and direction.
 
 public:
   /// @brief Constructor for CanHandlerEsp32.
@@ -68,11 +72,29 @@ private:
   /// @param packetsNum Number of packets available in the RX buffer.
   static IRAM_ATTR void rxInterrupt(int packetsNum);
 
+  /// @brief Hands one received frame to the device registered for its sender id.
+  /// @param frameIn Frame taken from the receive queue.
+  /// @note The caller must hold `canDevicesListMutex`.
+  void dispatchRxFrame(const CanFrame& frameIn) const;
+
+  /// @brief Puts one frame on the bus.
+  /// @param frameOut Frame taken from the transmit queue.
+  /// @return `true` when the controller accepted and sent it.
+  [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const; // NOLINT(readability-convert-member-functions-to-static)
+
+  /// @brief Logs how many received frames the interrupt had to drop since the previous pass.
+  void reportDroppedRxFrames();
+
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
+  // Written only by rxInterrupt(), read only by reportDroppedRxFrames(). Free-running: the
+  // reader keeps its own mark, so the interrupt never competes with a reset.
+  static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
+  static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
 
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
-  CanBase* deviceListHead = nullptr;                                      // Head of the intrusive linked list of registered CAN devices.
-  CanBase* deviceListTail = nullptr;                                      // Tail of the intrusive linked list, kept for O(1) append.
+  IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
+  DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
+  DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.
@@ -117,7 +139,9 @@ public:
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command, const uint8_t (&data)[8]) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command, const uint8_t (&data)[8]) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command), data);
   }
 
@@ -132,7 +156,9 @@ public:
   /// @brief Sends a CAN frame with a command and an empty data payload, using a `CanCmd` enum for the command.
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(CanCmd command) const {
+  template<typename Cmd>
+  [[nodiscard]] inline bool sendCanFrame(Cmd command) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command));
   }
 
@@ -150,15 +176,17 @@ public:
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @param response Boolean value indicating the response to the command (`true` or `false`).
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] bool sendCanResponse(CanCmd command, bool response) const {
+  template<typename Cmd>
+  [[nodiscard]] bool sendCanResponse(Cmd command, bool response) const {
+    static_assert(IsCanCommand<Cmd>::value, "sendCanResponse() takes a CAN command enum, not a raw value");
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 
   /// @brief Returns the next device in the intrusive linked list managed by CanHandlerEsp32.
-  [[nodiscard]] CanBase* getNextDevice() const { return nextDevice; }
+  [[nodiscard]] CanBase* getNext() const { return nextDevice; }
 
   /// @brief Sets the next device pointer. Used internally by CanHandlerEsp32 to build the device list.
-  void setNextDevice(CanBase* next) { nextDevice = next; }
+  void setNext(CanBase* next) { nextDevice = next; }
 
   CanBase(const CanBase&) = delete;                       // Define copy constructor.
   CanBase& operator=(const CanBase&) = delete;            // Define copy assignment operator.

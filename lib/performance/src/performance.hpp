@@ -1,22 +1,23 @@
-#ifndef PERFORMANCE_HPP
-#define PERFORMANCE_HPP
+#pragma once
 
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
-/// @brief Performance measurement class to track the execution time of each loop iteration.
+/// @brief Tracks how long the scheduler takes to come back round to an ordinary task.
+/// @details Measures the gap between two consecutive calls of its own `run()`, which under the
+/// partial round-robin is one full turn of the rotation rather than one `loop()` iteration -
+/// only the first task runs every pass. That is the number worth watching: it says how long a
+/// plain task waits for its turn, so a task that blocks shows up here whichever one it is.
 class Performance final : public Task {
 public:
-  /// @brief Constructs a `Performance` object with an initial loop time limit and a callback.
-  /// @param initialLoopTimeLimit The initial maximum loop time limit in milliseconds.
-  /// This value sets a baseline for comparison when tracking loop execution times.
-  /// @param maxLoopTimeCallback A callback function to be called when a new maximum loop
-  /// time is recorded. The function should accept a single `uint32_t` parameter, which
-  /// represents the new maximum loop time in milliseconds.
-  Performance(uint32_t initialLoopTimeLimit, void (*maxLoopTimeCallback)(uint32_t maxLoopTime)) :
-    maxLoopTime(initialLoopTimeLimit),
-    maxLoopTimeCallback(maxLoopTimeCallback) {}
+  /// @brief Constructs a `Performance` object with an initial round time limit and a callback.
+  /// @param initialRoundTimeLimit Starting maximum in milliseconds; nothing below it is reported.
+  /// @param maxRoundTimeCallback Called with the new maximum, in milliseconds, whenever one is
+  /// recorded. May be `nullptr`.
+  Performance(uint32_t initialRoundTimeLimit, void (*maxRoundTimeCallback)(uint32_t maxRoundTime)) :
+    maxRoundTime(initialRoundTimeLimit),
+    maxRoundTimeCallback(maxRoundTimeCallback) {}
 
   /// @brief Default destructor.
   ~Performance() override = default;
@@ -28,27 +29,23 @@ public:
     return true;
   }
 
-  /// @brief Runs the performance measurement and checks the loop execution time.
-  /// This function calculates the time taken since the last loop iteration and checks if
-  /// it exceeds the current maximum loop time. If a new maximum is recorded, it calls the
-  /// provided callback function (if not null).
+  /// @brief Measures the time since this task's previous turn and reports a new maximum.
   /// @return `true`.
   bool run() override {
     const uint32_t actualTime = millis();
-    const uint32_t actualLoopTime = actualTime - lastLoopTime;
-    lastLoopTime = actualTime;
-    if(actualLoopTime > maxLoopTime) {
-      maxLoopTime = actualLoopTime;
-      if(maxLoopTimeCallback != nullptr) {
-        maxLoopTimeCallback(maxLoopTime);
+    const uint32_t actualRoundTime = actualTime - lastRunTime;
+    lastRunTime = actualTime;
+    if(actualRoundTime > maxRoundTime) {
+      maxRoundTime = actualRoundTime;
+      if(maxRoundTimeCallback != nullptr) {
+        maxRoundTimeCallback(maxRoundTime);
       }
     }
     return true;
   }
 
-  /// @brief Resets the timer for measuring loop execution time.
-  /// @details Sets the `lastLoopTime` to the current timestamp (`millis()`).
-  inline void resetTimer() { lastLoopTime = millis(); }
+  /// @brief Restarts the measurement from now, so the startup time is not reported as a round.
+  inline void resetTimer() { lastRunTime = millis(); }
 
   Performance(const Performance&) = delete;                       // Define copy constructor.
   Performance& operator=(const Performance&) = delete;            // Define copy assignment operator.
@@ -56,8 +53,7 @@ public:
   Performance& operator=(Performance&&) = delete;                 // Define move assignment operator.
 
 private:
-  uint32_t maxLoopTime;                                 // The maximum loop time recorded in milliseconds.
-  uint32_t lastLoopTime = 0U;                           // The timestamp of the last loop iteration.
-  void (*maxLoopTimeCallback)(uint32_t maxLoopTime);    // The callback function for notifying maximum loop time.
+  uint32_t maxRoundTime;                                // Longest round recorded so far, in milliseconds.
+  uint32_t lastRunTime = 0U;                            // millis() at this task's previous turn.
+  void (*maxRoundTimeCallback)(uint32_t maxRoundTime);  // Notified when a new maximum is recorded.
 };
-#endif // PERFORMANCE_HPP

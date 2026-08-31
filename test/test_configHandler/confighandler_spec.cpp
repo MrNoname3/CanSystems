@@ -107,28 +107,33 @@ bool test_get_json_value_ok() {
 }
 
 bool test_get_json_value_wrong_type() {
-  IT("getJsonValue returns false when the key has the wrong type");
+  IT("getJsonValue returns false and keeps the caller's value when the key has the wrong type");
   LittleFS.reset();
   LittleFS.setFile("/cfg.json", R"({"flag":"yes"})");
-  bool flag = false;
+  // Started at true so a clobbered output is visible: callers rely on their own default
+  // surviving a failed read, which is how an optional setting keeps its documented default.
+  bool flag = true;
   IS_FALSE(ConfigHandler::getJsonValue<bool>("/cfg.json", "flag", flag));
+  IS_TRUE(flag);
   END_IT
 }
 
 bool test_get_json_value_missing_key() {
-  IT("getJsonValue returns false when the key is absent");
+  IT("getJsonValue returns false and keeps the caller's value when the key is absent");
   LittleFS.reset();
   LittleFS.setFile("/cfg.json", R"({"other":1})");
-  bool flag = false;
+  bool flag = true;
   IS_FALSE(ConfigHandler::getJsonValue<bool>("/cfg.json", "flag", flag));
+  IS_TRUE(flag);
   END_IT
 }
 
 bool test_get_json_value_file_missing() {
-  IT("getJsonValue returns false when the file cannot be opened");
+  IT("getJsonValue returns false and keeps the caller's value when the file cannot be opened");
   LittleFS.reset();
-  bool flag = false;
+  bool flag = true;
   IS_FALSE(ConfigHandler::getJsonValue<bool>("/none.json", "flag", flag));
+  IS_TRUE(flag);
   END_IT
 }
 

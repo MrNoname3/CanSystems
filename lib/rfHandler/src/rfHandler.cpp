@@ -46,27 +46,42 @@ bool RfHandler::run() {
     }
     dataCheckTimer = actualTime;
   }
+  // One command per pass: transmitting is a blocking, timing-critical bit-bang, so a burst must
+  // not hold the cooperative loop for several frames' air time in a row. Done after the receive
+  // side, because the transceiver goes deaf for the whole transmission.
+  if(!pendingTx.isEmpty()) { transmitCommand(pendingTx.pop()); }
   return true;
 }
 
-void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) {
+void RfHandler::transmitCommand(const RfData& command) {
+  if(command.protocol > 0U) {
+    rfTransceiver.setProtocol(static_cast<int32_t>(command.protocol));
+  }
+  if(command.pulseLength > 0U) {
+    rfTransceiver.setPulseLength(static_cast<int32_t>(command.pulseLength));
+  }
+  if(command.data > 0U && command.bitLength > 0U) {
+    rfTransceiver.send(command.data, command.bitLength);
+  }
+}
+
+void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant dataJsonVar = payloadJson[F("Data")];
   JsonVariant bitsJsonVar = payloadJson[F("Bits")];
   JsonVariant protocolJsonVar = payloadJson[F("Protocol")];
   JsonVariant pulseJsonVar = payloadJson[F("Pulse")];
   if(dataJsonVar.is<uint64_t>() && bitsJsonVar.is<uint32_t>() && protocolJsonVar.is<uint32_t>() && pulseJsonVar.is<uint32_t>()) {
-    const uint64_t rfOutData = dataJsonVar.as<uint64_t>();
-    const uint32_t rfOutBitLength = bitsJsonVar.as<uint32_t>();
-    const uint32_t rfOutProtocol = protocolJsonVar.as<uint32_t>();
     const uint32_t rfOutPulseLength = pulseJsonVar.as<uint32_t>();
-    if(rfOutProtocol > 0U) {
-      rfTransceiver.setProtocol(static_cast<int>(rfOutProtocol));
+    if((rfOutPulseLength != 0U) && ((rfOutPulseLength < minPulseLength) || (rfOutPulseLength > maxPulseLength))) {
+      Logger::get()->printf_P(PSTR("[RF] Pulse length %u out of range, command ignored\r\n"), rfOutPulseLength);
+      return;
     }
-    if(rfOutPulseLength > 0U) {
-      rfTransceiver.setPulseLength(static_cast<int>(rfOutPulseLength));
+    // Queued rather than transmitted here: this callback runs inside PubSubClient::loop(), and
+    // the transmission blocks for the frame's whole air time.
+    if(pendingTx.isFull()) {
+      Logger::get()->printf_P(PSTR("[RF] Transmit queue full, dropping the oldest command\r\n"));
     }
-    if(rfOutData > 0U && rfOutBitLength > 0U) {
-      rfTransceiver.send(rfOutData, rfOutBitLength);
-    }
+    pendingTx.put(RfData(dataJsonVar.as<uint64_t>(), bitsJsonVar.as<uint32_t>(),
+                         protocolJsonVar.as<uint32_t>(), rfOutPulseLength));
   }
 }

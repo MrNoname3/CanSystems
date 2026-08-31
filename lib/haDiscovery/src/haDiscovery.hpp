@@ -1,9 +1,8 @@
-#ifndef HADISCOVERY_HPP
-#define HADISCOVERY_HPP
+#pragma once
 
-#include <stdint.h>
-#include <pgmspace.h>
-#include "mqttTopics.hpp"
+#include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <pgmspace.h>                                               /// PROGMEM storage and the _P string functions.
+#include "mqttTopics.hpp"                                           /// Topic formats and the buffer sizes derived from them.
 
 /// @brief Handles Home Assistant MQTT auto-discovery.
 /// All HA-specific strings, enums, and publish logic live here; handlers provide only typed data.
@@ -173,6 +172,20 @@ private:
   // HA discovery topic format string (PROGMEM).
   static constexpr const char PROGMEM mqttDiscoveryTopic[] = "homeassistant/%s/%s_%s/config";
 
+  /// @brief Appends the fields every entity kind carries, in the order Home Assistant expects.
+  /// @details Both publish paths build this same run of fields; keeping it in one place is what
+  /// stops a newly supported field from reaching only one of them. Only the fields the config
+  /// actually sets are emitted.
+  /// @tparam Writer Payload writer. A template because the writer is an implementation detail
+  ///         of haDiscovery.cpp, where this is defined and where both callers live.
+  /// @param pw Writer receiving the fields.
+  /// @param config Entity configuration.
+  /// @param uniqueIdOwner What the entity's unique_id is built from: the MQTT client for a local
+  ///        entity, the CAN device for one behind the gateway.
+  /// @param subtopic Entity subtopic, the second half of its unique_id.
+  template<typename Writer>
+  static void appendCommonFields(Writer& pw, const EntityConfig& config, const char* uniqueIdOwner, const char* subtopic);
+
   static constexpr const char* getTypeStr(EntityType t) {
     switch(t) {
       case EntityType::sensor: return typeStrSensor;
@@ -210,5 +223,10 @@ private:
   const char* receiverTopic;
   const char* availabilityTopic;
   bool discoveryEnabled = true;                             // false → publish* retracts entities (empty retained payload).
+  // Sized for the larger of the two payload budgets and shared by both publish paths. A local
+  // array would put some 750 bytes - a fifth of the ESP8266's 4 KB cont stack - in the deepest
+  // frame the firmware has. Safe to share: every publish runs on the one loop task, and
+  // PubSubClient::publish() copies the payload into its own buffer before returning, so no
+  // second build can start while this one is in flight.
+  char payloadBuffer[canDiscoveryPayloadBufSize] = { '\0' };
 };
-#endif // HADISCOVERY_HPP

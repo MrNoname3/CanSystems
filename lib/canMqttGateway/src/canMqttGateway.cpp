@@ -19,6 +19,10 @@ CanOta::~CanOta() {
 
 CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storageNumber) {
   ErrorState<OtaStartError, OtaStartErrorType> otaStartErrState;
+  if(isOtaInProgress()) {
+    otaStartErrState.setError(OtaStartError::ALREADY_IN_PROGRESS);
+    return otaStartErrState.getRawErrorState();
+  }
   if(fileName == nullptr) {
     otaStartErrState.setError(OtaStartError::FILE_NAME_NULLPTR);
     return otaStartErrState.getRawErrorState();
@@ -52,6 +56,7 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
 }
 
 void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLINT(readability-convert-member-functions-to-static)
+  if(transferState != TransferState::WAIT_FOR_ACK) { return; }
   const uint16_t cmd = static_cast<uint16_t>(canFrame.cmd);
   const CanHandler::Response response = static_cast<CanHandler::Response>(canFrame.data[0]);
   if((cmd == static_cast<uint16_t>(CanCmd::OTA_START)) || (cmd == static_cast<uint16_t>(CanCmd::OTA_SEND))) {
@@ -68,9 +73,9 @@ void CanOta::runOta() {
   const uint32_t actualTime = millis();
   if(Time::hasElapsed(actualTime, otaTimeoutTimer, otaTimeoutTime)) {
     // Route an in-progress timeout through INVALID so the existing cleanup runs: the file gets
-    // closed, the counters reset, and the {"OTA":"[ERR]"} status reaches the server. Jumping
-    // straight to IDLE used to skip all of that. VALID/INVALID are excluded: they are processed
-    // within the same pass, and a timeout must not overwrite an already-arrived final ACK.
+    // closed, the counters reset, and the {"OTA":"[ERR]"} status reaches the server.
+    // VALID/INVALID are excluded: they are processed within the same pass, and a timeout must
+    // not overwrite an already-arrived final ACK.
     const bool otaInProgress = (transferState == TransferState::START) || (transferState == TransferState::STORE) || (transferState == TransferState::WAIT_FOR_ACK);
     if(otaInProgress) {
       Logger::get()->printf_P(PSTR("[CAN] OTA timeout for \"%s\"!\r\n"), canMqttGateway.getSubtopic());
@@ -253,7 +258,7 @@ void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLI
   if(commandJsonVar.is<uint16_t>() && dataJsonVar.is<const char*>()) {
     const uint16_t command = commandJsonVar.as<uint16_t>();
     const char* canDataStr = dataJsonVar.as<const char*>();
-    if(canDataStr == nullptr) { return; }
+    if(canDataStr == nullptr || *canDataStr == '\0') { return; }
     char* endPtr = nullptr;
     const uint64_t canData64 = std::strtoull(canDataStr, &endPtr, 16);
     if(*endPtr != '\0') { return; }

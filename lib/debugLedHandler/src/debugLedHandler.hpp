@@ -1,5 +1,4 @@
-#ifndef DEBUG_LED_HANDLER_HPP
-#define DEBUG_LED_HANDLER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Arduino.h>                                                /// Arduino libraries header.
@@ -58,4 +57,3 @@ private:
   Ticker ledTicker;                                                       // Timer for managing periodic LED toggling.
 #endif
 };
-#endif // DEBUG_LED_HANDLER_HPP

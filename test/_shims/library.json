@@ -1,6 +1,6 @@
 {
-    "name": "pubSubClientShims",
-    "description": "Arduino stubs for PubSubClient native unit tests",
+    "name": "nativeTestShims",
+    "description": "Host stand-ins for the Arduino APIs and hardware the native test suite needs",
     "frameworks": "native",
     "platforms": "native"
 }

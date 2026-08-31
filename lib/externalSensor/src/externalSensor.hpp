@@ -1,5 +1,4 @@
-#ifndef EXTERNAL_SENSOR_HPP
-#define EXTERNAL_SENSOR_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
@@ -31,4 +30,3 @@ public:
 private:
   const uint8_t sensorEnPin;                          // Digital pin to control the external sensor.
 };
-#endif // EXTERNAL_SENSOR_HPP

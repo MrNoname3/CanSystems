@@ -1,0 +1,8 @@
+# CI-only tooling, pinned exact so a release of either cannot change what the gate runs without
+# a commit. Not installed locally: PlatformIO runs from its own penv there (see CLAUDE.md), and
+# intelhex already lives in that penv.
+#
+#   platformio - the gate's build/test/check driver.
+#   intelhex   - imported by the ESP32 esptool (tool-esptoolpy) when it creates the flash image.
+platformio==6.1.19
+intelhex==2.3.0

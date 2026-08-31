@@ -30,7 +30,8 @@ private:
     FILE_NAME_NULLPTR     = 1 << 0U,              // Null pointer for the file name.
     FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location (must start with '/').
     FILE_OPEN_FAILED      = 1 << 2U,              // Unable to open the file.
-    FILE_EMPTY            = 1 << 3U               // File is empty.
+    FILE_EMPTY            = 1 << 3U,              // File is empty.
+    ALREADY_IN_PROGRESS   = 1 << 4U               // Another OTA transfer is still running.
     // clang-format on
   };
 

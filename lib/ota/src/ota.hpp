@@ -1,5 +1,4 @@
-#ifndef OTA_HPP
-#define OTA_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "SPIFlash.h"                                               /// SPI FLASH module driver.
@@ -86,4 +85,3 @@ private:
   uint32_t flashBlockBeginAddress;                                  // Start address of the Flash block for firmware.
   OtaState otaState;                                                // Current state of the OTA process.
 };
-#endif // OTA_HPP

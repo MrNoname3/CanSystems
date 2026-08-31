@@ -1,14 +1,17 @@
-#ifndef CAN_HANDLER_BASE_HPP
-#define CAN_HANDLER_BASE_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include "eepromHandler.hpp"                                        /// EEPROM wrapper class.
 #include <string.h>                                                 /// String / byte array handling.
 
-static constexpr uint16_t CBS = 32U;          // Command block separator.
+static constexpr uint16_t CBS = 32U;          // Command block separator: first device-specific value.
 
-/// @brief Enumeration of CAN commands for communication between nodes.
+/// @brief CAN commands every node understands, whatever hardware it drives.
+/// @details Values below `CBS` mean the same thing on every node. From `CBS` upwards the wire
+/// value means something different per device type, so those live in their own enums below -
+/// AlertCmd::PLAY_MP3 and IrrigationCmd::ADD_IRRIGATION are both 32 by design, and putting them
+/// in one enum only hid that a value alone does not identify a command.
 enum class CanCmd : uint16_t {
   PING = 0U,                                  // Ping command to check node availability.
   RESTART,                                    // Command to reset/restart the node.
@@ -18,17 +21,43 @@ enum class CanCmd : uint16_t {
   OTA_SEND,                                   // Send firmware data chunks for OTA updates.
   OTA_END,                                    // Signal the end of the OTA update process.
   RGB_LED,                                    // Set the color of WS2812 RGB LEDs.
-  LOOP_TIME_MAX,                              // Send maximum loop time in milliseconds.
+  ROUND_TIME_MAX,                             // Longest gap between two turns of an ordinary task, in ms.
+};
 
+/// @brief Commands only the ATmega328P alert node understands.
+enum class AlertCmd : uint16_t {
   PLAY_MP3 = CBS,                             // Command to play an MP3 file on the node.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature, and light sensor values.
   HUM_TEMP_SENSOR_ERROR,                      // Error occurred while using the I2C sensor.
+};
 
+/// @brief Commands only the ATmega328P irrigation node understands.
+enum class IrrigationCmd : uint16_t {
   ADD_IRRIGATION = CBS,                       // Add a new irrigation task to the queue.
   SKIP_IRRIGATION,                            // Skip the currently scheduled irrigation task.
   STOP_IRRIGATION,                            // Stop all ongoing and scheduled irrigation tasks.
   IRRIGATION_ERROR,                           // Report an error during irrigation.
   MOISTURE_DATA,                              // Provide moisture level data from sensors.
+};
+
+/// @brief Marks the enums that may be sent as a CAN command.
+/// @details Listed explicitly rather than accepting any enum, so a stray integer or an unrelated
+/// enumeration cannot slip into a send() call. AVR's libstdc++ has no <type_traits> to lean on.
+template<typename Cmd>
+struct IsCanCommand {
+  static constexpr bool value = false;
+};
+template<>
+struct IsCanCommand<CanCmd> {
+  static constexpr bool value = true;
+};
+template<>
+struct IsCanCommand<AlertCmd> {
+  static constexpr bool value = true;
+};
+template<>
+struct IsCanCommand<IrrigationCmd> {
+  static constexpr bool value = true;
 };
 
 /// @brief Abstract base class for handling CAN communication.
@@ -114,28 +143,37 @@ public:
     return send(command, data);
   }
 
-  /// @brief Sends a CAN frame using an enumeration command and data payload.
-  /// @param command Enum value of `CanCmd`.
+  /// @brief Sends a CAN frame using a command enum and data payload.
+  /// @tparam Cmd `CanCmd`, `AlertCmd` or `IrrigationCmd`.
+  /// @param command Command to send.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command, const uint8_t (&data)[8]) const { // NOLINT(modernize-use-nodiscard)
+  template<typename Cmd>
+  inline bool send(Cmd command, const uint8_t (&data)[8]) const { // NOLINT(modernize-use-nodiscard)
+    static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command), data);
   }
 
-  /// @brief Sends a CAN frame using an enumeration command.
-  /// @param command Enum value of `CanCmd`.
+  /// @brief Sends a CAN frame using a command enum.
+  /// @tparam Cmd `CanCmd`, `AlertCmd` or `IrrigationCmd`.
+  /// @param command Command to send.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command) const { // NOLINT(modernize-use-nodiscard)
+  template<typename Cmd>
+  inline bool send(Cmd command) const { // NOLINT(modernize-use-nodiscard)
+    static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command));
   }
 
   /// @brief Sends a CAN frame with a command and a response.
-  /// @param command Enum value of `CanCmd`.
+  /// @tparam Cmd `CanCmd`, `AlertCmd` or `IrrigationCmd`.
+  /// @param command Command to send.
   /// @param response Enum value of `Response`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(CanCmd command, Response response) const { // NOLINT(modernize-use-nodiscard)
+  template<typename Cmd>
+  inline bool send(Cmd command, Response response) const { // NOLINT(modernize-use-nodiscard)
+    static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
-    return send(command, data);
+    return send(static_cast<uint16_t>(command), data);
   }
 
   /// @brief Retrieves the CAN ID filter mask.
@@ -199,4 +237,3 @@ private:
   CanId canId;                                // Stores the master and local CAN IDs.
   EEPROMHandler<CanId, 0U> eepromHandler;     // EEPROM handler for address persistence.
 };
-#endif // CAN_HANDLER_BASE_HPP

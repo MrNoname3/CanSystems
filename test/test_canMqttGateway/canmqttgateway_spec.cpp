@@ -211,9 +211,9 @@ bool test_unknown_frame_goes_to_derived_handler() {
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   const uint8_t data[8] = { 0U };
-  injectFrame(gateway, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR), data);
+  injectFrame(gateway, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR), data);
   IS_EQUAL(TestGateway::customFrames, 1);
-  IS_EQUAL(TestGateway::lastCustomCmd, static_cast<uint16_t>(CanCmd::READ_HUM_TEMP_LDR));
+  IS_EQUAL(TestGateway::lastCustomCmd, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR));
   END_IT
 }
 
@@ -382,6 +382,49 @@ bool test_ota_timeout_reports_error() {
   END_IT
 }
 
+bool test_stray_ota_ack_while_idle_is_ignored() {
+  IT("an OTA ACK arriving with no transfer running is ignored");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  IS_FALSE(gateway.isOtaInProgress());
+  injectAck(gateway, CanCmd::OTA_SEND);               // late or duplicated ACK from an earlier transfer
+  IS_FALSE(gateway.isOtaInProgress());                // no phantom transfer starts
+  IS_TRUE(runOnce(gateway));
+  setFakeMillis(5U * 60U * 1000U + 1U);               // past the 5 minute OTA timeout
+  IS_TRUE(runOnce(gateway));
+  for(const auto& entry : MqttBase::subtopicMessages) {
+    IS_FALSE(entry.first == "alert1/ota");            // no status for a transfer that never ran
+  }
+  END_IT
+}
+
+bool test_second_ota_start_is_rejected_while_one_runs() {
+  IT("starting a second OTA while one is in progress is rejected and leaves it running");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  LittleFS.setFile(kFwFile, "ABCD");
+  IS_TRUE(gateway.startOta(kFwFile));
+  IS_TRUE(pumpUntilFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_START), 1U));
+  IS_TRUE(gateway.isOtaInProgress());
+  const size_t startFrames = countFrames(static_cast<uint16_t>(CanCmd::OTA_START));
+
+  IS_FALSE(gateway.startOta(kFwFile));                // rejected, not silently restarted
+  IS_TRUE(gateway.isOtaInProgress());
+  IS_EQUAL(countFrames(static_cast<uint16_t>(CanCmd::OTA_START)), startFrames);
+
+  injectAck(gateway, CanCmd::OTA_START);              // the running transfer still proceeds
+  IS_TRUE(pumpUntilFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_SEND), 1U));
+  END_IT
+}
+
 bool test_ota_start_rejects_bad_input() {
   IT("startOta() rejects a null name, a relative path, and a missing file");
   resetEnv();
@@ -479,6 +522,8 @@ int main() {
   test_ota_happy_path();
   test_ota_nack_aborts_with_error_status();
   test_ota_timeout_reports_error();
+  test_stray_ota_ack_while_idle_is_ignored();
+  test_second_ota_start_is_rejected_while_one_runs();
   test_ota_start_rejects_bad_input();
   test_ota_rejects_empty_file();
   test_ota_contract_gateway_to_device_storage();

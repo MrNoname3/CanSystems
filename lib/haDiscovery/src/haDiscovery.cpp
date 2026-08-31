@@ -60,7 +60,7 @@ void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
 }
 
 void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {
-  // Start after the first underscore to get just "smoke".
+  // Start after the first underscore to get just "thermo".
   uint8_t start = 0U;
   for(uint8_t i = 0U; deviceId[i] != '\0'; ++i) {
     if(deviceId[i] == '_') {
@@ -123,6 +123,26 @@ HADiscovery::EntityConfig::binarySensor(
   return c;
 }
 
+template<typename Writer>
+void HADiscovery::appendCommonFields(Writer& pw, const EntityConfig& config, const char* uniqueIdOwner, const char* subtopic) {
+  appendP(pw, fmtUniqueId, uniqueIdOwner, subtopic, config.name);
+  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
+  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
+  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
+  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
+  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
+  {
+    const char* sc = getStateClassStr(config.stateClass);
+    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
+  }
+  {
+    const char* dc = getDeviceClassStr(config.deviceClass);
+    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
+  }
+  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
+  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+}
+
 bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
                                          const EntityConfig& config,
                                          const CanDeviceConfig& canDevConfig) {
@@ -145,25 +165,11 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
   }
   const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
 
-  char payload[canDiscoveryPayloadBufSize] = { '\0' };
-  PayloadWriter pw(payload, sizeof(payload));
+  // Each entity kind keeps its own budget over the shared buffer; PayloadWriter writes from the
+  // start and terminates, so nothing of a previous payload survives into this one.
+  PayloadWriter pw(payloadBuffer, canDiscoveryPayloadBufSize);
 
-  appendP(pw, fmtUniqueId, canDevConfig.deviceId, subtopic, config.name);
-  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
-  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
-  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
-  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
-  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
-  {
-    const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
-  }
-  {
-    const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
-  }
-  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendCommonFields(pw, config, canDevConfig.deviceId, subtopic);
   appendP(pw, fmtTopicField, topicField, topicBase, canDevConfig.dataSubtopic);
   if(!config.isCommandTopic) { appendP(pw, fmtAttrTopic, topicBase, canDevConfig.dataSubtopic); }
   if(canDevConfig.skipCanAvailability) {
@@ -176,7 +182,7 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
           canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
 
   if(!pw.ok()) { return false; }
-  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
+  return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.
 }
 
 bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
@@ -211,30 +217,14 @@ bool HADiscovery::publishEntity(const char* subtopic, const EntityConfig& config
   const char* topicField = config.isCommandTopic ? topicFieldCmd : topicFieldState;
 
   // Build payload incrementally — only set fields appear in the JSON output.
-  char payload[discoveryPayloadBufSize] = { '\0' };
-  PayloadWriter pw(payload, sizeof(payload));
+  PayloadWriter pw(payloadBuffer, discoveryPayloadBufSize);
 
-  appendP(pw, fmtUniqueId, clientName, subtopic, config.name);
-  if(config.valueTemplate != nullptr) { appendP(pw, fmtValueTemplate, config.valueTemplate); }
-  if(config.payloadOn != nullptr) { appendP(pw, fmtPayloadOn, config.payloadOn); }
-  if(config.payloadOff != nullptr) { appendP(pw, fmtPayloadOff, config.payloadOff); }
-  if(config.payloadPress != nullptr) { appendP(pw, fmtPayloadPress, config.payloadPress); }
-  if(config.unit != nullptr) { appendP(pw, fmtUnit, config.unit); }
-  {
-    const char* sc = getStateClassStr(config.stateClass);
-    if(sc != nullptr) { appendP(pw, fmtStateClass, sc); }
-  }
-  {
-    const char* dc = getDeviceClassStr(config.deviceClass);
-    if(dc != nullptr) { appendP(pw, fmtDeviceClass, dc); }
-  }
-  if(config.icon != nullptr) { appendP(pw, fmtIcon, config.icon); }
-  if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
+  appendCommonFields(pw, config, clientName, subtopic);
   appendP(pw, fmtTopicField, topicField, topicBase, subtopic);
   if(!config.isCommandTopic && !config.skipAvailability) { appendP(pw, fmtAttrTopic, topicBase, subtopic); }
   if(!config.skipAvailability) { appendP(pw, fmtAvailSingle, availabilityTopic); }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s"}})"), clientName, deviceName, swVersion, hwVersionStr);
 
   if(!pw.ok()) { return false; }
-  return publishFn(publishCtx, discTopic, payload, true);  // Published under Connectivity's mutex via the owner callback.
+  return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.
 }

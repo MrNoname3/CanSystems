@@ -9,32 +9,6 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) {
   setServer(addr, port);
   setClient(client);
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client, Stream& stream) {
-  setServer(addr, port);
-  setClient(client);
-  setStream(stream);
-}
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client) {
-  setServer(addr, port);
-  setCallback(callback);
-  setClient(client);
-}
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
-  setServer(addr, port);
-  setCallback(callback);
-  setClient(client);
-  setStream(stream);
-}
-
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, Client& client) {
-  setServer(ip, port);
-  setClient(client);
-}
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, Client& client, Stream& stream) {
-  setServer(ip, port);
-  setClient(client);
-  setStream(stream);
-}
 PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client) {
   setServer(ip, port);
   setCallback(callback);
@@ -47,27 +21,11 @@ PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callba
   setStream(stream);
 }
 
-PubSubClient::PubSubClient(const char* domain, uint16_t port, Client& client) {
-  setServer(domain, port);
-  setClient(client);
-}
-PubSubClient::PubSubClient(const char* domain, uint16_t port, Client& client, Stream& stream) {
-  setServer(domain, port);
-  setClient(client);
-  setStream(stream);
-}
 PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) {
   setServer(domain, port);
   setCallback(callback);
   setClient(client);
 }
-PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
-  setServer(domain, port);
-  setCallback(callback);
-  setClient(client);
-  setStream(stream);
-}
-
 bool PubSubClient::connect(const char* id) {  // NOLINT(readability-convert-member-functions-to-static)
   return connect(id, nullptr, nullptr, nullptr, 0U, false, nullptr, true);
 }
@@ -210,10 +168,16 @@ bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(reada
   return false;
 }
 
+uint32_t PubSubClient::abortIncompletePacket() {
+  connectionState = State::CONNECTION_TIMEOUT;
+  tcpClient->stop();
+  return 0U;
+}
+
 uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readability-function-cognitive-complexity)
   uint16_t len = 0U;
   if(!readByte(this->buffer, &len)) {
-    return 0U;
+    return abortIncompletePacket();
   }
   const bool isPublish = (this->buffer[0] & 0xF0U) == MQTTPUBLISH;
   uint32_t multiplier = 1U;
@@ -229,7 +193,7 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
       return 0U;
     }
     if(!readByte(&digit)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     this->buffer[len++] = digit;
     length += (digit & 127U) * multiplier;
@@ -240,10 +204,10 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   if(isPublish) {
     // Read in topic length to calculate bytes to skip over for Stream writing
     if(!readByte(this->buffer, &len)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     if(!readByte(this->buffer, &len)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     skip = static_cast<uint16_t>((this->buffer[*lengthLength + 1U] << 8U) + this->buffer[*lengthLength + 2U]);
     if((this->buffer[0] & MQTTQOS1) != 0U) {
@@ -257,7 +221,7 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   for(uint32_t i = start; i < length; i++) {
     uint8_t dataByte = 0U;
     if(!readByte(&dataByte)) {
-      return 0U;
+      return abortIncompletePacket();
     }
     if(this->stream != nullptr && isPublish && idx - *lengthLength - 2U > skip) {
       this->stream->write(dataByte);

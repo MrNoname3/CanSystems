@@ -6,12 +6,14 @@
 #include "ota.hpp"                                                  /// OTA (Over-The-Air) update handler.
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include "canFramePump.hpp"                                            /// Bounded receive-buffer drain.
 
 /// @brief Handles CAN communication, OTA updates, and peripheral interactions.
 class CanHandlerAtmega328P final : public CanHandlerBase {
 private:
   static constexpr uint16_t pingTime = Time::secToMs(2U);           // Ping timeout in milliseconds.
   static constexpr uint16_t flashJedecId = 0xEF40U;                 // JEDEC ID for Winbond 64Mbit flash.
+  static constexpr uint8_t maxRxFramesPerRun = 4U;                  // Frame budget per run(): two receive buffers plus headroom.
 
 public:
   using CanHandlerBase::send;                                       // Bring the send methods of the base class into scope.
@@ -64,20 +66,16 @@ private:
   /// @return `true` if successful, `false` otherwise.
   bool handleRxFrame();
 
-  /// @brief Interrupt handler for tracking received CAN frames.
-  static inline void rxInterrupt() { intCount++; }
-
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.
   bool sendFwVersion() const; // NOLINT(modernize-use-nodiscard)
-
-  static volatile uint8_t intCount;                                         // Interrupt counter for received CAN frames.
 
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
   SPIFlash flash;                                                           // SPI flash module driver object.
   OTA ota;                                                                  // OTA update handler.
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
+  const uint8_t canIntPin;                                                  // MCP2515 INT line; low while the controller holds a frame.
   OTA::OtaState lastOtaState;                                               // Store last known OTA state.
 };
 using CanHandler = CanHandlerAtmega328P;                                    // Alias `CanHandler` to `CanHandlerAtmega328P`.

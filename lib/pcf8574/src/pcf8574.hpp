@@ -1,5 +1,4 @@
-#ifndef PCF8574_HPP
-#define PCF8574_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <Wire.h>                                                   /// I2C driver library.
@@ -70,9 +69,9 @@ public:
 private:
   static constexpr uint32_t clockSpeed = 100000U; // Default I2C clock speed in Hz.
 
+  const uint32_t timeoutUs;                       // I2C timeout in microseconds, applied in init().
   const uint8_t address;                          // I2C address of the PCF8574 device.
   TwoWire& wire;                                  // Reference to the I2C bus used for communication.
   uint8_t registerValue;                          // Cached register value to track the current pin states.
   bool deviceExists;                              // Indicates if the device is present on the I2C bus.
 };
-#endif // PCF8574_HPP

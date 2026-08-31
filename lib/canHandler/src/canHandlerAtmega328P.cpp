@@ -5,7 +5,6 @@
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
 #include "otaCanResponse.hpp"                                       /// Host-testable OTA state -> CAN response decision.
-#include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
 
 // The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
 // otherwise unpackSend() would hand storeNextData() a wrongly-sized array.
@@ -15,18 +14,19 @@ namespace {
   constexpr const char PROGMEM storingStr[] = "Storing: ";
 } // namespace
 
-volatile uint8_t CanHandlerAtmega328P::intCount = 0U;
-
 CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t canCsPin, uint8_t canIntPin, uint8_t flashCsPin) :
   debugLed(debugLed),
   flash(flashCsPin, flashJedecId),
   ota(flash),
   canCallback(nullptr),
   eventTimer(0U),
+  canIntPin(canIntPin),
   lastOtaState(OTA::OtaState::IDLE) {
+  // 0xFF tells the driver it has no interrupt pin, so onReceive() cannot attach its own handler:
+  // that one reads the controller over SPI from inside the ISR, and the same bus carries the
+  // W25Q64 the OTA writes. This handler polls the line in run() instead.
   CAN.setPins(canCsPin, 0xFFU);
-  pinMode(canIntPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(canIntPin), rxInterrupt, FALLING);
+  pinMode(this->canIntPin, INPUT);
 }
 
 bool CanHandlerAtmega328P::init(uint32_t canBaud) {
@@ -67,8 +67,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     Logger::get()->println(Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
-  { // Send startup info.
-    const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion();
+  { // Send startup info. The flush is what separates a live bus from a dead one: the sends
+    // above only reach a transmit buffer, and it is the bus that empties it.
+    const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion() && CAN.flushTx();
     if(!sendResult) { return false; }
   }
   { // Check SPI FLASH modul.
@@ -82,13 +83,10 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
 }
 
 bool CanHandlerAtmega328P::handleRxFrame() {
-  // The decrement is a non-atomic read-modify-write; an rxInterrupt between the load and the
-  // store would lose its increment (and with edge-triggered INT, the pending frame with it).
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { intCount--; }
-  const uint8_t canDataDlc = CAN.parsePacket();
   CanFrame canFrame;
   canFrame.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
+    const uint8_t canDataDlc = CAN.packetDlc();
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(canFrame.data, canDataDlc));
     if(canDataDlc != bytesReaded) { return false; }
   }
@@ -128,10 +126,16 @@ bool CanHandlerAtmega328P::handleRxFrame() {
 
 bool CanHandlerAtmega328P::run() {
   const uint32_t actualTime = millis();
-  if(intCount > 0U) {
+  // The MCP2515 holds INT low while any enabled flag is set, so the level itself says whether
+  // there is a frame waiting - no edge to miss, and nothing to remember between passes.
+  if(digitalRead(canIntPin) == LOW) {
     eventTimer = actualTime;
     DebugLedHandler::ledOff();
-    if(!handleRxFrame()) { return false; }
+    const CanFramePump::Result rxResult = CanFramePump::drain(
+        []() -> bool { return (CAN.parsePacket() != 0U) || (CAN.packetId() != CANController::noId); },
+        [this]() -> bool { return handleRxFrame(); },
+        maxRxFramesPerRun);
+    if(rxResult.failed) { return false; }
   }
   const OTA::OtaState otaState = ota.run();
   const OtaCanResponse::Decision otaDecision = OtaCanResponse::decide(lastOtaState, otaState, ota.isOwnFw());
@@ -152,7 +156,10 @@ bool CanHandlerAtmega328P::run() {
     case OtaCanResponse::Action::NONE: {
     } break;
   }
-  if(otaDecision.reboot) { ResetHandler::restartMCU(); }
+  if(otaDecision.reboot) {
+    (void)CAN.flushTx();                                            // The ack above is only queued; let it out before the reset.
+    ResetHandler::restartMCU();
+  }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {
     DebugLedHandler::ledOn();
@@ -167,7 +174,7 @@ bool CanHandlerAtmega328P::send(uint16_t command, const uint8_t (&data)[8]) cons
       ((static_cast<uint32_t>(getLocalCanId()) & 0x3FF) << 19U);
   const bool beginPacketResult = CAN.beginExtendedPacket(extId, sizeof(data)) != 0U;
   if(!beginPacketResult) { return false; }
-  const bool packetWriteResult = CAN.write(data, sizeof(data)) != 0U;
+  const bool packetWriteResult = CAN.write(data, sizeof(data)) == sizeof(data);   // a short write silently drops payload
   if(!packetWriteResult) { return false; }
   const bool endPacketResult = CAN.endPacket() != 0U;
   return endPacketResult;

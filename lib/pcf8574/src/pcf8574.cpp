@@ -1,16 +1,17 @@
 #include "pcf8574.hpp"
 
 PCF8574::PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire& wire) :
+  timeoutUs(timeoutUs),
   address(address),
   wire(wire),
   registerValue(0xFFU),
-  deviceExists(false) {
-  this->wire.setClock(clockSpeed);                        // Set I2C bus speed.
-  this->wire.setWireTimeout(timeoutUs, true);             // Set I2C timeout.
-}
+  deviceExists(false) {}
 
 bool PCF8574::init() {
   wire.begin();
+  // After begin(): it runs twi_init(), which rewrites TWBR and drops an earlier setClock().
+  wire.setClock(clockSpeed);                              // Set I2C bus speed.
+  wire.setWireTimeout(timeoutUs, true);                   // Set I2C timeout.
   wire.beginTransmission(address);
   deviceExists = (wire.endTransmission() == 0U);
   return deviceExists;

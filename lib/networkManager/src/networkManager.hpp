@@ -1,5 +1,4 @@
-#ifndef NETWORK_MANAGER_HPP
-#define NETWORK_MANAGER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -133,4 +132,3 @@ private:
   uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.
   char hostnameBuffer[hostnameLen]{};                               // Unique hostname: env (no prefix) + "_" + last 3 MAC bytes.
 };
-#endif // NETWORK_MANAGER_HPP

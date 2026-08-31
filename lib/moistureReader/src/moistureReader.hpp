@@ -1,5 +1,4 @@
-#ifndef MOISTURE_READER_HPP
-#define MOISTURE_READER_HPP
+#pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "multiplexer.hpp"                                          /// Analog multiplexer class.
@@ -112,9 +111,9 @@ bool MoistureReader<N>::run() {
       moistureValue = Analog::complementaryFilter10(multiplexer.analogReadAdvanced(), moistureValue);
       if(Time::hasElapsed(actualTime, eventTimer, filteringTime)) {
         if(dataSender != nullptr) {
-          const uint8_t moistureH = static_cast<uint8_t>(moistureValue & 0xFF);
-          const uint8_t moistureL = static_cast<uint8_t>((moistureValue >> 8U) & 0xFF);
-          dataSender({ channels[readIndex], moistureH, moistureL, 0U, 0U, 0U, 0U, 0U });
+          const uint8_t moistureLow = static_cast<uint8_t>(moistureValue & 0xFF);
+          const uint8_t moistureHigh = static_cast<uint8_t>((moistureValue >> 8U) & 0xFF);
+          dataSender({ channels[readIndex], moistureLow, moistureHigh, 0U, 0U, 0U, 0U, 0U });
         }
         readIndex++;
         if(readIndex >= channelNum) {
@@ -138,4 +137,3 @@ void MoistureReader<N>::triggerImmediateMeasurement() {
     eventTimer = millis() - readTime;
   }
 }
-#endif // MOISTURE_READER_HPP

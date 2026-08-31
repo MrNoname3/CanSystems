@@ -6,9 +6,12 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   2. pio test -e native_test    (native unit-test suite)
   3. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
   4. format_check.py            (clang-format + final-newline check; ANY violation fails)
-  5. lint_check.py              (ruff check over the Python; skipped if ruff is absent)
-  6. typecheck_check.py         (pyright over the Python; skipped if pyright is absent)
-  7. pytest_check.py            (pytest over ota/tests; skipped if pytest is absent)
+  5. lint_check.py              (ruff check over the Python; ANY finding fails)
+  6. typecheck_check.py         (pyright strict over the Python; ANY error fails)
+  7. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+
+Every guard is required: a missing tool fails the gate rather than skipping its step, so a
+green run means all seven actually ran.
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.
