@@ -176,6 +176,45 @@ bool test_run_crc_mismatch_goes_invalid() {
   END_IT
 }
 
+bool test_run_write_back_failure_goes_invalid() {
+  IT("a failed write-back of the first two bytes ends the check as INVALID, not a stuck CHECK");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  IS_TRUE(ota.storeNextData(0U, fw));
+  IS_EQUAL(ota.run(), OtaState::STORE);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  IS_EQUAL(ota.run(), OtaState::CHECK);
+  // The CRC is correct, so CHECK reaches the write-back of the two bytes it kept in RAM. That
+  // write silently does nothing, so the read-back cannot match - the only signal the device gets.
+  flash.setFailWrite(true);
+  IS_EQUAL(ota.run(), OtaState::INVALID);
+  IS_EQUAL(ota.run(), OtaState::IDLE);    // INVALID cleanup → IDLE
+  END_IT
+}
+
+bool test_run_write_back_failure_does_not_loop() {
+  IT("a failed write-back leaves the state machine, instead of rewriting flash on every pass");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
+  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  IS_TRUE(ota.storeNextData(0U, fw));
+  flash.setFailWrite(true);
+  // Ten passes is far more than the six a 4-byte image needs; a stuck CHECK never leaves it.
+  OtaState state = OtaState::IDLE;
+  for(uint8_t i = 0U; i < 10U; i++) {
+    state = ota.run();
+  }
+  IS_EQUAL(state, OtaState::IDLE);        // reached INVALID and cleaned up, rather than looping
+  END_IT
+}
+
 bool test_run_invalid_clears_flash() {
   IT("INVALID state calls chipErase so flash bytes return to the erased 0xFF state");
   SPIFlash flash(0U);
@@ -289,6 +328,8 @@ int main() {
   test_run_start_stays_when_busy();
   test_run_full_valid_flow();
   test_run_crc_mismatch_goes_invalid();
+  test_run_write_back_failure_goes_invalid();
+  test_run_write_back_failure_does_not_loop();
   test_run_invalid_clears_flash();
   test_start_restart_clears_previous_session();
   test_store_block1_writes_at_correct_flash_offset();

@@ -1,4 +1,9 @@
 #pragma once
+// Native-test shim for the W25Q64 SPI flash driver: an address -> byte map where a write only
+// clears bits and an erase restores 0xFF. setFailWrite() reproduces the real class's
+// silent failure mode: SPIFlash::writeByte() returns without writing when command() cannot get the
+// chip ready, and tells the caller nothing - so the OTA state machine only learns about it from
+// the read-back that follows.
 #include <stdint.h>
 #include <cassert>
 #include <cstring>
@@ -33,7 +38,8 @@ public:
 
   void writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
     assert(addr < flashCapacity);
-    memory[addr] = readByte(addr) & byt; // NAND: write can only clear bits (1→0); erase resets to 0xFF
+    if(failWrite) { return; }            // injected write failure: the real class also just returns
+    memory[addr] = readByte(addr) & byt; // NOR: write can only clear bits (1→0); erase resets to 0xFF
   }
 
   void writeBytes(uint32_t addr, const void* buf, uint16_t len) {
@@ -45,6 +51,7 @@ public:
 
   [[nodiscard]] bool busy() const { return busyFlag; }
   void setBusy(bool b) { busyFlag = b; }
+  void setFailWrite(bool fail) { failWrite = fail; }   // test hook: make every write silently do nothing
 
   void chipErase() { memory.clear(); }
 
@@ -85,4 +92,5 @@ private:
   uint16_t jedecId;
   uint32_t flashCapacity;
   bool busyFlag = false;
+  bool failWrite = false;
 };

@@ -87,9 +87,13 @@ OTA::OtaState OTA::run() {
         uint8_t dataReadBack[sizeof(firstFwBytes)] = { 0 };
         flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
         flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
-        // Compares the read-back bytes with the original.
+        // Compares the read-back bytes with the original. A failed write is the one thing SPIFlash
+        // cannot report back, so this comparison is the only signal there is - and leaving the state
+        // alone here would re-run the same write on every pass instead of ending the transfer.
         if(memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0) {
           otaState = OtaState::VALID;
+        } else {
+          otaState = OtaState::INVALID;
         }
       }
     } break;
