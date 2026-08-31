@@ -11,11 +11,11 @@
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief The startup and loop body every ESP node shares.
-/// @details The nodes differ in which objects they build and which of those go in the task list;
-/// everything around that - arming the watchdog, the banner, running initTasks() and restarting
-/// when it reports a failure, and the loop's feed-and-run - was the same text in each main. The
-/// platform differences live here rather than in every main: only the ESP32 can report whether a
-/// watchdog call took, and only it yields to FreeRTOS at the end of a pass.
+/// @details A node's main supplies the objects it builds and its task list; everything around
+/// that lives here - arming the watchdog, the banner, running initTasks() and restarting when it
+/// reports a failure, and the loop's feed-and-run. The platform differences are handled here too:
+/// only the ESP32 can report whether a watchdog call took, and only it yields to FreeRTOS at the
+/// end of a pass.
 ///
 /// The AVR nodes deliberately keep their own setup(): they print through println(F(...)) rather
 /// than printf_P, which on a 32 KB part is a flash decision, and their startup drives node
@@ -47,7 +47,7 @@ namespace AppBootstrap {
   /// @brief Brings the node up: banner, task initialisation and the startup timing report.
   /// @param taskHandler Task handler holding the node's task list.
   /// @param debugLed Debug LED, blinked for the duration of the startup.
-  /// @param performance Loop-time tracker, whose baseline is taken once the startup is done.
+  /// @param performance Round-time tracker, whose baseline is taken once the startup is done.
   /// @note Does not return when a watchdog or task initialisation fails: it restarts the MCU.
   template<uint8_t taskNumber, bool fullRoundRobin>
   [[gnu::always_inline]] inline void runSetup(TaskHandler<taskNumber, fullRoundRobin>& taskHandler, DebugLedHandler& debugLed, Performance& performance) {

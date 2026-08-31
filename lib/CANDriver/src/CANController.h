@@ -3,13 +3,10 @@
 #include <Arduino.h>
 
 /// @brief Base class holding the packet state a CAN controller driver builds on.
-/// @details The CAN operations are deliberately non-virtual. CAN.h picks one implementation at
-/// compile time, the controller object is a concrete global, and nothing ever reaches a driver
-/// through a base pointer - so virtual dispatch bought nothing while pinning every method into
-/// the vtable, where the linker cannot drop the ones a firmware never calls. Only what Stream
-/// and Print required stays behind, now as ordinary members: a CAN controller is not a byte
-/// stream, and inheriting one brought Stream::readBytes() with its timed reads into a path that
-/// runs from an interrupt on the ESP32.
+/// @details The CAN operations are deliberately non-virtual: CAN.h picks one implementation at
+/// compile time, the controller object is a concrete global, and no caller reaches a driver
+/// through a base pointer. Virtual dispatch would only pin every method into the vtable, where
+/// the linker cannot drop the ones a firmware never calls.
 class CANController {
 public:
   /// @brief Initialize the CAN controller at the given baud rate.
@@ -65,8 +62,8 @@ public:
 
   /// @brief Copies up to `length` unread bytes of the received packet into `buffer`.
   /// @return How many bytes were copied; less than `length` when the packet holds fewer.
-  /// @note Returns what is already there and does not wait, so it is safe to call from an
-  /// interrupt - unlike the timed read this replaced.
+  /// @note Returns what is already buffered and never waits, so it is safe to call from an
+  /// interrupt.
   size_t readBytes(uint8_t* buffer, size_t length);
 
   /// @brief Set the receive interrupt callback.

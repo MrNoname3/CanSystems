@@ -224,11 +224,11 @@ private:
   const char* receiverTopic;
   const char* availabilityTopic;
   bool discoveryEnabled = true;                             // false → publish* retracts entities (empty retained payload).
-  // Sized for the larger of the two payload budgets and shared by both publish paths. Held here
-  // rather than on the stack because ~750 bytes is a fifth of the ESP8266's cont stack, and the
-  // call arrives from the main loop with the TLS handshake in the same call chain. Safe to share:
-  // every publish runs on the one loop task, and PubSubClient::publish() copies the payload into
-  // its own buffer before returning, so no second build can start while this one is in flight.
+  // Sized for the larger of the two payload budgets and shared by both publish paths. A local
+  // array would put some 750 bytes - a fifth of the ESP8266's 4 KB cont stack - in the deepest
+  // frame the firmware has. Safe to share: every publish runs on the one loop task, and
+  // PubSubClient::publish() copies the payload into its own buffer before returning, so no
+  // second build can start while this one is in flight.
   char payloadBuffer[canDiscoveryPayloadBufSize] = { '\0' };
 };
 #endif // HADISCOVERY_HPP
