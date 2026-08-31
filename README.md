@@ -162,8 +162,9 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 
 ### Release gate
 
-`scripts/release_check.py` chains eight steps fail-fast: check that the `.venv` matches the
-pinned tooling (`deps_check.py`), build all environments, run the native test suite, static
+`scripts/release_check.py` chains eight steps fail-fast: check that the pinned tooling is the
+tooling installed (`deps_check.py` — in the project `.venv`, or in CI's own Python when there is
+no `.venv`), build all environments, run the native test suite, static
 analysis (`pio check` — where a **single defect of any severity** via
 `--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
 SUCCESS even with findings), then the Python guards — clang-format + final-newline

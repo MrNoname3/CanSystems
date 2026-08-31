@@ -39,6 +39,20 @@ def test_a_missing_include_contributes_nothing(tmp_path: Path) -> None:
     assert deps_check.read_requirements(req) == ["ruff==0.16.5"]
 
 
+def test_the_venv_is_preferred_when_there_is_one(tmp_path: Path, monkeypatch: object) -> None:
+    venv_python = tmp_path / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.touch()
+    monkeypatch.setattr(deps_check, "VENV_PYTHON", venv_python)   # type: ignore[attr-defined]
+    assert deps_check.target_python() == venv_python
+
+
+def test_without_a_venv_the_running_interpreter_is_checked(tmp_path: Path, monkeypatch: object) -> None:
+    # CI has no project .venv: it installs the pins into the runner's own Python.
+    monkeypatch.setattr(deps_check, "VENV_PYTHON", tmp_path / "absent" / "python")   # type: ignore[attr-defined]
+    assert deps_check.target_python() == Path(sys.executable)
+
+
 def test_the_projects_own_requirements_parse(tmp_path: Path) -> None:
     from packaging.requirements import Requirement
     lines = deps_check.read_requirements(deps_check.REQUIREMENTS)
