@@ -956,7 +956,6 @@ class MQTTClient:
     def disconnect(self):
         """Disconnect from MQTT broker"""
         self.client.disconnect()
-        self.client.loop_stop()
 
 
 # ---------------------------------------------------------------------------
@@ -996,9 +995,10 @@ class _BaseTransfer:
         # can still turn up after a late acknowledgment has already moved the transfer on.
         self._resend_unanswered = False
 
-        # Queue for incoming MQTT messages to avoid race conditions between
-        # the MQTT callback thread and the main loop. A deque because append and popleft are
-        # each atomic, so draining cannot discard a message the callback thread just added.
+        # Responses are queued rather than acted on where they arrive, so one is handled after
+        # the state machine has finished transitioning instead of in the middle of the network
+        # event that delivered it. A deque because append and popleft are each atomic, which
+        # keeps the drain correct even if this ever moves onto loop_start()'s own thread.
         self._pending_messages: Deque[Dict[str, Any]] = deque()
 
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
