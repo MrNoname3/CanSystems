@@ -21,8 +21,12 @@ public:
 
   [[nodiscard]] uint8_t endTransmission() const { return txResult; }
 
+  // Answers with what is actually available, as TwoWire does: a device that NACKs part way
+  // through, or a bus timeout, leaves the caller with fewer bytes than it asked for. Returning
+  // all-or-nothing here would hide every short-read path from the suite.
   uint8_t requestFrom(uint8_t /*addr*/, uint8_t n) {
-    return static_cast<uint8_t>(readQueue.size() >= static_cast<size_t>(n) ? n : 0U);
+    const size_t available = readQueue.size();
+    return static_cast<uint8_t>(available < static_cast<size_t>(n) ? available : n);
   }
 
   uint8_t read() { // NOLINT(readability-convert-member-functions-to-static)

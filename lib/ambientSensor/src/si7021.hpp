@@ -77,6 +77,10 @@ private:
   bool readReg(uint8_t* reg, uint8_t regLen);
 
   static constexpr uint32_t clockSpeed = 100000U; // Default I2C clock speed in Hz.
+  // The datasheet conversion is deliberately allowed to run slightly outside 0-100 %RH, so the
+  // reading has to be clamped before it reaches the caller's unsigned type.
+  static constexpr int32_t minHumidityPercent = 0;
+  static constexpr int32_t maxHumidityPercent = 100;
 
   const uint32_t timeoutUs;                       // I2C timeout in microseconds, applied in init().
   const uint8_t address;                          // I2C address of the device.
