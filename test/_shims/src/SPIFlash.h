@@ -43,7 +43,7 @@ public:
 
   bool writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
     assert(addr < flashCapacity);
-    if(failWrite) { return false; }      // chip never came ready: nothing is written
+    if(failWrite) { return false; }      // NOLINT(readability-simplify-boolean-expr) guard, not a boolean return: the write below still has to run
     memory[addr] = readByte(addr) & byt; // NOR: write can only clear bits (1→0); erase resets to 0xFF
     return true;
   }
@@ -62,8 +62,8 @@ public:
   void setFailRead(bool fail) { failRead = fail; }     // test hook: reads report a chip that never came ready
   void setFailErase(bool fail) { failErase = fail; }   // test hook: erases report a chip that never came ready
 
-  bool chipErase() {
-    if(failErase) { return false; }
+  bool chipErase() { // NOLINT(readability-make-member-function-const) clears the instance's map
+    if(failErase) { return false; }   // NOLINT(readability-simplify-boolean-expr) guard, not a boolean return
     memory.clear();
     return true;
   }
