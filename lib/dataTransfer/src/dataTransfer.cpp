@@ -8,6 +8,20 @@
 #include <Update.h>                                                 /// Native unit-test shim (test/_shims).
 #endif
 
+namespace {
+  // Throws away a firmware image that will never be finished, releasing the sector buffer the
+  // Updater allocated. The ESP32 class has abort() for exactly this; its end(false) performs the
+  // same reset but reports the unfinished image as an error first. The ESP8266 class has no
+  // abort(), and its end(false) resets quietly.
+  void abortFirmwareUpdate() {
+#if defined(ESP8266)
+    (void)Update.end(false);
+#else
+    Update.abort();
+#endif
+  }
+} // namespace
+
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
   checkOkCallback(checkOkCallback),
   fileSizeLocal(0U),
@@ -66,7 +80,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   }
   isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
   if(isFwTransfer) {
-    Update.end(false);
+    abortFirmwareUpdate();                                          // begin() refuses while an unfinished image is still open.
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get()->printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
     if(!updateBeginResult) {
@@ -76,7 +90,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
     if(!Update.setMD5(fileMd5Local)) {
       Logger::get()->printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_SET_MD5_FAILED);
-      Update.end(false);
+      abortFirmwareUpdate();                                        // This path does not reach CLEANUP.
       return false;
     }
   } else {
@@ -153,9 +167,6 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   if(decodedPostSize > remainingFileSizeLocal) {
     Logger::get()->printf_P(PSTR("[FT] Received more data than the declared file size!\r\n"));
     dataTransferErrState.setError(DataTransferError::RECEIVED_DATA_OVERRUN);
-    if(isFwTransfer) {
-      Update.end(false);
-    }
     transferState = TransferState::CLEANUP;
     return false;
   }
@@ -164,7 +175,6 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
     if(writtenBytes != decodedPostSize) {
       Logger::get()->printf_P(PSTR("[FT] Firmware write failed!\r\n"));
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_WRITE_FAILED);
-      Update.end(false);
       transferState = TransferState::CLEANUP;
       return false;
     }
@@ -262,20 +272,29 @@ void DataTransfer::runValidityCheck() {
       }
     } break;
     case TransferState::CLEANUP: {
-      fileSizeLocal = 0U;
-      memset(fileMd5Local, '\0', sizeof(fileMd5Local));
-      nextFilePieceNumberLocal = invalidFilePieceNumber;
-      remainingFileSizeLocal = 0U;
-      isFwTransfer = false;
-      if(receivedFile) {
-        receivedFile.close();
-      }
-      (void)LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
-      transferState = TransferState::IDLE;
-      if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
-        checkOkCallback(false);
-      }
+      cleanupTransfer();
     } break;
+  }
+}
+
+void DataTransfer::cleanupTransfer() {
+  // The Updater is the one resource that used to survive this state: an image left half-written by
+  // an abandoned or timed-out transfer keeps its sector buffer until the next begin().
+  if(isFwTransfer && (remainingFileSizeLocal > 0U)) {
+    abortFirmwareUpdate();
+  }
+  fileSizeLocal = 0U;
+  memset(fileMd5Local, '\0', sizeof(fileMd5Local));
+  nextFilePieceNumberLocal = invalidFilePieceNumber;
+  remainingFileSizeLocal = 0U;
+  isFwTransfer = false;
+  if(receivedFile) {
+    receivedFile.close();
+  }
+  (void)LittleFS.remove(FPSTR(FileName::getTempFileLocation()));
+  transferState = TransferState::IDLE;
+  if((checkOkCallback != nullptr) && (dataTransferErrState.getRawErrorState() > 0U)) {
+    checkOkCallback(false);
   }
 }
 

@@ -379,6 +379,35 @@ bool test_firmware_transfer_succeeds() {
   END_IT
 }
 
+bool test_firmware_transfer_can_be_restarted() {
+  IT("a firmware transfer abandoned half-way can be started again");
+  resetEnv();
+  setFakeMillis(0U);
+  const std::string raw = "abcdef";
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5_abcdef, fwName()));
+  IS_TRUE(dt.storeBase64(0U, b64(std::string("abc")).c_str()));   // half the image, then the sender gives up
+  IS_TRUE(Update.isOpen());
+  IS_TRUE(dt.begin(static_cast<uint32_t>(raw.size()), kMd5_abcdef, fwName()));
+  IS_TRUE(dt.storeBase64(0U, b64(raw).c_str()));                  // the retry completes
+  IS_TRUE(g_lastValid);
+  END_IT
+}
+
+bool test_cleanup_releases_an_unfinished_firmware_image() {
+  IT("an abandoned firmware image is released by the cleanup, not left open until the next transfer");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fwName()));
+  IS_TRUE(dt.storeBase64(0U, b64(std::string("abc")).c_str()));
+  IS_TRUE(Update.isOpen());
+  setFakeMillis(16U * 60U * 1000U);                               // > 15 min transfer timeout
+  dt.runValidityCheck();                                          // timeout -> CLEANUP -> IDLE
+  IS_FALSE(Update.isOpen());
+  END_IT
+}
+
 bool test_firmware_begin_failure() {
   IT("begin() reports FW_UPGRADE_BEGIN_FAILED when Update.begin fails");
   resetEnv();
@@ -515,6 +544,8 @@ int main() {
   test_md5_mismatch_fails_and_keeps_no_file();
   test_aborted_transfer_frees_the_temporary_file();
   test_firmware_transfer_succeeds();
+  test_firmware_transfer_can_be_restarted();
+  test_cleanup_releases_an_unfinished_firmware_image();
   test_firmware_begin_failure();
   test_firmware_write_failure();
   test_firmware_end_failure();

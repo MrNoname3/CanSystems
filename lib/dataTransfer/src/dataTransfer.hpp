@@ -99,6 +99,7 @@ public:
 
 private:
   bool finalizeTransfer();                                          // Finalizes the transfer after all pieces are received.
+  void cleanupTransfer();                                           // Releases what the transfer held and returns to IDLE.
 
   void (*checkOkCallback)(bool isValid);                            // Callback function invoked on transfer completion.
   uint32_t fileSizeLocal;                                           // Expected size of the file being transferred (in bytes).
