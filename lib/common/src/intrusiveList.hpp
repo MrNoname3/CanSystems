@@ -7,7 +7,7 @@
 /// remove anything, so the list only ever grows, and appending is O(1) through the kept tail.
 ///
 /// Kept free of the CAN handler, the MQTT client and the FreeRTOS plumbing so it can be
-/// unit-tested on the host, the same way CanFramePump and OtaCanResponse are.
+/// unit-tested on the host.
 ///
 /// @tparam Node Node type providing `getNext()` and `setNext()`.
 template<typename Node>

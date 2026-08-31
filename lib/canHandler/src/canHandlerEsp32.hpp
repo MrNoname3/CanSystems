@@ -87,8 +87,7 @@ private:
 
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
   // Written only by rxInterrupt(), read only by reportDroppedRxFrames(). Free-running: the
-  // reader keeps its own mark, so the interrupt never competes with a reset. A dropped frame
-  // leaves no other trace - the interrupt cannot log, and the frame simply never arrives.
+  // reader keeps its own mark, so the interrupt never competes with a reset.
   static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
   static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
 

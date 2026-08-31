@@ -3,16 +3,12 @@
 
 /// @brief Moves pending CAN frames across one scheduler pass, in either direction.
 /// @details Both ends of a CAN handler hold more than one frame: a controller has several
-/// receive buffers and keeps its interrupt line asserted while any of them is full, and an
-/// outgoing queue fills faster than a task that sends one frame per pass can empty it. Moving
-/// a single frame per pass leaves the rest behind - for an edge-triggered receive handler that
-/// also means no further edge, so the leftover stays unread until new traffic arrives.
-/// The pump moves frames until the source reports empty, bounded by a frame budget so a burst
-/// cannot starve the other tasks in the cooperative loop.
+/// receive buffers, and an outgoing queue fills faster than a task sending one frame per pass
+/// can empty it. The pump moves frames until the source reports empty, bounded by a frame
+/// budget so a burst cannot starve the other tasks in the cooperative loop.
 ///
 /// Kept free of the CAN driver and the AVR plumbing so it can be unit-tested on the host: the
-/// two operations are supplied as callables, mirroring how OtaCanResponse isolates the OTA
-/// handshake decision from canHandlerAtmega328P.
+/// two operations are supplied as callables.
 namespace CanFramePump {
   /// @brief Outcome of one drain pass.
   struct Result {
