@@ -991,6 +991,10 @@ class _BaseTransfer:
         # be answered by repeating it rather than failing the whole transfer.
         self._last_piece: Optional[tuple[int, int, int]] = None
         self._piece_retries = 0
+        # A repeat is on the wire and its answer has not arrived yet. Kept separate from
+        # _piece_retries, which the next accepted piece resets: the device's answer to a repeat
+        # can still turn up after a late acknowledgment has already moved the transfer on.
+        self._resend_unanswered = False
 
         # Queue for incoming MQTT messages to avoid race conditions between
         # the MQTT callback thread and the main loop. A deque because append and popleft are
@@ -1054,6 +1058,7 @@ class _BaseTransfer:
         self.state = TransferState.WAIT_START_ACK
         self.remaining_bytes = self.size
         self.timer_start = time.time()
+        self._resend_unanswered = False
 
     def _process_response(self, message: Dict[str, Any]):
         """Process ACK/NACK response messages from device."""
@@ -1062,6 +1067,10 @@ class _BaseTransfer:
             return
 
         ack = message["type"] != 0
+        # The device reports this only for a piece it has already stored, so with a repeat on the
+        # wire it says "I have it" rather than "something went wrong".
+        answers_a_repeat = (not ack and self._resend_unanswered
+                            and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER)
 
         if self.state == TransferState.WAIT_START_ACK and ack:
             logging.info("Start acknowledgment received, beginning transfer")
@@ -1071,13 +1080,20 @@ class _BaseTransfer:
         elif self.state == TransferState.WAIT_PIECE_ACK and ack:
             self._advance_after_piece()
 
-        elif (self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries > 0
-              and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER):
+        elif self.state == TransferState.WAIT_PIECE_ACK and answers_a_repeat:
             logging.info(f"Piece {self.piece_number - 1} was already stored; the lost acknowledgment is confirmed")
+            self._resend_unanswered = False
             self._advance_after_piece()
 
         elif self.state == TransferState.WAIT_CHECK_ACK and ack:
             self.state = TransferState.DONE
+
+        elif answers_a_repeat:
+            # The original acknowledgment was only slow: it arrived first and moved the transfer
+            # on, so this is the repeat's answer catching up. Failing here would abort a transfer
+            # that the retry had just recovered.
+            logging.info("The repeated piece was already stored; its answer arrived after the acknowledgment")
+            self._resend_unanswered = False
 
         else:
             logging.error(f"Received NACK in state {self.state}, error code: {message.get('err', 0)}")
@@ -1144,6 +1160,7 @@ class _BaseTransfer:
               and time.time() - self.timer_start > self.timeout_seconds):
             if self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries < self.max_piece_retries and self._last_piece:
                 self._piece_retries += 1
+                self._resend_unanswered = True
                 logging.warning(f"No acknowledgment for piece {self._last_piece[0]}; "
                                 f"resending ({self._piece_retries}/{self.max_piece_retries})")
                 self._publish_piece(*self._last_piece)
@@ -1288,7 +1305,8 @@ class CommandSender(_BaseTransfer):
 
     def _process_state(self):
         """Process pending messages and check for timeout."""
-        for message in self._pending_messages:
+        while self._pending_messages:
+            message = self._pending_messages.popleft()
             if "type" not in message:
                 logging.warning("Received message without 'type' field")
                 continue
@@ -1297,7 +1315,6 @@ class CommandSender(_BaseTransfer):
             else:
                 logging.error(f"Command rejected by device, error code: {message.get('err', 0)}")
                 self.state = TransferState.ERROR
-        self._pending_messages.clear()
 
         if self.state == TransferState.WAIT_START_ACK and time.time() - self.timer_start > self.timeout_seconds:
             logging.error("Timeout waiting for command acknowledgment")

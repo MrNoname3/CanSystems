@@ -11,8 +11,9 @@ import hashlib
 import json
 import sys
 import time
+from collections import deque as Deque
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Dict, Optional, cast
 
 import pytest
 
@@ -947,6 +948,73 @@ def test_a_message_arriving_during_the_drain_is_not_lost(tmp_path: Path) -> None
     updater._pending_messages.append({"type": 1})
     updater._process_state()
     assert len(seen) == 2
+
+
+def test_a_late_acknowledgment_and_the_repeats_answer_do_not_abort(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)                                       # the repeat goes out
+    # The original acknowledgment was only slow. It arrives first and moves the transfer on, and
+    # the device's answer to the repeat follows it - the transfer the retry just rescued must not
+    # be aborted by its own echo.
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.SENDING_FW
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.SENDING_FW
+
+
+def test_both_answers_drained_in_one_pass_do_not_abort(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)
+    # Same pair, delivered together: _process_state drains both before acting on either.
+    updater._pending_messages.append({"type": 1})
+    updater._pending_messages.append({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    updater._process_state()
+    assert updater.state != ota.TransferState.ERROR
+
+
+def test_only_one_answer_per_repeat_is_absorbed(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)
+    updater._process_response({"type": 1})                 # late acknowledgment
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})   # the repeat's answer
+    # A second one has no repeat behind it any more, so the device really is out of step.
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.ERROR
+
+
+class _SelfRefillingQueue(Deque[Dict[str, Any]]):
+    """A pending-message queue that appends one more entry while it is being drained,
+    standing in for the MQTT client delivering a message mid-pass."""
+
+    def __init__(self, refill: Dict[str, Any]) -> None:
+        super().__init__()
+        self._refill: Optional[Dict[str, Any]] = refill
+        self.taken: list[Dict[str, Any]] = []
+
+    def popleft(self) -> Dict[str, Any]:
+        message = super().popleft()
+        self.taken.append(message)
+        if self._refill is not None:
+            self.append(self._refill)
+            self._refill = None
+        return message
+
+
+def test_command_sender_keeps_a_message_queued_during_the_drain(tmp_path: Path) -> None:
+    del tmp_path
+    sender = ota.CommandSender(
+        ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        ota.CommandEntry(name="reboot", cmd="reboot"),
+    )
+    sender.state = ota.TransferState.WAIT_START_ACK
+    queue = _SelfRefillingQueue({"type": 1, "late": True})
+    sender._pending_messages = queue
+    queue.append({"type": 1})
+    sender._process_state()
+    # Iterating and then clear()ing would have thrown the late arrival away unseen.
+    assert len(queue.taken) == 2
+    assert len(queue) == 0
 
 
 def test_no_timeout_within_window(tmp_path: Path) -> None:
