@@ -162,7 +162,7 @@ bool test_fw_version_frame_publishes_info() {
   IS_TRUE(std::string(gateway.getCanSwVersion()) == "258 (0a0b0c0d)");
   bool infoFound = false;
   for(const auto& entry : MqttBase::retainedMessages) {
-    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"a0b0c0d","dirty":1,"rr":24})") {
+    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"0a0b0c0d","dirty":1,"rr":24})") {
       infoFound = true;
     }
   }

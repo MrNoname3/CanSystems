@@ -88,12 +88,14 @@ def test_staged_new_file_is_dirty(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 def test_hash_and_count_are_read_from_the_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo(tmp_path)
     monkeypatch.chdir(repo)
-    short = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
+    full = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
         cwd=repo, check=True, capture_output=True, text=True,
     ).stdout.strip()
-    assert git_utils.get_git_hash() == int(short, 16)
+    assert git_utils.get_git_hash() == int(full[:8], 16)
     assert git_utils.get_git_commit_count() == 1
+    # What the firmware prints has to be a prefix git accepts back, leading zeros included.
+    assert f"{git_utils.get_git_hash():08x}" == full[:8]
 
 
 def test_missing_git_falls_back_to_zeros(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

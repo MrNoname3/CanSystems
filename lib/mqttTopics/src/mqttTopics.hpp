@@ -14,7 +14,7 @@ private:
   static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
   static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic; %s receives the topic base ending with '/'.
   static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT retained device info topic; %s receives the topic base ending with '/'.
-  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason.
+  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason.
   static constexpr const char PROGMEM mqttDiagPayload[] = R"({"cause":"%s","at":"%s","downSec":%u,"n":%u})"; // Disconnect diagnostics JSON (published to the "diag" subtopic via publishRetained); args: cause string, drop ISO UTC time, offline seconds, reconnect counter.
   // clang-format on
   // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by the base length.
