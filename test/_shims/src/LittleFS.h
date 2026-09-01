@@ -74,9 +74,14 @@ public:
 
   static inline bool sWriteShouldFail = false;       // test hook: make write() report a short write
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) flushes write buffer to the store
+  // Both cores release the handle here (fs::File::close() nulls its _p), so the handle reads
+  // false afterwards and a second close() does nothing - which is what `if(receivedFile)` means
+  // at DataTransfer's call sites.
   void close() {
+    if(!valid_) { return; }
     if(write_ && (store_ != nullptr)) { (*store_)[path_] = buf_; }
+    store_ = nullptr;
+    valid_ = false;
   }
 
 private:
