@@ -250,7 +250,7 @@ void PumpControl::skipAllIrrigations() {
 }
 
 void PumpControl::checkSafetyIrrigations() {
-  for(const auto& element : safetyIrrigation) {
+  for(const SafetyIrrigationElement& element : safetyIrrigation) {
     if((element.time > 0U) && (millis() - element.timer > Time::minToMs(element.time))) {
       createIrrigation(element.irrigation);
     }
