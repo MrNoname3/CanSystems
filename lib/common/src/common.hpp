@@ -311,8 +311,9 @@ private:
 /// @tparam StorageType An integral type used to store the bitmask. Must be large enough to hold all Enum values.
 template<typename Enum, typename StorageType>
 class ErrorState final {
-  // Ensure that Enum is an enumeration type and StorageType is large enough to hold all Enum values.
-  static_assert(sizeof(StorageType) * 8U >= sizeof(Enum) * 8U, "StorageType must be large enough to hold all Enum values!");
+  // The storage has to be the enum's own underlying type; >= would let a uint8_t hold a uint16_t
+  // enum's values. std::underlying_type_t would say it directly, but AVR ships no <type_traits>.
+  static_assert(sizeof(StorageType) == sizeof(Enum), "StorageType must match the enum's underlying type!");
 
 public:
   /// @brief Constructs an `ErrorState` object with all error states cleared.
