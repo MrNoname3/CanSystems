@@ -516,8 +516,9 @@ class ConfigManager:
 class FirmwareManager:
     """Handles firmware file operations and validation"""
 
-    def __init__(self, firmware_path: Path):
+    def __init__(self, firmware_path: Path, pio_project: str):
         self.firmware_path = firmware_path
+        self.pio_project = pio_project
         self._firmware_data: Optional[bytes] = None
         self._md5: Optional[str] = None
         self._firmware_id: Optional[str] = None
@@ -542,12 +543,10 @@ class FirmwareManager:
 
     @property
     def firmware_id(self) -> str:
-        """Extract and cache firmware ID"""
+        """The build environment this image belongs to, checked against the image itself."""
         if self._firmware_id is None:
-            fw_id = self._extract_firmware_id()
-            if fw_id is None:
-                raise ValueError("Could not extract firmware ID from binary")
-            self._firmware_id = fw_id
+            self._verify_firmware_id()
+            self._firmware_id = self.pio_project
         return self._firmware_id
 
     def _read_firmware(self) -> bytes:
@@ -557,20 +556,21 @@ class FirmwareManager:
         except OSError as e:
             raise OSError(f"Failed to read firmware file: {e}") from e
 
-    def _extract_firmware_id(self) -> Optional[str]:
-        """Extract firmware identifier from binary"""
-        begin_of_id = b"project_"
-        start_index = self.firmware_data.find(begin_of_id)
+    def _verify_firmware_id(self) -> None:
+        """Fail unless the image carries the environment name it is being sent as.
 
-        if start_index != -1:
-            end_index = self.firmware_data.find(b'\0', start_index + len(begin_of_id))
-            if end_index != -1:
-                identifier = self.firmware_data[start_index:end_index].decode('utf-8')
-                logging.info(f"Firmware ID found: \"{identifier}\"")
-                return identifier
-
-        logging.error("Firmware ID not found in binary")
-        return None
+        The device compares binId against its own BUILD_ENV_NAME, which catches the right image
+        going to the wrong node. It cannot catch the wrong image going to the right node - for
+        that the file has to be asked what it is, and the build stamps the environment name into
+        every image (platformio.ini: -D BUILD_ENV_NAME="$PIOENV").
+        """
+        marker = self.pio_project.encode('utf-8') + b'\0'
+        if marker not in self.firmware_data:
+            raise ValueError(
+                f"{self.firmware_path} does not carry the environment name '{self.pio_project}', "
+                f"so it is not that environment's firmware"
+            )
+        logging.info(f"Firmware ID: \"{self.pio_project}\"")
 
 
 # ---------------------------------------------------------------------------
@@ -956,7 +956,6 @@ class MQTTClient:
     def disconnect(self):
         """Disconnect from MQTT broker"""
         self.client.disconnect()
-        self.client.loop_stop()
 
 
 # ---------------------------------------------------------------------------
@@ -991,10 +990,15 @@ class _BaseTransfer:
         # be answered by repeating it rather than failing the whole transfer.
         self._last_piece: Optional[tuple[int, int, int]] = None
         self._piece_retries = 0
+        # A repeat is on the wire and its answer has not arrived yet. Kept separate from
+        # _piece_retries, which the next accepted piece resets: the device's answer to a repeat
+        # can still turn up after a late acknowledgment has already moved the transfer on.
+        self._resend_unanswered = False
 
-        # Queue for incoming MQTT messages to avoid race conditions between
-        # the MQTT callback thread and the main loop. A deque because append and popleft are
-        # each atomic, so draining cannot discard a message the callback thread just added.
+        # Responses are queued rather than acted on where they arrive, so one is handled after
+        # the state machine has finished transitioning instead of in the middle of the network
+        # event that delivered it. A deque because append and popleft are each atomic, which
+        # keeps the drain correct even if this ever moves onto loop_start()'s own thread.
         self._pending_messages: Deque[Dict[str, Any]] = deque()
 
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
@@ -1054,6 +1058,7 @@ class _BaseTransfer:
         self.state = TransferState.WAIT_START_ACK
         self.remaining_bytes = self.size
         self.timer_start = time.time()
+        self._resend_unanswered = False
 
     def _process_response(self, message: Dict[str, Any]):
         """Process ACK/NACK response messages from device."""
@@ -1062,6 +1067,10 @@ class _BaseTransfer:
             return
 
         ack = message["type"] != 0
+        # The device reports this only for a piece it has already stored, so with a repeat on the
+        # wire it says "I have it" rather than "something went wrong".
+        answers_a_repeat = (not ack and self._resend_unanswered
+                            and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER)
 
         if self.state == TransferState.WAIT_START_ACK and ack:
             logging.info("Start acknowledgment received, beginning transfer")
@@ -1071,13 +1080,20 @@ class _BaseTransfer:
         elif self.state == TransferState.WAIT_PIECE_ACK and ack:
             self._advance_after_piece()
 
-        elif (self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries > 0
-              and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER):
+        elif self.state == TransferState.WAIT_PIECE_ACK and answers_a_repeat:
             logging.info(f"Piece {self.piece_number - 1} was already stored; the lost acknowledgment is confirmed")
+            self._resend_unanswered = False
             self._advance_after_piece()
 
         elif self.state == TransferState.WAIT_CHECK_ACK and ack:
             self.state = TransferState.DONE
+
+        elif answers_a_repeat:
+            # The original acknowledgment was only slow: it arrived first and moved the transfer
+            # on, so this is the repeat's answer catching up. Failing here would abort a transfer
+            # that the retry had just recovered.
+            logging.info("The repeated piece was already stored; its answer arrived after the acknowledgment")
+            self._resend_unanswered = False
 
         else:
             logging.error(f"Received NACK in state {self.state}, error code: {message.get('err', 0)}")
@@ -1144,6 +1160,7 @@ class _BaseTransfer:
               and time.time() - self.timer_start > self.timeout_seconds):
             if self.state == TransferState.WAIT_PIECE_ACK and self._piece_retries < self.max_piece_retries and self._last_piece:
                 self._piece_retries += 1
+                self._resend_unanswered = True
                 logging.warning(f"No acknowledgment for piece {self._last_piece[0]}; "
                                 f"resending ({self._piece_retries}/{self.max_piece_retries})")
                 self._publish_piece(*self._last_piece)
@@ -1187,9 +1204,9 @@ class _BaseTransfer:
 class OTAUpdater(_BaseTransfer):
     """Firmware OTA update – sends firmware.bin to the device via MQTT."""
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path):
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path, pio_project: str):
         super().__init__(device_config, mqtt_config)
-        self.firmware_manager = FirmwareManager(firmware_path)
+        self.firmware_manager = FirmwareManager(firmware_path, pio_project)
 
     @property
     def data(self) -> bytes:
@@ -1288,7 +1305,8 @@ class CommandSender(_BaseTransfer):
 
     def _process_state(self):
         """Process pending messages and check for timeout."""
-        for message in self._pending_messages:
+        while self._pending_messages:
+            message = self._pending_messages.popleft()
             if "type" not in message:
                 logging.warning("Received message without 'type' field")
                 continue
@@ -1297,7 +1315,6 @@ class CommandSender(_BaseTransfer):
             else:
                 logging.error(f"Command rejected by device, error code: {message.get('err', 0)}")
                 self.state = TransferState.ERROR
-        self._pending_messages.clear()
 
         if self.state == TransferState.WAIT_START_ACK and time.time() - self.timer_start > self.timeout_seconds:
             logging.error("Timeout waiting for command acknowledgment")
@@ -1426,7 +1443,7 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
     print("  Action:      Firmware upload")
     print(f"  Firmware:    {firmware_path}")
     print()
-    return OTAUpdater(device_config, mqtt_config, firmware_path)
+    return OTAUpdater(device_config, mqtt_config, firmware_path, result.project.pio_project)
 
 
 def main():

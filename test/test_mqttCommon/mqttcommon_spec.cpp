@@ -121,7 +121,12 @@ public:
   explicit TestOtaTarget(const char* name) :
     name_(name) {}
   [[nodiscard]] const char* getFwFileName() const override { return name_; }
-  void triggerOta() override { triggered = true; }
+  [[nodiscard]] bool isOtaTargetOnline() const override { return true; }
+  [[nodiscard]] bool isOtaInProgress() const override { return false; }
+  void triggerOta(OtaImageInfo& image) override {
+    (void)image;
+    triggered = true;
+  }
   bool triggered = false;
 
 private:
@@ -190,6 +195,18 @@ bool test_file_piece_without_begin_is_nacked() {
   END_IT
 }
 
+bool test_a_binid_that_only_starts_with_the_env_name_is_rejected() {
+  IT("a binId that merely begins with this environment's name is rejected");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  // The env here is "native_test"; the comparison has to reach the terminator, or every longer
+  // id sharing the prefix would be accepted and streamed into the Updater.
+  deliver(mc, R"({"binId":"native_test_v2","name":"espFirmware","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  IS_EQUAL(MqttBase::lastResponse, MqttBase::Response::NACK);
+  END_IT
+}
+
 int main() {
   SUITE("MqttCommon");
   test_init_returns_true();
@@ -205,5 +222,6 @@ int main() {
   test_file_piece_stored();
   test_unknown_json_no_response();
   test_end_to_end_file_routes_to_ota_target();
+  test_a_binid_that_only_starts_with_the_env_name_is_rejected();
   FINISH
 }

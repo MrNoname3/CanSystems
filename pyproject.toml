@@ -30,6 +30,9 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # PlatformIO SCons build scripts: Import("env") injects names ruff cannot see, and the
 # import of project helpers legitimately follows that call (so F821 + E402 are expected).
+# This one only needs F821: its own imports precede Import("env"), so nothing trails it.
+"scripts/check_avr_startup.py" = ["F821"]
+"scripts/check_esp8266_memory.py" = ["F821"]
 "scripts/elf_to_bin.py" = ["F821", "E402"]
 "scripts/git_commit_info.py" = ["F821", "E402"]
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
@@ -50,6 +53,8 @@ exclude = [
     "**/.venv",
     "**/__pycache__",
     ".pio",
+    "scripts/check_avr_startup.py",
+    "scripts/check_esp8266_memory.py",
     "scripts/elf_to_bin.py",
     "scripts/git_commit_info.py",
     "scripts/patch_elf2bin.py",

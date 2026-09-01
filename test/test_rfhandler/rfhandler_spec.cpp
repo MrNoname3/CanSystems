@@ -256,6 +256,38 @@ bool test_mqtt_message_missing_fields_is_ignored() {
   END_IT
 }
 
+bool test_an_oversized_bit_length_is_rejected() {
+  IT("a bit length past 64 is dropped instead of queued");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument doc;
+  // RCSwitch::send() evaluates `code & (1ULL << i)` for i down from length-1, so anything past
+  // 64 is an undefined shift - and the bit count is also half of the blocking air time.
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":100,"Protocol":1,"Pulse":350})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 0);
+  IS_EQUAL(RCSwitch::lastProtocol, 0);   // nothing was applied either: the whole command is dropped
+  END_IT
+}
+
+bool test_the_largest_valid_bit_length_still_transmits() {
+  IT("a 64-bit command is still accepted");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+  JsonDocument doc;
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":64,"Protocol":1,"Pulse":350})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  IS_TRUE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 1);
+  IS_EQUAL(RCSwitch::lastSentLength, 64U);
+  END_IT
+}
+
 int main() {
   SUITE("RfHandler");
   test_received_frame_is_published_as_json();
@@ -272,5 +304,7 @@ int main() {
   test_a_zero_pulse_length_keeps_the_current_one();
   test_mqtt_message_without_data_does_not_transmit();
   test_mqtt_message_missing_fields_is_ignored();
+  test_an_oversized_bit_length_is_rejected();
+  test_the_largest_valid_bit_length_still_transmits();
   FINISH
 }

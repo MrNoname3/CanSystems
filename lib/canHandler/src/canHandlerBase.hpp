@@ -87,6 +87,8 @@ public:
   /// @brief Structure representing a CAN frame.
   /// Includes an extended CAN ID with 3 parts: receiver address (`to`), command (`cmd`), and sender address (`from`).
   /// Also includes a data payload that can hold up to 8 bytes.
+  /// @note The 29-bit extended ID is split 10 / 9 / 10, so a command above 511 is masked away.
+  /// The union is read through the member the other one wrote, which GCC defines.
   struct __attribute__((packed)) CanFrame {
     union {
       uint32_t extId;                         // Extended CAN ID.
@@ -130,13 +132,13 @@ public:
   [[nodiscard]] bool run() override = 0;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
-  /// @param command 10-bit command value representing the specific action or request.
+  /// @param command 9-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   virtual bool send(uint16_t command, const uint8_t (&data)[8]) const = 0; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Sends a CAN frame with a specified command.
-  /// @param command 10-bit command value representing the specific action or request.
+  /// @param command 9-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   inline bool send(uint16_t command) const { // NOLINT(modernize-use-nodiscard)
     const uint8_t data[8] = { 0U };

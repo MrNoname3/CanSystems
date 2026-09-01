@@ -73,6 +73,12 @@ protected:
   CANController();
   ~CANController() = default;
 
+  /// @brief Puts the receive state back to "no frame": packetId() reads `noId`, packetDlc() and
+  /// available() read 0.
+  /// @note Every parsePacket() has to call this on the path where nothing was waiting, otherwise
+  /// packetId() keeps answering with the previous frame's identifier.
+  void clearRxState();
+
   void (*onReceiveCb)(int);
 
   bool packetBegun;

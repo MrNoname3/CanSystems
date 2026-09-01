@@ -120,7 +120,7 @@ uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
   }
 
   modifyRegister(regBtr1, 0x80U, 0x80U); // SAM = 1
-  writeRegister(regIer, 0xFFU);          // enable all interrupts
+  writeRegister(regIer, 0x01U);          // receive interrupt only; handleInterrupt() reads no other bit
 
   // set filter to allow anything
   writeRegister(regAcrN(0U), 0x00U);
@@ -160,15 +160,24 @@ void ESP32SJA1000::end() {
   CANController::end();
 }
 
+bool ESP32SJA1000::txReady() {
+  if((readRegister(regSr) & srTxBufferFree) == srTxBufferFree) {
+    txPending = false;
+    return true;
+  }
+  if(txPending && ((millis() - txStartedAt) > txWaitTimeoutMs)) {
+    // Nothing on the bus took the frame, and the controller retransmits until told otherwise.
+    // Giving it up is what frees the buffer; leaving it stalls every later frame behind a node
+    // that is switched off.
+    modifyRegister(regCmr, 0x1FU, cmrAbortTx);
+    txPending = false;
+    ++abandonedTxFrames;
+  }
+  return false;
+}
+
 uint8_t ESP32SJA1000::endPacket() {
   if(CANController::endPacket() == 0U) { return 0U; }
-
-  // wait for TX buffer to free
-  const uint32_t bufferWaitStart = millis();
-  while((readRegister(regSr) & srTxBufferFree) != srTxBufferFree) {
-    if((millis() - bufferWaitStart) > txWaitTimeoutMs) { return 0U; }
-    yield();
-  }
 
   uint8_t dataReg;
 
@@ -198,26 +207,17 @@ uint8_t ESP32SJA1000::endPacket() {
   } else {
     modifyRegister(regCmr, 0x1FU, 0x01U); // transmit request
   }
-
-  // wait for TX complete
-  const uint32_t completeWaitStart = millis();
-  while((readRegister(regSr) & srTxComplete) != srTxComplete) {
-    if(readRegister(regEcc) == 0xD9U) {
-      modifyRegister(regCmr, 0x1FU, cmrAbortTx); // error, abort
-      return 0U;
-    }
-    if(((readRegister(regSr) & srBusOff) != 0U) || ((millis() - completeWaitStart) > txWaitTimeoutMs)) {
-      modifyRegister(regCmr, 0x1FU, cmrAbortTx);
-      return 0U;
-    }
-    yield();
-  }
+  txPending = true;
+  txStartedAt = millis();
 
   return 1U;
 }
 
 uint8_t ESP32SJA1000::parsePacket() {
-  if((readRegister(regSr) & 0x01U) != 0x01U) { return 0U; }
+  if((readRegister(regSr) & 0x01U) != 0x01U) {
+    clearRxState();
+    return 0U;
+  }
 
   const uint8_t sff = readRegister(regSff);
   // clang-format off

@@ -79,7 +79,7 @@ void setup() {
   if(!initSuccess) {
     Logger::get()->print(F("Code: "));
     Logger::get()->println(initResult, BIN);
-    ResetHandler::restartMCU();
+    ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed);
   }
 
   Logger::get()->println(F("********\r\nLooping..."));

@@ -11,8 +11,9 @@ import hashlib
 import json
 import sys
 import time
+from collections import deque as Deque
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Dict, Optional, cast
 
 import pytest
 
@@ -173,18 +174,36 @@ def test_deviceconfig_topics() -> None:
 
 def test_firmware_size_and_md5(tmp_path: Path) -> None:
     blob = b"\x01\x02project_esp32_can\x00trailing"
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob))
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp32_can")
     assert firmware.size == len(blob)
     assert firmware.md5 == hashlib.md5(blob).hexdigest()
 
 
-def test_firmware_id_extracted(tmp_path: Path) -> None:
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"....project_esp8266_thermo\x00...."))
+def test_firmware_id_is_the_environment_the_image_was_built_for(tmp_path: Path) -> None:
+    blob = b"....project_esp8266_thermo\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
     assert firmware.firmware_id == "project_esp8266_thermo"
 
 
-def test_firmware_id_missing_raises(tmp_path: Path) -> None:
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"no id here"))
+def test_an_image_built_for_another_environment_is_refused(tmp_path: Path) -> None:
+    # The rad build sitting in the thermo's build directory: the device's own binId check would
+    # pass it, because the name it is sent under matches the node it is sent to.
+    blob = b"....project_esp8266_rad\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
+    with pytest.raises(ValueError):
+        _ = firmware.firmware_id
+
+
+def test_an_image_without_any_environment_name_is_refused(tmp_path: Path) -> None:
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"no id here"), "project_esp8266_thermo")
+    with pytest.raises(ValueError):
+        _ = firmware.firmware_id
+
+
+def test_a_name_that_only_appears_as_a_prefix_is_refused(tmp_path: Path) -> None:
+    # "project_esp8266_thermo2" contains the shorter name, but is a different build.
+    blob = b"....project_esp8266_thermo2\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
     with pytest.raises(ValueError):
         _ = firmware.firmware_id
 
@@ -732,9 +751,11 @@ class _RecordingMQTT:
         self.published.append((topic, payload))
 
 
-def _make_updater(tmp_path: Path, firmware: bytes) -> "ota.OTAUpdater":
+def _make_updater(tmp_path: Path, firmware: bytes,
+                  pio_project: str = "project_esp8266_thermo") -> "ota.OTAUpdater":
     device = ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x")
-    updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"), _write(tmp_path, "firmware.bin", firmware))
+    updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"),
+                             _write(tmp_path, "firmware.bin", firmware), pio_project)
     updater.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
     return updater
 
@@ -785,7 +806,7 @@ def test_single_short_piece(tmp_path: Path) -> None:
 
 def test_start_message_fields(tmp_path: Path) -> None:
     firmware = b"....project_esp32_can\x00...."
-    message = _make_updater(tmp_path, firmware)._build_start_message()
+    message = _make_updater(tmp_path, firmware, "project_esp32_can")._build_start_message()
     assert message["name"] == "espFirmware"
     assert message["fileSize"] == len(firmware)
     assert message["binId"] == "project_esp32_can"
@@ -949,6 +970,73 @@ def test_a_message_arriving_during_the_drain_is_not_lost(tmp_path: Path) -> None
     assert len(seen) == 2
 
 
+def test_a_late_acknowledgment_and_the_repeats_answer_do_not_abort(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)                                       # the repeat goes out
+    # The original acknowledgment was only slow. It arrives first and moves the transfer on, and
+    # the device's answer to the repeat follows it - the transfer the retry just rescued must not
+    # be aborted by its own echo.
+    updater._process_response({"type": 1})
+    assert updater.state == ota.TransferState.SENDING_FW
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.SENDING_FW
+
+
+def test_both_answers_drained_in_one_pass_do_not_abort(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)
+    # Same pair, delivered together: _process_state drains both before acting on either.
+    updater._pending_messages.append({"type": 1})
+    updater._pending_messages.append({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    updater._process_state()
+    assert updater.state != ota.TransferState.ERROR
+
+
+def test_only_one_answer_per_repeat_is_absorbed(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    _expire(updater)
+    updater._process_response({"type": 1})                 # late acknowledgment
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})   # the repeat's answer
+    # A second one has no repeat behind it any more, so the device really is out of step.
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.ERROR
+
+
+class _SelfRefillingQueue(Deque[Dict[str, Any]]):
+    """A pending-message queue that appends one more entry while it is being drained,
+    standing in for the MQTT client delivering a message mid-pass."""
+
+    def __init__(self, refill: Dict[str, Any]) -> None:
+        super().__init__()
+        self._refill: Optional[Dict[str, Any]] = refill
+        self.taken: list[Dict[str, Any]] = []
+
+    def popleft(self) -> Dict[str, Any]:
+        message = super().popleft()
+        self.taken.append(message)
+        if self._refill is not None:
+            self.append(self._refill)
+            self._refill = None
+        return message
+
+
+def test_command_sender_keeps_a_message_queued_during_the_drain(tmp_path: Path) -> None:
+    del tmp_path
+    sender = ota.CommandSender(
+        ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        ota.CommandEntry(name="reboot", cmd="reboot"),
+    )
+    sender.state = ota.TransferState.WAIT_START_ACK
+    queue = _SelfRefillingQueue({"type": 1, "late": True})
+    sender._pending_messages = queue
+    queue.append({"type": 1})
+    sender._process_state()
+    # Iterating and then clear()ing would have thrown the late arrival away unseen.
+    assert len(queue.taken) == 2
+    assert len(queue) == 0
+
+
 def test_no_timeout_within_window(tmp_path: Path) -> None:
     updater = _updater_in_state(tmp_path, ota.TransferState.WAIT_PIECE_ACK, remaining=50)
     updater.timer_start = time.time()
@@ -975,7 +1063,7 @@ def _run_simulated_transfer(transfer: "ota._BaseTransfer", *, ack: bool = True, 
 
 
 def test_full_transfer_reaches_done(tmp_path: Path) -> None:
-    firmware = b"project_e2e\x00" + bytes(range(256)) * 3  # valid firmware id + multi-piece body
+    firmware = b"project_esp8266_thermo\x00" + bytes(range(256)) * 3  # the env name the image carries + a multi-piece body
     updater = _make_updater(tmp_path, firmware)
     _run_simulated_transfer(updater)
 
@@ -987,7 +1075,7 @@ def test_full_transfer_reaches_done(tmp_path: Path) -> None:
 
 
 def test_device_nack_aborts_transfer(tmp_path: Path) -> None:
-    updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
+    updater = _make_updater(tmp_path, b"project_esp8266_thermo\x00" + b"A" * 250)
     _run_simulated_transfer(updater, ack=False)
     assert updater.state == ota.TransferState.ERROR
 

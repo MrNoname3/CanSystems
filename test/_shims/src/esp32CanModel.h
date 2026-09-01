@@ -21,8 +21,10 @@ public:
   static constexpr uint8_t regIr = 0x03U;     // Interrupt.
   static constexpr uint8_t regEcc = 0x0CU;    // Error code capture.
   static constexpr uint8_t regTxErr = 0x0FU;  // Transmit error counter.
+  static constexpr uint8_t regSff = 0x10U;    // Standard-frame receive window: header, then payload.
 
   static constexpr uint8_t modResetMode = 0x01U;
+  static constexpr uint8_t srReceiveBuffer = 0x01U;
   static constexpr uint8_t srTxBufferFree = 0x04U;
   static constexpr uint8_t srTxComplete = 0x08U;
   static constexpr uint8_t srBusOff = 0x80U;
@@ -42,9 +44,21 @@ public:
     pollDurationMs = 0U;
     statusReads = 0U;
     transmitRequests = 0U;
+    transmitAborts = 0U;
   }
 
   void setTxBehaviour(TxBehaviour behaviour) { txBehaviour = behaviour; }
+
+  /// @brief Places a standard 11-bit frame in the receive window and raises receive buffer
+  /// status, the way the controller does when a frame arrives.
+  /// @note The model holds one frame: the release command clears the status again.
+  void queueStandardFrame(uint16_t id, const uint8_t* data, uint8_t dlc) {
+    registers[regSff] = dlc & 0x0FU;
+    registers[regSff + 1U] = static_cast<uint8_t>(id >> 3U);
+    registers[regSff + 2U] = static_cast<uint8_t>(id << 5U);
+    for(uint8_t i = 0U; i < dlc; i++) { registers[regSff + 3U + i] = data[i]; }
+    registers[regSr] |= srReceiveBuffer;
+  }
 
   /// @brief Advances the fake clock by this many milliseconds on every status poll, standing in
   /// for the time a real poll costs. 0 leaves the clock alone.
@@ -54,6 +68,8 @@ public:
   [[nodiscard]] uint32_t getStatusReads() const { return statusReads; }
   /// @brief How many transmission requests the driver issued since the last reset.
   [[nodiscard]] uint32_t getTransmitRequests() const { return transmitRequests; }
+  /// @brief How many transmissions the driver aborted since the last reset.
+  [[nodiscard]] uint32_t getTransmitAborts() const { return transmitAborts; }
   [[nodiscard]] bool isInResetMode() const { return (registers[regMod] & modResetMode) != 0U; }
 
   [[nodiscard]] uint32_t* file() { return registers; }
@@ -71,26 +87,37 @@ public:
 private:
   void onCommand() {
     const uint8_t command = static_cast<uint8_t>(registers[regCmr]);
-    if((command & 0x01U) != 0U) { ++transmitRequests; }         // transmission request
+    if((command & 0x01U) != 0U) {                                // transmission request
+      ++transmitRequests;
+      // The controller holds the frame until it is on the bus or aborted.
+      registers[regSr] &= ~(static_cast<uint32_t>(srTxComplete) | srTxBufferFree);
+    }
     if((command & 0x02U) != 0U) {                                // abort transmission
+      ++transmitAborts;
       registers[regSr] |= static_cast<uint32_t>(srTxComplete) | srTxBufferFree;
+    }
+    if((command & 0x04U) != 0U) {                                // release receive buffer
+      registers[regSr] &= ~static_cast<uint32_t>(srReceiveBuffer);
     }
   }
 
   void onStatusRead() {
     ++statusReads;
     if(pollDurationMs != 0U) { setFakeMillis(millis() + pollDurationMs); }
+    // Nothing has been sent yet, so the transmit buffer is simply free.
+    if(transmitRequests == 0U) { return; }
     switch(txBehaviour) {
       case TxBehaviour::Completes: {
         registers[regSr] |= static_cast<uint32_t>(srTxComplete) | srTxBufferFree;
       } break;
       case TxBehaviour::NeverEnds: {
-        registers[regSr] &= ~static_cast<uint32_t>(srTxComplete);
+        // Nothing acknowledges, so the controller keeps retransmitting and the buffer stays busy.
+        registers[regSr] &= ~(static_cast<uint32_t>(srTxComplete) | srTxBufferFree);
       } break;
       case TxBehaviour::BusOff: {
         // The transmit error counter runs over and the controller drops into bus-off, which on
         // this part means it sets reset mode and stays there until software clears it.
-        registers[regSr] &= ~static_cast<uint32_t>(srTxComplete);
+        registers[regSr] &= ~(static_cast<uint32_t>(srTxComplete) | srTxBufferFree);
         registers[regSr] |= srBusOff;
         registers[regTxErr] = 255U;
         registers[regMod] |= modResetMode;
@@ -103,6 +130,7 @@ private:
   uint32_t pollDurationMs = 0U;
   uint32_t statusReads = 0U;
   uint32_t transmitRequests = 0U;
+  uint32_t transmitAborts = 0U;
 };
 
 extern Esp32CanModel esp32Can;

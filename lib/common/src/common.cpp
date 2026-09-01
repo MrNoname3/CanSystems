@@ -1,6 +1,7 @@
 #include "common.hpp"
 #if defined(__AVR_ATmega328P__)
 #include <avr/boot.h>                                               /// Reading fuses.
+#include "resetHandler.hpp"                                         /// Reset reason captured during startup.
 #elif defined(ESP8266) || defined(ESP32)
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>                                                   /// UTC time retrieval/formatting (NTP-backed clock).
@@ -81,7 +82,12 @@ void Build::printBuildInfo() {
   Logger::get()->print(F("FW: "));
   Logger::get()->println(getFwVersion());
   Logger::get()->print(F("GIT: "));
-  Logger::get()->println(getGitHash(), HEX);
+  // print(uint32_t, HEX) drops leading zeros, and a hash that does not paste back into git is
+  // worth nothing; the nibbles go out one by one instead.
+  for(int8_t shift = 28; shift >= 0; shift -= 4) {
+    Logger::get()->print(static_cast<uint8_t>((getGitHash() >> shift) & 0x0FU), HEX);
+  }
+  Logger::get()->println();
   Logger::get()->print(F("Dirty: "));
   Logger::get()->println(getGitDirty());
   Logger::get()->print(F("Fuses: "));
@@ -92,11 +98,13 @@ void Build::printBuildInfo() {
   Logger::get()->print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
   Logger::get()->print(Str::getSpacerStr());
   Logger::get()->println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
+  Logger::get()->print(F("Reset: "));
+  Logger::get()->println(ResetHandler::getResetReason(), HEX);
 #elif defined(ESP8266) || defined(ESP32)
   Logger::get()->printf_P(PSTR("Build info:\r\n"));
   Logger::get()->printf_P(PSTR("  CPP: %u\r\n"), getCppVersion());
   Logger::get()->printf_P(PSTR("  FW: %hu\r\n"), getFwVersion());
-  Logger::get()->printf_P(PSTR("  GIT: %x\r\n"), getGitHash());
+  Logger::get()->printf_P(PSTR("  GIT: %08x\r\n"), getGitHash());
   Logger::get()->printf_P(PSTR("  Dirty: %hu\r\n"), getGitDirty());
   Logger::get()->printf_P(PSTR("Reset reason: %hu\r\n"), ResetHandler::getResetReason());
 #endif

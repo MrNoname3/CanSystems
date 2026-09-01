@@ -23,7 +23,7 @@ private:
   static constexpr uint32_t measureTime = Time::minToMs(1U);   // Measurement interval in milliseconds for calculating CPM.
 
   // Message frame; sievert and radian are 0 when tube type is unknown.
-  // Values use fixed-point integer formatting to avoid float printf on ESP8266.
+  // Both are printed from one scaled integer, so their shared digits can never disagree.
   static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%u,"sievert":%u.%04u,"radian":%u.%02u})";
 
 public:

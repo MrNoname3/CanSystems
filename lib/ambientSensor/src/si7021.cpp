@@ -31,8 +31,11 @@ bool SI7021::getHumidityPercent(uint16_t& humidity) {
   uint8_t humBytes[2];
   const uint8_t command = static_cast<uint8_t>(SI7021Commands::RH_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(humBytes, sizeof(humBytes))) { return false; }
-  int32_t humRaw = static_cast<int32_t>(humBytes[0]) << 8U | humBytes[1];
-  humidity = ((125 * humRaw) >> 16U) - 6;
+  const int32_t humRaw = static_cast<int32_t>(humBytes[0]) << 8U | humBytes[1];
+  int32_t humPercent = ((125 * humRaw) >> 16U) - 6;
+  if(humPercent < minHumidityPercent) { humPercent = minHumidityPercent; }
+  if(humPercent > maxHumidityPercent) { humPercent = maxHumidityPercent; }
+  humidity = static_cast<uint16_t>(humPercent);
   return true;
 }
 
@@ -47,13 +50,13 @@ bool SI7021::writeReg(const uint8_t* reg, uint8_t regLen) { // NOLINT(readabilit
 
 bool SI7021::readReg(uint8_t* reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter, readability-convert-member-functions-to-static)
   if(reg == nullptr || regLen == 0U) { return false; }
-  const bool result = (wire.requestFrom(address, regLen) > 0U);
-  if(result) {
-    for(uint8_t i = 0U; i < regLen; ++i) {
-      reg[i] = wire.read();
-    }
+  // Every byte has to arrive: read() answers -1 once the buffer runs dry, which would reach the
+  // conversion as 0xFF and come out as a plausible-looking reading instead of an error.
+  if(wire.requestFrom(address, regLen) != regLen) { return false; }
+  for(uint8_t i = 0U; i < regLen; ++i) {
+    reg[i] = static_cast<uint8_t>(wire.read());
   }
-  return result;
+  return true;
 }
 
 bool SI7021::setPrecision(Precision precision) {

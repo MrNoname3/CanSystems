@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <string.h>                                                 /// strnlen for the subtopic split.
 #include <pgmspace.h>                                               /// PROGMEM storage for the format strings.
 
 /// @brief MQTT topic format strings and derived buffer sizes, shared between Connectivity and HADiscovery.
@@ -13,7 +14,7 @@ private:
   static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
   static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic; %s receives the topic base ending with '/'.
   static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT retained device info topic; %s receives the topic base ending with '/'.
-  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%x","dirty":%hu,"rr":%hu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason.
+  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason.
   static constexpr const char PROGMEM mqttDiagPayload[] = R"({"cause":"%s","at":"%s","downSec":%u,"n":%u})"; // Disconnect diagnostics JSON (published to the "diag" subtopic via publishRetained); args: cause string, drop ISO UTC time, offline seconds, reconnect counter.
   // clang-format on
   // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by the base length.
@@ -22,6 +23,10 @@ private:
   static constexpr uint8_t subtopicOffset = sizeof(mqttInTopic) - 4U + macHexLen;                         // sizeof - null - '#' - "%s"(2) + macHexLen.
   static constexpr uint8_t availTopicBufSize = sizeof(mqttAvailTopic) - 2U + senderTopicBufSize - 1U;     // "iot/dtos/<MAC>/availability" + null.
   static constexpr uint8_t infoTopicBufSize = sizeof(mqttInfoTopic) - 2U + senderTopicBufSize - 1U;       // "iot/dtos/<MAC>/info" + null.
+  static constexpr uint8_t subtopicSize = 16U;                                                             // Maximum size of an MQTT subtopic, including the null.
+  static constexpr uint8_t subSubtopicLen = 17U;                                                           // Longest sub-subtopic a handler appends: '/' + the thermometer's 16-hex ROM code.
+  // The longest topic a handler can publish to: sender base + a full-length subtopic + one under it.
+  static constexpr uint8_t publishTopicBufSize = senderTopicBufSize + (subtopicSize - 1U) + subSubtopicLen;
   static constexpr uint8_t infoPayloadBufSize = 52U;                                                      // {"fw":65535,"git":"ffffffff","dirty":255,"rr":255} = 50 chars + null.
   static constexpr uint8_t diagPayloadBufSize = 105U;                                                     // 36 fixed chars + cause (28: "MQTT_CONNECT_BAD_CREDENTIALS") + ISO time (20) + 2x uint32 (10 each) + null.
   // Disconnect diagnostics subtopic (RAM; publishRetained's strlcat requires a non-PROGMEM pointer).
@@ -45,6 +50,9 @@ public:
   static constexpr uint8_t getSenderTopicBufSize() { return senderTopicBufSize; }
   static constexpr uint8_t getReceiverTopicBufSize() { return receiverTopicBufSize; }
   static constexpr uint8_t getSubtopicOffset() { return subtopicOffset; }
+  static constexpr uint8_t getSubtopicSize() { return subtopicSize; }
+  static constexpr uint8_t getSubSubtopicLen() { return subSubtopicLen; }
+  static constexpr uint8_t getPublishTopicBufSize() { return publishTopicBufSize; }
   static constexpr uint8_t getAvailTopicBufSize() { return availTopicBufSize; }
   static constexpr uint8_t getInfoTopicBufSize() { return infoTopicBufSize; }
   static constexpr uint8_t getInfoPayloadBufSize() { return infoPayloadBufSize; }
@@ -52,6 +60,19 @@ public:
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
   static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }
   static constexpr const char* getAvailOfflinePayload() { return availOfflinePayload; }
+
+  /// @brief Splits the subtopic off a received topic.
+  /// @details The subscription is `iot/stod/<mac>/#`, and MQTT's `#` matches the parent level as
+  /// well, so `iot/stod/<mac>` - one character shorter than the offset - is delivered here too.
+  /// Stepping over it blindly would read past the topic's terminator and into the payload that
+  /// follows it in the client's buffer.
+  /// @param topic Topic as received.
+  /// @return Pointer to the subtopic within `topic`, or `nullptr` when the topic is too short.
+  [[nodiscard]] static const char* getSubtopicOf(const char* topic) {
+    if(topic == nullptr) { return nullptr; }
+    if(strnlen(topic, subtopicOffset) < subtopicOffset) { return nullptr; }
+    return topic + subtopicOffset;
+  }
 
   MqttTopics() = delete;                                              // Delete constructor.
   ~MqttTopics() = delete;                                             // Delete destructor.

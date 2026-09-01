@@ -25,17 +25,21 @@ uint8_t CANController::begin(uint32_t /*baudRate*/) {
   txDlc = 0U;
   txLength = 0U;
 
+  clearRxState();
+
+  return 1U;
+}
+
+void CANController::end() {}
+
+void CANController::clearRxState() {
   rxId = noId;
   rxExtended = false;
   rxRtr = false;
   rxDlc = 0U;
   rxLength = 0U;
   rxIndex = 0U;
-
-  return 1U;
 }
-
-void CANController::end() {}
 
 uint8_t CANController::beginPacket(uint16_t id, uint8_t dlc, bool rtr) {
   if(id > 0x7FFU) { return 0U; }

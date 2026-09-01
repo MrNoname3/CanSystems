@@ -32,7 +32,7 @@ public:
 private:
   bool initLocal() override { return true; }
   bool runLocal() override { return true; }
-  void processMessageArrived(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override {
     (void)payloadJson;
     ++customMessages;
   }
@@ -156,13 +156,13 @@ bool test_fw_version_frame_publishes_info() {
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());
-  // fw = 0x0102 = 258, git = 0x0a0b0c0d, dirty = 1.
-  const uint8_t version[8] = { 0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0U };
+  // fw = 0x0102 = 258, git = 0x0a0b0c0d, dirty = 1, reset reason = 0x18 (WDRF + intentional).
+  const uint8_t version[8] = { 0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0x18U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::FW_VERSION), version);
   IS_TRUE(std::string(gateway.getCanSwVersion()) == "258 (0a0b0c0d)");
   bool infoFound = false;
   for(const auto& entry : MqttBase::retainedMessages) {
-    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"a0b0c0d","dirty":1,"rr":255})") {
+    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"0a0b0c0d","dirty":1,"rr":24})") {
       infoFound = true;
     }
   }
@@ -219,41 +219,8 @@ bool test_unknown_frame_goes_to_derived_handler() {
 
 // ---- incoming MQTT messages ----
 
-bool test_generic_command_message_sends_can_frame() {
-  IT("a {Command, Data} MQTT message is forwarded as a raw CAN frame");
-  resetEnv();
-  CanHandler can;
-  Connectivity conn;
-  TestGateway gateway(can, 26U, conn, "alert1");
-  MqttBase& mqttSide = gateway;
-  JsonDocument doc;
-  IS_TRUE(deserializeJson(doc, R"({"Command":5,"Data":"1122334455667788"})") == DeserializationError::Ok);
-  mqttSide.messageArrivedCallback(doc);
-  const CanHandler::CanFrame* frame = lastFrame(5U);
-  IS_TRUE(frame != nullptr);
-  IS_EQUAL(frame->data[0], 0x88U);                    // little-endian memcpy of the hex value
-  IS_EQUAL(frame->data[7], 0x11U);
-  IS_EQUAL(TestGateway::customMessages, 0);
-  END_IT
-}
-
-bool test_invalid_command_data_is_dropped() {
-  IT("a {Command, Data} message with trailing garbage in Data sends nothing");
-  resetEnv();
-  CanHandler can;
-  Connectivity conn;
-  TestGateway gateway(can, 26U, conn, "alert1");
-  MqttBase& mqttSide = gateway;
-  JsonDocument doc;
-  IS_TRUE(deserializeJson(doc, R"({"Command":5,"Data":"11ZZ"})") == DeserializationError::Ok);
-  mqttSide.messageArrivedCallback(doc);
-  IS_EQUAL(CanHandler::sentFrames.size(), 0U);
-  IS_EQUAL(TestGateway::customMessages, 0);
-  END_IT
-}
-
 bool test_other_message_goes_to_derived_handler() {
-  IT("a non-command MQTT message is forwarded to processMessageArrived()");
+  IT("an MQTT message reaches the driver's own handler");
   resetEnv();
   CanHandler can;
   Connectivity conn;
@@ -426,7 +393,7 @@ bool test_second_ota_start_is_rejected_while_one_runs() {
 }
 
 bool test_ota_start_rejects_bad_input() {
-  IT("startOta() rejects a null name, a relative path, and a missing file");
+  IT("startOta() rejects a null name and a relative path without starting anything");
   resetEnv();
   CanHandler can;
   Connectivity conn;
@@ -435,7 +402,24 @@ bool test_ota_start_rejects_bad_input() {
   IS_TRUE(task.init());
   IS_FALSE(gateway.startOta(nullptr));
   IS_FALSE(gateway.startOta("relative.bin"));
+  IS_FALSE(gateway.isOtaInProgress());                     // nothing was opened, nothing to clean up
+  END_IT
+}
+
+bool test_ota_start_reports_a_missing_file_to_the_server() {
+  IT("a firmware file that cannot be opened is reported over MQTT, as an empty one is");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
   IS_FALSE(gateway.startOta("/missing.bin"));
+  MqttBase::subtopicMessages.clear();
+  (void)runOnce(gateway);                                  // the INVALID pass publishes and cleans up
+  IS_EQUAL(MqttBase::subtopicMessages.size(), 1U);
+  IS_TRUE(MqttBase::subtopicMessages[0].first == "alert1/ota");
+  IS_TRUE(MqttBase::subtopicMessages[0].second == R"({"OTA":"[ERR]"})");
   IS_FALSE(gateway.isOtaInProgress());
   END_IT
 }
@@ -458,6 +442,45 @@ bool test_ota_rejects_empty_file() {
 // as canHandlerAtmega328P does) into a real OTA storage object. It validates only if the gateway's
 // CRC matches the device's recomputed CRC, the byte offsets line up, and the partial last piece
 // agrees -- i.e. if the two hand-maintained sides of the wire format still agree.
+bool test_a_known_checksum_skips_the_read_pass() {
+  IT("an image whose checksum a previous target computed is sent without reading the file again");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway first(can, 26U, conn, "alert1");
+  Task& firstTask = first;
+  IS_TRUE(firstTask.init());
+  const std::string content(200U, 'Z');            // 200 bytes: four 64-byte checksum passes
+  LittleFS.setFile(kFwFile, content);
+
+  OtaImageInfo image{};
+  IS_TRUE(first.startOta(kFwFile, image));
+  IS_FALSE(image.valid);                           // nothing known about it yet
+  (void)runOnce(first);
+  IS_EQUAL(countFrames(static_cast<uint16_t>(CanCmd::OTA_START)), 0U);  // still checksumming
+  IS_TRUE(pumpUntilFrame(first, static_cast<uint16_t>(CanCmd::OTA_START), 1U));
+  const CanHandler::CanFrame* startFrame = lastFrame(static_cast<uint16_t>(CanCmd::OTA_START));
+  IS_TRUE(startFrame != nullptr);
+  const OtaCanFrame::StartFrame parsed = OtaCanFrame::unpackStart(startFrame->data);
+  IS_TRUE(image.valid);                            // the pass left its result behind
+  IS_EQUAL(image.size, 200U);
+  IS_EQUAL(image.crc, parsed.fwCrc);
+
+  // The next target of the same upload gets the checksum handed to it.
+  CanHandler::sentFrames.clear();
+  TestGateway second(can, 27U, conn, "alert2");
+  Task& secondTask = second;
+  IS_TRUE(secondTask.init());
+  IS_TRUE(second.startOta(kFwFile, image));
+  (void)runOnce(second);                           // one pass is enough now
+  const CanHandler::CanFrame* secondStart = lastFrame(static_cast<uint16_t>(CanCmd::OTA_START));
+  IS_TRUE(secondStart != nullptr);
+  const OtaCanFrame::StartFrame secondParsed = OtaCanFrame::unpackStart(secondStart->data);
+  IS_EQUAL(secondParsed.fwCrc, parsed.fwCrc);
+  IS_EQUAL(secondParsed.fwSize, 200U);
+  END_IT
+}
+
 bool test_ota_contract_gateway_to_device_storage() {
   IT("frames the gateway emits reconstruct on a real OTA storage object and validate");
   resetEnv();
@@ -516,8 +539,6 @@ int main() {
   test_restart_frame_republishes_availability();
   test_button_event_frame_publishes_message();
   test_unknown_frame_goes_to_derived_handler();
-  test_generic_command_message_sends_can_frame();
-  test_invalid_command_data_is_dropped();
   test_other_message_goes_to_derived_handler();
   test_ota_happy_path();
   test_ota_nack_aborts_with_error_status();
@@ -525,7 +546,9 @@ int main() {
   test_stray_ota_ack_while_idle_is_ignored();
   test_second_ota_start_is_rejected_while_one_runs();
   test_ota_start_rejects_bad_input();
+  test_ota_start_reports_a_missing_file_to_the_server();
   test_ota_rejects_empty_file();
+  test_a_known_checksum_skips_the_read_pass();
   test_ota_contract_gateway_to_device_storage();
   FINISH
 }

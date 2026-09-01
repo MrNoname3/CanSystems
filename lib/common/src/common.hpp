@@ -37,8 +37,8 @@ public:
   /// @brief Converts hours to minutes.
   /// @param hour The number of hours to convert.
   /// @return The equivalent time in minutes.
-  static constexpr uint16_t hrToMin(uint16_t hour) {
-    return hour * 60U;
+  static constexpr uint32_t hrToMin(uint16_t hour) {
+    return hour * 60UL;
   }
 
   /// @brief Converts milliseconds to microseconds.
@@ -311,8 +311,9 @@ private:
 /// @tparam StorageType An integral type used to store the bitmask. Must be large enough to hold all Enum values.
 template<typename Enum, typename StorageType>
 class ErrorState final {
-  // Ensure that Enum is an enumeration type and StorageType is large enough to hold all Enum values.
-  static_assert(sizeof(StorageType) * 8U >= sizeof(Enum) * 8U, "StorageType must be large enough to hold all Enum values!");
+  // The storage has to be the enum's own underlying type; >= would let a uint8_t hold a uint16_t
+  // enum's values. std::underlying_type_t would say it directly, but AVR ships no <type_traits>.
+  static_assert(sizeof(StorageType) == sizeof(Enum), "StorageType must match the enum's underlying type!");
 
 public:
   /// @brief Constructs an `ErrorState` object with all error states cleared.
@@ -445,8 +446,9 @@ private:
 /// @tparam N Number of elements in the array.
 /// @param arr Reference to the fixed-size array.
 /// @return Number of elements as a compile-time constant.
-template<typename T, uint8_t N>
+template<typename T, size_t N>
 constexpr uint8_t arraySize(T (&arr)[N]) {
+  static_assert(N <= UINT8_MAX, "arraySize() returns a uint8_t; a larger array needs a wider count!");
   (void)arr;
-  return N;
+  return static_cast<uint8_t>(N);
 }

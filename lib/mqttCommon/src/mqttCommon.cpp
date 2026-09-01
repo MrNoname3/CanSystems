@@ -21,14 +21,14 @@ bool MqttCommon::run() {
   if(isFileCheckDone) {
     isFileCheckDone = false;
     const uint32_t errCode = dataTransfer.getErrorCode();
-    sendResponse(isFileValid, errCode);
+    sendResult(isFileValid, errCode);
     if(!isFileValid) {
       Logger::get()->printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
     } else {
       if(isRestartRequired) {
         reboot();
       } else {
-        OtaRegistry::triggerForFile(dataTransfer.getFileName());
+        OtaRegistry::queueForFile(dataTransfer.getFileName());
       }
     }
   }
@@ -41,7 +41,7 @@ void MqttCommon::fileValidCb(bool isValid) {
   isFileValid = isValid;
 }
 
-bool MqttCommon::sendResponse(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
+bool MqttCommon::sendResult(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
   const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U, errCode);
   if(!sendingResult) {
     Logger::get()->printf_P(PSTR("[COMMON] Failed to send response '%hu'\r\n"), static_cast<uint8_t>(result));
@@ -74,9 +74,11 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
   if(fileNamePresented && fileSizePresented && fileMd5Presented) {
     if(binIdPresented) {
       const char* binId = binIdJsonVar.as<const char*>();
-      if(strncmp_P(binId, Build::getPioEnv(), Build::getPioEnvLength()) != 0) {
+      // The terminator is part of the comparison: without it every id that merely starts with this
+      // environment's name would pass, and getPioEnv() is a plain RAM string, not a PROGMEM one.
+      if(strncmp(binId, Build::getPioEnv(), Build::getPioEnvLength() + 1U) != 0) {
         Logger::get()->printf_P(PSTR("[COMMON] Wrong FW file ID: '%s' expected: '%s'\r\n"), binId, Build::getPioEnv());
-        sendResponse(false);
+        sendResult(false);
         return;
       }
       isRestartRequired = true;
@@ -88,7 +90,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const char* fileName = fileNameJsonVar.as<const char*>();
     const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileName);
     const uint32_t beginErrCode = dataTransfer.getErrorCode();
-    sendResponse(transferBeginResult, beginErrCode);
+    sendResult(transferBeginResult, beginErrCode);
     if(!transferBeginResult) {
       Logger::get()->printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileName, beginErrCode);
     }
@@ -97,7 +99,7 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
     const char* filePieceB64 = fileDataJsonVar.as<const char*>();
     const bool storingResult = dataTransfer.storeBase64(filePieceNumber, filePieceB64);
     const uint32_t storingErrCode = dataTransfer.getErrorCode();
-    sendResponse(storingResult, storingErrCode);
+    sendResult(storingResult, storingErrCode);
     if(!storingResult) {
       Logger::get()->printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
     }
@@ -125,11 +127,11 @@ void MqttCommon::dispatchCommand(const char* cmd) {
     }
   }
   Logger::get()->printf_P(PSTR("[COMMON] Unknown cmd: '%s'\r\n"), cmd);
-  sendResponse(false);
+  sendResult(false);
 }
 
 void MqttCommon::handleReboot() {
   Logger::get()->printf_P(PSTR("[COMMON] Reboot command received.\r\n"));
-  sendResponse(true);
+  sendResult(true);
   reboot();
 }

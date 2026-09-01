@@ -50,8 +50,11 @@ public:
   }
 
   size_t read(uint8_t* dst, size_t length) {         // Arduino raw read (dataTransfer)
+    if(sReadShouldFail) { return 0U; }               // injected read failure, as fs::File reports one
     return readBytes(reinterpret_cast<char*>(dst), length);
   }
+
+  static inline bool sReadShouldFail = false;        // test hook: make read() report a short read
 
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static) mutates pos_; mirrors fs::File
   bool seek(size_t position, SeekMode mode = SeekSet) {
@@ -74,9 +77,14 @@ public:
 
   static inline bool sWriteShouldFail = false;       // test hook: make write() report a short write
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) flushes write buffer to the store
+  // Both cores release the handle here (fs::File::close() nulls its _p), so the handle reads
+  // false afterwards and a second close() does nothing - which is what `if(receivedFile)` means
+  // at DataTransfer's call sites.
   void close() {
+    if(!valid_) { return; }
     if(write_ && (store_ != nullptr)) { (*store_)[path_] = buf_; }
+    store_ = nullptr;
+    valid_ = false;
   }
 
 private:
@@ -144,6 +152,7 @@ public:
   void setCapacity(size_t capacity) { capacity_ = capacity; }
   void setFailWriteOpen(bool fail) { failWriteOpen_ = fail; }
   void setFailWrite(bool fail) { File::sWriteShouldFail = fail; }      // NOLINT(readability-convert-member-functions-to-static)
+  void setFailRead(bool fail) { File::sReadShouldFail = fail; }        // NOLINT(readability-convert-member-functions-to-static)
   void setFailRename(bool fail) { failRename_ = fail; }
   void reset() {
     files_.clear();
@@ -151,6 +160,7 @@ public:
     failWriteOpen_ = false;
     failRename_ = false;
     File::sWriteShouldFail = false;
+    File::sReadShouldFail = false;
     capacity_ = defaultCapacity;
   }
 

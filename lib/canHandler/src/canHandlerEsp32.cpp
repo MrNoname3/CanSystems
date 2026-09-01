@@ -99,7 +99,7 @@ bool CanHandlerEsp32::run() {
     Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
     CAN.recoverFromBusOff();
   }
-  reportDroppedRxFrames();
+  reportDroppedFrames();
   { // Handle received CAN frames.
     // The mutex is taken around the whole pass rather than per frame: it guards the device list,
     // which only changes at registration time. Taking it first also means a timeout leaves the
@@ -115,8 +115,13 @@ bool CanHandlerEsp32::run() {
   }
   { // Handle CAN frame sending.
     CanFrame frameOut;
+    // The controller holds one frame at a time, so a busy transmit buffer ends the pass with the
+    // queue intact rather than waiting for the bus inside the loop task.
     const CanFramePump::Result txResult = CanFramePump::drain(
-        [this, &frameOut]() -> bool { return xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE; },
+        [this, &frameOut]() -> bool {
+          if(!CAN.txReady()) { return false; }
+          return xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE;
+        },
         [this, &frameOut]() -> bool { return transmitFrame(frameOut); },
         maxFramesPerRun);
     if(txResult.failed) { return false; }
@@ -124,11 +129,18 @@ bool CanHandlerEsp32::run() {
   return true;
 }
 
-void CanHandlerEsp32::reportDroppedRxFrames() {
+void CanHandlerEsp32::reportDroppedFrames() {
   const uint32_t incomplete = rxIncompleteReporter.takeGrowth(rxIncompleteFrames);
   const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
-  if((incomplete == 0U) && (queueFull == 0U)) { return; }
-  Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
+  if((incomplete != 0U) || (queueFull != 0U)) {
+    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
+  }
+  // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
+  // never took is reported.
+  const uint32_t abandoned = txAbandonedReporter.takeGrowth(CAN.getAbandonedTxFrames());
+  if(abandoned != 0U) {
+    Logger::get()->printf_P(PSTR("[CAN] TX abandoned: %u frames the bus did not take\r\n"), abandoned);
+  }
 }
 
 void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT(readability-convert-member-functions-to-static)

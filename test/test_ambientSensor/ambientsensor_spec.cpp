@@ -272,6 +272,60 @@ bool test_sensor_error_sends_error_command() {
   END_IT
 }
 
+bool test_a_dry_reading_is_clamped_not_wrapped() {
+  IT("a raw humidity below the formula's zero point reports 0%, not a wrapped value");
+  preloadInit();
+  // raw=0 gives ((125 * 0) >> 16) - 6 = -6, and the caller's type is uint16_t: unclamped this
+  // reaches the CAN bus and Home Assistant as 65530.
+  preloadMeasurement(0x68U, 0xADU, 0x00U, 0x00U);   // 25.00 °C, raw humidity 0
+  setAnalogReadValue(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  s.init();
+  runCycle(s, kMeasPeriod + 1U);
+  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR));
+  const uint16_t humidity = static_cast<uint16_t>(ch.lastData[2]) | (static_cast<uint16_t>(ch.lastData[3]) << 8U);
+  IS_EQUAL(humidity, 0U);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_a_saturated_reading_is_clamped_to_100() {
+  IT("a raw humidity above the formula's full scale reports 100%");
+  preloadInit();
+  preloadMeasurement(0x68U, 0xADU, 0xFFU, 0xFFU);   // raw humidity 0xFFFF -> 119% unclamped
+  setAnalogReadValue(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  s.init();
+  runCycle(s, kMeasPeriod + 1U);
+  const uint16_t humidity = static_cast<uint16_t>(ch.lastData[2]) | (static_cast<uint16_t>(ch.lastData[3]) << 8U);
+  IS_EQUAL(humidity, 100U);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_a_short_i2c_read_is_an_error_not_a_reading() {
+  IT("a truncated I2C answer reports SENSOR_ERROR instead of a plausible reading");
+  preloadInit();
+  // Temperature answers in full, humidity is one byte short of the two it needs. The missing byte
+  // used to be filled in as 0xFF and came out as a reading nobody could tell from a real one.
+  Wire.addReadByte(0x68U);
+  Wire.addReadByte(0xADU);
+  Wire.addReadByte(0x72U);
+  setAnalogReadValue(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  s.init();
+  runCycle(s, kMeasPeriod + 1U);
+  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(AlertCmd::HUM_TEMP_SENSOR_ERROR));
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_run_always_returns_true() {
   IT("run() always returns true regardless of state");
   preloadInit();
@@ -297,6 +351,9 @@ int main() {
   test_hum_change_above_tolerance_triggers_send();
   test_forced_send_after_30_minutes();
   test_sensor_error_sends_error_command();
+  test_a_dry_reading_is_clamped_not_wrapped();
+  test_a_saturated_reading_is_clamped_to_100();
+  test_a_short_i2c_read_is_an_error_not_a_reading();
   test_run_always_returns_true();
   FINISH
 }

@@ -132,6 +132,22 @@ bool test_zero_length_frame_is_still_a_frame() {
   END_IT
 }
 
+bool test_an_empty_controller_leaves_no_frame_behind() {
+  IT("parsePacket() clears the previous frame once both buffers are empty");
+  IS_TRUE(startController());
+  const uint8_t payload[4] = { 0xDEU, 0xADU, 0xBEU, 0xEFU };
+  mcp2515.deliverExtendedFrame(0U, 0x12345678U, payload, 4U);
+  IS_EQUAL(CAN.parsePacket(), 4U);
+  uint8_t received[4] = { 0U };
+  IS_EQUAL(CAN.readBytes(received, sizeof(received)), sizeof(received));
+
+  IS_EQUAL(CAN.parsePacket(), 0U);
+  IS_EQUAL(CAN.packetId(), kNoId);
+  IS_EQUAL(CAN.packetDlc(), 0U);                           // not the previous frame's length
+  IS_EQUAL(CAN.available(), 0);                            // and not a negative count either
+  END_IT
+}
+
 bool test_on_receive_drains_every_pending_frame() {
   IT("the driver's own interrupt path drains both buffers in one go");
   IS_TRUE(startController());
@@ -276,6 +292,7 @@ int main() {
   test_parse_packet_reads_an_extended_frame();
   test_parse_packet_drains_one_buffer_per_call();
   test_zero_length_frame_is_still_a_frame();
+  test_an_empty_controller_leaves_no_frame_behind();
   test_on_receive_drains_every_pending_frame();
   test_queued_frames_keep_their_sending_order();
   test_transmit_gives_up_when_the_bus_never_takes_a_frame();

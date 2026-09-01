@@ -213,10 +213,7 @@ uint8_t MCP2515::parsePacket() {
   } else if((intf & flagRxnIf(1U)) != 0U) {
     n = 1U;
   } else {
-    rxId = noId;
-    rxExtended = false;
-    rxRtr = false;
-    rxLength = 0U;
+    clearRxState();
     return 0U;
   }
 

@@ -1,7 +1,7 @@
 #include "canAlertDriver.hpp"
 
-CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
-  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
+  CanMqttGateway::CanMqttGateway(canHandler, clientCanId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
   tempOffset(tempOffset) {}
 
 bool CanAlertDriver::publishDiscovery() {
@@ -42,7 +42,7 @@ bool CanAlertDriver::publishDiscovery() {
   return result;
 }
 
-void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

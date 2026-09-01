@@ -17,6 +17,11 @@ private:
   // serving anything else. 0 keeps whatever is currently set.
   static constexpr uint32_t minPulseLength = 50U;
   static constexpr uint32_t maxPulseLength = 1000U;
+  // The other half of that blocking time is the bit count, and it also bounds the shift
+  // RCSwitch::send() performs per bit: `code & (1ULL << i)` is undefined once i reaches 64.
+  // 0 is allowed and means "no transmission", which is how a protocol- or pulse-only command
+  // is expressed.
+  static constexpr uint32_t maxBitLength = 64U;
 
   // Format string for the MQTT message containing RF data.
   static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";

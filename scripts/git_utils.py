@@ -14,10 +14,16 @@ import subprocess
 GIT_UNAVAILABLE = (subprocess.CalledProcessError, FileNotFoundError)
 
 
+# The firmware stores the hash as a uint32_t and prints it with %08x, so it has to be exactly this
+# many hex digits: --short would give a width that grows with the repository and drops leading zeros.
+GIT_HASH_HEX_DIGITS = 8
+
+
 def get_git_hash():
-    # Retrieve the short commit hash
+    # Retrieve the first GIT_HASH_HEX_DIGITS digits of the commit hash
     try:
-        git_hash = int(subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode('utf-8'), 16)
+        full_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
+        git_hash = int(full_hash[:GIT_HASH_HEX_DIGITS], 16)
     except GIT_UNAVAILABLE:
         git_hash = 0
     return git_hash

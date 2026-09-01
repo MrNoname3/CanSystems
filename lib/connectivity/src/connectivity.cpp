@@ -27,6 +27,11 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 }
 
 bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
+  // cppcheck-suppress knownConditionTrueFalse ; only ESP32 has a semaphore that can fail to exist
+  if(!mqttMutex.valid()) {
+    Logger::get()->printf_P(PSTR("[MQTT] Mutex is not initialized properly!\r\n"));
+    return false;
+  }
   { // Initialise the file system.
     delay(10U);
     uint32_t totalBytes = 0U;
@@ -141,7 +146,7 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
-    const char* subtopic = topic + MqttTopics::getSubtopicOffset();
+    const char* subtopic = MqttTopics::getSubtopicOf(topic);
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
     MqttBase* messageHandler = handlerList.findIf(
         [subtopic](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), subtopic) == 0; });
@@ -311,8 +316,7 @@ void Connectivity::shutdownMqtt() {
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
-  static constexpr uint8_t topicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
-  char actualTopic[topicBufSize] = { '\0' };
+  char actualTopic[MqttTopics::getPublishTopicBufSize()] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
   const size_t actualTopicLen = strlcat(actualTopic, subTopic, sizeof(actualTopic));
   if(actualTopicLen >= sizeof(actualTopic)) { return false; }
@@ -354,8 +358,7 @@ bool Connectivity::publishRaw(const char* topic, const char* payload, bool retai
 bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
   if(subSubTopic == nullptr || payload == nullptr) { return false; }
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
-  static constexpr uint8_t retainedTopicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
-  char actualTopic[retainedTopicBufSize] = { '\0' };
+  char actualTopic[MqttTopics::getPublishTopicBufSize()] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
   const size_t len = strlcat(actualTopic, subSubTopic, sizeof(actualTopic));
   if(len >= sizeof(actualTopic)) { return false; }

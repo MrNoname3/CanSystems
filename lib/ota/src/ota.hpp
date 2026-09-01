@@ -3,6 +3,7 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "SPIFlash.h"                                               /// SPI FLASH module driver.
 #include "crc16.hpp"                                                /// CRC16 calculator class.
+#include "common.hpp"                                               /// Time helpers for the stall timeout.
 
 #ifndef FW_PIECE_SIZE
 #define FW_PIECE_SIZE 4U                                            // Default size of firmware pieces for chunked updates.
@@ -15,6 +16,9 @@ class OTA final {
 private:
   // Size of a single flash block in bytes.
   static constexpr uint16_t flashBlockTobytes = static_cast<uint16_t>(32U * 1024U);
+  // Bounds START and STORE, the two states that wait on somebody else: above the ~100 s a full
+  // W25Q64 erase can take, below the gateway's own 5 minute timeout.
+  static constexpr uint32_t stallTimeoutTime = Time::minToMs(3U);
 
 #ifndef PROGRAM_MEMORY_SIZE
   static_assert(false, "PROGRAM_MEMORY_SIZE macro is not defined!");
@@ -83,5 +87,6 @@ private:
   // Calculate the begin address of the FLASH. (FLASH is used in 32KB chunks by this class.)
   // The 0. chunk must contain the OTA FW for this device and the other chunks can contain anything else.
   uint32_t flashBlockBeginAddress;                                  // Start address of the Flash block for firmware.
+  uint32_t stallTimer;                                              // Last sign of progress, for the stall timeout.
   OtaState otaState;                                                // Current state of the OTA process.
 };
