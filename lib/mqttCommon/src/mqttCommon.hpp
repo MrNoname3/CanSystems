@@ -46,11 +46,13 @@ private:
   /// @param isValid `true` if the file is valid, `false` otherwise.
   static void fileValidCb(bool isValid);
 
-  /// @brief Sends a response message over MQTT.
+  /// @brief Turns an operation's outcome into an ACK/NACK response over MQTT.
+  /// @details Named apart from MqttBase::sendResponse() on purpose: an overload here would hide
+  /// the base's virtual one, which only the host compiler is new enough to warn about.
   /// @param result Outcome of the previous operation (`true` for success, `false` for failure).
   /// @param errCode Optional error code included in the response on failure (0 = no error).
   /// @return `true` if the response is sent successfully, `false` otherwise.
-  bool sendResponse(bool result, uint32_t errCode = 0U);
+  bool sendResult(bool result, uint32_t errCode = 0U);
 
   /// @brief Dispatches an incoming command string to the appropriate handler.
   /// @param cmd Null-terminated command string received via MQTT.

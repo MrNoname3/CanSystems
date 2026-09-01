@@ -23,6 +23,7 @@ private:
   static constexpr uint8_t subtopicOffset = sizeof(mqttInTopic) - 4U + macHexLen;                         // sizeof - null - '#' - "%s"(2) + macHexLen.
   static constexpr uint8_t availTopicBufSize = sizeof(mqttAvailTopic) - 2U + senderTopicBufSize - 1U;     // "iot/dtos/<MAC>/availability" + null.
   static constexpr uint8_t infoTopicBufSize = sizeof(mqttInfoTopic) - 2U + senderTopicBufSize - 1U;       // "iot/dtos/<MAC>/info" + null.
+  static constexpr uint8_t subtopicSize = 16U;                                                             // Maximum size of an MQTT subtopic, including the null.
   static constexpr uint8_t infoPayloadBufSize = 52U;                                                      // {"fw":65535,"git":"ffffffff","dirty":255,"rr":255} = 50 chars + null.
   static constexpr uint8_t diagPayloadBufSize = 105U;                                                     // 36 fixed chars + cause (28: "MQTT_CONNECT_BAD_CREDENTIALS") + ISO time (20) + 2x uint32 (10 each) + null.
   // Disconnect diagnostics subtopic (RAM; publishRetained's strlcat requires a non-PROGMEM pointer).
@@ -46,6 +47,7 @@ public:
   static constexpr uint8_t getSenderTopicBufSize() { return senderTopicBufSize; }
   static constexpr uint8_t getReceiverTopicBufSize() { return receiverTopicBufSize; }
   static constexpr uint8_t getSubtopicOffset() { return subtopicOffset; }
+  static constexpr uint8_t getSubtopicSize() { return subtopicSize; }
   static constexpr uint8_t getAvailTopicBufSize() { return availTopicBufSize; }
   static constexpr uint8_t getInfoTopicBufSize() { return infoTopicBufSize; }
   static constexpr uint8_t getInfoPayloadBufSize() { return infoPayloadBufSize; }

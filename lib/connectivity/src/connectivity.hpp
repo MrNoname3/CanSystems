@@ -200,7 +200,7 @@ private:
 /// @brief Base class for handling MQTT communication tasks.
 class MqttBase : public virtual Task {
 private:
-  static constexpr uint8_t subtopicSize = 16U;                      // Maximum allowed size for MQTT subtopics.
+  static constexpr uint8_t subtopicSize = MqttTopics::getSubtopicSize();  // The native-test shim reads the same constant.
   static constexpr uint8_t responseBufferSize = 42U;                // Size of the buffer used for generating response messages.
 
 public:

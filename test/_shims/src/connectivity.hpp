@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 #include "taskHandler.hpp"
+#include "mqttTopics.hpp"
 #include "haDiscovery.hpp"
 #include <ArduinoJson.h>
 
@@ -34,7 +35,7 @@ public:
   virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
   virtual bool publishDiscovery() { return true; }
 
-  [[nodiscard]] static constexpr uint8_t getSubtopicSize() { return 16U; }
+  [[nodiscard]] static constexpr uint8_t getSubtopicSize() { return MqttTopics::getSubtopicSize(); }
 
   // These mirror the real MqttBase (instance methods that reach into Connectivity); the shim records
   // into static fields instead, so clang-tidy would make them static — kept non-static to match.
@@ -44,7 +45,7 @@ public:
     ++messageCount;
     return sendResult;
   }
-  [[nodiscard]] bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {
     (void)command;
     lastResponse = response;
     lastErrCode = errCode;
