@@ -16,10 +16,8 @@ class OTA final {
 private:
   // Size of a single flash block in bytes.
   static constexpr uint16_t flashBlockTobytes = static_cast<uint16_t>(32U * 1024U);
-  // Bound for the two states that wait on somebody else: START on the chip erase, STORE on the
-  // next piece from the gateway. Above the ~100 s a full W25Q64 erase can take, and below the
-  // gateway's own 5 minute timeout, so a stalled transfer is reported from here rather than
-  // outliving it. CHECK is left out: it advances a byte per run() and cannot stall.
+  // Bounds START and STORE, the two states that wait on somebody else: above the ~100 s a full
+  // W25Q64 erase can take, below the gateway's own 5 minute timeout.
   static constexpr uint32_t stallTimeoutTime = Time::minToMs(3U);
 
 #ifndef PROGRAM_MEMORY_SIZE

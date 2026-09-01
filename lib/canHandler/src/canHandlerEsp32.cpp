@@ -135,7 +135,7 @@ void CanHandlerEsp32::reportDroppedFrames() {
   if((incomplete != 0U) || (queueFull != 0U)) {
     Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
   }
-  // Transmission no longer fails inside endPacket(), so this is the only place a frame the bus
+  // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
   // never took is reported.
   const uint32_t abandoned = txAbandonedReporter.takeGrowth(CAN.getAbandonedTxFrames());
   if(abandoned != 0U) {

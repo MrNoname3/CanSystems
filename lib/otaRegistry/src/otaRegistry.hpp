@@ -4,9 +4,9 @@
 class OtaRegistry;                                                  // Forward declaration.
 
 /// @brief What every target of one upload needs to know about the image, computed once.
-/// @details The checksum only depends on the file, and the queued targets all send the same
-/// file, so the first transfer of a batch leaves it here for the rest. `valid` is cleared when
-/// a new file arrives, which is the only moment the contents can change.
+/// @details The checksum only depends on the file, so the first transfer of a batch leaves it
+/// here for the rest. `valid` is cleared when a new file arrives, which is the only moment the
+/// contents can change.
 struct OtaImageInfo {
   uint32_t size = 0U;                                               // Size of the image in bytes.
   uint16_t crc = 0U;                                                // CRC16 over the whole image.
@@ -44,9 +44,8 @@ private:
 };
 
 /// @brief Hands one uploaded firmware to every matching target, one transfer at a time.
-/// @details The targets share a CAN bus and a controller that holds a single frame, so running
-/// two transfers at once does not finish them any sooner - it only keeps both nodes in transfer
-/// twice as long. The queue serialises them instead.
+/// @details Targets share whatever carries the transfer, so running them together finishes no
+/// sooner and keeps each of them in transfer for longer. The queue serialises them instead.
 class OtaRegistry {
 public:
   /// @brief Appends an OTA target to the registry. Called once per target at construction time.

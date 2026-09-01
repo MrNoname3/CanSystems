@@ -58,8 +58,8 @@ bool test_transmit_does_not_wait_for_the_bus() {
   IS_TRUE(controller().txReady());                // free before the first frame
   IS_TRUE(sendOneFrame());
   IS_EQUAL(esp32Can.getTransmitRequests(), 1U);
-  // The old path polled here until its 50 ms timeout; a pass of the cooperative loop cannot
-  // afford that, so what matters is that the clock barely moved.
+  // A pass of the cooperative loop cannot afford to wait out a 50 ms transmit timeout, so what
+  // this asserts is that the clock barely moved.
   IS_TRUE(millis() < 10U);
   IS_FALSE(controller().txReady());               // the controller is still holding the frame
   clearFakeMillis();
