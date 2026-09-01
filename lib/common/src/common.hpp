@@ -37,8 +37,8 @@ public:
   /// @brief Converts hours to minutes.
   /// @param hour The number of hours to convert.
   /// @return The equivalent time in minutes.
-  static constexpr uint16_t hrToMin(uint16_t hour) {
-    return hour * 60U;
+  static constexpr uint32_t hrToMin(uint16_t hour) {
+    return hour * 60UL;
   }
 
   /// @brief Converts milliseconds to microseconds.
