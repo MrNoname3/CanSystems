@@ -120,7 +120,7 @@ uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
   }
 
   modifyRegister(regBtr1, 0x80U, 0x80U); // SAM = 1
-  writeRegister(regIer, 0xFFU);          // enable all interrupts
+  writeRegister(regIer, 0x01U);          // receive interrupt only; handleInterrupt() reads no other bit
 
   // set filter to allow anything
   writeRegister(regAcrN(0U), 0x00U);
