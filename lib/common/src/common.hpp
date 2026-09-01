@@ -446,8 +446,9 @@ private:
 /// @tparam N Number of elements in the array.
 /// @param arr Reference to the fixed-size array.
 /// @return Number of elements as a compile-time constant.
-template<typename T, uint8_t N>
+template<typename T, size_t N>
 constexpr uint8_t arraySize(T (&arr)[N]) {
+  static_assert(N <= UINT8_MAX, "arraySize() returns a uint8_t; a larger array needs a wider count!");
   (void)arr;
-  return N;
+  return static_cast<uint8_t>(N);
 }
