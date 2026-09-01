@@ -60,6 +60,20 @@ public:
   /// @brief Executes the main OTA processing logic.
   void runOta();
 
+  /// @brief Runs the START state: checksums the file a chunk at a time, then sends OTA_START.
+  void checksumOrSendStart();
+
+  /// @brief Runs the STORE state: sends the next firmware piece, or moves on when the file is done.
+  void sendNextPiece();
+
+  /// @brief Reads the next bytes of the firmware file into `buffer`.
+  /// @details Ends the transfer through INVALID when the file returns fewer bytes than asked for,
+  /// so a read error is reported rather than checksummed or sent.
+  /// @param buffer Destination for the bytes read.
+  /// @param length How many bytes to read.
+  /// @return `true` when the whole request was read.
+  bool readFilePiece(uint8_t* buffer, uint8_t length);
+
   CanOta(const CanOta&) = delete;                       // Define copy constructor.
   CanOta& operator=(const CanOta&) = delete;            // Define copy assignment operator.
   CanOta(CanOta&&) = delete;                            // Define move constructor.

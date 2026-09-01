@@ -248,7 +248,12 @@ void DataTransfer::runValidityCheck() {
       if(remainingBytes > 0U) {
         uint8_t readBuffer[readBufferSize] = { 0U };
         const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : static_cast<uint8_t>(remainingBytes);
-        receivedFile.read(readBuffer, readLength);
+        if(receivedFile.read(readBuffer, readLength) != readLength) {
+          Logger::get()->printf_P(PSTR("[FT] Short read while hashing %s\r\n"), FileName::getTempFileLocation());
+          dataTransferErrState.setError(DataTransferError::TEMP_FILE_READING_ERROR);
+          transferState = TransferState::CLEANUP;
+          break;
+        }
         md5.add(readBuffer, readLength);
       } else {
         transferState = TransferState::CLEANUP;

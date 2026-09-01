@@ -27,6 +27,7 @@ namespace Err {
   constexpr uint32_t TEMP_OPEN_ERROR    = 1UL << 15U;
   constexpr uint32_t TEMP_WRITE_ERROR   = 1UL << 16U;
   constexpr uint32_t FILE_MD5_ERROR     = 1UL << 18U;
+  constexpr uint32_t TEMP_READ_ERROR    = 1UL << 25U;
   constexpr uint32_t TEMP_RENAME_ERROR  = 1UL << 19U;
   constexpr uint32_t FW_BEGIN_FAILED    = 1UL << 20U;
   constexpr uint32_t FW_SET_MD5_FAILED  = 1UL << 21U;
@@ -476,6 +477,20 @@ bool test_temp_open_failure() {
   END_IT
 }
 
+bool test_temp_read_failure() {
+  IT("a temp file that reads short reports it, instead of blaming the MD5");
+  resetEnv();
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));
+  LittleFS.setFailRead(true);
+  dt.runValidityCheck();                            // the hashing pass hits the failing read
+  IS_EQUAL(dt.getErrorCode(), Err::TEMP_READ_ERROR);
+  LittleFS.setFailRead(false);
+  IS_FALSE(LittleFS.exists(fileName()));            // nothing was published
+  END_IT
+}
+
 bool test_temp_write_failure() {
   IT("storeBase64() reports TEMP_FILE_WRITING_ERROR on a short write");
   resetEnv();
@@ -580,6 +595,7 @@ int main() {
   test_firmware_end_failure();
   test_firmware_md5_mismatch_rejected();
   test_temp_open_failure();
+  test_temp_read_failure();
   test_temp_write_failure();
   test_temp_write_failure_ends_the_transfer();
   test_rename_failure();

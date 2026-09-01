@@ -70,6 +70,48 @@ void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLIN
   }
 }
 
+void CanOta::checksumOrSendStart() {
+  const uint32_t remainingBytes = receivedFile.available();
+  if(remainingBytes == 0U) {
+    receivedFile.seek(0U, SeekSet);
+    OtaCanFrame::StartFrame startFrame;
+    startFrame.storageNumber = storageNumber;
+    startFrame.fwSize = fileSize;
+    startFrame.fwCrc = crc16.get();
+    uint8_t canData[8] = { 0U };
+    OtaCanFrame::packStart(startFrame, canData);
+    transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_START, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
+    return;
+  }
+  uint8_t readBuffer[readBufferSize] = { 0U };
+  const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
+  if(!readFilePiece(readBuffer, readLength)) { return; }
+  crc16.next(readBuffer, readLength);
+}
+
+void CanOta::sendNextPiece() {
+  const uint32_t remainingFileSize = receivedFile.available();
+  if(remainingFileSize == 0U) {
+    transferState = TransferState::WAIT_FOR_ACK;
+    return;
+  }
+  const uint8_t bytesNumber = (remainingFileSize >= filePieceSize) ? filePieceSize : remainingFileSize;
+  OtaCanFrame::SendFrame sendFrame;
+  if(!readFilePiece(sendFrame.data, bytesNumber)) { return; }
+  sendFrame.dataAddress = frameNumber;
+  uint8_t canData[8] = { 0U };
+  OtaCanFrame::packSend(sendFrame, canData);
+  frameNumber += bytesNumber;
+  transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_SEND, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
+}
+
+bool CanOta::readFilePiece(uint8_t* buffer, uint8_t length) {
+  if(receivedFile.read(buffer, length) == length) { return true; }
+  Logger::get()->printf_P(PSTR("[CAN] Short read from \"%s\"\r\n"), fileNamePtr);
+  transferState = TransferState::INVALID;
+  return false;
+}
+
 void CanOta::runOta() {
   const uint32_t actualTime = millis();
   if(Time::hasElapsed(actualTime, otaTimeoutTimer, otaTimeoutTime)) {
@@ -91,38 +133,11 @@ void CanOta::runOta() {
     case TransferState::WAIT_FOR_ACK: {
     } break;
     case TransferState::START: {
-      const uint32_t remainingBytes = receivedFile.available();
-      if(remainingBytes > 0U) {
-        uint8_t readBuffer[readBufferSize] = { 0U };
-        const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
-        receivedFile.read(readBuffer, readLength);
-        crc16.next(readBuffer, readLength);
-      } else {
-        receivedFile.seek(0U, SeekSet);
-        OtaCanFrame::StartFrame startFrame;
-        startFrame.storageNumber = storageNumber;
-        startFrame.fwSize = fileSize;
-        startFrame.fwCrc = crc16.get();
-        uint8_t canData[8] = { 0U };
-        OtaCanFrame::packStart(startFrame, canData);
-        transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_START, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
-      }
+      checksumOrSendStart();
     } break;
     case TransferState::STORE: {
       otaTimeoutTimer = actualTime;
-      const uint32_t remainingFileSize = receivedFile.available();
-      if(remainingFileSize == 0U) {
-        transferState = TransferState::WAIT_FOR_ACK;
-        break;
-      }
-      const uint8_t bytesNumber = (remainingFileSize >= filePieceSize) ? filePieceSize : remainingFileSize;
-      OtaCanFrame::SendFrame sendFrame;
-      receivedFile.read(sendFrame.data, bytesNumber);
-      sendFrame.dataAddress = frameNumber;
-      uint8_t canData[8] = { 0U };
-      OtaCanFrame::packSend(sendFrame, canData);
-      frameNumber += bytesNumber;
-      transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_SEND, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
+      sendNextPiece();
     } break;
     case TransferState::VALID:
     case TransferState::INVALID: {

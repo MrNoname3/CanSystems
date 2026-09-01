@@ -46,7 +46,8 @@ private:
     FW_UPGRADE_SET_MD5_FAILED = 1UL << 21U,             // Firmware upgrade MD5 configuration failed.
     FW_UPGRADE_WRITE_FAILED   = 1UL << 22U,             // Firmware upgrade chunk write failed.
     FW_UPGRADE_END_FAILED     = 1UL << 23U,             // Firmware upgrade finalization failed.
-    RECEIVED_DATA_OVERRUN     = 1UL << 24U              // More data received than the declared file size.
+    RECEIVED_DATA_OVERRUN     = 1UL << 24U,             // More data received than the declared file size.
+    TEMP_FILE_READING_ERROR   = 1UL << 25U              // The temporary file returned fewer bytes than it holds.
     // clang-format on
   };
 
