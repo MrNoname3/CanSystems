@@ -21,8 +21,10 @@ public:
   static constexpr uint8_t regIr = 0x03U;     // Interrupt.
   static constexpr uint8_t regEcc = 0x0CU;    // Error code capture.
   static constexpr uint8_t regTxErr = 0x0FU;  // Transmit error counter.
+  static constexpr uint8_t regSff = 0x10U;    // Standard-frame receive window: header, then payload.
 
   static constexpr uint8_t modResetMode = 0x01U;
+  static constexpr uint8_t srReceiveBuffer = 0x01U;
   static constexpr uint8_t srTxBufferFree = 0x04U;
   static constexpr uint8_t srTxComplete = 0x08U;
   static constexpr uint8_t srBusOff = 0x80U;
@@ -45,6 +47,17 @@ public:
   }
 
   void setTxBehaviour(TxBehaviour behaviour) { txBehaviour = behaviour; }
+
+  /// @brief Places a standard 11-bit frame in the receive window and raises receive buffer
+  /// status, the way the controller does when a frame arrives.
+  /// @note The model holds one frame: the release command clears the status again.
+  void queueStandardFrame(uint16_t id, const uint8_t* data, uint8_t dlc) {
+    registers[regSff] = dlc & 0x0FU;
+    registers[regSff + 1U] = static_cast<uint8_t>(id >> 3U);
+    registers[regSff + 2U] = static_cast<uint8_t>(id << 5U);
+    for(uint8_t i = 0U; i < dlc; i++) { registers[regSff + 3U + i] = data[i]; }
+    registers[regSr] |= srReceiveBuffer;
+  }
 
   /// @brief Advances the fake clock by this many milliseconds on every status poll, standing in
   /// for the time a real poll costs. 0 leaves the clock alone.
@@ -74,6 +87,9 @@ private:
     if((command & 0x01U) != 0U) { ++transmitRequests; }         // transmission request
     if((command & 0x02U) != 0U) {                                // abort transmission
       registers[regSr] |= static_cast<uint32_t>(srTxComplete) | srTxBufferFree;
+    }
+    if((command & 0x04U) != 0U) {                                // release receive buffer
+      registers[regSr] &= ~static_cast<uint32_t>(srReceiveBuffer);
     }
   }
 

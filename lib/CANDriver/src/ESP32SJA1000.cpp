@@ -217,7 +217,10 @@ uint8_t ESP32SJA1000::endPacket() {
 }
 
 uint8_t ESP32SJA1000::parsePacket() {
-  if((readRegister(regSr) & 0x01U) != 0x01U) { return 0U; }
+  if((readRegister(regSr) & 0x01U) != 0x01U) {
+    clearRxState();
+    return 0U;
+  }
 
   const uint8_t sff = readRegister(regSff);
   // clang-format off

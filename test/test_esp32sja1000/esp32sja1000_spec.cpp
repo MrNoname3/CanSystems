@@ -5,8 +5,9 @@
 #include "BDDTest.h"
 
 // The ESP32 CAN driver against the register-level model in test/_shims/src/esp32CanModel.h.
-// The gateway's transmit path is what these cover: what endPacket() does when nothing on the
-// bus answers, and what the driver does once the controller has dropped into bus-off.
+// These cover the gateway's transmit path - what endPacket() does when nothing on the bus
+// answers, and what the driver does once the controller has dropped into bus-off - plus the
+// receive contract the two drivers have to share.
 
 static ESP32SJA1000& controller() {
   static ESP32SJA1000 can;
@@ -25,6 +26,13 @@ static bool sendOneFrame() {
   if(controller().beginExtendedPacket(0x0000001AU, 2U) == 0U) { return false; }
   if(controller().write(payload, sizeof(payload)) != sizeof(payload)) { return false; }
   return controller().endPacket() != 0U;
+}
+
+// Hands the model one standard frame and takes it back out through the driver.
+static bool receiveOneFrame(uint16_t id, uint8_t dlc) {
+  const uint8_t payload[8] = { 0x5AU, 0xC3U, 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U };
+  esp32Can.queueStandardFrame(id, payload, dlc);
+  return controller().parsePacket() == dlc;
 }
 
 bool test_begin_leaves_the_controller_out_of_reset() {
@@ -72,11 +80,44 @@ bool test_bus_off_is_recovered() {
   END_IT
 }
 
+bool test_a_standard_frame_is_decoded() {
+  IT("parsePacket() decodes a standard frame and hands its payload over");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_TRUE(receiveOneFrame(0x123U, 2U));
+  IS_EQUAL(controller().packetId(), 0x123U);
+  IS_FALSE(controller().packetExtended());
+  IS_FALSE(controller().packetRtr());
+  uint8_t received[2] = { 0U };
+  IS_EQUAL(controller().readBytes(received, sizeof(received)), sizeof(received));
+  IS_EQUAL(received[0], 0x5AU);
+  IS_EQUAL(received[1], 0xC3U);
+  END_IT
+}
+
+bool test_an_empty_controller_leaves_no_frame_behind() {
+  IT("parsePacket() clears the previous frame once the controller has nothing waiting");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_TRUE(receiveOneFrame(0x123U, 2U));
+  uint8_t received[2] = { 0U };
+  IS_EQUAL(controller().readBytes(received, sizeof(received)), sizeof(received));
+
+  // Reading the frame released the buffer, so this pass finds an empty controller. The AVR
+  // side tells a zero-length frame from "nothing" by the id alone, which only works while both
+  // drivers answer noId here.
+  IS_EQUAL(controller().parsePacket(), 0U);
+  IS_EQUAL(controller().packetId(), CANController::noId);
+  IS_EQUAL(controller().packetDlc(), 0U);
+  IS_EQUAL(controller().available(), 0);
+  END_IT
+}
+
 int main() {
   SUITE("ESP32SJA1000");
   test_begin_leaves_the_controller_out_of_reset();
   test_a_frame_is_transmitted_when_the_bus_answers();
   test_transmit_gives_up_when_nothing_answers();
   test_bus_off_is_recovered();
+  test_a_standard_frame_is_decoded();
+  test_an_empty_controller_leaves_no_frame_behind();
   FINISH
 }
