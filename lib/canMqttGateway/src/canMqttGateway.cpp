@@ -268,25 +268,6 @@ void CanMqttGateway::handlePing() {
   }
 }
 
-void CanMqttGateway::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
-  JsonVariant commandJsonVar = payloadJson[F("Command")];
-  JsonVariant dataJsonVar = payloadJson[F("Data")];
-  if(commandJsonVar.is<uint16_t>() && dataJsonVar.is<const char*>()) {
-    const uint16_t command = commandJsonVar.as<uint16_t>();
-    const char* canDataStr = dataJsonVar.as<const char*>();
-    if(canDataStr == nullptr || *canDataStr == '\0') { return; }
-    char* endPtr = nullptr;
-    const uint64_t canData64 = std::strtoull(canDataStr, &endPtr, 16);
-    if(*endPtr != '\0') { return; }
-    uint8_t canData[8] = { 0U };
-    memcpy(canData, &canData64, sizeof(canData));
-    (void)sendCanFrame(command, canData);
-    return;
-  }
-
-  processMessageArrived(payloadJson);
-}
-
 void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) {
   clientPingTimer = clientOfflineTimer = millis();
   switch(static_cast<uint16_t>(canFrame.cmd)) {

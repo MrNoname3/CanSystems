@@ -32,7 +32,7 @@ public:
 private:
   bool initLocal() override { return true; }
   bool runLocal() override { return true; }
-  void processMessageArrived(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonDocument& payloadJson) override {
     (void)payloadJson;
     ++customMessages;
   }
@@ -219,41 +219,8 @@ bool test_unknown_frame_goes_to_derived_handler() {
 
 // ---- incoming MQTT messages ----
 
-bool test_generic_command_message_sends_can_frame() {
-  IT("a {Command, Data} MQTT message is forwarded as a raw CAN frame");
-  resetEnv();
-  CanHandler can;
-  Connectivity conn;
-  TestGateway gateway(can, 26U, conn, "alert1");
-  MqttBase& mqttSide = gateway;
-  JsonDocument doc;
-  IS_TRUE(deserializeJson(doc, R"({"Command":5,"Data":"1122334455667788"})") == DeserializationError::Ok);
-  mqttSide.messageArrivedCallback(doc);
-  const CanHandler::CanFrame* frame = lastFrame(5U);
-  IS_TRUE(frame != nullptr);
-  IS_EQUAL(frame->data[0], 0x88U);                    // little-endian memcpy of the hex value
-  IS_EQUAL(frame->data[7], 0x11U);
-  IS_EQUAL(TestGateway::customMessages, 0);
-  END_IT
-}
-
-bool test_invalid_command_data_is_dropped() {
-  IT("a {Command, Data} message with trailing garbage in Data sends nothing");
-  resetEnv();
-  CanHandler can;
-  Connectivity conn;
-  TestGateway gateway(can, 26U, conn, "alert1");
-  MqttBase& mqttSide = gateway;
-  JsonDocument doc;
-  IS_TRUE(deserializeJson(doc, R"({"Command":5,"Data":"11ZZ"})") == DeserializationError::Ok);
-  mqttSide.messageArrivedCallback(doc);
-  IS_EQUAL(CanHandler::sentFrames.size(), 0U);
-  IS_EQUAL(TestGateway::customMessages, 0);
-  END_IT
-}
-
 bool test_other_message_goes_to_derived_handler() {
-  IT("a non-command MQTT message is forwarded to processMessageArrived()");
+  IT("an MQTT message reaches the driver's own handler");
   resetEnv();
   CanHandler can;
   Connectivity conn;
@@ -533,8 +500,6 @@ int main() {
   test_restart_frame_republishes_availability();
   test_button_event_frame_publishes_message();
   test_unknown_frame_goes_to_derived_handler();
-  test_generic_command_message_sends_can_frame();
-  test_invalid_command_data_is_dropped();
   test_other_message_goes_to_derived_handler();
   test_ota_happy_path();
   test_ota_nack_aborts_with_error_status();

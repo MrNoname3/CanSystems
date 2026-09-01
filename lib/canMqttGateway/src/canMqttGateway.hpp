@@ -112,10 +112,6 @@ private:
   static constexpr const char PROGMEM buttonFrame[] = R"({"Button":%hu})";
 
 public:
-  /// @brief Processes an MQTT message received for this client.
-  /// @param payloadJson The JSON document containing the message payload.
-  virtual void processMessageArrived(JsonDocument& payloadJson) = 0;
-
   /// @brief Processes a CAN frame received for this client.
   /// @param canFrame The received CAN frame.
   virtual void processCanFrameArrived(const CanHandler::CanFrame& canFrame) = 0;
@@ -176,10 +172,6 @@ private:
   /// @brief Local runtime logic to be implemented by derived classes.
   /// @return True if successful, false otherwise.
   [[nodiscard]] virtual bool runLocal() = 0;
-
-  /// @brief Handles the arrival of an MQTT message.
-  /// @param payloadJson The JSON document containing the message payload.
-  void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   /// @brief Handles the arrival of a CAN frame.
   /// @param canFrame The received CAN frame to be processed.

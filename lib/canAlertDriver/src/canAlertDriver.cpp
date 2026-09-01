@@ -42,7 +42,7 @@ bool CanAlertDriver::publishDiscovery() {
   return result;
 }
 
-void CanAlertDriver::processMessageArrived(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

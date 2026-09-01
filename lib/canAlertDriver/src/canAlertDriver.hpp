@@ -59,8 +59,10 @@ private:
   bool runLocal() override { return true; }
 
   /// @brief Process a received MQTT message.
+  /// @details `{"Colors":[r,g,b]}` sets the LEDs; `{"Sound":n,"Volume":v}` plays a track, with
+  /// `Colors` optional - omitted leaves the LEDs dark, present colours them for the playback.
   /// @param payloadJson The JSON document containing the received message payload.
-  void processMessageArrived(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonDocument& payloadJson) override;
 
   /// @brief Process a received CAN frame.
   /// @param canFrame The CAN frame containing command and data bytes.

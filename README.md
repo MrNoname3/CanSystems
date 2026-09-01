@@ -80,6 +80,8 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
   drop) and a since-boot reconnect counter. Kept in RAM only: an outage that ends in the
   offline-watchdog MCU reset is reported by the `info` topic's reset reason instead.
 - CAN sub-devices get their own sub-tree: `iot/dtos/<mac>/alert1/{availability,info,ota,button}`.
+  An alert node takes `{"Colors":[r,g,b]}` on its `iot/stod` topic to set the LEDs, and
+  `{"Sound":n,"Volume":v}` to play a track - with `Colors` if it should light up while playing.
 - Home Assistant MQTT discovery is opt-in via `"haDiscovery": true` in `server.json`;
   when disabled, the nodes actively retract their previously published entities.
 
