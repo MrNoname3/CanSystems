@@ -3,6 +3,8 @@
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
 /// @brief Manages an external sensor by controlling its enable pin.
+/// @details on() and off() are const: the pin they drive is the sensor's, not this object's
+/// state, so a const instance can still switch it.
 class ExternalSensor final {
 public:
   /// @brief Constructs the ExternalSensor object.
