@@ -426,7 +426,7 @@ bool test_second_ota_start_is_rejected_while_one_runs() {
 }
 
 bool test_ota_start_rejects_bad_input() {
-  IT("startOta() rejects a null name, a relative path, and a missing file");
+  IT("startOta() rejects a null name and a relative path without starting anything");
   resetEnv();
   CanHandler can;
   Connectivity conn;
@@ -435,7 +435,24 @@ bool test_ota_start_rejects_bad_input() {
   IS_TRUE(task.init());
   IS_FALSE(gateway.startOta(nullptr));
   IS_FALSE(gateway.startOta("relative.bin"));
+  IS_FALSE(gateway.isOtaInProgress());                     // nothing was opened, nothing to clean up
+  END_IT
+}
+
+bool test_ota_start_reports_a_missing_file_to_the_server() {
+  IT("a firmware file that cannot be opened is reported over MQTT, as an empty one is");
+  resetEnv();
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
   IS_FALSE(gateway.startOta("/missing.bin"));
+  MqttBase::subtopicMessages.clear();
+  (void)runOnce(gateway);                                  // the INVALID pass publishes and cleans up
+  IS_EQUAL(MqttBase::subtopicMessages.size(), 1U);
+  IS_TRUE(MqttBase::subtopicMessages[0].first == "alert1/ota");
+  IS_TRUE(MqttBase::subtopicMessages[0].second == R"({"OTA":"[ERR]"})");
   IS_FALSE(gateway.isOtaInProgress());
   END_IT
 }
@@ -525,6 +542,7 @@ int main() {
   test_stray_ota_ack_while_idle_is_ignored();
   test_second_ota_start_is_rejected_while_one_runs();
   test_ota_start_rejects_bad_input();
+  test_ota_start_reports_a_missing_file_to_the_server();
   test_ota_rejects_empty_file();
   test_ota_contract_gateway_to_device_storage();
   FINISH

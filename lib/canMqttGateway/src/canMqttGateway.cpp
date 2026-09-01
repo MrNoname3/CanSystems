@@ -38,6 +38,7 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
   receivedFile = LittleFS.open(fileNamePtr, FILE_READ);
   if(!receivedFile) {
     otaStartErrState.setError(OtaStartError::FILE_OPEN_FAILED);
+    transferState = TransferState::INVALID;
     return otaStartErrState.getRawErrorState();
   }
   fileSize = receivedFile.size();
