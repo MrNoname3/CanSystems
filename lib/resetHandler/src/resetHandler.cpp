@@ -21,6 +21,7 @@ namespace {
   // also frees it to reuse the register the r2 read landed in.
   volatile uint8_t bootResetFlags __attribute__((section(".noinit")));
   volatile uint16_t restartMarker __attribute__((section(".noinit")));
+  volatile uint8_t restartCause __attribute__((section(".noinit")));
   constexpr uint16_t restartMagic = 0xB007U;   // Distinguishes our marker from uninitialised SRAM.
 } // namespace
 
@@ -47,7 +48,10 @@ void captureResetFlags() {
   const bool handoverLooksReal = (handedOver != 0U) && ((handedOver & 0xF0U) == 0U);
   uint8_t flags = ownFlags;
   if(ownFlags == 0U) { flags = handoverLooksReal ? handedOver : 0U; }
-  if(restartMarker == restartMagic) { flags |= ResetHandler::intentionalRestartFlag; }
+  if(restartMarker == restartMagic) {
+    flags |= ResetHandler::intentionalRestartFlag;
+    flags |= static_cast<uint8_t>((restartCause & 0x07U) << ResetHandler::restartCauseShift);
+  }
   restartMarker = 0U;                                 // One restart, one flag.
   bootResetFlags = flags;
 }
@@ -57,19 +61,27 @@ uint8_t ResetHandler::getResetReason() {  // NOLINT(readability-convert-member-f
 }
 #endif
 
-void ResetHandler::restartMCU() {
 #if defined(__AVR_ATmega328P__)
+void ResetHandler::restartMCU() {
+  restartMCU(RestartCause::Unspecified);
+}
+
+void ResetHandler::restartMCU(RestartCause cause) {
   Logger::get()->println(F("Restarting..."));
   Logger::get()->flush();                              // Sends out data from the serial buffer before reset.
-  restartMarker = restartMagic;                       // Tells the next startup this reset was asked for.
-  wdt_enable(WDTO_15MS);                              // Configures the watchdog timer for a 15-ms timeout.
+  restartCause = static_cast<uint8_t>(cause) & 0x07U;  // Three bits, so the shift cannot reach MCUSR's.
+  restartMarker = restartMagic;                        // Tells the next startup this reset was asked for.
+  wdt_enable(WDTO_15MS);                               // Configures the watchdog timer for a 15-ms timeout.
+  while(true) {}
+}
 #elif defined(ESP32) || defined(ESP8266)
+void ResetHandler::restartMCU() {
   Logger::get()->printf_P(PSTR("Restarting...\r\n"));
   Logger::get()->flush();
   ESP.restart();
-#endif
   while(true) {}
 }
+#endif
 
 #if defined(ESP8266) || defined(ESP32)
 uint8_t ResetHandler::getResetReason() {

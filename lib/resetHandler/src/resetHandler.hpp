@@ -28,6 +28,32 @@ public:
   /// @details MCUSR only uses bits 0-3 on this part, so bit 4 is free. Without it a deliberate
   /// restart and a hang the watchdog caught are both just WDRF.
   static constexpr uint8_t intentionalRestartFlag = 0x10U;
+
+  /// @brief Why restartMCU() was called, carried in bits 5-7 of the reset reason.
+  /// @details Every deliberate restart is WDRF plus `intentionalRestartFlag`, which alone cannot
+  /// say which of them it was. Only meaningful while that flag is set.
+  enum class RestartCause : uint8_t {
+    Unspecified = 0U,       // restartMCU() called without one.
+    InitFailed,             // A task refused to initialise at startup.
+    CommandedOverCan,       // The gateway asked for it.
+    OtaComplete             // Firmware was stored; rebooting into it.
+  };
+
+  /// @brief Position of RestartCause in the reset reason. Three bits, so eight causes fit.
+  static constexpr uint8_t restartCauseShift = 5U;
+
+  /// @brief Reads the cause back out of a reset reason.
+  /// @param reason Value from getResetReason().
+  /// @return The recorded cause; `Unspecified` when the restart was not a deliberate one.
+  [[nodiscard]] static constexpr RestartCause getRestartCause(uint8_t reason) {
+    return ((reason & intentionalRestartFlag) == 0U)
+               ? RestartCause::Unspecified
+               : static_cast<RestartCause>(reason >> restartCauseShift);
+  }
+
+  /// @brief Resets the MCU, recording why for the next startup to report.
+  /// @param cause What prompted the restart.
+  static void restartMCU(RestartCause cause);
 #endif
 
   ResetHandler() = delete;                                           // Delete constructor.

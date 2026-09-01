@@ -38,7 +38,8 @@ void printReason(uint8_t reason) {
   if((reason & 0x08U) != 0U) { Logger::get()->print(F(" WDRF")); }
   if((reason & ResetHandler::intentionalRestartFlag) != 0U) { Logger::get()->print(F(" INTENTIONAL")); }
   if(reason == 0U) { Logger::get()->print(F(" none - the bootloader kept it")); }
-  Logger::get()->println(F(" ]"));
+  Logger::get()->print(F(" ] cause: "));
+  Logger::get()->println(static_cast<uint8_t>(ResetHandler::getRestartCause(reason)));
 }
 
 void setup() {
@@ -67,7 +68,8 @@ void setup() {
     printReason(previousReason);
   }
   previousReason = ResetHandler::getResetReason();
-  Logger::get()->println(F("r = restartMCU()   h = hang until the watchdog fires   z = clear counter"));
+  Logger::get()->println(F("r = restart   1/2/3 = restart as InitFailed/CommandedOverCan/OtaComplete"));
+  Logger::get()->println(F("h = hang until the watchdog fires   z = clear counter"));
 }
 
 void loop() {
@@ -87,6 +89,9 @@ void loop() {
       // No watchdog reset here, and no marker either - this is what a real lock-up looks like.
       while(true) {}
     }
+    case '1': ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed); break;
+    case '2': ResetHandler::restartMCU(ResetHandler::RestartCause::CommandedOverCan); break;
+    case '3': ResetHandler::restartMCU(ResetHandler::RestartCause::OtaComplete); break;
     case 'z': {
       bootCounterMagic = 0U;
       Logger::get()->println(F("-> counter cleared; the next start reports a cold one"));

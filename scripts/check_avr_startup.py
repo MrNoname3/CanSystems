@@ -20,7 +20,7 @@ import subprocess
 Import("env")
 
 # Symbols that have to be in the image, and the section each one belongs in.
-REQUIRED_IN_NOINIT = ("bootResetFlags", "restartMarker")
+REQUIRED_IN_NOINIT = ("bootResetFlags", "restartMarker", "restartCause")
 REQUIRED_FUNCTION = "captureResetFlags"
 # Everything in .init0 - .init3 is linked ahead of __do_copy_data, which is .init4's entry point.
 # Comparing addresses is what proves the handler still runs before .data and .bss are set up.

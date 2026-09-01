@@ -95,7 +95,7 @@ bool CanHandlerAtmega328P::handleRxFrame() {
       CanHandlerBase::send(CanCmd::PING);
     } break;
     case static_cast<uint16_t>(CanCmd::RESTART): {
-      ResetHandler::restartMCU();
+      ResetHandler::restartMCU(ResetHandler::RestartCause::CommandedOverCan);
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
       sendFwVersion();
@@ -158,7 +158,7 @@ bool CanHandlerAtmega328P::run() {
   }
   if(otaDecision.reboot) {
     (void)CAN.flushTx();                                            // The ack above is only queued; let it out before the reset.
-    ResetHandler::restartMCU();
+    ResetHandler::restartMCU(ResetHandler::RestartCause::OtaComplete);
   }
   lastOtaState = otaState;
   if(Time::hasElapsed(actualTime, eventTimer, pingTime)) {

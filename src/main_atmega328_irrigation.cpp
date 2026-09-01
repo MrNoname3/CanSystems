@@ -96,7 +96,7 @@ void setup() {
   if(!initSuccess) {
     Logger::get()->print(F("Code: "));
     Logger::get()->println(initResult, BIN);
-    ResetHandler::restartMCU();
+    ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed);
   }
 
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
