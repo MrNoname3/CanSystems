@@ -40,7 +40,13 @@ void captureResetFlags() {
   const uint8_t ownFlags = MCUSR;
   MCUSR = 0;                                          // Must be cleared before WDE can be.
   wdt_disable();
-  uint8_t flags = (ownFlags != 0U) ? ownFlags : handedOver;
+  // A real reset always leaves one of MCUSR's low four bits set and the top four clear, so a
+  // value outside that shape is not a handover at all - it is whatever the register happened to
+  // hold. Optiboot 4.4, the stock Arduino bootloader, clears MCUSR without passing it on, and
+  // without this check a node burned with it would report leftovers as a reset reason.
+  const bool handoverLooksReal = (handedOver != 0U) && ((handedOver & 0xF0U) == 0U);
+  uint8_t flags = ownFlags;
+  if(ownFlags == 0U) { flags = handoverLooksReal ? handedOver : 0U; }
   if(restartMarker == restartMagic) { flags |= ResetHandler::intentionalRestartFlag; }
   restartMarker = 0U;                                 // One restart, one flag.
   bootResetFlags = flags;
