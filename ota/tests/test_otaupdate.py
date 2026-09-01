@@ -174,18 +174,36 @@ def test_deviceconfig_topics() -> None:
 
 def test_firmware_size_and_md5(tmp_path: Path) -> None:
     blob = b"\x01\x02project_esp32_can\x00trailing"
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob))
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp32_can")
     assert firmware.size == len(blob)
     assert firmware.md5 == hashlib.md5(blob).hexdigest()
 
 
-def test_firmware_id_extracted(tmp_path: Path) -> None:
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"....project_esp8266_thermo\x00...."))
+def test_firmware_id_is_the_environment_the_image_was_built_for(tmp_path: Path) -> None:
+    blob = b"....project_esp8266_thermo\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
     assert firmware.firmware_id == "project_esp8266_thermo"
 
 
-def test_firmware_id_missing_raises(tmp_path: Path) -> None:
-    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"no id here"))
+def test_an_image_built_for_another_environment_is_refused(tmp_path: Path) -> None:
+    # The rad build sitting in the thermo's build directory: the device's own binId check would
+    # pass it, because the name it is sent under matches the node it is sent to.
+    blob = b"....project_esp8266_rad\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
+    with pytest.raises(ValueError):
+        _ = firmware.firmware_id
+
+
+def test_an_image_without_any_environment_name_is_refused(tmp_path: Path) -> None:
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", b"no id here"), "project_esp8266_thermo")
+    with pytest.raises(ValueError):
+        _ = firmware.firmware_id
+
+
+def test_a_name_that_only_appears_as_a_prefix_is_refused(tmp_path: Path) -> None:
+    # "project_esp8266_thermo2" contains the shorter name, but is a different build.
+    blob = b"....project_esp8266_thermo2\x00...."
+    firmware = ota.FirmwareManager(_write(tmp_path, "firmware.bin", blob), "project_esp8266_thermo")
     with pytest.raises(ValueError):
         _ = firmware.firmware_id
 
@@ -733,9 +751,11 @@ class _RecordingMQTT:
         self.published.append((topic, payload))
 
 
-def _make_updater(tmp_path: Path, firmware: bytes) -> "ota.OTAUpdater":
+def _make_updater(tmp_path: Path, firmware: bytes,
+                  pio_project: str = "project_esp8266_thermo") -> "ota.OTAUpdater":
     device = ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x")
-    updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"), _write(tmp_path, "firmware.bin", firmware))
+    updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"),
+                             _write(tmp_path, "firmware.bin", firmware), pio_project)
     updater.mqtt_client = _RecordingMQTT()  # type: ignore  # deliberate test double for the MQTT client
     return updater
 
@@ -786,7 +806,7 @@ def test_single_short_piece(tmp_path: Path) -> None:
 
 def test_start_message_fields(tmp_path: Path) -> None:
     firmware = b"....project_esp32_can\x00...."
-    message = _make_updater(tmp_path, firmware)._build_start_message()
+    message = _make_updater(tmp_path, firmware, "project_esp32_can")._build_start_message()
     assert message["name"] == "espFirmware"
     assert message["fileSize"] == len(firmware)
     assert message["binId"] == "project_esp32_can"
@@ -1043,7 +1063,7 @@ def _run_simulated_transfer(transfer: "ota._BaseTransfer", *, ack: bool = True, 
 
 
 def test_full_transfer_reaches_done(tmp_path: Path) -> None:
-    firmware = b"project_e2e\x00" + bytes(range(256)) * 3  # valid firmware id + multi-piece body
+    firmware = b"project_esp8266_thermo\x00" + bytes(range(256)) * 3  # the env name the image carries + a multi-piece body
     updater = _make_updater(tmp_path, firmware)
     _run_simulated_transfer(updater)
 
@@ -1055,7 +1075,7 @@ def test_full_transfer_reaches_done(tmp_path: Path) -> None:
 
 
 def test_device_nack_aborts_transfer(tmp_path: Path) -> None:
-    updater = _make_updater(tmp_path, b"project_e2e\x00" + b"A" * 250)
+    updater = _make_updater(tmp_path, b"project_esp8266_thermo\x00" + b"A" * 250)
     _run_simulated_transfer(updater, ack=False)
     assert updater.state == ota.TransferState.ERROR
 

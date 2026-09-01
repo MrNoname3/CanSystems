@@ -516,8 +516,9 @@ class ConfigManager:
 class FirmwareManager:
     """Handles firmware file operations and validation"""
 
-    def __init__(self, firmware_path: Path):
+    def __init__(self, firmware_path: Path, pio_project: str):
         self.firmware_path = firmware_path
+        self.pio_project = pio_project
         self._firmware_data: Optional[bytes] = None
         self._md5: Optional[str] = None
         self._firmware_id: Optional[str] = None
@@ -542,12 +543,10 @@ class FirmwareManager:
 
     @property
     def firmware_id(self) -> str:
-        """Extract and cache firmware ID"""
+        """The build environment this image belongs to, checked against the image itself."""
         if self._firmware_id is None:
-            fw_id = self._extract_firmware_id()
-            if fw_id is None:
-                raise ValueError("Could not extract firmware ID from binary")
-            self._firmware_id = fw_id
+            self._verify_firmware_id()
+            self._firmware_id = self.pio_project
         return self._firmware_id
 
     def _read_firmware(self) -> bytes:
@@ -557,20 +556,21 @@ class FirmwareManager:
         except OSError as e:
             raise OSError(f"Failed to read firmware file: {e}") from e
 
-    def _extract_firmware_id(self) -> Optional[str]:
-        """Extract firmware identifier from binary"""
-        begin_of_id = b"project_"
-        start_index = self.firmware_data.find(begin_of_id)
+    def _verify_firmware_id(self) -> None:
+        """Fail unless the image carries the environment name it is being sent as.
 
-        if start_index != -1:
-            end_index = self.firmware_data.find(b'\0', start_index + len(begin_of_id))
-            if end_index != -1:
-                identifier = self.firmware_data[start_index:end_index].decode('utf-8')
-                logging.info(f"Firmware ID found: \"{identifier}\"")
-                return identifier
-
-        logging.error("Firmware ID not found in binary")
-        return None
+        The device compares binId against its own BUILD_ENV_NAME, which catches the right image
+        going to the wrong node. It cannot catch the wrong image going to the right node - for
+        that the file has to be asked what it is, and the build stamps the environment name into
+        every image (platformio.ini: -D BUILD_ENV_NAME="$PIOENV").
+        """
+        marker = self.pio_project.encode('utf-8') + b'\0'
+        if marker not in self.firmware_data:
+            raise ValueError(
+                f"{self.firmware_path} does not carry the environment name '{self.pio_project}', "
+                f"so it is not that environment's firmware"
+            )
+        logging.info(f"Firmware ID: \"{self.pio_project}\"")
 
 
 # ---------------------------------------------------------------------------
@@ -1204,9 +1204,9 @@ class _BaseTransfer:
 class OTAUpdater(_BaseTransfer):
     """Firmware OTA update – sends firmware.bin to the device via MQTT."""
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path):
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path, pio_project: str):
         super().__init__(device_config, mqtt_config)
-        self.firmware_manager = FirmwareManager(firmware_path)
+        self.firmware_manager = FirmwareManager(firmware_path, pio_project)
 
     @property
     def data(self) -> bytes:
@@ -1443,7 +1443,7 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
     print("  Action:      Firmware upload")
     print(f"  Firmware:    {firmware_path}")
     print()
-    return OTAUpdater(device_config, mqtt_config, firmware_path)
+    return OTAUpdater(device_config, mqtt_config, firmware_path, result.project.pio_project)
 
 
 def main():
