@@ -13,11 +13,11 @@ private:
 public:
   /// @brief Constructor to initialize the driver.
   /// @param canHandler Reference to the CAN handler managing the bus.
-  /// @param canId The CAN ID associated with this device.
+  /// @param clientCanId Client CAN ID for the device.
   /// @param connectivity Reference to the MQTT connectivity object.
   /// @param subTopic Pointer to the subtopic string to be associated with the instance.
   /// @param tempOffset Offset to adjust the temperature readings. Default is `0.0F`.
-  CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* subTopic, float tempOffset = 0.0F);
+  CanAlertDriver(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, float tempOffset = 0.0F);
 
   /// @brief Default destructor.
   ~CanAlertDriver() override = default;

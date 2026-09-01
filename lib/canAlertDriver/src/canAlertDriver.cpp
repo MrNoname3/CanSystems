@@ -1,7 +1,7 @@
 #include "canAlertDriver.hpp"
 
-CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint32_t canId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
-  CanMqttGateway::CanMqttGateway(canHandler, canId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
+CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
+  CanMqttGateway::CanMqttGateway(canHandler, clientCanId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
   tempOffset(tempOffset) {}
 
 bool CanAlertDriver::publishDiscovery() {
