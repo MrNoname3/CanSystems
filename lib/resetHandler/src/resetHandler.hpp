@@ -17,10 +17,14 @@ public:
   [[nodiscard]] static bool isWdtReset();
 #elif defined(__AVR_ATmega328P__)
   /// @brief Retrieves the reason for the last system reset.
-  /// @details The MCUSR bits as the hardware left them - PORF, EXTRF, BORF, WDRF - plus
-  /// `intentionalRestartFlag` when the reset came from restartMCU() rather than a hang. The
-  /// value is captured during startup (see resetHandler.cpp); MCUSR itself always reads 0 by
-  /// then, because urboot clears it after handing the flags over in r2.
+  /// @details Captured during startup (see resetHandler.cpp): MCUSR itself always reads 0 by
+  /// then, because urboot clears it after handing the flags over in r2. Layout:
+  ///   - bits 0-3: MCUSR as the hardware left it (PORF, EXTRF, BORF, WDRF)
+  ///   - bit 4:    `intentionalRestartFlag`, set when the watchdog reset came from restartMCU()
+  ///   - bits 5-7: `RestartCause`, meaningful only while bit 4 is set
+  ///
+  /// urboot enters its serial wait on an external reset and restarts the part through its own
+  /// watchdog, so EXTRF never reaches here: a reset pin and a hang both arrive as WDRF.
   /// @return The captured reset flags. Unlike the ESP builds this is a bitmask, not an enum.
   [[nodiscard]] static uint8_t getResetReason();
 

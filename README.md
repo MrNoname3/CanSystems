@@ -61,6 +61,19 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
 - Device → server: `iot/dtos/<mac>/<subtopic>`; server → device: `iot/stod/<mac>/<subtopic>`.
 - Every node publishes a retained `availability` topic (LWT) and a retained `info` topic
   (fw version = git commit count, git hash, dirty flag, reset reason).
+- The info topic's `rr` is the SDK's own enum on the ESP nodes. On the CAN nodes it is the
+  bitmask `ResetHandler::getResetReason()` builds — MCUSR in bits 0-3, a deliberate-restart flag
+  in bit 4, and why in bits 5-7:
+
+  | `rr` | Meaning |
+  |------|---------|
+  | `0x05` | power-on (the brown-out flag comes up with it) |
+  | `0x04` | brown-out while running — the urboot envs set BOD to 4.3 V |
+  | `0x08` | reset pin, or a hang the watchdog caught: urboot consumes EXTRF, so the two look alike |
+  | `0x38` | a task failed to initialise at startup |
+  | `0x58` | the gateway commanded a restart |
+  | `0x78` | rebooted into freshly stored firmware |
+  | `0x00` | the node is not running urboot, which is the only bootloader that hands MCUSR on |
 - After every reconnect the node publishes a retained `diag` topic: the cause of the last
   disconnect (MQTT status or `NETWORK_LOST`), its UTC timestamp, the offline duration in
   seconds (measured from client-side detection, i.e. up to ~2x keepalive after the actual
