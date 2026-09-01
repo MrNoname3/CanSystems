@@ -43,7 +43,7 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
   for(uint8_t i = 0U; i < expectedDataSize; i++) {
     // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
     if(flashPointer < sizeof(firstFwBytes)) {
-      firstFwBytes[i] = fwData[i];
+      firstFwBytes[flashPointer] = fwData[i];
     } else {
       // Save the other bytes to the FLASH.
       if(!flash.writeByte(flashBlockBeginAddress + flashPointer, fwData[i])) {
@@ -52,7 +52,6 @@ bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSiz
       }
     }
     flashPointer++;
-    if(flashPointer > fwSize) { return false; }              // Check for overwrites.
   }
   stallTimer = millis();                                     // The sender is still there.
   return true;
