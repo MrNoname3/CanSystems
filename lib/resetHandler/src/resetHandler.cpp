@@ -14,37 +14,25 @@
 
 #if defined(__AVR_ATmega328P__)
 namespace {
-  // Survives a reset because .noinit is left alone by .init4, and SRAM keeps its contents through
-  // everything but a power cycle.
-  // volatile is load-bearing, not decoration: these are written in .init3 and read from an
-  // unrelated context much later, and without it the optimiser drops the stores as dead - which
-  // also frees it to reuse the register the r2 read landed in.
+  // .noinit survives a reset; volatile keeps the .init3 stores from being dropped as dead, which
+  // would also free the register holding the r2 read.
   volatile uint8_t bootResetFlags __attribute__((section(".noinit")));
   volatile uint16_t restartMarker __attribute__((section(".noinit")));
   volatile uint8_t restartCause __attribute__((section(".noinit")));
-  constexpr uint16_t restartMagic = 0xB007U;   // Distinguishes our marker from uninitialised SRAM.
+  constexpr uint16_t restartMagic = 0xB007U;   // Tells the marker apart from uninitialised SRAM.
 } // namespace
 
-// Runs from .init3: the stack is up (.init2) but .data/.bss (.init4) and the global constructors
-// (.init6) have not run, so this beats the WdtHandler constructor to the watchdog and reads r2
-// before the compiler can use it for anything else.
-//
-// urboot copies MCUSR into r2 and then clears MCUSR (verified in the shipped bootloader images),
-// which is why reading MCUSR from the application only ever returns 0. It also disables the
-// watchdog itself, so the wdt_disable() below only matters for a board programmed over ISP with
-// no bootloader - and on such a board r2 is undefined at power-up, which is what the MCUSR
-// fallback covers: urboot always leaves MCUSR at 0, so a non-zero one means nobody handed over.
+// .init3 runs after the stack is up but before .data/.bss and the global constructors, so this
+// reads r2 before the compiler can use it and reaches the watchdog before WdtHandler's constructor.
 void captureResetFlags() __attribute__((naked, used, section(".init3")));
 void captureResetFlags() {
   uint8_t handedOver;
-  __asm__ __volatile__("mov %0, r2" : "=r"(handedOver));
-  const uint8_t ownFlags = MCUSR;
+  __asm__ __volatile__("mov %0, r2" : "=r"(handedOver));   // where urboot leaves MCUSR before clearing it
+  const uint8_t ownFlags = MCUSR;                         // still set when no bootloader handed it over
   MCUSR = 0;                                          // Must be cleared before WDE can be.
   wdt_disable();
-  // A real reset always leaves one of MCUSR's low four bits set and the top four clear, so a
-  // value outside that shape is not a handover at all - it is whatever the register happened to
-  // hold. Optiboot 4.4, the stock Arduino bootloader, clears MCUSR without passing it on, and
-  // without this check a node burned with it would report leftovers as a reset reason.
+  // A real reset sets one of the low four bits and none of the top four; anything else is
+  // register leftovers, which is what a bootloader that clears MCUSR without passing it on leaves.
   const bool handoverLooksReal = (handedOver != 0U) && ((handedOver & 0xF0U) == 0U);
   uint8_t flags = ownFlags;
   if(ownFlags == 0U) { flags = handoverLooksReal ? handedOver : 0U; }

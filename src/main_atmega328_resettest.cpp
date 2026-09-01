@@ -86,12 +86,18 @@ void loop() {
     case 'h': {
       Logger::get()->println(F("-> hanging: expect a watchdog reset WITHOUT the intentional flag"));
       Logger::get()->flush();
-      // No watchdog reset here, and no marker either - this is what a real lock-up looks like.
+      // No marker is left, so this is what a real lock-up looks like.
       while(true) {}
     }
-    case '1': ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed); break;
-    case '2': ResetHandler::restartMCU(ResetHandler::RestartCause::CommandedOverCan); break;
-    case '3': ResetHandler::restartMCU(ResetHandler::RestartCause::OtaComplete); break;
+    case '1': {
+      ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed);
+    } break;
+    case '2': {
+      ResetHandler::restartMCU(ResetHandler::RestartCause::CommandedOverCan);
+    } break;
+    case '3': {
+      ResetHandler::restartMCU(ResetHandler::RestartCause::OtaComplete);
+    } break;
     case 'z': {
       bootCounterMagic = 0U;
       Logger::get()->println(F("-> counter cleared; the next start reports a cold one"));

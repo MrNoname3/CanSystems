@@ -23,19 +23,17 @@ public:
   ///   - bit 4:    `intentionalRestartFlag`, set when the watchdog reset came from restartMCU()
   ///   - bits 5-7: `RestartCause`, meaningful only while bit 4 is set
   ///
-  /// urboot enters its serial wait on an external reset and restarts the part through its own
-  /// watchdog, so EXTRF never reaches here: a reset pin and a hang both arrive as WDRF.
+  /// EXTRF never reaches here: urboot restarts the part through its own watchdog after its serial
+  /// wait, so a reset pin and a hang both arrive as WDRF.
   /// @return The captured reset flags. Unlike the ESP builds this is a bitmask, not an enum.
   [[nodiscard]] static uint8_t getResetReason();
 
   /// @brief Bit set on top of MCUSR when the watchdog reset was asked for by restartMCU().
-  /// @details MCUSR only uses bits 0-3 on this part, so bit 4 is free. Without it a deliberate
-  /// restart and a hang the watchdog caught are both just WDRF.
+  /// @details MCUSR only uses bits 0-3 on this part, so bit 4 is free.
   static constexpr uint8_t intentionalRestartFlag = 0x10U;
 
   /// @brief Why restartMCU() was called, carried in bits 5-7 of the reset reason.
-  /// @details Every deliberate restart is WDRF plus `intentionalRestartFlag`, which alone cannot
-  /// say which of them it was. Only meaningful while that flag is set.
+  /// @details Only meaningful while `intentionalRestartFlag` is set.
   enum class RestartCause : uint8_t {
     Unspecified = 0U,       // restartMCU() called without one.
     InitFailed,             // A task refused to initialise at startup.
