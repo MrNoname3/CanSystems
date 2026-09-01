@@ -9,7 +9,10 @@ CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   fileSize(0U),
   transferState(TransferState::IDLE),
   otaTimeoutTimer(0U),
-  fileNamePtr(nullptr) {}
+  fileNamePtr(nullptr),
+  imageCrc(0U),
+  imageCrcKnown(false),
+  sharedImage(nullptr) {}
 
 CanOta::~CanOta() {
   if(receivedFile) {
@@ -17,7 +20,7 @@ CanOta::~CanOta() {
   }
 }
 
-CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storageNumber) {
+CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storageNumber, OtaImageInfo* image) {
   ErrorState<OtaStartError, OtaStartErrorType> otaStartErrState;
   if(isOtaInProgress()) {
     otaStartErrState.setError(OtaStartError::ALREADY_IN_PROGRESS);
@@ -52,6 +55,9 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
   this->storageNumber = storageNumber;
   transferState = TransferState::START;
   crc16.reset();
+  sharedImage = image;
+  imageCrcKnown = (image != nullptr) && image->valid && (image->size == fileSize);
+  imageCrc = imageCrcKnown ? image->crc : 0U;
   otaTimeoutTimer = millis();
   return otaStartErrState.getRawErrorState();
 }
@@ -71,22 +77,31 @@ void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLIN
 }
 
 void CanOta::checksumOrSendStart() {
-  const uint32_t remainingBytes = receivedFile.available();
-  if(remainingBytes == 0U) {
-    receivedFile.seek(0U, SeekSet);
-    OtaCanFrame::StartFrame startFrame;
-    startFrame.storageNumber = storageNumber;
-    startFrame.fwSize = fileSize;
-    startFrame.fwCrc = crc16.get();
-    uint8_t canData[8] = { 0U };
-    OtaCanFrame::packStart(startFrame, canData);
-    transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_START, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
-    return;
+  if(!imageCrcKnown) {
+    const uint32_t remainingBytes = receivedFile.available();
+    if(remainingBytes > 0U) {
+      uint8_t readBuffer[readBufferSize] = { 0U };
+      const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
+      if(!readFilePiece(readBuffer, readLength)) { return; }
+      crc16.next(readBuffer, readLength);
+      return;
+    }
+    imageCrc = crc16.get();
+    imageCrcKnown = true;
+    if(sharedImage != nullptr) {
+      sharedImage->size = fileSize;
+      sharedImage->crc = imageCrc;
+      sharedImage->valid = true;
+    }
   }
-  uint8_t readBuffer[readBufferSize] = { 0U };
-  const uint8_t readLength = (remainingBytes >= readBufferSize) ? readBufferSize : remainingBytes;
-  if(!readFilePiece(readBuffer, readLength)) { return; }
-  crc16.next(readBuffer, readLength);
+  receivedFile.seek(0U, SeekSet);
+  OtaCanFrame::StartFrame startFrame;
+  startFrame.storageNumber = storageNumber;
+  startFrame.fwSize = fileSize;
+  startFrame.fwCrc = imageCrc;
+  uint8_t canData[8] = { 0U };
+  OtaCanFrame::packStart(startFrame, canData);
+  transferState = canMqttGateway.sendCanFrame(CanCmd::OTA_START, canData) ? TransferState::WAIT_FOR_ACK : TransferState::INVALID;
 }
 
 void CanOta::sendNextPiece() {
@@ -177,8 +192,16 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   }
 }
 
+bool CanMqttGateway::startOta(const char* fileName, OtaImageInfo& image) {
+  return startOta(fileName, &image);
+}
+
 bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-convert-member-functions-to-static)
-  const uint8_t otaStartResultCode = canOta.startOta(fileName);
+  return startOta(fileName, nullptr);
+}
+
+bool CanMqttGateway::startOta(const char* fileName, OtaImageInfo* image) { // NOLINT(readability-convert-member-functions-to-static)
+  const uint8_t otaStartResultCode = canOta.startOta(fileName, 0U, image);
   const bool fileTransferStartResult = (otaStartResultCode == 0U);
   Logger::get()->printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
                           MqttBase::getSubtopic(), Str::getStateStr(fileTransferStartResult));
@@ -248,7 +271,11 @@ bool CanMqttGateway::init() {
 
 bool CanMqttGateway::run() {
   handlePing();
+  const bool otaWasRunning = canOta.isOtaInProgress();
   canOta.runOta();
+  // The queue holds the next target until this one is done: transfers share one bus and one
+  // transmit buffer, so running them at once only stretches both.
+  if(otaWasRunning && !canOta.isOtaInProgress()) { OtaRegistry::startNext(); }
   return runLocal();
 }
 

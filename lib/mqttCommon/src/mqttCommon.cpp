@@ -28,7 +28,7 @@ bool MqttCommon::run() {
       if(isRestartRequired) {
         reboot();
       } else {
-        OtaRegistry::triggerForFile(dataTransfer.getFileName());
+        OtaRegistry::queueForFile(dataTransfer.getFileName());
       }
     }
   }

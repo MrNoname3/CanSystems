@@ -46,8 +46,11 @@ public:
   /// @brief Starts the OTA process.
   /// @param fileName The name of the firmware file.
   /// @param storageNumber The storage location number.
+  /// @param image Image facts shared with the other targets of the same upload: when it already
+  /// holds this file's checksum the whole read-and-checksum pass is skipped, otherwise the pass
+  /// runs and leaves its result there. `nullptr` computes without sharing.
   /// @return A bitmask of OtaStartError indicating any errors encountered.
-  OtaStartErrorType startOta(const char* fileName, uint16_t storageNumber = 0U);
+  OtaStartErrorType startOta(const char* fileName, uint16_t storageNumber = 0U, OtaImageInfo* image = nullptr);
 
   /// @brief Checks if an OTA process is currently in progress.
   /// @return True if OTA is in progress, false otherwise.
@@ -60,7 +63,8 @@ public:
   /// @brief Executes the main OTA processing logic.
   void runOta();
 
-  /// @brief Runs the START state: checksums the file a chunk at a time, then sends OTA_START.
+  /// @brief Runs the START state: checksums the file a chunk at a time (unless the checksum
+  /// already came from a previous target), then sends OTA_START.
   void checksumOrSendStart();
 
   /// @brief Runs the STORE state: sends the next firmware piece, or moves on when the file is done.
@@ -99,6 +103,9 @@ private:
   Crc16 crc16;                                          // CRC16 calculator for validating file integrity.
   uint32_t otaTimeoutTimer;                             // Timer for OTA process timeout.
   const char* fileNamePtr;                              // Pointer to the firmware file name (must outlive the OTA process).
+  uint16_t imageCrc;                                    // CRC16 of the image being sent.
+  bool imageCrcKnown;                                   // Whether imageCrc holds it yet, or the START pass still has to compute it.
+  OtaImageInfo* sharedImage;                            // Where to leave the checksum for the next target of this upload; may be null.
 };
 
 /// @brief Combines CAN and MQTT functionalities for managing device communications.
@@ -121,9 +128,21 @@ public:
   /// @return True if the OTA process started successfully.
   [[nodiscard]] bool startOta(const char* fileName);
 
+  /// @brief Starts the OTA sharing the image facts with the other targets of the same upload.
+  /// @param fileName The name of the firmware file on LittleFS.
+  /// @param image Read when it already describes this file, filled in when it does not.
+  /// @return True if the OTA process started successfully.
+  bool startOta(const char* fileName, OtaImageInfo& image);
+
+  /// @brief Starts the OTA, with or without shared image facts.
+  /// @param fileName The name of the firmware file on LittleFS.
+  /// @param image Shared image facts, or `nullptr` to compute them for this transfer alone.
+  /// @return True if the OTA process started successfully.
+  bool startOta(const char* fileName, OtaImageInfo* image);
+
   /// @brief Checks if an OTA process is currently in progress on this device.
   /// @return True if OTA is in progress, false otherwise.
-  [[nodiscard]] bool isOtaInProgress() const;
+  [[nodiscard]] bool isOtaInProgress() const override;
 
   /// @brief Sends the OTA result payload to the dedicated OTA sub-topic instead of the main topic.
   /// @param payload JSON payload to send (e.g. {"OTA":"OK"}).
@@ -133,8 +152,12 @@ public:
   /// @brief Returns the firmware file name configured for this device (PROGMEM pointer).
   [[nodiscard]] const char* getFwFileName() const override { return fwFileNamePtr; }
 
+  /// @brief Whether the CAN client has answered a ping recently enough to be worth sending to.
+  [[nodiscard]] bool isOtaTargetOnline() const override { return clientOnline; }
+
   /// @brief Triggers OTA using the configured firmware file name.
-  void triggerOta() override { (void)startOta(fwFileNamePtr); }
+  /// @param image Image facts shared with the other targets of the same upload.
+  void triggerOta(OtaImageInfo& image) override { (void)startOta(fwFileNamePtr, image); }
 
   CanMqttGateway(const CanMqttGateway&) = delete;                       // Define copy constructor.
   CanMqttGateway& operator=(const CanMqttGateway&) = delete;            // Define copy assignment operator.

@@ -115,6 +115,11 @@ bus in 4-byte pieces with a CRC16. The ATmega stages it to its SPI flash (W25Q64
 urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA":"[OK]"}` /
 `{"OTA":"[ERR]"}` on the device's `ota` subtopic.
 
+Every node expecting that file is updated from the one upload, **one transfer at a time**: they
+share a CAN bus and a controller that holds a single frame, so running them together finishes no
+sooner and keeps each node in transfer twice as long. A node that is not answering its ping is
+skipped rather than queued, and the image's checksum is computed once for the whole batch.
+
 ## Repository layout
 
 | Path | Contents |

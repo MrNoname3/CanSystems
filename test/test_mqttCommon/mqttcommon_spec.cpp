@@ -121,7 +121,12 @@ public:
   explicit TestOtaTarget(const char* name) :
     name_(name) {}
   [[nodiscard]] const char* getFwFileName() const override { return name_; }
-  void triggerOta() override { triggered = true; }
+  [[nodiscard]] bool isOtaTargetOnline() const override { return true; }
+  [[nodiscard]] bool isOtaInProgress() const override { return false; }
+  void triggerOta(OtaImageInfo& image) override {
+    (void)image;
+    triggered = true;
+  }
   bool triggered = false;
 
 private:
