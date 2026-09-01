@@ -28,6 +28,12 @@ public:
     if(handle != nullptr) { (void)xSemaphoreGiveRecursive(handle); }
   }
 
+  /// @brief Whether the underlying semaphore exists.
+  /// @details lock() and unlock() do nothing without one, so a guard would report success while
+  /// leaving the data unprotected.
+  /// @return `true` when the mutex can actually lock.
+  [[nodiscard]] bool valid() const { return handle != nullptr; }
+
   RecursiveMutex(const RecursiveMutex&) = delete;                   // Define copy constructor.
   RecursiveMutex& operator=(const RecursiveMutex&) = delete;        // Define copy assignment operator.
   RecursiveMutex(RecursiveMutex&&) = delete;                        // Define move constructor.
@@ -52,6 +58,10 @@ public:
 
   /// @brief Releases one level of the lock. Nothing to release here, so this compiles away.
   void unlock() {}
+
+  /// @brief There is nothing to create here, so the lock is always usable.
+  /// @return Always `true`.
+  [[nodiscard]] bool valid() const { return true; }  // NOLINT(readability-convert-member-functions-to-static) mirrors the ESP32 signature
 
   RecursiveMutex(const RecursiveMutex&) = delete;                   // Define copy constructor.
   RecursiveMutex& operator=(const RecursiveMutex&) = delete;        // Define copy assignment operator.

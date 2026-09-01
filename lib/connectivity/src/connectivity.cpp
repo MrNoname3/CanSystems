@@ -27,6 +27,11 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 }
 
 bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
+  // cppcheck-suppress knownConditionTrueFalse ; only ESP32 has a semaphore that can fail to exist
+  if(!mqttMutex.valid()) {
+    Logger::get()->printf_P(PSTR("[MQTT] Mutex is not initialized properly!\r\n"));
+    return false;
+  }
   { // Initialise the file system.
     delay(10U);
     uint32_t totalBytes = 0U;
