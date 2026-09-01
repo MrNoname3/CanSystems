@@ -19,13 +19,17 @@ template<uint8_t MaxSensors>
 class MqttThermometer final : public MqttBase {
 private:
   // clang-format off
-  static constexpr uint8_t subSubTopicSize = 34U;                  // <subtopic up to 15> + '/' + 16 hex + null.
+  static constexpr uint8_t subSubTopicSize = 33U;                  // <subtopic up to 15> + '/' + 16 hex + null.
   static constexpr uint8_t payloadSize     = 24U;                  // {"tempC":-55.00} + margin.
   static constexpr uint8_t deviceIdSize    = 56U;                  // clientName + '_' + 16 hex + null.
   static constexpr uint8_t deviceNameSize  = 32U;                  // "DS18B20 " + 16 hex + null.
   static constexpr uint8_t swVersionSize   = 24U;                  // "65535 (deadbeef)" + margin.
   static constexpr float   minValidTempC   = -55.0F;               // Below the DS18B20 range -> invalid/disconnected.
   // clang-format on
+  // Connectivity prefixes the sender base, so a longer sub-subtopic would be truncated there.
+  static_assert(subSubTopicSize - 1U <= MqttTopics::getPublishTopicBufSize() - MqttTopics::getSenderTopicBufSize(),
+                "A sub-subtopic this long would be truncated when published!");
+
   static constexpr const char PROGMEM entityName[] = "Temperature";
   static constexpr const char PROGMEM entitySub[] = "temperature";
   static constexpr const char PROGMEM valueTemplate[] = "{{ value_json.tempC }}";

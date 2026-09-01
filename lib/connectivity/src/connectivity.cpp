@@ -311,8 +311,7 @@ void Connectivity::shutdownMqtt() {
 bool Connectivity::sendMqttMessage(const char* subTopic, const char* payload) {
   if(subTopic == nullptr || payload == nullptr) { return false; }
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
-  static constexpr uint8_t topicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
-  char actualTopic[topicBufSize] = { '\0' };
+  char actualTopic[MqttTopics::getPublishTopicBufSize()] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
   const size_t actualTopicLen = strlcat(actualTopic, subTopic, sizeof(actualTopic));
   if(actualTopicLen >= sizeof(actualTopic)) { return false; }
@@ -354,8 +353,7 @@ bool Connectivity::publishRaw(const char* topic, const char* payload, bool retai
 bool Connectivity::publishRetained(const char* subSubTopic, const char* payload) {
   if(subSubTopic == nullptr || payload == nullptr) { return false; }
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access (callable from any task).
-  static constexpr uint8_t retainedTopicBufSize = MqttTopics::getSenderTopicBufSize() + 24U;
-  char actualTopic[retainedTopicBufSize] = { '\0' };
+  char actualTopic[MqttTopics::getPublishTopicBufSize()] = { '\0' };
   strlcpy(actualTopic, mqttCredentials.senderTopic, sizeof(actualTopic));
   const size_t len = strlcat(actualTopic, subSubTopic, sizeof(actualTopic));
   if(len >= sizeof(actualTopic)) { return false; }
