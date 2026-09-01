@@ -82,11 +82,11 @@ private:
   /// @return `true` when the controller accepted and sent it.
   [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const; // NOLINT(readability-convert-member-functions-to-static)
 
-  /// @brief Logs how many received frames the interrupt had to drop since the previous pass.
-  void reportDroppedRxFrames();
+  /// @brief Logs the frames lost in either direction since the previous pass.
+  void reportDroppedFrames();
 
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
-  // Written only by rxInterrupt(), read only by reportDroppedRxFrames(). Free-running: the
+  // Written only by rxInterrupt(), read only by reportDroppedFrames(). Free-running: the
   // reader keeps its own mark, so the interrupt never competes with a reset.
   static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
   static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
@@ -95,6 +95,7 @@ private:
   IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
   DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
   DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
+  DeltaCounter txAbandonedReporter;                                       // Mark for the driver's abandoned-frame counter.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.

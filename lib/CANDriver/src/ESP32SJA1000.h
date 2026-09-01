@@ -18,10 +18,21 @@ public:
   /// @brief Takes the controller off the bus and releases its pins and interrupt.
   void end();
 
-  /// @brief Sends the packet being built and waits for the controller to finish with it.
-  /// @return 1 once the frame has gone out, 0 on a transmission error, on bus-off, or when the
-  /// wait ran past its timeout.
+  /// @brief Hands the packet being built to the controller.
+  /// @details Returns as soon as the transmission is requested; whether the frame reached the
+  /// bus is answered by the next txReady(). Call txReady() first - this does not wait for a
+  /// busy controller.
+  /// @return 1 once the frame is in the transmit buffer, 0 when nothing was being built.
   [[nodiscard]] uint8_t endPacket();
+
+  /// @brief Whether the transmit buffer is free for the next frame.
+  /// @details A frame nobody acknowledges is retransmitted by the controller indefinitely, so a
+  /// buffer that stays busy past the transmit timeout is aborted and the slot freed.
+  /// @return `true` when endPacket() can be called.
+  [[nodiscard]] bool txReady();
+
+  /// @brief How many frames have been given up on since begin(), because the bus never took them.
+  [[nodiscard]] uint32_t getAbandonedTxFrames() const { return abandonedTxFrames; }
 
   /// @brief Reads the next received frame out of the controller, if there is one.
   /// @return The frame's payload length in bytes, 0 when no frame was waiting. A zero-length
@@ -95,6 +106,9 @@ private:
   gpio_num_t txPin = defaultTxPin;
   bool loopbackEnabled = false;
   intr_handle_t intrHandle = nullptr;
+  bool txPending = false;                                           // A frame is in the transmit buffer, waiting for the bus.
+  uint32_t txStartedAt = 0U;                                        // millis() when that frame was handed to the controller.
+  uint32_t abandonedTxFrames = 0U;                                  // Frames aborted because the bus never took them.
 };
 
 #if !defined(NATIVE_TEST)
