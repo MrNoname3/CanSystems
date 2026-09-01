@@ -43,7 +43,7 @@ static_assert(digitalPinToInterrupt(CAN_INT) != (NOT_AN_INTERRUPT), "CAN modul i
 static_assert(digitalPinToInterrupt(FLOW_INT) != (NOT_AN_INTERRUPT), "Flow sensor interrupt input pin is not interrupt capable!");
 
 //--- Driver objects ---//
-WdtHandler wdt(WdtHandler::WDT::T_120MS);
+WdtHandler wdt(WdtHandler::WDT::T_500MS);
 DebugLedHandler debugLed(LED_PIN, HIGH);
 CanHandler canHandler(debugLed, CAN_CS, CAN_INT, FLASH_CS);
 PushButtonHandler buttonHandler(canHandler, []() -> bool { return static_cast<bool>(digitalRead(BUTTON_PIN)); });
