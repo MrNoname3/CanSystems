@@ -296,9 +296,10 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
           (static_cast<uint32_t>(canFrame.data[4]) << 16U) |
           (static_cast<uint32_t>(canFrame.data[5]) << 24U);
       const uint8_t gitDirty = canFrame.data[6];
+      const uint8_t resetReason = canFrame.data[7];   // MCUSR bits plus the intentional-restart bit
       (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
       char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, 255U);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(dataOutValid) {
         const char* infoSubtopic = canInfoTopic + (MqttTopics::getSenderTopicBufSize() - 1U);

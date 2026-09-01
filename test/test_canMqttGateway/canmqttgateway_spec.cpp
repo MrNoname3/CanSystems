@@ -156,13 +156,13 @@ bool test_fw_version_frame_publishes_info() {
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());
-  // fw = 0x0102 = 258, git = 0x0a0b0c0d, dirty = 1.
-  const uint8_t version[8] = { 0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0U };
+  // fw = 0x0102 = 258, git = 0x0a0b0c0d, dirty = 1, reset reason = 0x18 (WDRF + intentional).
+  const uint8_t version[8] = { 0x02U, 0x01U, 0x0dU, 0x0cU, 0x0bU, 0x0aU, 1U, 0x18U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::FW_VERSION), version);
   IS_TRUE(std::string(gateway.getCanSwVersion()) == "258 (0a0b0c0d)");
   bool infoFound = false;
   for(const auto& entry : MqttBase::retainedMessages) {
-    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"a0b0c0d","dirty":1,"rr":255})") {
+    if(entry.first == "alert1/info" && entry.second == R"({"fw":258,"git":"a0b0c0d","dirty":1,"rr":24})") {
       infoFound = true;
     }
   }

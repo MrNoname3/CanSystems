@@ -181,7 +181,8 @@ bool CanHandlerAtmega328P::send(uint16_t command, const uint8_t (&data)[8]) cons
 }
 
 bool CanHandlerAtmega328P::sendFwVersion() const { // NOLINT(readability-convert-member-functions-to-static)
-  static constexpr uint8_t versionInfo[8] = {
+  // Not constexpr any more: data[7] carries the reset reason, which is only known at run time.
+  const uint8_t versionInfo[8] = {
     static_cast<uint8_t>(Build::getFwVersion() & 0xFF),
     static_cast<uint8_t>((Build::getFwVersion() >> 8U) & 0xFF),
     static_cast<uint8_t>(Build::getGitHash() & 0xFF),
@@ -189,7 +190,7 @@ bool CanHandlerAtmega328P::sendFwVersion() const { // NOLINT(readability-convert
     static_cast<uint8_t>((Build::getGitHash() >> 16U) & 0xFF),
     static_cast<uint8_t>((Build::getGitHash() >> 24U) & 0xFF),
     Build::getGitDirty(),
-    0U
+    ResetHandler::getResetReason()
   };
   return CanHandlerBase::send(CanCmd::FW_VERSION, versionInfo);
 }

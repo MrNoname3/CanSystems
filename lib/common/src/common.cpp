@@ -1,6 +1,7 @@
 #include "common.hpp"
 #if defined(__AVR_ATmega328P__)
 #include <avr/boot.h>                                               /// Reading fuses.
+#include "resetHandler.hpp"                                         /// Reset reason captured during startup.
 #elif defined(ESP8266) || defined(ESP32)
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include <time.h>                                                   /// UTC time retrieval/formatting (NTP-backed clock).
@@ -92,6 +93,8 @@ void Build::printBuildInfo() {
   Logger::get()->print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
   Logger::get()->print(Str::getSpacerStr());
   Logger::get()->println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
+  Logger::get()->print(F("Reset: "));
+  Logger::get()->println(ResetHandler::getResetReason(), HEX);
 #elif defined(ESP8266) || defined(ESP32)
   Logger::get()->printf_P(PSTR("Build info:\r\n"));
   Logger::get()->printf_P(PSTR("  CPP: %u\r\n"), getCppVersion());
