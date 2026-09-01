@@ -47,7 +47,7 @@ public:
   bool send(const CanFrame& frameOut) const; // NOLINT(modernize-use-nodiscard)
 
   /// @brief Sends a CAN frame with a specified command and data payload.
-  /// @param command 10-bit command value.
+  /// @param command 9-bit command value.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
@@ -128,7 +128,7 @@ public:
   virtual void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) = 0;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
-  /// @param command 10-bit command value representing the specific action or request.
+  /// @param command 9-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] inline bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
@@ -146,7 +146,7 @@ public:
   }
 
   /// @brief Sends a CAN frame with a specified command and an empty data payload.
-  /// @param command 10-bit command value representing the specific action or request.
+  /// @param command 9-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] inline bool sendCanFrame(uint16_t command) const {
     uint8_t data[8] = { 0U };
@@ -163,7 +163,7 @@ public:
   }
 
   /// @brief Sends a CAN response frame with a specified command and a single boolean response value.
-  /// @param command 10-bit command value representing the specific action or request.
+  /// @param command 9-bit command value representing the specific action or request.
   /// @param response Boolean value indicating the response to the command (`true` or `false`).
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   [[nodiscard]] bool sendCanResponse(uint16_t command, bool response) const {
