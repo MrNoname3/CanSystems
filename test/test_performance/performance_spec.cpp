@@ -146,6 +146,32 @@ bool test_multiple_runs_callback_count() {
   END_IT
 }
 
+// ---- measurement window ----
+
+bool test_a_spike_stops_silencing_the_measurement_after_the_window() {
+  IT("a maximum older than the window no longer hides the rounds that follow it");
+  setFakeMillis(0U);
+  Performance p(50U, onMaxRoundTime);
+  p.init();
+
+  callbackCount = 0U;
+  setFakeMillis(800U);
+  p.run();                                        // delta=800 -> the spike; callback #1
+  IS_EQUAL(callbackCount, 1U);
+  IS_EQUAL(callbackLastValue, 800U);
+
+  // Ordinary 100 ms rounds from here on: silent while the spike stands, heard once the window
+  // has rolled over. Stepping rather than jumping, so no single gap becomes a maximum itself.
+  for(uint32_t t = 900U; t <= (16U * 60U * 1000U); t += 100U) {
+    setFakeMillis(t);
+    p.run();
+  }
+  IS_EQUAL(callbackCount, 2U);                    // exactly one report after the rollover
+  IS_EQUAL(callbackLastValue, 100U);              // and it is the ordinary round, not the old spike
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Performance");
   test_init_returns_true();
@@ -157,5 +183,6 @@ int main() {
   test_run_updates_max_loop_time();
   test_reset_timer_shifts_reference_point();
   test_multiple_runs_callback_count();
+  test_a_spike_stops_silencing_the_measurement_after_the_window();
   FINISH
 }

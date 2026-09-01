@@ -3,12 +3,15 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "common.hpp"                                                /// Time helpers for the measurement window.
 
 /// @brief Tracks how long the scheduler takes to come back round to an ordinary task.
 /// @details Measures the gap between two consecutive calls of its own `run()`, which under the
 /// partial round-robin is one full turn of the rotation rather than one `loop()` iteration -
 /// only the first task runs every pass. That is the number worth watching: it says how long a
 /// plain task waits for its turn, so a task that blocks shows up here whichever one it is.
+/// The maximum stands for one window and then restarts from the initial limit, so what is
+/// reported is the current trend rather than the worst round since boot.
 class Performance final : public Task {
 public:
   /// @brief Constructs a `Performance` object with an initial round time limit and a callback.
@@ -16,6 +19,7 @@ public:
   /// @param maxRoundTimeCallback Called with the new maximum, in milliseconds, whenever one is
   /// recorded. May be `nullptr`.
   Performance(uint32_t initialRoundTimeLimit, void (*maxRoundTimeCallback)(uint32_t maxRoundTime)) :
+    roundTimeLimit(initialRoundTimeLimit),
     maxRoundTime(initialRoundTimeLimit),
     maxRoundTimeCallback(maxRoundTimeCallback) {}
 
@@ -35,6 +39,10 @@ public:
     const uint32_t actualTime = millis();
     const uint32_t actualRoundTime = actualTime - lastRunTime;
     lastRunTime = actualTime;
+    if(Time::hasElapsed(actualTime, windowStart, windowTime)) {
+      windowStart = actualTime;
+      maxRoundTime = roundTimeLimit;
+    }
     if(actualRoundTime > maxRoundTime) {
       maxRoundTime = actualRoundTime;
       if(maxRoundTimeCallback != nullptr) {
@@ -45,7 +53,10 @@ public:
   }
 
   /// @brief Restarts the measurement from now, so the startup time is not reported as a round.
-  inline void resetTimer() { lastRunTime = millis(); }
+  inline void resetTimer() {
+    lastRunTime = millis();
+    windowStart = lastRunTime;
+  }
 
   Performance(const Performance&) = delete;                       // Define copy constructor.
   Performance& operator=(const Performance&) = delete;            // Define copy assignment operator.
@@ -53,7 +64,11 @@ public:
   Performance& operator=(Performance&&) = delete;                 // Define move assignment operator.
 
 private:
-  uint32_t maxRoundTime;                                // Longest round recorded so far, in milliseconds.
+  static constexpr uint32_t windowTime = Time::minToMs(15U);  // How long a maximum stands before the measurement restarts.
+
+  uint32_t roundTimeLimit;                              // Starting maximum, restored at every window rollover.
+  uint32_t maxRoundTime;                                // Longest round of the current window, in milliseconds.
   uint32_t lastRunTime = 0U;                            // millis() at this task's previous turn.
+  uint32_t windowStart = 0U;                            // millis() when the current window began.
   void (*maxRoundTimeCallback)(uint32_t maxRoundTime);  // Notified when a new maximum is recorded.
 };
