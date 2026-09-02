@@ -1,4 +1,5 @@
 #include "canMqttGateway.hpp"
+#include "bootProgress.hpp"                                        /// BootStage::Unknown for sub-devices.
 #include <ctype.h>
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
@@ -323,7 +324,8 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       const uint8_t resetReason = canFrame.data[7];   // MCUSR bits plus the intentional-restart bit
       (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
       char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason);
+      const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason,
+                                             static_cast<uint8_t>(BootStage::Unknown));   // A CAN device runs no startup of ours to report.
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
       if(dataOutValid) {
         const char* infoSubtopic = canInfoTopic + (MqttTopics::getSenderTopicBufSize() - 1U);

@@ -1,6 +1,7 @@
 #include "networkManager.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"
+#include "bootProgress.hpp"                                        /// Records how far startup got.
 
 namespace {
   // clang-format off
@@ -47,6 +48,7 @@ void NetworkManager::buildHostname() {
 
 NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { // NOLINT(readability-function-cognitive-complexity)
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
+  BootProgress::set(BootStage::NetworkStart);
   static constexpr uint32_t connectTimeoutMs = Time::secToMs(30U);
   Logger::get()->printf_P(PSTR("[NETWORK] Network interface: "));
   switch(networkInterface) {
@@ -80,6 +82,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
 #endif
       WiFi.begin(ssid, password);
       Logger::get()->printf_P(logConnecting);
+      BootProgress::set(BootStage::AddressWait);
       const uint32_t wifiConnectStartMs = millis();
       while(WiFi.status() != WL_CONNECTED) {
         if(Time::hasElapsed(millis(), wifiConnectStartMs, connectTimeoutMs)) {
@@ -118,6 +121,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
         intf->hostname = hostnameBuffer;
       }
       Logger::get()->printf_P(logConnecting);
+      BootProgress::set(BootStage::AddressWait);
       const uint32_t enc28ConnectStartMs = millis();
       while(!ethernetEnc28j60.value().connected()) {
         if(Time::hasElapsed(millis(), enc28ConnectStartMs, connectTimeoutMs)) {
@@ -146,6 +150,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       buildHostname();
       ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
       Logger::get()->printf_P(logConnecting);
+      BootProgress::set(BootStage::AddressWait);
       const uint32_t lan8720ConnectStartMs = millis();
       while(!ethConnected) {
         if(Time::hasElapsed(millis(), lan8720ConnectStartMs, connectTimeoutMs)) {

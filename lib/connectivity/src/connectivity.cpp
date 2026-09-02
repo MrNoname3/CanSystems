@@ -1,46 +1,12 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "bootProgress.hpp"                                         /// Records how far startup got.
+#include "rtcStore.hpp"                                             /// Storage that survives a reset.
 #include <time.h>
 
 #if defined(ESP32)
 #include <esp_sntp.h>
 #endif
-
-namespace {
-  // The backoff rung survives a reset but not a power cycle - exactly the lifetime wanted: a device
-  // that keeps restarting keeps stepping the wait up, while pulling the plug is a fresh start.
-  constexpr uint32_t backoffMagic = 0xB0FF0001UL;                   // Tells a real record from uninitialised RTC memory.
-#ifdef ESP8266
-  constexpr uint32_t backoffRtcOffset = 64U;                        // In 4-byte words; keeps clear of other RTC users.
-
-  bool readBackoffStep(uint8_t& step) {
-    uint32_t record[2] = { 0U };
-    if(!ESP.rtcUserMemoryRead(backoffRtcOffset, record, sizeof(record))) { return false; }
-    if(record[0] != backoffMagic) { return false; }
-    step = static_cast<uint8_t>(record[1]);
-    return true;
-  }
-
-  void storeBackoffStep(uint8_t step) {
-    uint32_t record[2] = { backoffMagic, step };
-    (void)ESP.rtcUserMemoryWrite(backoffRtcOffset, record, sizeof(record));
-  }
-#elif defined(ESP32)
-  RTC_NOINIT_ATTR uint32_t backoffRecordMagic;                      // Survives a reset; garbage after a power cycle.
-  RTC_NOINIT_ATTR uint32_t backoffRecordStep;
-
-  bool readBackoffStep(uint8_t& step) {
-    const bool valid = (backoffRecordMagic == backoffMagic);
-    if(valid) { step = static_cast<uint8_t>(backoffRecordStep); }
-    return valid;
-  }
-
-  void storeBackoffStep(uint8_t step) {
-    backoffRecordMagic = backoffMagic;
-    backoffRecordStep = step;
-  }
-#endif
-} // namespace
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
@@ -66,13 +32,16 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 bool Connectivity::init() {
   const bool initialised = initOnce();
   // Every failure exit of initOnce() funnels through here: a failed start restarts the MCU, so the
-  // rung must be stepped and stored before that, or the boot loop would retry at full speed.
-  if(initialised) {
-    backoff.onSuccess();
-  } else {
-    backoff.onFailure();
-  }
-  storeBackoffStep(backoff.getStepIndex());
+  // rung must be stepped and stored before that, or the boot loop would retry at full speed. A
+  // start that succeeded deliberately does not clear the ladder - run() does that once the link has
+  // held - so a device that connects and dies again keeps climbing rather than dropping back to the
+  // shortest wait on every boot.
+  if(!initialised) { backoff.onFailure(); }
+  RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
+  // The link came up inside initOnce(), and run() sees no online transition to stamp because the
+  // device starts out marked online, so the settle window has to be started here or it would be
+  // measured from millis() zero and expire almost at once.
+  if(initialised) { onlineSinceTimer = millis(); }
   return initialised;
 }
 
@@ -83,6 +52,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     return false;
   }
   { // Initialise the file system.
+    BootProgress::set(BootStage::FileSystem);
     delay(10U);
     uint32_t totalBytes = 0U;
     uint32_t usedBytes = 0U;
@@ -95,10 +65,16 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
   { // Backoff: a restart must not turn into a reconnect storm. The rung is read back from RTC
     // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
     // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
+    BootProgress::set(BootStage::BackoffWait);
     uint8_t storedStep = 0U;
-    if(readBackoffStep(storedStep)) {
-      backoff.restore(storedStep);
-      if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+    const bool hadRecord = RtcStore::read(RtcStore::Slot::BackoffStep, storedStep);
+    if(hadRecord) { backoff.restore(storedStep); }
+    if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+    // Stored before the attempt rather than after it: a connect that hangs takes the watchdog with
+    // it, so nothing below this line is guaranteed to run. Recording the rung first is what keeps
+    // a device that dies mid-attempt from starting over at the shortest wait on every boot.
+    RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
+    if(hadRecord) {
       Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
       const uint32_t startMs = millis();
       while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
@@ -119,6 +95,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     }
   }
   { // Set time via NTP, as required for x.509 validation.
+    BootProgress::set(BootStage::ClockSync);
     const bool ntpSynced = syncNtpTime();
     Logger::get()->printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
@@ -132,6 +109,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     }
   }
   { // Get MQTT server credentials.
+    BootProgress::set(BootStage::Credentials);
     const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
     const bool credResultOk = (credResult == 0U);
     Logger::get()->printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
@@ -172,17 +150,19 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid || !availTopicValid) { return false; }
   }
   { // Open certificate.
+    BootProgress::set(BootStage::Certificate);
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
       serverCert.emplace(certFile, certFileSize);
       if(serverCert.has_value()) {
         tcpClient.setTrustAnchors(&serverCert.value());
         Logger::get()->printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
-        tcpClient.setTimeout(Time::secToMs(5U));
+        // No setTimeout() here: WiFiClientSecure does not forward it, and BearSSL pins its own
+        // 15 s connect budget - longer than the ~8.4 s hardware watchdog - whatever we ask for.
       }
       return serverCert.has_value();
 #elif defined ESP32
-      tcpClient.setTimeout(5U);  // seconds; ESP32 crypto is fast (TLS handshake < 3s typical)
+      tcpClient.setTimeout(5U);  // Seconds here, and it does bound the socket connect; the handshake has its own budget.
       const bool loaded = tcpClient.loadCACert(certFile, certFileSize);
       if(loaded) {
         Logger::get()->printf_P(PSTR("[TCP] CA cert loaded: %u bytes\r\n"), certFileSize);
@@ -239,7 +219,8 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
     char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
+    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
+                                               static_cast<uint8_t>(BootProgress::getPrevious()));
     const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
     if(!infoTopicValid || !infoPayloadValid) { return false; }
@@ -251,6 +232,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
+  BootProgress::set(BootStage::BrokerConnect);
   const bool mqttConResult = mqttClient.connect(
       mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
       mqttCredentials.availabilityTopic, 1U, true, MqttTopics::getAvailOfflinePayload());
@@ -268,12 +250,14 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
 #endif
     return false;
   }
+  BootProgress::set(BootStage::Subscribe);
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get()->printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   if(!subResult) {
     mqttClient.disconnect();
     return false;
   }
+  BootProgress::set(BootStage::Announce);
   const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::getAvailOnlinePayload(), true);
   Logger::get()->printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
   if(!availResult) {
@@ -316,7 +300,7 @@ bool Connectivity::run() {
       resetWatchdogTimer();
       if(!connectToMqttServer()) {
         backoff.onFailure();
-        storeBackoffStep(backoff.getStepIndex());
+        RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
       }
     }
   }
@@ -328,7 +312,7 @@ bool Connectivity::run() {
     // again keeps climbing instead of dropping back to the shortest wait every time.
     if((backoff.getStepIndex() != 0U) && Time::hasElapsed(actualTime, onlineSinceTimer, onlineSettleTime)) {
       backoff.onSuccess();
-      storeBackoffStep(backoff.getStepIndex());
+      RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
     }
   }
   if(actualOnlineState != onlineState) {
