@@ -272,7 +272,7 @@ bool Connectivity::run() {
     if(debugLed != nullptr) { debugLed(onlineState); }
     Logger::get()->printf_P(PSTR("[RUN] Device is: %s\r\n"), Str::getOnlineStateStr(onlineState));
     if(onlineState) {
-      publishDisconnectDiag(actualTime);
+      publishDisconnectDiag();
     } else {
       recordDisconnect(actualTime);
     }
@@ -294,9 +294,9 @@ void Connectivity::recordDisconnect(uint32_t actualTime) { // NOLINT(readability
   Logger::get()->printf_P(PSTR("[DIAG] Disconnect recorded at %s\r\n"), dropTimeStr);
 }
 
-void Connectivity::publishDisconnectDiag(uint32_t actualTime) {
+void Connectivity::publishDisconnectDiag() {
   DisconnectDiag::Report report;
-  if(!disconnectDiag.takeReport(actualTime, report)) { return; }    // Nothing recorded (first connect after boot).
+  if(!disconnectDiag.takeReport(millis(), report)) { return; }      // Nothing recorded (first connect after boot).
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
   const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
                                              report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount);

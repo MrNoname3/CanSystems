@@ -174,8 +174,10 @@ private:
   /// No-op when no disconnect has been recorded (e.g. the first connect after boot).
   /// Diagnostics live in RAM only: an outage ended by the offline MCU reset loses its record
   /// (the reset reason in the info topic covers that case).
-  /// @param actualTime Current millis() timestamp, used to compute the offline duration.
-  void publishDisconnectDiag(uint32_t actualTime);
+  /// @note Samples millis() itself instead of reusing the timestamp run() took at the top of its
+  /// iteration: the reconnect, TLS handshake included, happens in between, so the cached value
+  /// under-reports the outage by the whole handshake.
+  void publishDisconnectDiag();
 
   NetworkManager& networkManager;                                   // Reference to the network manager.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
