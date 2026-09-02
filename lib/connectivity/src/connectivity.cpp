@@ -66,13 +66,16 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
 bool Connectivity::init() {
   const bool initialised = initOnce();
   // Every failure exit of initOnce() funnels through here: a failed start restarts the MCU, so the
-  // rung must be stepped and stored before that, or the boot loop would retry at full speed.
-  if(initialised) {
-    backoff.onSuccess();
-  } else {
-    backoff.onFailure();
-  }
+  // rung must be stepped and stored before that, or the boot loop would retry at full speed. A
+  // start that succeeded deliberately does not clear the ladder - run() does that once the link has
+  // held - so a device that connects and dies again keeps climbing rather than dropping back to the
+  // shortest wait on every boot.
+  if(!initialised) { backoff.onFailure(); }
   storeBackoffStep(backoff.getStepIndex());
+  // The link came up inside initOnce(), and run() sees no online transition to stamp because the
+  // device starts out marked online, so the settle window has to be started here or it would be
+  // measured from millis() zero and expire almost at once.
+  if(initialised) { onlineSinceTimer = millis(); }
   return initialised;
 }
 
@@ -96,9 +99,14 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
     // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
     uint8_t storedStep = 0U;
-    if(readBackoffStep(storedStep)) {
-      backoff.restore(storedStep);
-      if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+    const bool hadRecord = readBackoffStep(storedStep);
+    if(hadRecord) { backoff.restore(storedStep); }
+    if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+    // Stored before the attempt rather than after it: a connect that hangs takes the watchdog with
+    // it, so nothing below this line is guaranteed to run. Recording the rung first is what keeps
+    // a device that dies mid-attempt from starting over at the shortest wait on every boot.
+    storeBackoffStep(backoff.getStepIndex());
+    if(hadRecord) {
       Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
       const uint32_t startMs = millis();
       while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
