@@ -76,9 +76,14 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   if(receivedFile) {
     receivedFile.close();
   }
+  // Releasing an image the previous transfer left open has to happen before the flag is
+  // recomputed: past that point nothing remembers one was open, so neither the cleanup nor the
+  // timeout reaches it. Update.begin() also refuses while one is still open.
+  if(isFwTransfer) {
+    abortFirmwareUpdate();
+  }
   isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
   if(isFwTransfer) {
-    abortFirmwareUpdate();                                          // begin() refuses while an unfinished image is still open.
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get()->printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
     if(!updateBeginResult) {
