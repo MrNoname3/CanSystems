@@ -192,11 +192,12 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
       if(serverCert.has_value()) {
         tcpClient.setTrustAnchors(&serverCert.value());
         Logger::get()->printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
-        tcpClient.setTimeout(Time::secToMs(15U));  // Mirrors BearSSL's own fixed connect budget; it ignores this value.
+        // No setTimeout() here: WiFiClientSecure does not forward it, and BearSSL pins its own
+        // 15 s connect budget - longer than the ~8.4 s hardware watchdog - whatever we ask for.
       }
       return serverCert.has_value();
 #elif defined ESP32
-      tcpClient.setTimeout(5U);  // seconds; ESP32 crypto is fast (TLS handshake < 3s typical)
+      tcpClient.setTimeout(5U);  // Seconds here, and it does bound the socket connect; the handshake has its own budget.
       const bool loaded = tcpClient.loadCACert(certFile, certFileSize);
       if(loaded) {
         Logger::get()->printf_P(PSTR("[TCP] CA cert loaded: %u bytes\r\n"), certFileSize);
@@ -252,8 +253,8 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
-    char infoPayload[MqttTopics::getNodeInfoPayloadBufSize()] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttNodeInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
+    char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
+    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
                                                static_cast<uint8_t>(BootProgress::getPrevious()));
     const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
