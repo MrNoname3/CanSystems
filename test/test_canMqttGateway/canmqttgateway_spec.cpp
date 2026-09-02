@@ -126,6 +126,22 @@ bool test_ping_sent_after_ping_interval() {
   END_IT
 }
 
+bool test_a_silent_client_is_never_announced_online() {
+  IT("a client that has never answered is not announced online, whatever millis() reads at init()");
+  resetEnv();
+  setFakeMillis(3000U);                               // the gateway reached this driver 3 s after boot
+  CanHandler can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  IS_TRUE(runOnce(gateway));
+  setFakeMillis(4900U);
+  IS_TRUE(runOnce(gateway));
+  IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 0U);
+  END_IT
+}
+
 bool test_online_offline_transitions() {
   IT("a received frame marks the client online; 5 s of silence marks it offline");
   resetEnv();
@@ -134,12 +150,13 @@ bool test_online_offline_transitions() {
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());                              // retained offline
-  IS_TRUE(runOnce(gateway));                          // boot: offline timer not yet elapsed -> online
+  const uint8_t pong[8] = { 0U };
+  injectFrame(gateway, static_cast<uint16_t>(CanCmd::PING), pong);   // the client answers
+  IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 1U);
   setFakeMillis(5001U);                               // 5 s of CAN silence
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"offline"})"), 2U);
-  const uint8_t pong[8] = { 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::PING), pong);
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 2U);
@@ -534,6 +551,7 @@ int main() {
   SUITE("CanMqttGateway");
   test_init_builds_topics_and_publishes_offline();
   test_ping_sent_after_ping_interval();
+  test_a_silent_client_is_never_announced_online();
   test_online_offline_transitions();
   test_fw_version_frame_publishes_info();
   test_restart_frame_republishes_availability();
