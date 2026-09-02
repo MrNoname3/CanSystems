@@ -167,6 +167,44 @@ bool test_a_device_on_the_handlers_own_id_is_not_registered() {
   END_IT
 }
 
+bool test_a_device_built_before_init_on_a_reserved_id_stops_init() {
+  IT("init() refuses to come up when a registered device holds the handler's own id");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  // Built before init(), the way the gateway's drivers are: at this point the handler's own ids
+  // are still unread, so nothing the constructor could compare against exists yet.
+  TestDevice clash(handler, kLocalId);
+  IS_EQUAL(clash.getClientCanId(), kLocalId);       // in the list, registered from its constructor
+  IS_FALSE(handler.init());
+  END_IT
+}
+
+bool test_a_device_built_before_init_on_the_master_id_stops_init() {
+  IT("init() refuses to come up when a registered device holds the master's id");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  TestDevice clash(handler, kMasterId);
+  IS_EQUAL(clash.getClientCanId(), kMasterId);
+  IS_FALSE(handler.init());
+  END_IT
+}
+
+bool test_devices_on_free_ids_let_init_through() {
+  IT("init() comes up with devices that hold ids of their own");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  TestDevice first(handler, kDeviceId);
+  TestDevice second(handler, 27U);
+  IS_TRUE(handler.init());
+  deliverFrame(handler, kDeviceId, static_cast<uint16_t>(CanCmd::PING), 1U);
+  IS_EQUAL(first.received, 1U);
+  IS_EQUAL(second.received, 0U);
+  END_IT
+}
+
 bool test_registering_nothing_is_refused() {
   IT("registerCallback refuses a null device");
   resetEnv();
@@ -281,6 +319,9 @@ int main() {
   test_a_frame_from_an_unknown_sender_reaches_nobody();
   test_each_device_only_sees_its_own_sender();
   test_a_device_on_the_handlers_own_id_is_not_registered();
+  test_a_device_built_before_init_on_a_reserved_id_stops_init();
+  test_a_device_built_before_init_on_the_master_id_stops_init();
+  test_devices_on_free_ids_let_init_through();
   test_registering_nothing_is_refused();
   test_a_sent_frame_reaches_the_bus();
   test_a_busy_controller_keeps_the_frame_queued();

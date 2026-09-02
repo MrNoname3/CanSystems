@@ -55,16 +55,23 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     Logger::get()->printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
-  // List CAN devices.
+  // List CAN devices, and check the ids they claim. This is the first moment that can be done:
+  // a device registers from its own constructor, which runs before anything has been read out of
+  // the EEPROM, so the check it makes there has nothing to compare against yet.
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
+  bool deviceIdsFree = true;
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     uint8_t deviceIndex = 0U;
     for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
-      Logger::get()->printf_P(PSTR("  %hhu. %hu\r\n"), deviceIndex++, d->getClientCanId());
+      const uint16_t clientCanId = d->getClientCanId();
+      const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
+      Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
+                              reserved ? PSTR(" <- reserved id!") : PSTR(""));
+      if(reserved) { deviceIdsFree = false; }
     }
     xSemaphoreGive(canDevicesListMutex);
   }
-  return true;
+  return deviceIdsFree;
 }
 
 bool CanHandlerEsp32::send(uint16_t command, const uint8_t (&data)[8]) const {
