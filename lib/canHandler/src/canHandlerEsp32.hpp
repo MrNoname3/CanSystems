@@ -69,8 +69,11 @@ private:
   bool init(uint32_t canBaud);
 
   /// @brief Interrupt service routine for CAN RX events.
+  /// @details Runs with the flash cache enabled, so it does not belong in IRAM: the driver
+  /// allocates the interrupt without `ESP_INTR_FLAG_IRAM`, and the controller accessors this
+  /// reads the frame through live in flash themselves.
   /// @param packetsNum Number of packets available in the RX buffer.
-  static IRAM_ATTR void rxInterrupt(int packetsNum);
+  static void rxInterrupt(int packetsNum);
 
   /// @brief Hands one received frame to the device registered for its sender id.
   /// @param frameIn Frame taken from the receive queue.
