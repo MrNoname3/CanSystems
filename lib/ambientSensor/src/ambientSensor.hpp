@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#include "canHandler.hpp"                                           /// CAN handler library.
+#include "canHandlerBase.hpp"                                       /// CAN handler interface this sensor reports through.
 #include "si7021.hpp"                                               /// Temperature and humidity sensor driver.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
@@ -14,7 +14,7 @@ public:
   /// @param canHandler CAN handler instance for communication.
   /// @param lightPin Analog pin for reading light intensity.
   /// @param measurePeriod Time interval for sensor measurements in milliseconds.
-  AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod);
+  AmbientSensor(CanHandlerBase& canHandler, uint8_t lightPin, uint32_t measurePeriod);
 
   /// @brief Destructor for the AmbientSensor object.
   ~AmbientSensor() override = default;
@@ -49,7 +49,7 @@ private:
   };
 
   SI7021 si7021;                                                            // I2C humidity and temperature sensor driver.
-  CanHandler& canHandler;                                                   // Reference to a CAN handler object.
+  CanHandlerBase& canHandler;                                               // Reference to a CAN handler object.
   const uint8_t lightPin;                                                   // Analog pin for light intensity readings.
   const uint32_t measurePeriod;                                             // Measurement interval in milliseconds.
   uint16_t lightValue;                                                      // Filtered light intensity value.

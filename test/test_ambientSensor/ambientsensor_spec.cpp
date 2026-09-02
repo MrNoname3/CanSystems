@@ -7,9 +7,9 @@
 
 // ---- TestCanHandler mock ----
 
-class TestCanHandler final : public CanHandler {     // CanHandler = CanHandlerNative (test/_shims)
+class TestCanHandler final : public CanHandlerBase {
 public:
-  using CanHandler::send;
+  using CanHandlerBase::send;
   mutable uint32_t sendCount = 0U;
   mutable uint16_t lastCommand = 0U;
   mutable uint8_t lastData[8] = {};

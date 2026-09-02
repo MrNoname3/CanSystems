@@ -9,6 +9,7 @@
 #include "networkManager.hpp"   /// Manages the network connection.
 #include "connectivity.hpp"     /// Handles the MQTT connection.
 #include "mqttCommon.hpp"       /// Handles the basic interaction between server and client.
+#include "CAN.h"                /// The board's CAN controller instance.
 #include "canHandler.hpp"       /// CAN handler library.
 #include "canAlertDriver.hpp"   /// Driver for the alert client.
 
@@ -35,7 +36,7 @@ Connectivity iotConn(
 
 //--- MQTT handler objects ---//
 MqttCommon mqttCommon(iotConn, "common");
-CanHandler canHandler;
+CanHandler canHandler(CAN);
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
 

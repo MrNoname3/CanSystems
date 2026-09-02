@@ -1,4 +1,5 @@
 #include "canAlertDriver.hpp"
+#include "testCan.hpp"
 #include "Arduino.h"
 #include "LittleFS.h"
 #include "BDDTest.h"
@@ -11,7 +12,7 @@
 static void resetEnv() {
   LittleFS.reset();
   MqttBase::resetState();
-  CanHandler::resetState();
+  esp32Can.reset();
   setFakeMillis(0U);
 }
 
@@ -27,19 +28,14 @@ static void injectFrame(CanAlertDriver& driver, uint16_t cmd, const uint8_t (&da
   canSide.canFrameArrivedCallback(CanHandler::CanFrame(10U, static_cast<uint16_t>(cmd), 26U, data));
 }
 
-static const CanHandler::CanFrame* lastFrame(uint16_t cmd) {
-  for(auto it = CanHandler::sentFrames.rbegin(); it != CanHandler::sentFrames.rend(); ++it) {
-    if(static_cast<uint16_t>(it->cmd) == static_cast<uint16_t>(cmd)) { return &(*it); }
-  }
-  return nullptr;
-}
+static const CanHandler::CanFrame* lastFrame(uint16_t cmd) { return lastCanFrame(cmd); }
 
 // ---- MQTT message -> CAN frame mapping ----
 
 bool test_colors_only_sends_rgb_led() {
   IT("a Colors-only message sends an RGB_LED frame with the color bytes");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 26U, conn, "alert1");
   injectMessage(driver, R"({"Colors":[3,2,1]})");
@@ -54,7 +50,7 @@ bool test_colors_only_sends_rgb_led() {
 bool test_sound_volume_colors_sends_play_mp3() {
   IT("a Sound+Volume+Colors message sends a PLAY_MP3 frame with sound, volume and colors");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 27U, conn, "alert2");
   injectMessage(driver, R"({"Sound":300,"Volume":20,"Colors":[7,8,9]})");
@@ -72,7 +68,7 @@ bool test_sound_volume_colors_sends_play_mp3() {
 bool test_sound_without_colors_plays_with_dark_leds() {
   IT("a Sound+Volume message without Colors sends PLAY_MP3 with zeroed color bytes");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 28U, conn, "alert3");
   injectMessage(driver, R"({"Sound":5,"Volume":15})");
@@ -90,14 +86,15 @@ bool test_sound_without_colors_plays_with_dark_leds() {
 bool test_malformed_colors_drops_message() {
   IT("a present but malformed Colors array drops the whole message");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 29U, conn, "alert4");
   injectMessage(driver, R"({"Sound":5,"Volume":15,"Colors":[1,2]})");        // wrong size
   injectMessage(driver, R"({"Sound":5,"Volume":15,"Colors":[1,2,300]})");    // out of uint8_t range
   injectMessage(driver, R"({"Sound":5,"Volume":15,"Colors":"red"})");        // wrong type
   injectMessage(driver, R"({"Colors":[1,"x",3]})");                          // bad element, no sound
-  IS_EQUAL(CanHandler::sentFrames.size(), 0U);
+  pumpCanBus();
+  IS_EQUAL(esp32Can.transmitted().size(), 0U);
   END_IT
 }
 
@@ -116,7 +113,7 @@ static std::string publishTemperature(CanAlertDriver& driver, int16_t rawTempera
 bool test_hum_temp_ldr_frame_publishes_json() {
   IT("a READ_HUM_TEMP_LDR frame publishes temperature (with offset), humidity and light");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 30U, conn, "alert5", -0.5F);
   // temp raw = 2345 (23.45 C), humidity = 55, light = 1023.
@@ -130,7 +127,7 @@ bool test_hum_temp_ldr_frame_publishes_json() {
 bool test_temperature_decode_spans_the_int16_range() {
   IT("the temperature is decoded as int16_t over the whole range, including zero and negatives");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 33U, conn, "alert8");  // No offset: the raw value maps straight through.
   IS_TRUE(publishTemperature(driver, 2345) == R"({"Temperature":23.45,"Humidity":0,"Light":0})");
@@ -146,7 +143,7 @@ bool test_temperature_decode_spans_the_int16_range() {
 bool test_unknown_frame_is_ignored() {
   IT("an unrelated CAN command produces no MQTT traffic");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 31U, conn, "alert6");
   const uint8_t data[8] = { 0U };
@@ -161,7 +158,7 @@ bool test_unknown_frame_is_ignored() {
 bool test_publish_discovery_covers_all_entities() {
   IT("publishDiscovery() publishes the three sensors and the connectivity entity");
   resetEnv();
-  static CanHandler can;
+  static TestCan can;
   static Connectivity conn;
   static CanAlertDriver driver(can, 32U, conn, "alert7");
   MqttBase& mqttSide = driver;

@@ -2,7 +2,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include "PushButtonClicks.hpp"                                     /// Push button handling class.
-#include "canHandler.hpp"                                           /// CAN handler library.
+#include "canHandlerBase.hpp"                                       /// CAN handler interface this reports events through.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 
 /// @brief Handles button press events and communicates them over CAN or via callbacks.
@@ -26,7 +26,7 @@ public:
   /// @brief Constructs a `PushButtonHandler` object.
   /// @param canHandler Reference to the CAN handler object for sending button events.
   /// @param buttonReader Function pointer to a button state reader function (e.g., a `digitalRead()` wrapper).
-  PushButtonHandler(const CanHandler& canHandler, bool (*buttonReader)());
+  PushButtonHandler(const CanHandlerBase& canHandler, bool (*buttonReader)());
 
   /// @brief Destructor of the object.
   ~PushButtonHandler() override = default;
@@ -57,7 +57,7 @@ private:
   static constexpr uint8_t debounceTime = 70U;          // Debounce duration (in ms) to filter out noisy signals.
   static constexpr bool buttonPolarity = false;         // Polarity of the button when pressed (`true` for HIGH, `false` for LOW).
 
-  const CanHandler& canHandler;                         // Reference to the CAN handler object.
+  const CanHandlerBase& canHandler;                     // Reference to the CAN handler object.
   bool (*readButtonValue)();                            // Function pointer for reading the button state.
   PushButton button;                                    // Instance of the `PushButton` class to handle button press events.
   void (*btnCallback)(BtnEvent btnEvent);               // Function pointer for the button event callback (if set).

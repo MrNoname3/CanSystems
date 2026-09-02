@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <vector>
 #include "Arduino.h"
 
 /// @brief Register-level SJA1000 stand-in: the register file plus the behaviour tests drive.
@@ -24,10 +25,25 @@ public:
   static constexpr uint8_t regSff = 0x10U;    // Standard-frame receive window: header, then payload.
 
   static constexpr uint8_t modResetMode = 0x01U;
+  static constexpr uint8_t irReceive = 0x01U;
   static constexpr uint8_t srReceiveBuffer = 0x01U;
   static constexpr uint8_t srTxBufferFree = 0x04U;
   static constexpr uint8_t srTxComplete = 0x08U;
   static constexpr uint8_t srBusOff = 0x80U;
+
+  /// @brief A frame the driver handed to the controller, decoded from the transmit window.
+  struct SentFrame {
+    uint32_t id = 0U;                 // Identifier as written; an extended frame carries all 29 bits.
+    uint8_t dlc = 0U;                 // Payload length.
+    uint8_t data[8] = {};             // Payload.
+    bool extended = false;            // Which of the two register layouts the driver used.
+  };
+
+  /// @brief Every frame the driver has requested since the last reset, in order.
+  [[nodiscard]] const std::vector<SentFrame>& transmitted() const { return sentFrames; }
+
+  /// @brief Forgets the frames recorded so far, leaving the peripheral's own state alone.
+  void clearTransmitted() { sentFrames.clear(); }
 
   /// @brief How the peripheral answers a transmission request.
   enum class TxBehaviour : uint8_t {
@@ -45,6 +61,7 @@ public:
     statusReads = 0U;
     transmitRequests = 0U;
     transmitAborts = 0U;
+    sentFrames.clear();
   }
 
   void setTxBehaviour(TxBehaviour behaviour) { txBehaviour = behaviour; }
@@ -58,6 +75,20 @@ public:
     registers[regSff + 2U] = static_cast<uint8_t>(id << 5U);
     for(uint8_t i = 0U; i < dlc; i++) { registers[regSff + 3U + i] = data[i]; }
     registers[regSr] |= srReceiveBuffer;
+  }
+
+  /// @brief Places an extended 29-bit frame in the receive window and raises receive buffer
+  /// status, the way the controller does when one arrives.
+  /// @note The model holds one frame: the release command clears the status again.
+  void queueExtendedFrame(uint32_t id, const uint8_t* data, uint8_t dlc) {
+    registers[regSff] = static_cast<uint32_t>(0x80U | (dlc & 0x0FU));
+    registers[regSff + 1U] = static_cast<uint8_t>(id >> 21U);
+    registers[regSff + 2U] = static_cast<uint8_t>(id >> 13U);
+    registers[regSff + 3U] = static_cast<uint8_t>(id >> 5U);
+    registers[regSff + 4U] = static_cast<uint8_t>(id << 3U);
+    for(uint8_t i = 0U; i < dlc; i++) { registers[regSff + 5U + i] = data[i]; }
+    registers[regSr] |= srReceiveBuffer;
+    registers[regIr] |= irReceive;                             // an arriving frame also raises the interrupt
   }
 
   /// @brief Advances the fake clock by this many milliseconds on every status poll, standing in
@@ -89,6 +120,7 @@ private:
     const uint8_t command = static_cast<uint8_t>(registers[regCmr]);
     if((command & 0x01U) != 0U) {                                // transmission request
       ++transmitRequests;
+      recordTransmit();
       // The controller holds the frame until it is on the bus or aborted.
       registers[regSr] &= ~(static_cast<uint32_t>(srTxComplete) | srTxBufferFree);
     }
@@ -99,6 +131,29 @@ private:
     if((command & 0x04U) != 0U) {                                // release receive buffer
       registers[regSr] &= ~static_cast<uint32_t>(srReceiveBuffer);
     }
+  }
+
+  /// @brief Decodes the transmit window the driver has just filled in.
+  /// @details Mirrors the layout ESP32SJA1000::endPacket() writes, which is the only writer.
+  // NOLINTNEXTLINE(readability-make-member-function-const) appends to sentFrames
+  void recordTransmit() {
+    const uint8_t frameInfo = reg(regSff);
+    SentFrame frame;
+    frame.extended = (frameInfo & 0x80U) != 0U;
+    frame.dlc = frameInfo & 0x0FU;
+    if(frame.dlc > 8U) { frame.dlc = 8U; }
+    const uint8_t dataReg = frame.extended ? static_cast<uint8_t>(regSff + 5U) : static_cast<uint8_t>(regSff + 3U);
+    if(frame.extended) {
+      frame.id = (static_cast<uint32_t>(reg(regSff + 1U)) << 21U) |
+                 (static_cast<uint32_t>(reg(regSff + 2U)) << 13U) |
+                 (static_cast<uint32_t>(reg(regSff + 3U)) << 5U) |
+                 (static_cast<uint32_t>(reg(regSff + 4U)) >> 3U);
+    } else {
+      frame.id = (static_cast<uint32_t>(reg(regSff + 1U)) << 3U) |
+                 (static_cast<uint32_t>(reg(regSff + 2U)) >> 5U);
+    }
+    for(uint8_t i = 0U; i < frame.dlc; i++) { frame.data[i] = reg(static_cast<uint8_t>(dataReg + i)); }
+    sentFrames.push_back(frame);
   }
 
   void onStatusRead() {
@@ -131,6 +186,7 @@ private:
   uint32_t statusReads = 0U;
   uint32_t transmitRequests = 0U;
   uint32_t transmitAborts = 0U;
+  std::vector<SentFrame> sentFrames;
 };
 
 extern Esp32CanModel esp32Can;

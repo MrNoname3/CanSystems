@@ -1,6 +1,7 @@
 #pragma once
-#ifdef ESP32
+#if defined(ESP32) || defined(NATIVE_TEST)
 #include "canHandlerBase.hpp"                                       /// Base class for CAN handling.
+#include "ESP32SJA1000.h"                                           /// The CAN controller this handler drives.
 #include "canFramePump.hpp"                                         /// Bounded frame drain shared by both directions.
 #include "intrusiveList.hpp"                                        /// Intrusive list of the registered CAN devices.
 #include "deltaCounter.hpp"                                         /// Growth of a free-running interrupt counter.
@@ -26,7 +27,9 @@ private:
 
 public:
   /// @brief Constructor for CanHandlerEsp32.
-  CanHandlerEsp32();
+  /// @param controller CAN controller this handler drives. Also handed to the receive ISR,
+  /// which is static and so cannot reach it through an instance.
+  explicit CanHandlerEsp32(ESP32SJA1000& controller);
 
   /// @brief Default destructor.
   ~CanHandlerEsp32() override = default;
@@ -88,12 +91,14 @@ private:
   /// @brief Logs the frames lost in either direction since the previous pass.
   void reportDroppedFrames();
 
+  static ESP32SJA1000* isrController;                                     // Controller the receive ISR reads frames from.
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
   // Written only by rxInterrupt(), read only by reportDroppedFrames(). Free-running: the
   // reader keeps its own mark, so the interrupt never competes with a reset.
   static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
   static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
 
+  ESP32SJA1000& controller;                                               // CAN controller this handler drives.
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
   IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
   DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
@@ -217,4 +222,4 @@ private:
   const uint16_t clientCanId;                             // Client CAN ID for this device.
   CanBase* nextDevice = nullptr;                          // Intrusive linked list pointer, managed by CanHandlerEsp32.
 };
-#endif // ESP32
+#endif // ESP32 || NATIVE_TEST
