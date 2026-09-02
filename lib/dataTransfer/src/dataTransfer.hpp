@@ -85,6 +85,12 @@ public:
   /// @return Pointer to the file name buffer.
   [[nodiscard]] const char* getFileName() const { return fileNameLocal; }
 
+  /// @brief Whether the transfer under way streams a firmware image rather than an ordinary file.
+  /// @details Decided from the file name in `begin()`, so it answers for what is actually being
+  /// written, not for what the message that started it happened to carry.
+  /// @return True while a firmware transfer is open; false from the cleanup onwards.
+  [[nodiscard]] bool isFirmwareTransfer() const { return isFwTransfer; }
+
   /// @brief Retrieves the error code for the last file transfer operation.
   /// @return A DataTransferErrorType value representing the error code.
   [[nodiscard]] DataTransferErrorType getErrorCode();

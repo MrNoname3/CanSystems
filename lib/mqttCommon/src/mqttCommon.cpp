@@ -81,14 +81,16 @@ void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
         sendResult(false);
         return;
       }
-      isRestartRequired = true;
-    } else {
-      isRestartRequired = false;
     }
     const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
     const char* fileMd5 = fileMd5JsonVar.as<const char*>();
     const char* fileName = fileNameJsonVar.as<const char*>();
     const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileName);
+    // What the device reboots into is decided by what is being written, which the transfer
+    // works out from the file name; binId only says whether this image belongs to this device.
+    if(transferBeginResult) {
+      isRestartRequired = dataTransfer.isFirmwareTransfer();
+    }
     const uint32_t beginErrCode = dataTransfer.getErrorCode();
     sendResult(transferBeginResult, beginErrCode);
     if(!transferBeginResult) {
