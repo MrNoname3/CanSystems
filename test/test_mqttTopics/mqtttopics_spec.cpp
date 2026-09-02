@@ -66,6 +66,15 @@ bool test_infoPayloadBufSize() {
   END_IT
 }
 
+bool test_nodeInfoPayloadBufSize() {
+  IT("nodeInfoPayloadBufSize fits the maximum-length node info payload");
+  char buf[MqttTopics::getNodeInfoPayloadBufSize()];
+  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttNodeInfoPayload(), static_cast<uint16_t>(65535U), 0xFFFFFFFFU, static_cast<uint16_t>(255U), static_cast<uint16_t>(255U), static_cast<uint8_t>(255U));
+  TEST(n > 0 && static_cast<size_t>(n) < sizeof(buf));
+  IS_EQUAL(strcmp(buf, R"({"fw":65535,"git":"ffffffff","dirty":255,"rr":255,"boot":255})"), 0);
+  END_IT
+}
+
 bool test_diagPayloadBufSize() {
   IT("diagPayloadBufSize fits the maximum-length diagnostics payload");
   char buf[MqttTopics::getDiagPayloadBufSize()];
@@ -126,6 +135,7 @@ int main() {
   test_infoTopicBufSize();
   test_subtopicOffset();
   test_infoPayloadBufSize();
+  test_nodeInfoPayloadBufSize();
   test_diagPayloadBufSize();
   test_availPayloads();
   test_diagSubtopic();

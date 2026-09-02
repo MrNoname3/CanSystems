@@ -14,7 +14,8 @@ private:
   static constexpr const char PROGMEM mqttInTopic[]     = "iot/stod/%s/#";                                // MQTT receiver topic: iot/stod/<MAC>/#.
   static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic; %s receives the topic base ending with '/'.
   static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT retained device info topic; %s receives the topic base ending with '/'.
-  static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason.
+  static constexpr const char PROGMEM mqttInfoPayload[]     = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu})"; // Info JSON for a CAN sub-device; args: fwVersion, gitHash, gitDirty, resetReason.
+  static constexpr const char PROGMEM mqttNodeInfoPayload[] = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu,"boot":%hhu})"; // Info JSON for this node; adds the stage its previous run reached.
   static constexpr const char PROGMEM mqttDiagPayload[] = R"({"cause":"%s","at":"%s","downSec":%u,"n":%u})"; // Disconnect diagnostics JSON (published to the "diag" subtopic via publishRetained); args: cause string, drop ISO UTC time, offline seconds, reconnect counter.
   // clang-format on
   // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by the base length.
@@ -28,6 +29,7 @@ private:
   // The longest topic a handler can publish to: sender base + a full-length subtopic + one under it.
   static constexpr uint8_t publishTopicBufSize = senderTopicBufSize + (subtopicSize - 1U) + subSubtopicLen;
   static constexpr uint8_t infoPayloadBufSize = 52U;                                                      // {"fw":65535,"git":"ffffffff","dirty":255,"rr":255} = 50 chars + null.
+  static constexpr uint8_t nodeInfoPayloadBufSize = 64U;                                                  // The same plus ,"boot":255 = 62 chars + null.
   static constexpr uint8_t diagPayloadBufSize = 105U;                                                     // 36 fixed chars + cause (28: "MQTT_CONNECT_BAD_CREDENTIALS") + ISO time (20) + 2x uint32 (10 each) + null.
   // Disconnect diagnostics subtopic (RAM; publishRetained's strlcat requires a non-PROGMEM pointer).
   static constexpr const char diagSubtopic[] = "diag";
@@ -46,6 +48,7 @@ public:
   static constexpr const char* getMqttAvailTopic() { return mqttAvailTopic; }
   static constexpr const char* getMqttInfoTopic() { return mqttInfoTopic; }
   static constexpr const char* getMqttInfoPayload() { return mqttInfoPayload; }
+  static constexpr const char* getMqttNodeInfoPayload() { return mqttNodeInfoPayload; }
   static constexpr const char* getMqttDiagPayload() { return mqttDiagPayload; }
   static constexpr uint8_t getSenderTopicBufSize() { return senderTopicBufSize; }
   static constexpr uint8_t getReceiverTopicBufSize() { return receiverTopicBufSize; }
@@ -56,6 +59,7 @@ public:
   static constexpr uint8_t getAvailTopicBufSize() { return availTopicBufSize; }
   static constexpr uint8_t getInfoTopicBufSize() { return infoTopicBufSize; }
   static constexpr uint8_t getInfoPayloadBufSize() { return infoPayloadBufSize; }
+  static constexpr uint8_t getNodeInfoPayloadBufSize() { return nodeInfoPayloadBufSize; }
   static constexpr uint8_t getDiagPayloadBufSize() { return diagPayloadBufSize; }
   static constexpr const char* getDiagSubtopic() { return diagSubtopic; }
   static constexpr const char* getAvailOnlinePayload() { return availOnlinePayload; }

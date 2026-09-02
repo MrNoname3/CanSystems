@@ -9,6 +9,7 @@
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "performance.hpp"                                          /// Performance measurement class.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
+#include "bootProgress.hpp"                                         /// Records how far startup got.
 
 /// @brief The startup and loop body every ESP node shares.
 /// @details A node's main supplies the objects it builds and its task list; everything around
@@ -58,6 +59,8 @@ namespace AppBootstrap {
     delay(1U);
     Logger::get()->printf_P(PSTR("\r\n%s\r\nStarting...\r\n"), Str::getSectionSeparator());
     Build::printBuildInfo();
+    BootProgress::begin();
+    Logger::get()->printf_P(PSTR("Previous run reached: %s\r\n"), BootProgress::getName(BootProgress::getPrevious()));
     if(!wdtEnabled) {
       Logger::get()->printf_P(PSTR("WDT enable failed!\r\n"));
       ResetHandler::restartMCU();
@@ -74,6 +77,7 @@ namespace AppBootstrap {
 
     Logger::get()->printf_P(PSTR("Init time: %lums\r\n"), (millis() - initTime));
     Logger::get()->printf_P(PSTR("%s\r\nLoop starting...\r\n"), Str::getSectionSeparator());
+    BootProgress::set(BootStage::Running);
     debugLed.stopTicker();
     performance.resetTimer();
   }

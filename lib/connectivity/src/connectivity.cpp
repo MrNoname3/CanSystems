@@ -1,5 +1,6 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
+#include "bootProgress.hpp"                                         /// Records how far startup got.
 #include <time.h>
 
 #if defined(ESP32)
@@ -86,6 +87,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     return false;
   }
   { // Initialise the file system.
+    BootProgress::set(BootStage::FileSystem);
     delay(10U);
     uint32_t totalBytes = 0U;
     uint32_t usedBytes = 0U;
@@ -98,6 +100,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
   { // Backoff: a restart must not turn into a reconnect storm. The rung is read back from RTC
     // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
     // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
+    BootProgress::set(BootStage::BackoffWait);
     uint8_t storedStep = 0U;
     const bool hadRecord = readBackoffStep(storedStep);
     if(hadRecord) { backoff.restore(storedStep); }
@@ -127,6 +130,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     }
   }
   { // Set time via NTP, as required for x.509 validation.
+    BootProgress::set(BootStage::ClockSync);
     const bool ntpSynced = syncNtpTime();
     Logger::get()->printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
     if(!ntpSynced) { return false; }
@@ -140,6 +144,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     }
   }
   { // Get MQTT server credentials.
+    BootProgress::set(BootStage::Credentials);
     const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
     const bool credResultOk = (credResult == 0U);
     Logger::get()->printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
@@ -180,13 +185,14 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     if(!clientNameValid || !senderTopicValid || !receiverTopicValid || !availTopicValid) { return false; }
   }
   { // Open certificate.
+    BootProgress::set(BootStage::Certificate);
     const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
       serverCert.emplace(certFile, certFileSize);
       if(serverCert.has_value()) {
         tcpClient.setTrustAnchors(&serverCert.value());
         Logger::get()->printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
-        tcpClient.setTimeout(Time::secToMs(5U));
+        tcpClient.setTimeout(Time::secToMs(15U));  // Mirrors BearSSL's own fixed connect budget; it ignores this value.
       }
       return serverCert.has_value();
 #elif defined ESP32
@@ -246,8 +252,9 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
     char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
     const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
-    char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason());
+    char infoPayload[MqttTopics::getNodeInfoPayloadBufSize()] = { '\0' };
+    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttNodeInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
+                                               static_cast<uint8_t>(BootProgress::getPrevious()));
     const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
     const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
     if(!infoTopicValid || !infoPayloadValid) { return false; }
@@ -259,6 +266,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
 
 bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
+  BootProgress::set(BootStage::BrokerConnect);
   const bool mqttConResult = mqttClient.connect(
       mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
       mqttCredentials.availabilityTopic, 1U, true, MqttTopics::getAvailOfflinePayload());
@@ -276,12 +284,14 @@ bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-
 #endif
     return false;
   }
+  BootProgress::set(BootStage::Subscribe);
   const bool subResult = mqttClient.subscribe(mqttCredentials.receiverTopic, 1U);
   Logger::get()->printf_P(PSTR("[MQTT] Subscription: %s\r\n"), Str::getStateStr(subResult));
   if(!subResult) {
     mqttClient.disconnect();
     return false;
   }
+  BootProgress::set(BootStage::Announce);
   const bool availResult = mqttClient.publish(mqttCredentials.availabilityTopic, MqttTopics::getAvailOnlinePayload(), true);
   Logger::get()->printf_P(PSTR("[MQTT] Availability: %s\r\n"), Str::getStateStr(availResult));
   if(!availResult) {
