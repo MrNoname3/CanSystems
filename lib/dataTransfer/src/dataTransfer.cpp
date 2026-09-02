@@ -71,7 +71,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   nextFilePieceNumberLocal = 0U;
   remainingFileSizeLocal = fileSize;
   memset(fileNameLocal, '\0', sizeof(fileNameLocal));
-  strncpy_P(fileNameLocal, fileName, sizeof(fileNameLocal) - 1U);
+  strncpy(fileNameLocal, fileName, sizeof(fileNameLocal) - 1U);
   fileNameLocal[sizeof(fileNameLocal) - 1U] = '\0';
   if(receivedFile) {
     receivedFile.close();
