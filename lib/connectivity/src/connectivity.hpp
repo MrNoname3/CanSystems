@@ -18,6 +18,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "intrusiveList.hpp"                                        /// Intrusive list of the registered MQTT handlers.
 #include "disconnectDiag.hpp"                                       /// Outage bookkeeping behind the [DIAG] message.
+#include "reconnectBackoff.hpp"                                     /// Growing wait between reconnect attempts.
 #include "configHandler.hpp"                                        /// Retrieves configurations from file system.
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
@@ -35,7 +36,7 @@ public:
 
 private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
-  static constexpr uint32_t reconnectTime = Time::secToMs(60U);     // Interval for MQTT reconnect retries and WDT-reset backoff.
+  static constexpr uint32_t onlineSettleTime = Time::minToMs(5U);   // A connection must hold this long before the backoff ladder is cleared.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
   static constexpr const char* const ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };  // Hungarian NTP pool servers.
   static constexpr const char* tzEuropeBudapest = "CET-1CEST,M3.5.0/2,M10.5.0/3";  // POSIX TZ (CET/CEST, EU DST rules); system time stays UTC, only localtime() applies it.
@@ -62,7 +63,8 @@ public:
   /// @brief Destructor of the object.
   ~Connectivity() override = default;
 
-  /// @brief Initializes the connectivity system.
+  /// @brief Initializes the connectivity system, sitting out the reconnect backoff first and
+  /// recording the outcome on the ladder so a boot loop keeps stepping the wait up.
   /// @return `true` if initialization succeeds; otherwise, `false`.
   [[nodiscard]] bool init() override;
 
@@ -144,6 +146,12 @@ private:
     MqttCredentials() = default;
   };
 
+  /// @brief Brings up the file system, network, clock, credentials and MQTT connection.
+  /// @details The body of init(), kept separate so its many failure exits all funnel through the
+  /// one place that steps the backoff ladder and stores it.
+  /// @return `true` if every step succeeded; otherwise, `false`.
+  [[nodiscard]] bool initOnce();
+
   /// @brief Establishes a connection to the MQTT broker.
   /// @return `true` if the connection was successfully established; otherwise, `false`.
   bool connectToMqttServer();
@@ -191,6 +199,8 @@ private:
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.
   void (*resetWdt)();                                               // Function pointer for resetting the watchdog timer.
   uint32_t reconnectTimer;                                          // Timer for managing MQTT reconnections.
+  uint32_t onlineSinceTimer;                                        // When the current connection came up, for the settle check.
+  ReconnectBackoff backoff;                                         // Wait before the next reconnect attempt; climbs on failure.
   DisconnectDiag disconnectDiag;                                    // Outage cause, duration and reconnect count for the [DIAG] message.
 #ifdef ESP8266
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.

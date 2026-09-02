@@ -6,6 +6,42 @@
 #include <esp_sntp.h>
 #endif
 
+namespace {
+  // The backoff rung survives a reset but not a power cycle - exactly the lifetime wanted: a device
+  // that keeps restarting keeps stepping the wait up, while pulling the plug is a fresh start.
+  constexpr uint32_t backoffMagic = 0xB0FF0001UL;                   // Tells a real record from uninitialised RTC memory.
+#ifdef ESP8266
+  constexpr uint32_t backoffRtcOffset = 64U;                        // In 4-byte words; keeps clear of other RTC users.
+
+  bool readBackoffStep(uint8_t& step) {
+    uint32_t record[2] = { 0U };
+    if(!ESP.rtcUserMemoryRead(backoffRtcOffset, record, sizeof(record))) { return false; }
+    if(record[0] != backoffMagic) { return false; }
+    step = static_cast<uint8_t>(record[1]);
+    return true;
+  }
+
+  void storeBackoffStep(uint8_t step) {
+    uint32_t record[2] = { backoffMagic, step };
+    (void)ESP.rtcUserMemoryWrite(backoffRtcOffset, record, sizeof(record));
+  }
+#elif defined(ESP32)
+  RTC_NOINIT_ATTR uint32_t backoffRecordMagic;                      // Survives a reset; garbage after a power cycle.
+  RTC_NOINIT_ATTR uint32_t backoffRecordStep;
+
+  bool readBackoffStep(uint8_t& step) {
+    const bool valid = (backoffRecordMagic == backoffMagic);
+    if(valid) { step = static_cast<uint8_t>(backoffRecordStep); }
+    return valid;
+  }
+
+  void storeBackoffStep(uint8_t step) {
+    backoffRecordMagic = backoffMagic;
+    backoffRecordStep = step;
+  }
+#endif
+} // namespace
+
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
   tcpClient(),
@@ -17,6 +53,7 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
   reconnectTimer(0U),
+  onlineSinceTimer(0U),
 #ifdef ESP8266
   serverCert{},
 #endif
@@ -26,7 +63,20 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
               this, mqttCredentials.clientName, mqttCredentials.senderTopic, mqttCredentials.receiverTopic, mqttCredentials.availabilityTopic) {
 }
 
-bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
+bool Connectivity::init() {
+  const bool initialised = initOnce();
+  // Every failure exit of initOnce() funnels through here: a failed start restarts the MCU, so the
+  // rung must be stepped and stored before that, or the boot loop would retry at full speed.
+  if(initialised) {
+    backoff.onSuccess();
+  } else {
+    backoff.onFailure();
+  }
+  storeBackoffStep(backoff.getStepIndex());
+  return initialised;
+}
+
+bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complexity)
   // cppcheck-suppress knownConditionTrueFalse ; only ESP32 has a semaphore that can fail to exist
   if(!mqttMutex.valid()) {
     Logger::get()->printf_P(PSTR("[MQTT] Mutex is not initialized properly!\r\n"));
@@ -42,11 +92,16 @@ bool Connectivity::init() { // NOLINT(readability-function-cognitive-complexity)
     if(!initFS) { return false; }
     Logger::get()->printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
   }
-  { // Backoff: if reset was caused by WDT, wait before retrying to avoid hammering the network.
-    if(ResetHandler::isWdtReset()) {
-      Logger::get()->printf_P(PSTR("[MQTT] WDT reset — waiting %us before reconnect\r\n"), static_cast<uint32_t>(reconnectTime / 1000U));
+  { // Backoff: a restart must not turn into a reconnect storm. The rung is read back from RTC
+    // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
+    // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
+    uint8_t storedStep = 0U;
+    if(readBackoffStep(storedStep)) {
+      backoff.restore(storedStep);
+      if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+      Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
       const uint32_t startMs = millis();
-      while(!Time::hasElapsed(millis(), startMs, reconnectTime)) {
+      while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
         delay(1000U);
         resetWatchdogTimer();
         Logger::get()->printf_P(PSTR("."));
@@ -256,22 +311,32 @@ bool Connectivity::run() {
   if(mqttClient.loop()) {
     reconnectTimer = actualTime;
   } else {
-    if(networkState && Time::hasElapsed(actualTime, reconnectTimer, reconnectTime)) {
+    if(networkState && Time::hasElapsed(actualTime, reconnectTimer, backoff.getDelayMs())) {
       reconnectTimer = actualTime;
       resetWatchdogTimer();
-      (void)connectToMqttServer();
+      if(!connectToMqttServer()) {
+        backoff.onFailure();
+        storeBackoffStep(backoff.getStepIndex());
+      }
     }
   }
 
   const bool actualOnlineState = networkState && mqttClient.connected();
   if(actualOnlineState) {
     deviceResetTimer = actualTime;
+    // The ladder only resets once the link has proven itself: a connection that comes up and dies
+    // again keeps climbing instead of dropping back to the shortest wait every time.
+    if((backoff.getStepIndex() != 0U) && Time::hasElapsed(actualTime, onlineSinceTimer, onlineSettleTime)) {
+      backoff.onSuccess();
+      storeBackoffStep(backoff.getStepIndex());
+    }
   }
   if(actualOnlineState != onlineState) {
     onlineState = actualOnlineState;
     if(debugLed != nullptr) { debugLed(onlineState); }
     Logger::get()->printf_P(PSTR("[RUN] Device is: %s\r\n"), Str::getOnlineStateStr(onlineState));
     if(onlineState) {
+      onlineSinceTimer = actualTime;
       publishDisconnectDiag();
     } else {
       recordDisconnect(actualTime);
