@@ -11,10 +11,10 @@
 Exits 1 (listing offenders) on any violation, 0 if the whole tree is clean.
 Usable standalone, as a git pre-commit hook, or as a step in release_check.py.
 
-clang-format lookup order: $CLANG_FORMAT, then `clang-format` on PATH (CI installs
-clang-format==22.1.3 via pip), then the VS Code cpptools-bundled binary (the one the
-editor formats with locally). Keep the pip pin in .github/workflows/ci.yml equal to
-the cpptools version so the gate never disagrees with format-on-save.
+clang-format lookup order: $CLANG_FORMAT, then `clang-format` on PATH (CI installs the pin
+from requirements-dev.txt), then the VS Code cpptools-bundled binary (the one the editor
+formats with locally). Keep that pin equal to the cpptools version so the gate never
+disagrees with format-on-save.
 """
 
 import os
