@@ -1,67 +1,16 @@
 #include "bootProgress.hpp"
-#if defined(ESP8266)
-#include <Esp.h>                                                    /// RTC user memory access.
-#elif defined(ESP32)
-#include <esp_attr.h>                                               /// RTC_NOINIT_ATTR.
-#endif
+#include "rtcStore.hpp"                                             /// Storage that survives a reset.
 #if defined(ESP8266) || defined(ESP32)
 #include <pgmspace.h>                                               /// PROGMEM stage names.
 #else
-#define PROGMEM                                                     // NOLINT(cppcoreguidelines-macro-usage) - host build has no flash strings.
+#define PROGMEM                                                     // NOLINT(cppcoreguidelines-macro-usage) - the host build has no flash strings.
 #endif
 
 BootStage BootProgress::previousStage = BootStage::Unknown;
 BootStage BootProgress::currentStage = BootStage::Unknown;
 
 namespace {
-  constexpr uint32_t recordMagic = 0xB007'5747UL;                   // Tells a real record from uninitialised memory.
   constexpr uint8_t lastStage = static_cast<uint8_t>(BootStage::Running);
-
-#if defined(ESP8266)
-  constexpr uint32_t rtcOffset = 66U;                               // In 4-byte words; sits above the reconnect backoff's slot.
-
-  bool readStage(uint8_t& stage) {
-    uint32_t record[2] = { 0U };
-    if(!ESP.rtcUserMemoryRead(rtcOffset, record, sizeof(record))) { return false; }
-    const bool valid = (record[0] == recordMagic);
-    if(valid) { stage = static_cast<uint8_t>(record[1]); }
-    return valid;
-  }
-
-  void writeStage(uint8_t stage) {
-    uint32_t record[2] = { recordMagic, stage };
-    (void)ESP.rtcUserMemoryWrite(rtcOffset, record, sizeof(record));
-  }
-#elif defined(ESP32)
-  RTC_NOINIT_ATTR uint32_t recordMagicRtc;                          // Survives a reset; garbage after a power cycle.
-  RTC_NOINIT_ATTR uint32_t recordStageRtc;
-
-  bool readStage(uint8_t& stage) {
-    const bool valid = (recordMagicRtc == recordMagic);
-    if(valid) { stage = static_cast<uint8_t>(recordStageRtc); }
-    return valid;
-  }
-
-  void writeStage(uint8_t stage) {
-    recordMagicRtc = recordMagic;
-    recordStageRtc = stage;
-  }
-#else
-  // Host build: plain storage, so the bookkeeping can be exercised without an RTC.
-  uint32_t hostMagic = 0U;
-  uint32_t hostStage = 0U;
-
-  bool readStage(uint8_t& stage) {
-    const bool valid = (hostMagic == recordMagic);
-    if(valid) { stage = static_cast<uint8_t>(hostStage); }
-    return valid;
-  }
-
-  void writeStage(uint8_t stage) {
-    hostMagic = recordMagic;
-    hostStage = stage;
-  }
-#endif
 
   // clang-format off
   constexpr const char PROGMEM unknownName[]       = "UNKNOWN";
@@ -84,13 +33,13 @@ void BootProgress::begin() {
   uint8_t stored = 0U;
   // An out-of-range record is treated as nothing on record: the stage is published, so a value from
   // a firmware that knew more stages than this one must not be reported as one of ours.
-  previousStage = (readStage(stored) && (stored <= lastStage)) ? static_cast<BootStage>(stored) : BootStage::Unknown;
+  previousStage = (RtcStore::read(RtcStore::Slot::BootStage, stored) && (stored <= lastStage)) ? static_cast<BootStage>(stored) : BootStage::Unknown;
   set(BootStage::Banner);
 }
 
 void BootProgress::set(BootStage stage) {
   currentStage = stage;
-  writeStage(static_cast<uint8_t>(stage));
+  RtcStore::write(RtcStore::Slot::BootStage, static_cast<uint8_t>(stage));
 }
 
 BootStage BootProgress::getPrevious() {

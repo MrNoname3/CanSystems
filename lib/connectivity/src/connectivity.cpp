@@ -1,47 +1,12 @@
 #include "connectivity.hpp"
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "bootProgress.hpp"                                         /// Records how far startup got.
+#include "rtcStore.hpp"                                             /// Storage that survives a reset.
 #include <time.h>
 
 #if defined(ESP32)
 #include <esp_sntp.h>
 #endif
-
-namespace {
-  // The backoff rung survives a reset but not a power cycle - exactly the lifetime wanted: a device
-  // that keeps restarting keeps stepping the wait up, while pulling the plug is a fresh start.
-  constexpr uint32_t backoffMagic = 0xB0FF0001UL;                   // Tells a real record from uninitialised RTC memory.
-#ifdef ESP8266
-  constexpr uint32_t backoffRtcOffset = 64U;                        // In 4-byte words; keeps clear of other RTC users.
-
-  bool readBackoffStep(uint8_t& step) {
-    uint32_t record[2] = { 0U };
-    if(!ESP.rtcUserMemoryRead(backoffRtcOffset, record, sizeof(record))) { return false; }
-    if(record[0] != backoffMagic) { return false; }
-    step = static_cast<uint8_t>(record[1]);
-    return true;
-  }
-
-  void storeBackoffStep(uint8_t step) {
-    uint32_t record[2] = { backoffMagic, step };
-    (void)ESP.rtcUserMemoryWrite(backoffRtcOffset, record, sizeof(record));
-  }
-#elif defined(ESP32)
-  RTC_NOINIT_ATTR uint32_t backoffRecordMagic;                      // Survives a reset; garbage after a power cycle.
-  RTC_NOINIT_ATTR uint32_t backoffRecordStep;
-
-  bool readBackoffStep(uint8_t& step) {
-    const bool valid = (backoffRecordMagic == backoffMagic);
-    if(valid) { step = static_cast<uint8_t>(backoffRecordStep); }
-    return valid;
-  }
-
-  void storeBackoffStep(uint8_t step) {
-    backoffRecordMagic = backoffMagic;
-    backoffRecordStep = step;
-  }
-#endif
-} // namespace
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
@@ -72,7 +37,7 @@ bool Connectivity::init() {
   // held - so a device that connects and dies again keeps climbing rather than dropping back to the
   // shortest wait on every boot.
   if(!initialised) { backoff.onFailure(); }
-  storeBackoffStep(backoff.getStepIndex());
+  RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
   // The link came up inside initOnce(), and run() sees no online transition to stamp because the
   // device starts out marked online, so the settle window has to be started here or it would be
   // measured from millis() zero and expire almost at once.
@@ -102,13 +67,13 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
     BootProgress::set(BootStage::BackoffWait);
     uint8_t storedStep = 0U;
-    const bool hadRecord = readBackoffStep(storedStep);
+    const bool hadRecord = RtcStore::read(RtcStore::Slot::BackoffStep, storedStep);
     if(hadRecord) { backoff.restore(storedStep); }
     if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
     // Stored before the attempt rather than after it: a connect that hangs takes the watchdog with
     // it, so nothing below this line is guaranteed to run. Recording the rung first is what keeps
     // a device that dies mid-attempt from starting over at the shortest wait on every boot.
-    storeBackoffStep(backoff.getStepIndex());
+    RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
     if(hadRecord) {
       Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
       const uint32_t startMs = millis();
@@ -335,7 +300,7 @@ bool Connectivity::run() {
       resetWatchdogTimer();
       if(!connectToMqttServer()) {
         backoff.onFailure();
-        storeBackoffStep(backoff.getStepIndex());
+        RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
       }
     }
   }
@@ -347,7 +312,7 @@ bool Connectivity::run() {
     // again keeps climbing instead of dropping back to the shortest wait every time.
     if((backoff.getStepIndex() != 0U) && Time::hasElapsed(actualTime, onlineSinceTimer, onlineSettleTime)) {
       backoff.onSuccess();
-      storeBackoffStep(backoff.getStepIndex());
+      RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
     }
   }
   if(actualOnlineState != onlineState) {
