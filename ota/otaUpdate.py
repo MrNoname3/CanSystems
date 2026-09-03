@@ -8,6 +8,7 @@ proper error handling and progress tracking.
 Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.yaml).
 """
 
+import argparse
 import base64
 import curses
 import enum
@@ -1422,6 +1423,93 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
                     return ActionResult(project=selected_project, device=selected_device, command=command_map[choice])
 
 
+# ---------------------------------------------------------------------------
+# Non-interactive target selection
+# ---------------------------------------------------------------------------
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Builds the command-line parser. With no arguments at all the interactive menu runs."""
+    parser = argparse.ArgumentParser(
+        description="OTA update tool. Run without arguments for the interactive menu.",
+        epilog="A non-interactive run names its device by MAC and its action in full. Nothing is "
+               "defaulted, so a typo fails instead of selecting a target of its own.")
+    parser.add_argument('--list', action='store_true',
+                        help="print every device and the arguments that select its actions, then exit")
+    parser.add_argument('--device', metavar='MAC',
+                        help="MAC address of the target device, as devices.yaml spells it")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--firmware', action='store_true', help="upload this project's firmware over MQTT")
+    action.add_argument('--provision', action='store_true', help="initial provisioning over USB")
+    action.add_argument('--serial-flash', action='store_true', help="initial firmware flash over USB")
+    action.add_argument('--file', metavar='NAME', help="transfer the file entry with this name")
+    action.add_argument('--command', metavar='CMD', help="send this command")
+    return parser
+
+
+def format_target_list(projects: List[ProjectEntry]) -> str:
+    """Renders every device together with the arguments that select each of its actions.
+    The lines are meant to be copied straight onto a command line."""
+    lines: List[str] = []
+    for project in projects:
+        lines.append(f"{project.name}  ({project.pio_project})")
+        for device in project.devices:
+            label = f"  --device {device.mac}"
+            lines.append(f"{label}  # {device.friendly_name}" if device.friendly_name else label)
+            lines.append("      --firmware")
+            lines.append("      --provision")
+            lines.append("      --serial-flash")
+            for file_entry in device.files:
+                lines.append(f'      --file "{file_entry.name}"')
+            for command in project.commands:
+                lines.append(f"      --command {command.cmd}")
+    return "\n".join(lines)
+
+
+def resolve_target(projects: List[ProjectEntry], mac: str, *,
+                   firmware: bool = False, provision: bool = False, serial_flash: bool = False,
+                   file_name: Optional[str] = None, command_name: Optional[str] = None) -> ActionResult:
+    """Builds the same ActionResult the menu would, from explicit arguments instead of keystrokes.
+
+    The menu shows what is about to happen before it happens; this path has no such moment, so
+    every value has to be named and every mismatch is an error. An unknown MAC, a missing action
+    or a name that matches no entry raises rather than falling back on something plausible.
+    """
+    matches = [(p, d) for p in projects for d in p.devices if d.mac == mac]
+    if not matches:
+        known = ", ".join(d.mac for p in projects for d in p.devices)
+        raise ValueError(f"unknown device '{mac}'; devices.yaml lists: {known}")
+    if len(matches) > 1:
+        raise ValueError(f"device '{mac}' is listed in more than one project")
+    project, device = matches[0]
+
+    given = [name for name, chosen in (('--firmware', firmware),
+                                       ('--provision', provision),
+                                       ('--serial-flash', serial_flash),
+                                       ('--file', file_name is not None),
+                                       ('--command', command_name is not None)) if chosen]
+    if len(given) != 1:
+        raise ValueError("exactly one action is required: --firmware, --provision, --serial-flash, "
+                         f"--file NAME or --command CMD (got: {', '.join(given) if given else 'none'})")
+
+    if firmware:
+        return ActionResult(project=project, device=device)
+    if provision:
+        return ActionResult(project=project, device=device, provision=True)
+    if serial_flash:
+        return ActionResult(project=project, device=device, serial_flash=True)
+    if file_name is not None:
+        for file_entry in device.files:
+            if file_entry.name == file_name:
+                return ActionResult(project=project, device=device, file=file_entry)
+        known = ", ".join(f'"{f.name}"' for f in device.files) or "none"
+        raise ValueError(f"device '{mac}' has no file entry named '{file_name}'; it accepts: {known}")
+    for command in project.commands:
+        if command.cmd == command_name:
+            return ActionResult(project=project, device=device, command=command)
+    known = ", ".join(c.cmd for c in project.commands) or "none"
+    raise ValueError(f"project '{project.name}' has no command '{command_name}'; it accepts: {known}")
+
+
 def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig):
     """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender)."""
     device_config = DeviceConfig(mac_address=result.device.mac, project_name=result.project.pio_project)
@@ -1455,19 +1543,43 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
 
 def main():
     """Main entry point"""
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
+                    or args.file is not None or args.command is not None)
+    if args.list and (args.device is not None or action_given):
+        parser.error("--list takes no other arguments")
+    if args.device is None and action_given:
+        parser.error("an action needs --device MAC")
+
     try:
         config_manager = ConfigManager(__file__)
         device_manager = DeviceManager(__file__)
 
         print("Loading configuration...")
-        mqtt_config = config_manager.load_mqtt_config()
+        # The device list is read first so --list answers without needing the broker secrets.
         projects = device_manager.load()
 
-        # Interactive target selection (project → device → action)
-        result = select_target(projects)
-        if result is None:
-            print("Cancelled.")
+        if args.list:
+            print(format_target_list(projects))
             sys.exit(0)
+
+        mqtt_config = config_manager.load_mqtt_config()
+
+        if args.device is not None:
+            result = resolve_target(projects, str(args.device),
+                                    firmware=bool(args.firmware),
+                                    provision=bool(args.provision),
+                                    serial_flash=bool(args.serial_flash),
+                                    file_name=cast(Optional[str], args.file),
+                                    command_name=cast(Optional[str], args.command))
+        else:
+            # Interactive target selection (project → device → action)
+            selected = select_target(projects)
+            if selected is None:
+                print("Cancelled.")
+                sys.exit(0)
+            result = selected
 
         print("\n✅ Configuration loaded successfully:")
         print(f"  Protocol:    {mqtt_config.protocol}")

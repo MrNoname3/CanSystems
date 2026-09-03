@@ -1191,3 +1191,110 @@ def test_real_devices_yaml_entries_resolve(tmp_path: Path) -> None:
             assert payload
             if entry.device_path.endswith(".json"):
                 json.loads(payload)  # every JSON config must arrive parseable
+
+
+# --- Non-interactive target selection ---------------------------------------
+
+def _cli_projects() -> "list[ota.ProjectEntry]":
+    """Two projects whose devices differ in the files and commands they accept."""
+    thermo = ota.DeviceEntry(
+        mac="40f52033765d", friendly_name="Test2",
+        files=[
+            ota.FileEntry(name="CA certificate upload", device_path="/config/mosq-ca.crt",
+                          local_path=Path("ca.crt")),
+            ota.FileEntry(name="Server configuration upload", device_path="/config/server.json",
+                          render="server_json"),
+        ])
+    gateway = ota.DeviceEntry(
+        mac="fcf5c401bd83", friendly_name="Living room",
+        files=[ota.FileEntry(name="CAN alert firmware upload", device_path="/canAlertFw.bin",
+                             local_path=Path("firmware.bin"))])
+    reboot = ota.CommandEntry(name="Reboot", cmd="reboot", description="Restarts the device")
+    return [
+        ota.ProjectEntry(name="Thermometer", pio_project="project_esp8266_thermo",
+                         commands=[reboot], devices=[thermo]),
+        ota.ProjectEntry(name="CAN gateway", pio_project="project_esp32_can",
+                         commands=[reboot], devices=[gateway]),
+    ]
+
+
+def test_resolve_firmware_action() -> None:
+    result = ota.resolve_target(_cli_projects(), "fcf5c401bd83", firmware=True)
+    assert result.project.pio_project == "project_esp32_can"
+    assert result.device.mac == "fcf5c401bd83"
+    assert result.file is None and result.command is None
+    assert result.provision is False and result.serial_flash is False
+
+
+def test_resolve_usb_actions() -> None:
+    projects = _cli_projects()
+    assert ota.resolve_target(projects, "40f52033765d", provision=True).provision is True
+    assert ota.resolve_target(projects, "40f52033765d", serial_flash=True).serial_flash is True
+
+
+def test_resolve_file_action_picks_the_named_entry() -> None:
+    result = ota.resolve_target(_cli_projects(), "40f52033765d", file_name="Server configuration upload")
+    assert result.file is not None
+    assert result.file.render == "server_json"
+    assert result.file.device_path == "/config/server.json"
+
+
+def test_resolve_command_action_matches_the_wire_string() -> None:
+    result = ota.resolve_target(_cli_projects(), "fcf5c401bd83", command_name="reboot")
+    assert result.command is not None
+    assert result.command.cmd == "reboot"
+
+
+def test_resolve_unknown_device_lists_the_known_ones() -> None:
+    with pytest.raises(ValueError, match="unknown device 'deadbeef'"):
+        ota.resolve_target(_cli_projects(), "deadbeef", firmware=True)
+
+
+def test_resolve_needs_exactly_one_action() -> None:
+    projects = _cli_projects()
+    # Nothing named: the menu would have shown a list here, so guessing is not an option.
+    with pytest.raises(ValueError, match="exactly one action"):
+        ota.resolve_target(projects, "40f52033765d")
+    with pytest.raises(ValueError, match="exactly one action"):
+        ota.resolve_target(projects, "40f52033765d", firmware=True, provision=True)
+
+
+def test_resolve_rejects_a_file_the_device_does_not_accept() -> None:
+    # The gateway's firmware file is not the thermometer's, and a near miss must not be rounded up.
+    with pytest.raises(ValueError, match="no file entry named"):
+        ota.resolve_target(_cli_projects(), "40f52033765d", file_name="CAN alert firmware upload")
+
+
+def test_resolve_rejects_an_unknown_command() -> None:
+    with pytest.raises(ValueError, match="no command 'restart'"):
+        ota.resolve_target(_cli_projects(), "40f52033765d", command_name="restart")
+
+
+def test_resolve_rejects_a_mac_listed_twice() -> None:
+    projects = _cli_projects()
+    projects[1].devices[0].mac = projects[0].devices[0].mac
+    with pytest.raises(ValueError, match="more than one project"):
+        ota.resolve_target(projects, "40f52033765d", firmware=True)
+
+
+def test_target_list_names_every_action_of_every_device() -> None:
+    listing = ota.format_target_list(_cli_projects())
+    assert "  --device 40f52033765d  # Test2" in listing
+    assert '      --file "Server configuration upload"' in listing
+    assert "      --command reboot" in listing
+    # The gateway's file belongs to the gateway only.
+    gateway_block = listing.split("--device fcf5c401bd83", 1)[1]
+    assert '--file "CAN alert firmware upload"' in gateway_block
+    assert '--file "Server configuration upload"' not in gateway_block
+
+
+def test_arg_parser_defaults_to_the_menu() -> None:
+    args = ota.build_arg_parser().parse_args([])
+    assert args.device is None and args.list is False
+    assert not (args.firmware or args.provision or args.serial_flash)
+    assert args.file is None and args.command is None
+
+
+def test_arg_parser_refuses_two_actions() -> None:
+    with pytest.raises(SystemExit):
+        ota.build_arg_parser().parse_args(["--device", "40f52033765d", "--firmware", "--command", "reboot"])
