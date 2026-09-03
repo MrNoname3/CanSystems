@@ -8,6 +8,7 @@ proper error handling and progress tracking.
 Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.yaml).
 """
 
+import argparse
 import base64
 import curses
 import enum
@@ -842,10 +843,11 @@ class Provisioner:
 
     CONFIG_PREFIX = '/config/'
 
-    def __init__(self, repo_root: Path, pio_cmd: str):
+    def __init__(self, repo_root: Path, pio_cmd: str, upload_port: Optional[str] = None):
         self.repo_root = repo_root
         self.data_dir = repo_root / 'data'
         self.pio_cmd = pio_cmd
+        self.upload_port = upload_port
 
     def provision(self, project: ProjectEntry, device: DeviceEntry,
                   config_manager: "ConfigManager") -> bool:
@@ -879,9 +881,40 @@ class Provisioner:
             shutil.rmtree(self.data_dir)
         self.data_dir.mkdir()
 
+    def _candidate_ports(self) -> List[str]:
+        """The serial ports PlatformIO can see, as "<port>  <description>" lines.
+        Diagnostic only: any failure answers with nothing rather than holding up the flash."""
+        try:
+            listing = subprocess.run([self.pio_cmd, 'device', 'list', '--json-output'],
+                                     cwd=self.repo_root, check=False, capture_output=True, text=True)
+            entries = cast(List[Dict[str, Any]], json.loads(listing.stdout))
+        except (OSError, ValueError):
+            return []
+        return [f"{e.get('port', '?')}  {e.get('description', '')}".rstrip()
+                for e in entries if str(e.get('hwid', 'n/a')) != 'n/a']
+
+    def _warn_if_the_port_is_ambiguous(self):
+        """Says so when PlatformIO has more than one board to choose from.
+
+        Not every board manifest carries USB hwids (d1_mini does not), so with several boards
+        attached the auto-detection can land on the wrong one - and a serial flash does not ask
+        what it is talking to before it writes.
+        """
+        ports = self._candidate_ports()
+        if len(ports) < 2:
+            return
+        print("⚠  Several serial ports are attached and no --upload-port was given;")
+        print("   PlatformIO will pick one of these itself:")
+        for port in ports:
+            print(f"     {port}")
+
     def _run_pio_target(self, pio_env: str, target: str) -> bool:
         """Run `pio run -e <env> -t <target>` from the repo root, streaming its output."""
         command = [self.pio_cmd, 'run', '-e', pio_env, '-t', target]
+        if self.upload_port is not None:
+            command += ['--upload-port', self.upload_port]
+        else:
+            self._warn_if_the_port_is_ambiguous()
         env = dict(os.environ)
         env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
         logging.info(f"Running: {' '.join(command)}")
@@ -1003,7 +1036,6 @@ class _BaseTransfer:
         self._pending_messages: Deque[Dict[str, Any]] = deque()
 
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     # --- Abstract interface ---------------------------------------------------
 
@@ -1422,6 +1454,96 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
                     return ActionResult(project=selected_project, device=selected_device, command=command_map[choice])
 
 
+# ---------------------------------------------------------------------------
+# Non-interactive target selection
+# ---------------------------------------------------------------------------
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Builds the command-line parser. With no arguments at all the interactive menu runs."""
+    parser = argparse.ArgumentParser(
+        description="OTA update tool. Run without arguments for the interactive menu.",
+        epilog="A non-interactive run names its device by MAC and its action in full. Nothing is "
+               "defaulted, so a typo fails instead of selecting a target of its own.")
+    parser.add_argument('--list', action='store_true',
+                        help="print every device and the arguments that select its actions, then exit")
+    parser.add_argument('--device', metavar='MAC',
+                        help="MAC address of the target device, as devices.yaml spells it")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--firmware', action='store_true', help="upload this project's firmware over MQTT")
+    action.add_argument('--provision', action='store_true', help="initial provisioning over USB")
+    action.add_argument('--serial-flash', action='store_true', help="initial firmware flash over USB")
+    action.add_argument('--file', metavar='NAME', help="transfer the file entry with this name")
+    action.add_argument('--command', metavar='CMD', help="send this command")
+    parser.add_argument('--upload-port', metavar='PORT',
+                        help="serial port for --provision / --serial-flash; without it PlatformIO "
+                             "picks one itself, which is a guess when several boards are attached")
+    return parser
+
+
+def format_target_list(projects: List[ProjectEntry]) -> str:
+    """Renders every device together with the arguments that select each of its actions.
+    The lines are meant to be copied straight onto a command line."""
+    lines: List[str] = []
+    for project in projects:
+        lines.append(f"{project.name}  ({project.pio_project})")
+        for device in project.devices:
+            label = f"  --device {device.mac}"
+            lines.append(f"{label}  # {device.friendly_name}" if device.friendly_name else label)
+            lines.append("      --firmware")
+            lines.append("      --provision")
+            lines.append("      --serial-flash")
+            for file_entry in device.files:
+                lines.append(f'      --file "{file_entry.name}"')
+            for command in project.commands:
+                lines.append(f"      --command {command.cmd}")
+    return "\n".join(lines)
+
+
+def resolve_target(projects: List[ProjectEntry], mac: str, *,
+                   firmware: bool = False, provision: bool = False, serial_flash: bool = False,
+                   file_name: Optional[str] = None, command_name: Optional[str] = None) -> ActionResult:
+    """Builds the same ActionResult the menu would, from explicit arguments instead of keystrokes.
+
+    The menu shows what is about to happen before it happens; this path has no such moment, so
+    every value has to be named and every mismatch is an error. An unknown MAC, a missing action
+    or a name that matches no entry raises rather than falling back on something plausible.
+    """
+    matches = [(p, d) for p in projects for d in p.devices if d.mac == mac]
+    if not matches:
+        known = ", ".join(d.mac for p in projects for d in p.devices)
+        raise ValueError(f"unknown device '{mac}'; devices.yaml lists: {known}")
+    if len(matches) > 1:
+        raise ValueError(f"device '{mac}' is listed in more than one project")
+    project, device = matches[0]
+
+    given = [name for name, chosen in (('--firmware', firmware),
+                                       ('--provision', provision),
+                                       ('--serial-flash', serial_flash),
+                                       ('--file', file_name is not None),
+                                       ('--command', command_name is not None)) if chosen]
+    if len(given) != 1:
+        raise ValueError("exactly one action is required: --firmware, --provision, --serial-flash, "
+                         f"--file NAME or --command CMD (got: {', '.join(given) if given else 'none'})")
+
+    if firmware:
+        return ActionResult(project=project, device=device)
+    if provision:
+        return ActionResult(project=project, device=device, provision=True)
+    if serial_flash:
+        return ActionResult(project=project, device=device, serial_flash=True)
+    if file_name is not None:
+        for file_entry in device.files:
+            if file_entry.name == file_name:
+                return ActionResult(project=project, device=device, file=file_entry)
+        known = ", ".join(f'"{f.name}"' for f in device.files) or "none"
+        raise ValueError(f"device '{mac}' has no file entry named '{file_name}'; it accepts: {known}")
+    for command in project.commands:
+        if command.cmd == command_name:
+            return ActionResult(project=project, device=device, command=command)
+    known = ", ".join(c.cmd for c in project.commands) or "none"
+    raise ValueError(f"project '{project.name}' has no command '{command_name}'; it accepts: {known}")
+
+
 def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig):
     """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender)."""
     device_config = DeviceConfig(mac_address=result.device.mac, project_name=result.project.pio_project)
@@ -1455,19 +1577,49 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
 
 def main():
     """Main entry point"""
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
+                    or args.file is not None or args.command is not None)
+    if args.list and (args.device is not None or action_given or args.upload_port is not None):
+        parser.error("--list takes no other arguments")
+    if args.device is None and action_given:
+        parser.error("an action needs --device MAC")
+    if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
+        parser.error("--upload-port applies to --provision and --serial-flash only")
+
+    # Configured here rather than in whichever object happens to be built: the USB actions run
+    # without any transfer worker, and their progress lines were dropped on the default level.
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     try:
         config_manager = ConfigManager(__file__)
         device_manager = DeviceManager(__file__)
 
         print("Loading configuration...")
-        mqtt_config = config_manager.load_mqtt_config()
+        # The device list is read first so --list answers without needing the broker secrets.
         projects = device_manager.load()
 
-        # Interactive target selection (project → device → action)
-        result = select_target(projects)
-        if result is None:
-            print("Cancelled.")
+        if args.list:
+            print(format_target_list(projects))
             sys.exit(0)
+
+        mqtt_config = config_manager.load_mqtt_config()
+
+        if args.device is not None:
+            result = resolve_target(projects, str(args.device),
+                                    firmware=bool(args.firmware),
+                                    provision=bool(args.provision),
+                                    serial_flash=bool(args.serial_flash),
+                                    file_name=cast(Optional[str], args.file),
+                                    command_name=cast(Optional[str], args.command))
+        else:
+            # Interactive target selection (project → device → action)
+            selected = select_target(projects)
+            if selected is None:
+                print("Cancelled.")
+                sys.exit(0)
+            result = selected
 
         print("\n✅ Configuration loaded successfully:")
         print(f"  Protocol:    {mqtt_config.protocol}")
@@ -1491,7 +1643,8 @@ def main():
             sys.exit(1)
 
         if result.provision or result.serial_flash:
-            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
+            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command(),
+                                      cast(Optional[str], args.upload_port))
             if result.provision:
                 print("  Action:      Initial provisioning (USB)")
                 print()

@@ -14,6 +14,7 @@
 #include "taskHandler.hpp"
 #include "mqttTopics.hpp"
 #include "haDiscovery.hpp"
+#include "sync.hpp"
 #include <ArduinoJson.h>
 
 class MqttBase;
@@ -21,6 +22,13 @@ class MqttBase;
 class Connectivity {
 public:
   using HADiscovery = ::HADiscovery;
+
+  // Mirrors the real accessor. Off ESP32 the mutex and the guard compile away, so this only has
+  // to exist for the handlers that take it.
+  [[nodiscard]] LockGuard lockShared() { return LockGuard(sharedMutex); }
+
+private:
+  RecursiveMutex sharedMutex;
 };
 
 class MqttBase : public virtual Task {
@@ -75,6 +83,7 @@ public:
   [[nodiscard]] const char* getSenderTopicStr() const { return senderTopicStr; }          // NOLINT(readability-convert-member-functions-to-static)
   [[nodiscard]] const char* getClientNameStr() const { return clientNameStr; }            // NOLINT(readability-convert-member-functions-to-static)
   void shutdownMqtt() { ++shutdownCount; }                                  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] LockGuard lockShared() { return connectivity.lockShared(); }
   [[nodiscard]] const char* getSubtopic() const { return subtopic; }
 
   // ---- test inspection (static so tests can read them without a handle) ----
@@ -110,8 +119,8 @@ public:
   MqttBase& operator=(MqttBase&&) = delete;
 
 protected:
-  MqttBase(Connectivity& connectivity, const char* subTopic) {
-    (void)connectivity;
+  MqttBase(Connectivity& connectivity, const char* subTopic) :
+    connectivity(connectivity) {
     if(subTopic != nullptr) {
       strncpy(subtopic, subTopic, sizeof(subtopic) - 1U);
       subtopic[sizeof(subtopic) - 1U] = '\0';
@@ -120,5 +129,6 @@ protected:
   ~MqttBase() override = default;
 
 private:
+  Connectivity& connectivity;
   char subtopic[16] = { 0 };
 };

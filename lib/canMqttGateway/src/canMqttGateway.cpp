@@ -188,7 +188,8 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   clientOfflineTimer(0U),
   clientOnline(true),
   clientEverSeen(false),
-  fwFileNamePtr(fwFileName) {
+  fwFileNamePtr(fwFileName),
+  batchImage() {
   if(fwFileNamePtr != nullptr) {
     OtaRegistry::add(*this);
   }
@@ -223,6 +224,9 @@ bool CanMqttGateway::sendOtaStatusMessage(const char* payload) { // NOLINT(reada
 }
 
 void CanMqttGateway::buildCanTopics() {
+  // These buffers are what a discovery payload is built from, and both this and the payload can
+  // be reached from either task once the CAN drivers run on one of their own.
+  const LockGuard guard = lockShared();
   if(canTopicsBuilt) { return; }
   const char* sender = MqttBase::getSenderTopicStr();
   const char* sub = MqttBase::getSubtopic();
@@ -273,11 +277,15 @@ bool CanMqttGateway::init() {
 
 bool CanMqttGateway::run() {
   handlePing();
-  const bool otaWasRunning = canOta.isOtaInProgress();
+  // The turn is taken here rather than handed over by whoever received the file: the transfer
+  // this starts is driven from this same run(), so no other task ever touches its state.
+  if(!canOta.isOtaInProgress() && OtaRegistry::claimStart(*this, batchImage)) {
+    (void)startOta(fwFileNamePtr, batchImage);
+  }
+  const bool checksumWasKnown = batchImage.valid;
   canOta.runOta();
-  // The queue holds the next target until this one is done: transfers share one bus and one
-  // transmit buffer, so running them at once only stretches both.
-  if(otaWasRunning && !canOta.isOtaInProgress()) { OtaRegistry::startNext(); }
+  // The read pass leaves its result in batchImage; the rest of the batch is spared it.
+  if(!checksumWasKnown && batchImage.valid) { OtaRegistry::reportImage(batchImage); }
   return runLocal();
 }
 
@@ -324,7 +332,10 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
           (static_cast<uint32_t>(canFrame.data[5]) << 24U);
       const uint8_t gitDirty = canFrame.data[6];
       const uint8_t resetReason = canFrame.data[7];   // MCUSR bits plus the intentional-restart bit
-      (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
+      {
+        const LockGuard guard = lockShared();                       // canSwVersion feeds the discovery payload.
+        (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
+      }
       char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason,
                                              static_cast<uint8_t>(BootStage::Unknown));   // A CAN device runs no startup of ours to report.

@@ -6,6 +6,9 @@ CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint16_t clientCanId, Con
 
 bool CanAlertDriver::publishDiscovery() {
   using HA = HADiscovery;
+  // Held across the whole build: the config below hands the payload writer pointers into this
+  // object's metadata buffers, so the lock has to outlive the publishes, not just the copy.
+  const LockGuard guard = lockShared();
   buildCanTopics();
 
   const HA::CanDeviceConfig canDevConfig = {

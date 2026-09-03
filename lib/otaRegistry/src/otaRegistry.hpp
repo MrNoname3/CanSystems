@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "sync.hpp"                                                 /// Mutex/lock guard (no-op off ESP32).
 
 class OtaRegistry;                                                  // Forward declaration.
 
@@ -26,10 +27,6 @@ public:
   /// @brief Whether a transfer to this target is running.
   [[nodiscard]] virtual bool isOtaInProgress() const = 0;
 
-  /// @brief Triggers the OTA update for this target.
-  /// @param image Shared image facts for this batch: read when `valid`, filled in when not.
-  virtual void triggerOta(OtaImageInfo& image) = 0;
-
   OtaTarget() = default;
   virtual ~OtaTarget() = default;
   OtaTarget(const OtaTarget&) = delete;
@@ -52,13 +49,33 @@ public:
   /// @param target Reference to the target to register.
   static void add(OtaTarget& target);
 
-  /// @brief Queues every registered target expecting this file, and starts the first of them.
+  /// @brief Queues every registered target expecting this file.
+  /// @details Starts nothing itself: a target begins its own transfer from its own run(), so the
+  /// task that received the file never reaches into the state another task is driving.
   /// @param fileName The validated file name (RAM string) to match against.
   static void queueForFile(const char* fileName);
 
-  /// @brief Starts the next queued target, if nothing is transferring.
-  /// @details Called by a target that has just finished, and by queueForFile().
-  static void startNext();
+  /// @brief Asks whether this target may begin its queued transfer now.
+  /// @details Answers `true` at most once per queueing, and only while nothing else is
+  /// transferring - the targets share one bus, so running them together finishes no sooner. A
+  /// target that is not answering loses its turn rather than holding the queue up while it times
+  /// out.
+  /// @param target The caller, asking on its own behalf.
+  /// @param image Receives the image facts known so far for this batch.
+  /// @return `true` when the caller should start; `false` when it should not.
+  [[nodiscard]] static bool claimStart(OtaTarget& target, OtaImageInfo& image);
+
+  /// @brief Whether a transfer is still reading this file.
+  /// @details True from the moment the targets are queued until the last of them has finished with
+  /// it. A target holds the image open for the whole transfer, so replacing the file underneath it
+  /// would leave it reading blocks the filesystem has already freed.
+  /// @param fileName The file name to ask about (RAM string).
+  /// @return `true` while the file must not be replaced.
+  [[nodiscard]] static bool isFileInUse(const char* fileName);
+
+  /// @brief Hands back what a target worked out about the image, for the rest of the batch.
+  /// @param image Facts to keep; the next claim receives them.
+  static void reportImage(const OtaImageInfo& image);
 
   OtaRegistry() = delete;
 
@@ -68,4 +85,5 @@ private:
 
   static OtaTarget* head;                                           // Head of the intrusive linked list.
   static OtaImageInfo batchImage;                                   // Shared image facts for the queued batch.
+  static RecursiveMutex mutex;                                      // Guards the queue flags and batchImage across tasks.
 };

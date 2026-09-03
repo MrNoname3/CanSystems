@@ -47,7 +47,8 @@ private:
     FW_UPGRADE_WRITE_FAILED   = 1UL << 22U,             // Firmware upgrade chunk write failed.
     FW_UPGRADE_END_FAILED     = 1UL << 23U,             // Firmware upgrade finalization failed.
     RECEIVED_DATA_OVERRUN     = 1UL << 24U,             // More data received than the declared file size.
-    TEMP_FILE_READING_ERROR   = 1UL << 25U              // The temporary file returned fewer bytes than it holds.
+    TEMP_FILE_READING_ERROR   = 1UL << 25U,             // The temporary file returned fewer bytes than it holds.
+    FILE_IN_USE               = 1UL << 26U              // Something is still reading the file this transfer would replace.
     // clang-format on
   };
 
@@ -63,7 +64,9 @@ public:
   /// @brief Constructor.
   /// @param checkOkCallback Callback function that is invoked when the transfer process
   ///        completes successfully (true) or fails (false).
-  explicit DataTransfer(void (*checkOkCallback)(bool isValid));
+  /// @param fileInUseCallback Optional predicate asked before a transfer starts, answering whether
+  ///        something is still reading the file it would replace. `nullptr` means nothing is.
+  explicit DataTransfer(void (*checkOkCallback)(bool isValid), bool (*fileInUseCallback)(const char* fileName) = nullptr);
 
   /// @brief Destructor. Closes any open file handles.
   ~DataTransfer();
@@ -109,6 +112,7 @@ private:
   void cleanupTransfer();                                           // Releases what the transfer held and returns to IDLE.
 
   void (*checkOkCallback)(bool isValid);                            // Callback function invoked on transfer completion.
+  bool (*fileInUseCallback)(const char* fileName);                  // Predicate asked in begin(), or nullptr.
   uint32_t fileSizeLocal;                                           // Expected size of the file being transferred (in bytes).
   char fileMd5Local[fileMd5Size];                                   // Expected MD5 checksum of the file as a hex string.
   uint32_t nextFilePieceNumberLocal;                                // The next expected file piece number.

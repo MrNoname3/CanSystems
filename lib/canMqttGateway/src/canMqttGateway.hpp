@@ -155,10 +155,6 @@ public:
   /// @brief Whether the CAN client has answered a ping recently enough to be worth sending to.
   [[nodiscard]] bool isOtaTargetOnline() const override { return clientOnline; }
 
-  /// @brief Triggers OTA using the configured firmware file name.
-  /// @param image Image facts shared with the other targets of the same upload.
-  void triggerOta(OtaImageInfo& image) override { (void)startOta(fwFileNamePtr, image); }
-
   CanMqttGateway(const CanMqttGateway&) = delete;                       // Define copy constructor.
   CanMqttGateway& operator=(const CanMqttGateway&) = delete;            // Define copy assignment operator.
   CanMqttGateway(CanMqttGateway&&) = delete;                            // Define move constructor.
@@ -206,6 +202,7 @@ private:
   bool clientOnline;              // Flag indicating the current online status of the client. True if online, false if offline.
   bool clientEverSeen;            // False until a frame arrives from the client; clientOfflineTimer carries no meaning before that.
   const char* fwFileNamePtr;      // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
+  OtaImageInfo batchImage;        // Image facts for the transfer this gateway is running, shared back when computed.
 
 protected:
   /// @brief Builds CAN topic and device metadata buffers from senderTopic, clientName, and subtopic.

@@ -20,8 +20,9 @@ namespace {
   }
 } // namespace
 
-DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid)) :
+DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid), bool (*fileInUseCallback)(const char* fileName)) :
   checkOkCallback(checkOkCallback),
+  fileInUseCallback(fileInUseCallback),
   fileSizeLocal(0U),
   fileMd5Local{ '\0' },
   nextFilePieceNumberLocal(invalidFilePieceNumber),
@@ -62,6 +63,14 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   }
   if(!FileName::isValidFileName(fileName)) {
     dataTransferErrState.setError(DataTransferError::FILE_NAME_NOT_ALLOWED);
+    return false;
+  }
+  // Asked before anything here is touched: the transfer ends by renaming a new file onto this
+  // name, and littlefs frees the blocks of the one it replaces even while a reader still holds it
+  // open - the reader would go on reading blocks the allocator has since handed out.
+  if((fileInUseCallback != nullptr) && fileInUseCallback(fileName)) {
+    Logger::get()->printf_P(PSTR("[FT] File is still in use: %s\r\n"), fileName);
+    dataTransferErrState.setError(DataTransferError::FILE_IN_USE);
     return false;
   }
   fileSizeLocal = fileSize;

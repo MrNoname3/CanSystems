@@ -130,6 +130,32 @@ to `ota/` or the repo root, so the tool works from any directory.
 Pick a project, then a device, then an action. Firmware actions expect the build output at
 `.pio/build/<env>/firmware.bin`, so build the target first (`pio run -e <env>`).
 
+### Without the menu
+
+The same actions are reachable from arguments, for scripting and CI. `--list` prints every
+device with the arguments that select its actions, and needs no `secrets.yaml`:
+
+```sh
+.venv/bin/python ota/otaUpdate.py --list
+.venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --firmware
+.venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --file "CAN alert firmware upload"
+.venv/bin/python ota/otaUpdate.py --device 40f52033765d --command reboot
+.venv/bin/python ota/otaUpdate.py --device 40f52033765d --provision --upload-port /dev/ttyUSB0
+.venv/bin/python ota/otaUpdate.py --device 40f52033765d --serial-flash --upload-port /dev/ttyUSB0
+```
+
+`--upload-port` applies to the two USB actions and works in the menu too (pass it with no other
+argument). Without it PlatformIO auto-detects, and with several boards attached that is a guess:
+not every board manifest carries USB hwids to pick by — `d1_mini` carries none — so the flash can
+land on whichever board enumerated first. The tool lists the attached ports and says so before
+starting an auto-detected flash, but naming the port is the reliable answer.
+
+The device is named by MAC and the action in full; nothing is defaulted. The menu shows what
+is about to happen before it happens, and this path has no such moment, so an unknown MAC, a
+missing action or a name no entry matches is refused (exit 1) rather than resolved to
+something plausible. The identity preflight, the transfers and the USB actions are the same
+code either way. Exit status: 0 success, 1 refused or failed, 2 bad arguments.
+
 ### Bench setup of a fresh device (USB)
 
 A brand-new (or wiped) device has no config to connect with, so the OTA path can't reach it.

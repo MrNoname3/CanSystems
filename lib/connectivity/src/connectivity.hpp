@@ -125,6 +125,17 @@ public:
   /// @brief Returns the MQTT client name (e.g. "esp32_can_aabbccddeeff"). Valid after init().
   [[nodiscard]] const char* getClientName() const { return mqttCredentials.clientName; }
 
+  /// @brief Takes the lock that serialises everything this object shares between tasks.
+  /// @details That is the PubSubClient, HADiscovery's single payload buffer, and the handler
+  /// metadata a discovery payload is built from. The mutex is recursive, so a caller holding it
+  /// may go on to publish; off ESP32 the whole thing compiles away.
+  /// @note run() holds this across mqttClient.loop() and the whole reconnect, TLS handshake
+  /// included, and the wait here is untimed. A task blocking on it can be held off for seconds,
+  /// and esp_task_wdt_reset() only feeds the task that calls it - so a second task subscribed to
+  /// the task watchdog would have to survive that wait on its own.
+  /// @return A guard holding the lock for its lifetime.
+  [[nodiscard]] LockGuard lockShared() { return LockGuard(mqttMutex); }
+
   Connectivity(const Connectivity&) = delete;                       // Delete copy constructor.
   Connectivity& operator=(const Connectivity&) = delete;            // Delete copy assignment operator.
   Connectivity(Connectivity&&) = delete;                            // Delete move constructor.
@@ -320,6 +331,11 @@ public:
   /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
   /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
   void shutdownMqtt() { connectivity.shutdownMqtt(); }
+
+  /// @brief Takes the connectivity lock, for a handler that reads or writes state a discovery
+  /// payload is built from while another task may be publishing one.
+  /// @return A guard holding the lock for its lifetime.
+  [[nodiscard]] LockGuard lockShared() { return connectivity.lockShared(); }
 
   /// @brief Returns the MQTT sender topic base. Valid after Connectivity::init().
   [[nodiscard]] const char* getSenderTopicStr() const { return connectivity.getSenderTopic(); }

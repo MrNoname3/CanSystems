@@ -225,8 +225,8 @@ private:
   bool discoveryEnabled = true;                             // false → publish* retracts entities (empty retained payload).
   // Sized for the larger of the two payload budgets and shared by both publish paths. A local
   // array would put some 750 bytes - a fifth of the ESP8266's 4 KB cont stack - in the deepest
-  // frame the firmware has. Safe to share: every publish runs on the one loop task, and
-  // PubSubClient::publish() copies the payload into its own buffer before returning, so no
-  // second build can start while this one is in flight.
+  // frame the firmware has. Sharing it is what makes the owner's lock a requirement rather than
+  // a detail: Connectivity holds it across the whole build and publish, so a second caller
+  // cannot start building over a payload still in flight.
   char payloadBuffer[canDiscoveryPayloadBufSize] = { '\0' };
 };
