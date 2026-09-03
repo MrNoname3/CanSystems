@@ -34,7 +34,7 @@ Connectivity iotConn(
     WdtHandler::resetWatchdog);
 
 //--- MQTT handler objects ---//
-MqttCommon mqttCommon(iotConn, "common");
+MqttCommon mqttCommon(iotConn, MqttTopics::getCommonSubtopic());
 MqttThermometer<MAX_THERMOMETERS> thermometer(iotConn, "temp", ONE_WIRE_PIN, MEASURE_PERIOD_MS);
 
 //--- Handling tasks ---//

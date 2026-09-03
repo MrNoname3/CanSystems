@@ -62,7 +62,7 @@ private:
   /// @details `{"Colors":[r,g,b]}` sets the LEDs; `{"Sound":n,"Volume":v}` plays a track, with
   /// `Colors` optional - omitted leaves the LEDs dark, present colours them for the playback.
   /// @param payloadJson The JSON document containing the received message payload.
-  void messageArrivedCallback(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonVariant payloadJson) override;
 
   /// @brief Process a received CAN frame.
   /// @param canFrame The CAN frame containing command and data bytes.

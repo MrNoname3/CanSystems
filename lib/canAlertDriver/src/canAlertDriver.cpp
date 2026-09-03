@@ -45,10 +45,12 @@ bool CanAlertDriver::publishDiscovery() {
   return result;
 }
 
-void CanAlertDriver::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant canIdJsonVar = payloadJson[F("setCanId")];
   if(canIdJsonVar.is<uint16_t>()) {
-    (void)requestCanIdChange(canIdJsonVar.as<uint16_t>());
+    // Says only that the request went out; the node's own answer arrives later, over CAN.
+    const bool requestSent = requestCanIdChange(canIdJsonVar.as<uint16_t>());
+    (void)sendResponse(requestSent ? Response::ACK : Response::NACK, static_cast<uint16_t>(CanCmd::SET_CAN_ID));
     return;
   }
   JsonVariant soundJsonVar = payloadJson[F("Sound")];

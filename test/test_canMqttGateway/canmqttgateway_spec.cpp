@@ -33,7 +33,7 @@ public:
 private:
   bool initLocal() override { return true; }
   bool runLocal() override { return true; }
-  void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonVariant payloadJson) override {
     (void)payloadJson;
     ++customMessages;
   }

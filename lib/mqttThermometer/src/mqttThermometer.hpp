@@ -120,7 +120,7 @@ public:
   }
 
   /// @brief Read-only sensor: incoming messages are ignored.
-  void messageArrivedCallback(JsonDocument& payloadJson) override { (void)payloadJson; }
+  void messageArrivedCallback(JsonVariant payloadJson) override { (void)payloadJson; }
 
   MqttThermometer(const MqttThermometer&) = delete;                 // Define copy constructor.
   MqttThermometer& operator=(const MqttThermometer&) = delete;      // Define copy assignment operator.

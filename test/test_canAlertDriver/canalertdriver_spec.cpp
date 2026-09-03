@@ -187,6 +187,22 @@ bool test_set_can_id_message_sends_the_request() {
   }
   IS_EQUAL(countCanFrames(static_cast<uint16_t>(AlertCmd::PLAY_MP3)), 0U);
   IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::RGB_LED)), 0U);
+  // The sender is told whether the request went out; the node's own answer comes later, on CAN.
+  IS_EQUAL(MqttBase::responseCount, 1);
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::ACK);
+  END_IT
+}
+
+bool test_a_refused_address_is_nacked() {
+  IT("an address the gateway refuses is NACKed to the sender");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 31U, conn, "alert5");
+  injectMessage(driver, R"({"setCanId":0})");
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  IS_EQUAL(MqttBase::responseCount, 1);
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
   END_IT
 }
 
@@ -214,5 +230,6 @@ int main() {
   test_publish_discovery_covers_all_entities();
   test_set_can_id_message_sends_the_request();
   test_a_non_numeric_set_can_id_falls_through();
+  test_a_refused_address_is_nacked();
   FINISH
 }

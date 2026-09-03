@@ -34,7 +34,7 @@ public:
 
   /// @brief Processes an incoming MQTT message in JSON format.
   /// @param payloadJson JSON document containing the received MQTT message.
-  void messageArrivedCallback(JsonDocument& payloadJson) override;
+  void messageArrivedCallback(JsonVariant payloadJson) override;
 
   MqttCommon(const MqttCommon&) = delete;                       // Define copy constructor.
   MqttCommon& operator=(const MqttCommon&) = delete;            // Define copy assignment operator.

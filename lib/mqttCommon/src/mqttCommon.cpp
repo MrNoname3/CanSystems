@@ -49,7 +49,7 @@ bool MqttCommon::sendResult(bool result, uint32_t errCode) { // NOLINT(readabili
   return sendingResult;
 }
 
-void MqttCommon::messageArrivedCallback(JsonDocument& payloadJson) {
+void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
   JsonVariant binIdJsonVar = payloadJson[F("binId")];
   JsonVariant fileNameJsonVar = payloadJson[F("name")];
   JsonVariant fileSizeJsonVar = payloadJson[F("fileSize")];

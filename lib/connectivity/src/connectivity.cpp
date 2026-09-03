@@ -183,19 +183,13 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = MqttTopics::getSubtopicOf(topic);
     if(!MqttBase::isSubtopicValid(subtopic)) { return; }
-    MqttBase* messageHandler = handlerList.findIf(
-        [subtopic](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), subtopic) == 0; });
-    if(messageHandler == nullptr) {
-      Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), subtopic);
-      return;
-    }
     JsonDocument payloadJson;
     DeserializationError parsingError = deserializeJson(payloadJson, payload, length);
     if(parsingError != DeserializationError::Code::Ok) {
-      Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), messageHandler->getSubtopic(), reinterpret_cast<const char*>(parsingError.f_str()));
+      Logger::get()->printf_P(PSTR("[MQTT] Parsing failed for: \"%s\" -> %s\r\n"), subtopic, reinterpret_cast<const char*>(parsingError.f_str()));
       return;
     }
-    messageHandler->messageArrivedCallback(payloadJson);
+    deliverMessage(subtopic, payloadJson);
   });
   // List message handlers.
   Logger::get()->printf_P(PSTR("[MQTT] Message handlers:\r\n"));
@@ -417,6 +411,37 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config, const HADiscovery::CanDeviceConfig& canDevConfig) {
   LockGuard guard(mqttMutex);                                       // HADiscovery builds into one shared buffer.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
+}
+
+void Connectivity::deliverMessage(const char* arrivedOn, JsonVariant message) {
+  const MessageRoute::Route route = MessageRoute::resolve(arrivedOn, message);
+  if(route.target == nullptr) {
+    Logger::get()->printf_P(PSTR("[MQTT] Bad envelope on \"%s\"\r\n"), arrivedOn);
+    sendRoutingNack(arrivedOn);
+    return;
+  }
+
+  MqttBase* messageHandler = handlerList.findIf(
+      [&route](const MqttBase* h) -> bool { return strcmp(h->getSubtopic(), route.target) == 0; });
+  if(messageHandler == nullptr) {
+    Logger::get()->printf_P(PSTR("[MQTT] No handler -> \"%s\"\r\n"), route.target);
+    // Only an envelope has a sender waiting: nobody asked for an answer on a subtopic that was
+    // merely published to.
+    if(route.rerouted) { sendRoutingNack(arrivedOn); }
+    return;
+  }
+
+  // A plain member is enough: deliveries all come out of mqttClient.loop(), under the same lock
+  // as every publish, so they never overlap.
+  replySubtopic = arrivedOn;
+  messageHandler->messageArrivedCallback(route.body);
+  replySubtopic = nullptr;
+}
+
+void Connectivity::sendRoutingNack(const char* subTopic) {
+  char responseBuffer[MqttBase::getResponseBufferSize()] = { '\0' };
+  if(!MqttBase::formatResponse(responseBuffer, MqttBase::Response::NACK, 0U, 0U)) { return; }
+  (void)sendMqttMessage(subTopic, responseBuffer);
 }
 
 bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)

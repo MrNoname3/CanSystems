@@ -40,7 +40,7 @@ public:
 
   [[nodiscard]] bool init() override = 0;
   [[nodiscard]] bool run() override = 0;
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
+  virtual void messageArrivedCallback(JsonVariant payloadJson) = 0;
   virtual bool publishDiscovery() { return true; }
 
   [[nodiscard]] static constexpr uint8_t getSubtopicSize() { return MqttTopics::getSubtopicSize(); }
@@ -84,6 +84,12 @@ public:
   [[nodiscard]] const char* getClientNameStr() const { return clientNameStr; }            // NOLINT(readability-convert-member-functions-to-static)
   void shutdownMqtt() { ++shutdownCount; }                                  // NOLINT(readability-convert-member-functions-to-static)
   [[nodiscard]] LockGuard lockShared() { return connectivity.lockShared(); }
+  [[nodiscard]] bool sendReply(const char* payload) { // NOLINT(readability-convert-member-functions-to-static) mirrors the real reply path
+    if(payload == nullptr) { return false; }
+    lastReply = payload;
+    ++replyCount;
+    return sendResult;
+  }
   [[nodiscard]] const char* getSubtopic() const { return subtopic; }
 
   // ---- test inspection (static so tests can read them without a handle) ----
@@ -93,6 +99,8 @@ public:
   static inline int messageCount = 0;
   static inline int shutdownCount = 0;
   static inline bool sendResult = true;
+  static inline std::string lastReply;                                          // Last sendReply payload.
+  static inline int replyCount = 0;
   static inline std::string lastMessage;                                        // Last sendMessage payload.
   static inline std::vector<std::pair<std::string, std::string>> retainedMessages;   // (subSubTopic, payload) pairs.
   static inline std::vector<std::pair<std::string, std::string>> subtopicMessages;   // (subSubTopic, payload) pairs.
@@ -108,6 +116,8 @@ public:
     shutdownCount = 0;
     sendResult = true;
     lastMessage.clear();
+    lastReply.clear();
+    replyCount = 0;
     retainedMessages.clear();
     subtopicMessages.clear();
     canDiscoverySubtopics.clear();
