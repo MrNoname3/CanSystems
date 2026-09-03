@@ -1,17 +1,19 @@
-#ifdef ESP32
+#if defined(ESP32) || defined(NATIVE_TEST)
 #include "canHandlerEsp32.hpp"
-#include "CAN.h"                                                    /// CAN controller library.
-#include <ArduinoJson.h>                                            /// Handle JSON files.
-#include <cstdlib>                                                  /// Standard library for memory and utilities.
 #include "common.hpp"                                               /// Common definitions and functions.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
 volatile uint32_t CanHandlerEsp32::rxIncompleteFrames = 0U;
 volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
-CanHandlerEsp32::CanHandlerEsp32() : // NOLINT(modernize-use-equals-default)
+ESP32SJA1000* CanHandlerEsp32::isrController = nullptr;
+
+CanHandlerEsp32::CanHandlerEsp32(ESP32SJA1000& controller) :
+  controller(controller),
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
-  canDevicesListMutex(xSemaphoreCreateMutex()) {}
+  canDevicesListMutex(xSemaphoreCreateMutex()) {
+  isrController = &controller;
+}
 
 bool CanHandlerEsp32::init(uint32_t canBaud) {
   { // Setup mutex and message queues.
@@ -43,26 +45,33 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     if(!canIdLoadingResult) { return false; }
   }
   { // Initialise CAN peripheral.
-    const bool canBeginResult = CAN.begin(canBaud) == 1U;
+    const bool canBeginResult = controller.begin(canBaud) == 1U;
     Logger::get()->printf_P(PSTR("[CAN] Init:%s\r\n"), Str::getStateStr(canBeginResult));
-    CAN.onReceive(rxInterrupt);
+    controller.onReceive(rxInterrupt);
     if(!canBeginResult) { return false; }
   }
   { // Set up the CAN filtering.
-    const bool setFilterResult = CAN.filterExtended(CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
+    const bool setFilterResult = controller.filterExtended(CanHandlerBase::getCanFilteredId(), CanHandlerBase::getCanIdFilterMask()) == 1U;
     Logger::get()->printf_P(PSTR("[CAN] Set up filter:%s\r\n"), Str::getStateStr(setFilterResult));
     if(!setFilterResult) { return false; }
   }
-  // List CAN devices.
+  // List CAN devices, and check the ids they claim. This is the first moment that can be done:
+  // a device registers from its own constructor, which runs before anything has been read out of
+  // the EEPROM, so the check it makes there has nothing to compare against yet.
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
+  bool deviceIdsFree = true;
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     uint8_t deviceIndex = 0U;
     for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
-      Logger::get()->printf_P(PSTR("  %hhu. %hu\r\n"), deviceIndex++, d->getClientCanId());
+      const uint16_t clientCanId = d->getClientCanId();
+      const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
+      Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
+                              reserved ? PSTR(" <- reserved id!") : PSTR(""));
+      if(reserved) { deviceIdsFree = false; }
     }
     xSemaphoreGive(canDevicesListMutex);
   }
-  return true;
+  return deviceIdsFree;
 }
 
 bool CanHandlerEsp32::send(uint16_t command, const uint8_t (&data)[8]) const {
@@ -75,12 +84,12 @@ bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
 }
 
 void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-convert-member-functions-to-static)
-  if(packetsNum <= 0) { return; }
+  if((packetsNum <= 0) || (isrController == nullptr)) { return; }
   CanFrame rxCanData;
-  rxCanData.extId = CAN.packetId();
-  if(!CAN.packetRtr()) {
-    const uint8_t canDataDlc = CAN.packetDlc();
-    const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(rxCanData.data, canDataDlc));
+  rxCanData.extId = isrController->packetId();
+  if(!isrController->packetRtr()) {
+    const uint8_t canDataDlc = isrController->packetDlc();
+    const uint8_t bytesReaded = static_cast<uint8_t>(isrController->readBytes(rxCanData.data, canDataDlc));
     if(canDataDlc != bytesReaded) {
       ++rxIncompleteFrames;
       return;
@@ -95,9 +104,9 @@ void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-conver
 }
 
 bool CanHandlerEsp32::run() {
-  if(CAN.isBusOff()) {
+  if(controller.isBusOff()) {
     Logger::get()->printf_P(PSTR("[CAN] Bus-off detected, recovering\r\n"));
-    CAN.recoverFromBusOff();
+    controller.recoverFromBusOff();
   }
   reportDroppedFrames();
   { // Handle received CAN frames.
@@ -119,7 +128,7 @@ bool CanHandlerEsp32::run() {
     // queue intact rather than waiting for the bus inside the loop task.
     const CanFramePump::Result txResult = CanFramePump::drain(
         [this, &frameOut]() -> bool {
-          if(!CAN.txReady()) { return false; }
+          if(!controller.txReady()) { return false; }
           return xQueueReceive(canTxQueue, &frameOut, static_cast<TickType_t>(0U)) == pdTRUE;
         },
         [this, &frameOut]() -> bool { return transmitFrame(frameOut); },
@@ -137,7 +146,7 @@ void CanHandlerEsp32::reportDroppedFrames() {
   }
   // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
   // never took is reported.
-  const uint32_t abandoned = txAbandonedReporter.takeGrowth(CAN.getAbandonedTxFrames());
+  const uint32_t abandoned = txAbandonedReporter.takeGrowth(controller.getAbandonedTxFrames());
   if(abandoned != 0U) {
     Logger::get()->printf_P(PSTR("[CAN] TX abandoned: %u frames the bus did not take\r\n"), abandoned);
   }
@@ -151,9 +160,9 @@ void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT
 }
 
 bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
-  const bool beginPacketResult = CAN.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
-  const bool packetWriteResult = beginPacketResult && (CAN.write(frameOut.data, sizeof(frameOut.data)) == sizeof(frameOut.data));
-  const bool endPacketResult = packetWriteResult && (CAN.endPacket() != 0U);
+  const bool beginPacketResult = controller.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
+  const bool packetWriteResult = beginPacketResult && (controller.write(frameOut.data, sizeof(frameOut.data)) == sizeof(frameOut.data));
+  const bool endPacketResult = packetWriteResult && (controller.endPacket() != 0U);
   if(!endPacketResult) {
     // The frame is already consumed from the queue, so a TX failure would otherwise vanish
     // silently (the mains discard the runTasks() failure mask).
@@ -170,4 +179,4 @@ bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readabil
   xSemaphoreGive(canDevicesListMutex);
   return appendResult;
 }
-#endif // ESP32
+#endif // ESP32 || NATIVE_TEST

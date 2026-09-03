@@ -1,7 +1,7 @@
 #include "ambientSensor.hpp"
 #include "common.hpp"
 
-AmbientSensor::AmbientSensor(CanHandler& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
+AmbientSensor::AmbientSensor(CanHandlerBase& canHandler, uint8_t lightPin, uint32_t measurePeriod) :
   si7021(Time::msToUs(10U)),
   canHandler(canHandler),
   lightPin(lightPin),

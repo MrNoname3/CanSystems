@@ -1,4 +1,5 @@
 #include "canMqttGateway.hpp"
+#include "testCan.hpp"
 #include "ota.hpp"
 #include "Arduino.h"
 #include "LittleFS.h"
@@ -45,7 +46,7 @@ private:
 static void resetEnv() {
   LittleFS.reset();
   MqttBase::resetState();
-  CanHandler::resetState();
+  esp32Can.reset();
   TestGateway::resetState();
   setFakeMillis(0U);
 }
@@ -66,20 +67,9 @@ static bool runOnce(CanMqttGateway& gateway) {
   return task.run();
 }
 
-static size_t countFrames(uint16_t cmd) {
-  size_t count = 0U;
-  for(const auto& frame : CanHandler::sentFrames) {
-    if(static_cast<uint16_t>(frame.cmd) == cmd) { ++count; }
-  }
-  return count;
-}
+static size_t countFrames(uint16_t cmd) { return countCanFrames(cmd); }
 
-static const CanHandler::CanFrame* lastFrame(uint16_t cmd) {
-  for(auto it = CanHandler::sentFrames.rbegin(); it != CanHandler::sentFrames.rend(); ++it) {
-    if(static_cast<uint16_t>(it->cmd) == cmd) { return &(*it); }
-  }
-  return nullptr;
-}
+static const CanHandler::CanFrame* lastFrame(uint16_t cmd) { return lastCanFrame(cmd); }
 
 static size_t countRetained(const char* subSubTopic, const char* payload) {
   size_t count = 0U;
@@ -94,7 +84,7 @@ static size_t countRetained(const char* subSubTopic, const char* payload) {
 bool test_init_builds_topics_and_publishes_offline() {
   IT("init() builds the CAN topics, sends FW_VERSION and publishes retained offline");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -113,7 +103,7 @@ bool test_init_builds_topics_and_publishes_offline() {
 bool test_ping_sent_after_ping_interval() {
   IT("run() sends a PING frame once the 1 s ping interval elapses");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -126,20 +116,37 @@ bool test_ping_sent_after_ping_interval() {
   END_IT
 }
 
+bool test_a_silent_client_is_never_announced_online() {
+  IT("a client that has never answered is not announced online, whatever millis() reads at init()");
+  resetEnv();
+  setFakeMillis(3000U);                               // the gateway reached this driver 3 s after boot
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  IS_TRUE(runOnce(gateway));
+  setFakeMillis(4900U);
+  IS_TRUE(runOnce(gateway));
+  IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 0U);
+  END_IT
+}
+
 bool test_online_offline_transitions() {
   IT("a received frame marks the client online; 5 s of silence marks it offline");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());                              // retained offline
-  IS_TRUE(runOnce(gateway));                          // boot: offline timer not yet elapsed -> online
+  const uint8_t pong[8] = { 0U };
+  injectFrame(gateway, static_cast<uint16_t>(CanCmd::PING), pong);   // the client answers
+  IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 1U);
   setFakeMillis(5001U);                               // 5 s of CAN silence
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"offline"})"), 2U);
-  const uint8_t pong[8] = { 0U };
   injectFrame(gateway, static_cast<uint16_t>(CanCmd::PING), pong);
   IS_TRUE(runOnce(gateway));
   IS_EQUAL(countRetained("alert1/availability", R"({"state":"online"})"), 2U);
@@ -151,7 +158,7 @@ bool test_online_offline_transitions() {
 bool test_fw_version_frame_publishes_info() {
   IT("a FW_VERSION frame publishes the retained info payload and the sw version string");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -175,7 +182,7 @@ bool test_fw_version_frame_publishes_info() {
 bool test_restart_frame_republishes_availability() {
   IT("a RESTART frame requests FW_VERSION and pulses offline+online availability");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -191,7 +198,7 @@ bool test_restart_frame_republishes_availability() {
 bool test_button_event_frame_publishes_message() {
   IT("a BUTTON_EVENT frame publishes the button state on the button subtopic");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -207,7 +214,7 @@ bool test_button_event_frame_publishes_message() {
 bool test_unknown_frame_goes_to_derived_handler() {
   IT("an unhandled CAN command is forwarded to processCanFrameArrived()");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   const uint8_t data[8] = { 0U };
@@ -222,7 +229,7 @@ bool test_unknown_frame_goes_to_derived_handler() {
 bool test_other_message_goes_to_derived_handler() {
   IT("an MQTT message reaches the driver's own handler");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   MqttBase& mqttSide = gateway;
@@ -249,7 +256,7 @@ static bool pumpUntilFrame(CanMqttGateway& gateway, uint16_t cmd, size_t expecte
 bool test_ota_happy_path() {
   IT(R"(a full CAN OTA streams the file in 4-byte pieces and reports {"OTA":"[OK]"})");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -306,7 +313,7 @@ bool test_ota_happy_path() {
 bool test_ota_nack_aborts_with_error_status() {
   IT(R"(a NACK during the OTA aborts it and reports {"OTA":"[ERR]"})");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -329,7 +336,7 @@ bool test_ota_nack_aborts_with_error_status() {
 bool test_ota_timeout_reports_error() {
   IT(R"(an OTA stuck waiting for an ACK times out into {"OTA":"[ERR]"} and cleans up)");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -352,7 +359,7 @@ bool test_ota_timeout_reports_error() {
 bool test_stray_ota_ack_while_idle_is_ignored() {
   IT("an OTA ACK arriving with no transfer running is ignored");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -372,7 +379,7 @@ bool test_stray_ota_ack_while_idle_is_ignored() {
 bool test_second_ota_start_is_rejected_while_one_runs() {
   IT("starting a second OTA while one is in progress is rejected and leaves it running");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -395,7 +402,7 @@ bool test_second_ota_start_is_rejected_while_one_runs() {
 bool test_ota_start_rejects_bad_input() {
   IT("startOta() rejects a null name and a relative path without starting anything");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -409,7 +416,7 @@ bool test_ota_start_rejects_bad_input() {
 bool test_ota_start_reports_a_missing_file_to_the_server() {
   IT("a firmware file that cannot be opened is reported over MQTT, as an empty one is");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -427,7 +434,7 @@ bool test_ota_start_reports_a_missing_file_to_the_server() {
 bool test_ota_rejects_empty_file() {
   IT("startOta() rejects an empty firmware file");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -445,7 +452,7 @@ bool test_ota_rejects_empty_file() {
 bool test_a_known_checksum_skips_the_read_pass() {
   IT("an image whose checksum a previous target computed is sent without reading the file again");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway first(can, 26U, conn, "alert1");
   Task& firstTask = first;
@@ -467,7 +474,7 @@ bool test_a_known_checksum_skips_the_read_pass() {
   IS_EQUAL(image.crc, parsed.fwCrc);
 
   // The next target of the same upload gets the checksum handed to it.
-  CanHandler::sentFrames.clear();
+  esp32Can.clearTransmitted();
   TestGateway second(can, 27U, conn, "alert2");
   Task& secondTask = second;
   IS_TRUE(secondTask.init());
@@ -484,7 +491,7 @@ bool test_a_known_checksum_skips_the_read_pass() {
 bool test_ota_contract_gateway_to_device_storage() {
   IT("frames the gateway emits reconstruct on a real OTA storage object and validate");
   resetEnv();
-  CanHandler can;
+  TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
@@ -534,6 +541,7 @@ int main() {
   SUITE("CanMqttGateway");
   test_init_builds_topics_and_publishes_offline();
   test_ping_sent_after_ping_interval();
+  test_a_silent_client_is_never_announced_online();
   test_online_offline_transitions();
   test_fw_version_frame_publishes_info();
   test_restart_frame_republishes_availability();

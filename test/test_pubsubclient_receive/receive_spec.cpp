@@ -351,6 +351,34 @@ bool test_receive_qos1() {
   END_IT
 }
 
+bool test_topic_length_past_the_packet_is_dropped() {
+  IT("drops a message whose topic length runs past the bytes that arrived");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // Remaining length 4, but the topic-length field claims 0xFFFF. Both numbers come off the
+  // wire, and a broker is free to disagree with itself.
+  const uint8_t publish[] = { 0x30U, 0x04U, 0xFFU, 0xFFU, 0x41U, 0x42U };
+  shimClient.respond(publish, 6U);
+
+  rc = client.loop();
+
+  IS_TRUE(rc);
+  IS_FALSE(callback_called);
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -362,6 +390,7 @@ int main() {
   test_resize_buffer();
   test_receive_oversized_stream_message();
   test_receive_qos1();
+  test_topic_length_past_the_packet_is_dropped();
 
   FINISH
 }

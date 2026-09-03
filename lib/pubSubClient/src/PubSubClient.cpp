@@ -249,6 +249,14 @@ bool PubSubClient::handlePacket(uint32_t t) {
     if(type == MQTTPUBLISH) {
       if(callback != nullptr) {
         const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+        // The topic length and the packet length are two independent numbers off the wire, and
+        // every index below is built from the first one. A packet where they disagree is dropped
+        // rather than trusted: readPacket() consumed exactly the announced bytes, so the stream
+        // stays in step and only this message is lost.
+        const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;
+        if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
+          return true;
+        }
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
         char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);

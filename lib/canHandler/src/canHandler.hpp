@@ -6,7 +6,7 @@
 #elif defined(ESP32)
 #include "canHandlerEsp32.hpp"                                      /// CAN handler for ESP32 boards.
 #elif defined(NATIVE_TEST)
-#include "canHandlerNative.hpp"                                     /// Recording CanHandler + CanBase test double (test/_shims).
+#include "canHandlerEsp32.hpp"                                      /// The ESP32 handler, driven on the host through the shims.
 #else
 #include "canHandlerBase.hpp"                                       /// Base class used on non-hardware platforms.
 using CanHandler = CanHandlerBase;

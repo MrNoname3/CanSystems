@@ -187,6 +187,7 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   clientPingTimer(0U),
   clientOfflineTimer(0U),
   clientOnline(true),
+  clientEverSeen(false),
   fwFileNamePtr(fwFileName) {
   if(fwFileNamePtr != nullptr) {
     OtaRegistry::add(*this);
@@ -286,7 +287,7 @@ void CanMqttGateway::handlePing() {
     (void)sendCanFrame(CanCmd::PING);
     clientPingTimer = actualTime;
   }
-  const bool clientOnlineActual = !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
+  const bool clientOnlineActual = clientEverSeen && !Time::hasElapsed(actualTime, clientOfflineTimer, clientOfflineTime);
   if(clientOnline != clientOnlineActual) {
     clientOnline = clientOnlineActual;
     Logger::get()->printf_P(PSTR("[CAN] %s is %s!\r\n"), MqttBase::getSubtopic(),
@@ -298,6 +299,7 @@ void CanMqttGateway::handlePing() {
 
 void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) {
   clientPingTimer = clientOfflineTimer = millis();
+  clientEverSeen = true;
   switch(static_cast<uint16_t>(canFrame.cmd)) {
     case static_cast<uint16_t>(CanCmd::PING): {
     } break;

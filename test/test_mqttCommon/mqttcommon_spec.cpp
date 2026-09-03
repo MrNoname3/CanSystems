@@ -154,6 +154,37 @@ bool test_end_to_end_file_routes_to_ota_target() {
   END_IT
 }
 
+bool test_firmware_without_a_binid_is_rebooted_into() {
+  IT("firmware that arrives without a binId is rebooted into, not left staged");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  deliver(mc, R"({"name":"espFirmware","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");  // begin
+  deliver(mc, R"({"piece":0,"data":"YWJj"})");             // base64("abc") -> Update.end() verifies it
+  (void)mc.run();                                          // consume completion
+  IS_EQUAL(ResetHandler::restartCount, 1);
+  END_IT
+}
+
+bool test_a_config_file_carrying_a_binid_is_not_rebooted_into() {
+  IT("a file that is not firmware does not restart the device, whatever binId the message carries");
+  resetEnv();
+  static TestOtaTarget target("/canAlertFw.bin");
+  target.triggered = false;
+  OtaRegistry::add(target);  // idempotent
+
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  deliver(mc, R"({"binId":"native_test","name":"/canAlertFw.bin","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  deliver(mc, R"({"piece":0,"data":"YWJj"})");
+  (void)mc.run();                                          // CHECK: read + hash
+  (void)mc.run();                                          // CHECK: MD5 matches -> rename
+  (void)mc.run();                                          // consume completion
+  IS_EQUAL(ResetHandler::restartCount, 0);
+  IS_TRUE(target.triggered);
+  END_IT
+}
+
 // ---- lifecycle / discovery / failure logging ----
 
 bool test_init_returns_true() {
@@ -222,6 +253,8 @@ int main() {
   test_file_piece_stored();
   test_unknown_json_no_response();
   test_end_to_end_file_routes_to_ota_target();
+  test_firmware_without_a_binid_is_rebooted_into();
+  test_a_config_file_carrying_a_binid_is_not_rebooted_into();
   test_a_binid_that_only_starts_with_the_env_name_is_rejected();
   FINISH
 }

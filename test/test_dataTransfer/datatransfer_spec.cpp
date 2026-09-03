@@ -420,6 +420,21 @@ bool test_cleanup_releases_an_unfinished_firmware_image() {
   END_IT
 }
 
+bool test_an_abandoned_firmware_image_is_released_by_a_file_transfer() {
+  IT("an abandoned firmware image is released when the next transfer is an ordinary file");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fwName()));
+  IS_TRUE(dt.storeBase64(0U, b64(std::string("abc")).c_str()));   // half the image, then the sender moves on
+  IS_TRUE(Update.isOpen());
+  // begin() is the last moment the open image can still be seen: the cleanup that would release
+  // it decides on isFwTransfer, and a file transfer clears that flag.
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_FALSE(Update.isOpen());
+  END_IT
+}
+
 bool test_firmware_begin_failure() {
   IT("begin() reports FW_UPGRADE_BEGIN_FAILED when Update.begin fails");
   resetEnv();
@@ -590,6 +605,7 @@ int main() {
   test_a_temp_file_left_by_a_reset_does_not_block_the_next_transfer();
   test_firmware_transfer_can_be_restarted();
   test_cleanup_releases_an_unfinished_firmware_image();
+  test_an_abandoned_firmware_image_is_released_by_a_file_transfer();
   test_firmware_begin_failure();
   test_firmware_write_failure();
   test_firmware_end_failure();

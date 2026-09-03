@@ -1,7 +1,7 @@
 #include "pushButtonHandler.hpp"
 #include <Arduino.h>
 
-PushButtonHandler::PushButtonHandler(const CanHandler& canHandler, bool (*buttonReader)()) :
+PushButtonHandler::PushButtonHandler(const CanHandlerBase& canHandler, bool (*buttonReader)()) :
   canHandler(canHandler),
   readButtonValue(buttonReader),
   button(deadTime, longPressTime, debounceTime, buttonPolarity),

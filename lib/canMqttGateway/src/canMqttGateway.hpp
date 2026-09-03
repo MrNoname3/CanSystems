@@ -204,6 +204,7 @@ private:
   uint32_t clientPingTimer;       // Timer for tracking the interval of client pings.
   uint32_t clientOfflineTimer;    // Timer for tracking the time since the last client ping to detect offline status.
   bool clientOnline;              // Flag indicating the current online status of the client. True if online, false if offline.
+  bool clientEverSeen;            // False until a frame arrives from the client; clientOfflineTimer carries no meaning before that.
   const char* fwFileNamePtr;      // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
 
 protected:

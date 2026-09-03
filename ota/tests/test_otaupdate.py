@@ -982,6 +982,26 @@ def test_a_late_acknowledgment_and_the_repeats_answer_do_not_abort(tmp_path: Pat
     assert updater.state == ota.TransferState.SENDING_FW
 
 
+def test_the_repeats_answer_does_not_acknowledge_the_piece_that_followed(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path)
+    recorder = cast(_RecordingMQTT, updater.mqtt_client)
+    _expire(updater)                                       # the repeat of piece 0 goes out
+
+    # The original acknowledgment was only slow. It arrives in a pass of its own, which puts the
+    # next piece on the wire.
+    updater._pending_messages.append({"type": 1})
+    updater._process_state()
+    in_flight = json.loads(recorder.published[-1][1])["piece"]
+
+    # A round trip later the repeat's own answer turns up, in a pass of its own. It names the
+    # piece that was repeated, not the one now in flight, so it acknowledges nothing.
+    updater._pending_messages.append({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    updater._process_state()
+
+    assert updater.state == ota.TransferState.WAIT_PIECE_ACK
+    assert json.loads(recorder.published[-1][1])["piece"] == in_flight
+
+
 def test_both_answers_drained_in_one_pass_do_not_abort(tmp_path: Path) -> None:
     updater = _updater_awaiting_piece_ack(tmp_path)
     _expire(updater)
