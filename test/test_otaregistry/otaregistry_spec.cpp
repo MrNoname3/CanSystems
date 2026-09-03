@@ -10,11 +10,10 @@ class TestTarget : public OtaTarget {
 public:
   const char* const fileName;
   bool online = true;             // What isOtaTargetOnline() reports.
-  bool startTakes = true;         // Whether triggerOta() leaves a transfer running.
+  bool startTakes = true;         // Whether a claimed turn leaves a transfer running.
   bool busy = false;              // What isOtaInProgress() reports.
   uint8_t triggerCount = 0U;
-  OtaImageInfo seenImage{};       // The image facts triggerOta() was handed.
-  OtaImageInfo* imageRef = nullptr;  // Where to write them back, as a gateway does after checksumming.
+  OtaImageInfo seenImage{};       // The image facts the claimed turn handed over.
 
   explicit TestTarget(const char* fn) :
     fileName(fn) {}
@@ -23,26 +22,27 @@ public:
   [[nodiscard]] bool isOtaTargetOnline() const override { return online; }
   [[nodiscard]] bool isOtaInProgress() const override { return busy; }
 
-  void triggerOta(OtaImageInfo& image) override {
+  /// @brief One turn of the target's own run(), where a queued transfer is picked up.
+  void poll() {
+    if(busy) { return; }
+    OtaImageInfo image{};
+    if(!OtaRegistry::claimStart(*this, image)) { return; }
     ++triggerCount;
     seenImage = image;
-    imageRef = &image;
     busy = startTakes;
   }
 
-  /// @brief Ends the transfer and lets the queue move on.
+  /// @brief Ends the transfer; the queue moves on when the next target polls.
   void finish() {
     busy = false;
-    OtaRegistry::startNext();
   }
 
   /// @brief Ends the transfer having checksummed the image, as a gateway's START pass does.
   void finishWithChecksum(uint32_t size, uint16_t crc) {
-    if(imageRef != nullptr) {
-      imageRef->size = size;
-      imageRef->crc = crc;
-      imageRef->valid = true;
-    }
+    seenImage.size = size;
+    seenImage.crc = crc;
+    seenImage.valid = true;
+    OtaRegistry::reportImage(seenImage);
     finish();
   }
 
@@ -52,7 +52,6 @@ public:
     busy = false;
     triggerCount = 0U;
     seenImage = OtaImageInfo{};
-    imageRef = nullptr;
   }
 };
 
@@ -70,12 +69,37 @@ static void resetAll() {
   targetDup.reset();
 }
 
+/// @brief Gives every target one run(), in the order they were registered.
+static void pollAll() {
+  targetA.poll();
+  targetB.poll();
+  targetC.poll();
+  targetNull.poll();
+  targetDup.poll();
+}
+
+bool test_queueing_starts_nothing_by_itself() {
+  IT("queueing leaves the start to the target's own run()");
+  OtaRegistry::add(targetA);
+  resetAll();
+
+  // The file arrives on the task that owns MQTT, while the transfer runs on the task that owns
+  // the bus: starting it here would reach into state the other task is driving.
+  OtaRegistry::queueForFile("fw_a.bin");
+  IS_EQUAL(targetA.triggerCount, 0U);
+  pollAll();
+  IS_EQUAL(targetA.triggerCount, 1U);
+  targetA.finish();
+  END_IT
+}
+
 bool test_matching_target_started() {
   IT("starts the registered target whose file name matches");
   OtaRegistry::add(targetA);
   resetAll();
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 1U);
   targetA.finish();
   END_IT
@@ -87,6 +111,7 @@ bool test_non_matching_target_not_started() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_b.bin");
+  pollAll();
   IS_EQUAL(targetB.triggerCount, 1U);
   IS_EQUAL(targetA.triggerCount, 0U);
   targetB.finish();
@@ -99,11 +124,16 @@ bool test_targets_sharing_a_file_run_one_at_a_time() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 1U);
   IS_EQUAL(targetC.triggerCount, 0U);   // queued, not started
   IS_EQUAL(targetB.triggerCount, 0U);
 
+  pollAll();                            // more turns change nothing while the first transfers
+  IS_EQUAL(targetC.triggerCount, 0U);
+
   targetA.finish();
+  pollAll();
   IS_EQUAL(targetC.triggerCount, 1U);   // its turn came with the first one's end
   IS_TRUE(targetC.busy);
   targetC.finish();
@@ -115,9 +145,11 @@ bool test_the_checksum_is_computed_once_for_the_batch() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_FALSE(targetA.seenImage.valid);      // nothing is known about a file that just arrived
   targetA.finishWithChecksum(19018U, 0xB0CAU);
 
+  pollAll();
   IS_TRUE(targetC.seenImage.valid);       // so the second one does not read the file again
   IS_EQUAL(targetC.seenImage.size, 19018U);
   IS_EQUAL(targetC.seenImage.crc, 0xB0CAU);
@@ -130,15 +162,19 @@ bool test_a_new_upload_invalidates_the_shared_checksum() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   targetA.finishWithChecksum(19018U, 0xB0CAU);
+  pollAll();
   targetC.finish();
 
   // Same file name, different contents: carrying the old checksum over would send a firmware
   // the node then rejects on its own CRC check.
   resetAll();
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_FALSE(targetA.seenImage.valid);
   targetA.finish();
+  pollAll();
   targetC.finish();
   END_IT
 }
@@ -149,6 +185,7 @@ bool test_offline_target_is_skipped() {
   targetA.online = false;
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 0U);   // nothing to send to
   IS_EQUAL(targetC.triggerCount, 1U);   // the queue moved straight on
   targetC.finish();
@@ -161,6 +198,7 @@ bool test_a_start_that_does_not_take_does_not_stall_the_queue() {
   targetA.startTakes = false;
 
   OtaRegistry::queueForFile("fw_a.bin");
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 1U);   // it was asked
   IS_FALSE(targetA.busy);               // but nothing is running
   IS_EQUAL(targetC.triggerCount, 1U);   // so the next one went at once
@@ -174,6 +212,7 @@ bool test_null_filename_queue_is_noop() {
   resetAll();
 
   OtaRegistry::queueForFile(nullptr);
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 0U);
   IS_EQUAL(targetB.triggerCount, 0U);
   IS_EQUAL(targetC.triggerCount, 0U);
@@ -185,6 +224,7 @@ bool test_unknown_file_starts_nothing() {
   IT("no target is started for an unregistered file name");
   resetAll();
   OtaRegistry::queueForFile("unknown.bin");
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 0U);
   IS_EQUAL(targetB.triggerCount, 0U);
   IS_EQUAL(targetC.triggerCount, 0U);
@@ -196,6 +236,7 @@ bool test_null_named_target_skipped_on_real_file() {
   IT("a null-named target is never started, even for a matching non-null request");
   resetAll();
   OtaRegistry::queueForFile("fw_b.bin");
+  pollAll();
   IS_EQUAL(targetNull.triggerCount, 0U);
   IS_EQUAL(targetB.triggerCount, 1U);
   targetB.finish();
@@ -209,8 +250,10 @@ bool test_duplicate_add_is_idempotent() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_dup.bin");
+  pollAll();
   IS_EQUAL(targetDup.triggerCount, 1U);  // started exactly once, not twice
   targetDup.finish();
+  pollAll();
   IS_EQUAL(targetDup.triggerCount, 1U);  // and it is not in the queue a second time either
   END_IT
 }
@@ -219,8 +262,10 @@ bool test_case_sensitivity() {
   IT("queueForFile is case-sensitive; the wrong case starts nothing");
   resetAll();
   OtaRegistry::queueForFile("FW_B.BIN");
+  pollAll();
   IS_EQUAL(targetB.triggerCount, 0U);
   OtaRegistry::queueForFile("Fw_b.Bin");
+  pollAll();
   IS_EQUAL(targetB.triggerCount, 0U);
   END_IT
 }
@@ -230,11 +275,14 @@ bool test_a_new_upload_replaces_the_previous_queue() {
   resetAll();
 
   OtaRegistry::queueForFile("fw_a.bin");   // targetA runs, targetC waits
+  pollAll();
   IS_EQUAL(targetA.triggerCount, 1U);
   OtaRegistry::queueForFile("fw_b.bin");   // a different file arrives
+  pollAll();
   IS_EQUAL(targetB.triggerCount, 0U);      // targetA is still transferring, so nothing starts yet
 
   targetA.finish();
+  pollAll();
   IS_EQUAL(targetC.triggerCount, 0U);      // the old queue is gone
   IS_EQUAL(targetB.triggerCount, 1U);      // the new one took its place
   targetB.finish();
@@ -243,6 +291,7 @@ bool test_a_new_upload_replaces_the_previous_queue() {
 
 int main() {
   SUITE("OtaRegistry");
+  test_queueing_starts_nothing_by_itself();
   test_matching_target_started();
   test_non_matching_target_not_started();
   test_targets_sharing_a_file_run_one_at_a_time();

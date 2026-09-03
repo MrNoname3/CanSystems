@@ -123,9 +123,10 @@ public:
   [[nodiscard]] const char* getFwFileName() const override { return name_; }
   [[nodiscard]] bool isOtaTargetOnline() const override { return true; }
   [[nodiscard]] bool isOtaInProgress() const override { return false; }
-  void triggerOta(OtaImageInfo& image) override {
-    (void)image;
-    triggered = true;
+  /// @brief One turn of the target's own run(), where a queued transfer is picked up.
+  void poll() {
+    OtaImageInfo image{};
+    if(OtaRegistry::claimStart(*this, image)) { triggered = true; }
   }
   bool triggered = false;
 
@@ -146,7 +147,8 @@ bool test_end_to_end_file_routes_to_ota_target() {
   deliver(mc, R"({"piece":0,"data":"YWJj"})");             // store base64("abc") -> completes -> CHECK
   (void)mc.run();                                          // CHECK: read + hash
   (void)mc.run();                                          // CHECK: real MD5 matches -> rename + mark valid
-  (void)mc.run();                                          // consume completion -> ACK + route to OTA target
+  (void)mc.run();                                          // consume completion -> ACK + queue the OTA target
+  target.poll();                                           // the target starts from its own run()
 
   IS_TRUE(target.triggered);
   IS_TRUE(MqttBase::lastResponse == MqttBase::Response::ACK);
@@ -180,6 +182,7 @@ bool test_a_config_file_carrying_a_binid_is_not_rebooted_into() {
   (void)mc.run();                                          // CHECK: read + hash
   (void)mc.run();                                          // CHECK: MD5 matches -> rename
   (void)mc.run();                                          // consume completion
+  target.poll();
   IS_EQUAL(ResetHandler::restartCount, 0);
   IS_TRUE(target.triggered);
   END_IT

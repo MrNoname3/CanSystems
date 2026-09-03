@@ -4,6 +4,7 @@
 
 OtaTarget* OtaRegistry::head = nullptr;
 OtaImageInfo OtaRegistry::batchImage;
+RecursiveMutex OtaRegistry::mutex;
 
 void OtaRegistry::add(OtaTarget& target) {
   for(OtaTarget* current = head; current != nullptr; current = current->next) {
@@ -23,26 +24,27 @@ void OtaRegistry::add(OtaTarget& target) {
 
 void OtaRegistry::queueForFile(const char* fileName) {
   if(fileName == nullptr) { return; }
+  const LockGuard guard(mutex);
   batchImage = OtaImageInfo{};                                      // A new file: nothing known about it yet.
   for(OtaTarget* current = head; current != nullptr; current = current->next) {
     const char* targetFile = current->getFwFileName();
     current->otaQueued = (targetFile != nullptr) && (strcmp_P(fileName, targetFile) == 0);
   }
-  startNext();
 }
 
-void OtaRegistry::startNext() {
-  if(anyInProgress()) { return; }
-  for(OtaTarget* current = head; current != nullptr; current = current->next) {
-    if(!current->otaQueued) { continue; }
-    current->otaQueued = false;
-    // A node that is not answering would spend the whole transfer timing out, and hold the
-    // queue up while it does.
-    if(!current->isOtaTargetOnline()) { continue; }
-    current->triggerOta(batchImage);
-    // A start that did not take leaves nothing to wait for, so the queue moves on at once.
-    if(current->isOtaInProgress()) { return; }
-  }
+bool OtaRegistry::claimStart(OtaTarget& target, OtaImageInfo& image) {
+  const LockGuard guard(mutex);
+  if(!target.otaQueued) { return false; }
+  if(anyInProgress()) { return false; }
+  target.otaQueued = false;                                         // One turn per queueing, taken or not.
+  if(!target.isOtaTargetOnline()) { return false; }
+  image = batchImage;
+  return true;
+}
+
+void OtaRegistry::reportImage(const OtaImageInfo& image) {
+  const LockGuard guard(mutex);
+  batchImage = image;
 }
 
 bool OtaRegistry::anyInProgress() {

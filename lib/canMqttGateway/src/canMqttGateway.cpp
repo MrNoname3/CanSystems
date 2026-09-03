@@ -188,7 +188,8 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   clientOfflineTimer(0U),
   clientOnline(true),
   clientEverSeen(false),
-  fwFileNamePtr(fwFileName) {
+  fwFileNamePtr(fwFileName),
+  batchImage() {
   if(fwFileNamePtr != nullptr) {
     OtaRegistry::add(*this);
   }
@@ -276,11 +277,15 @@ bool CanMqttGateway::init() {
 
 bool CanMqttGateway::run() {
   handlePing();
-  const bool otaWasRunning = canOta.isOtaInProgress();
+  // The turn is taken here rather than handed over by whoever received the file: the transfer
+  // this starts is driven from this same run(), so no other task ever touches its state.
+  if(!canOta.isOtaInProgress() && OtaRegistry::claimStart(*this, batchImage)) {
+    (void)startOta(fwFileNamePtr, batchImage);
+  }
+  const bool checksumWasKnown = batchImage.valid;
   canOta.runOta();
-  // The queue holds the next target until this one is done: transfers share one bus and one
-  // transmit buffer, so running them at once only stretches both.
-  if(otaWasRunning && !canOta.isOtaInProgress()) { OtaRegistry::startNext(); }
+  // The read pass leaves its result in batchImage; the rest of the batch is spared it.
+  if(!checksumWasKnown && batchImage.valid) { OtaRegistry::reportImage(batchImage); }
   return runLocal();
 }
 
