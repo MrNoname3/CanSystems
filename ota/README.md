@@ -140,9 +140,15 @@ device with the arguments that select its actions, and needs no `secrets.yaml`:
 .venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --firmware
 .venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --file "CAN alert firmware upload"
 .venv/bin/python ota/otaUpdate.py --device 40f52033765d --command reboot
-.venv/bin/python ota/otaUpdate.py --device 40f52033765d --provision      # USB
-.venv/bin/python ota/otaUpdate.py --device 40f52033765d --serial-flash   # USB
+.venv/bin/python ota/otaUpdate.py --device 40f52033765d --provision --upload-port /dev/ttyUSB0
+.venv/bin/python ota/otaUpdate.py --device 40f52033765d --serial-flash --upload-port /dev/ttyUSB0
 ```
+
+`--upload-port` applies to the two USB actions and works in the menu too (pass it with no other
+argument). Without it PlatformIO auto-detects, and with several boards attached that is a guess:
+not every board manifest carries USB hwids to pick by — `d1_mini` carries none — so the flash can
+land on whichever board enumerated first. The tool lists the attached ports and says so before
+starting an auto-detected flash, but naming the port is the reliable answer.
 
 The device is named by MAC and the action in full; nothing is defaulted. The menu shows what
 is about to happen before it happens, and this path has no such moment, so an unknown MAC, a

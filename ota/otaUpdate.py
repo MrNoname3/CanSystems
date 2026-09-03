@@ -843,10 +843,11 @@ class Provisioner:
 
     CONFIG_PREFIX = '/config/'
 
-    def __init__(self, repo_root: Path, pio_cmd: str):
+    def __init__(self, repo_root: Path, pio_cmd: str, upload_port: Optional[str] = None):
         self.repo_root = repo_root
         self.data_dir = repo_root / 'data'
         self.pio_cmd = pio_cmd
+        self.upload_port = upload_port
 
     def provision(self, project: ProjectEntry, device: DeviceEntry,
                   config_manager: "ConfigManager") -> bool:
@@ -880,9 +881,40 @@ class Provisioner:
             shutil.rmtree(self.data_dir)
         self.data_dir.mkdir()
 
+    def _candidate_ports(self) -> List[str]:
+        """The serial ports PlatformIO can see, as "<port>  <description>" lines.
+        Diagnostic only: any failure answers with nothing rather than holding up the flash."""
+        try:
+            listing = subprocess.run([self.pio_cmd, 'device', 'list', '--json-output'],
+                                     cwd=self.repo_root, check=False, capture_output=True, text=True)
+            entries = cast(List[Dict[str, Any]], json.loads(listing.stdout))
+        except (OSError, ValueError):
+            return []
+        return [f"{e.get('port', '?')}  {e.get('description', '')}".rstrip()
+                for e in entries if str(e.get('hwid', 'n/a')) != 'n/a']
+
+    def _warn_if_the_port_is_ambiguous(self):
+        """Says so when PlatformIO has more than one board to choose from.
+
+        Not every board manifest carries USB hwids (d1_mini does not), so with several boards
+        attached the auto-detection can land on the wrong one - and a serial flash does not ask
+        what it is talking to before it writes.
+        """
+        ports = self._candidate_ports()
+        if len(ports) < 2:
+            return
+        print("⚠  Several serial ports are attached and no --upload-port was given;")
+        print("   PlatformIO will pick one of these itself:")
+        for port in ports:
+            print(f"     {port}")
+
     def _run_pio_target(self, pio_env: str, target: str) -> bool:
         """Run `pio run -e <env> -t <target>` from the repo root, streaming its output."""
         command = [self.pio_cmd, 'run', '-e', pio_env, '-t', target]
+        if self.upload_port is not None:
+            command += ['--upload-port', self.upload_port]
+        else:
+            self._warn_if_the_port_is_ambiguous()
         env = dict(os.environ)
         env['VIRTUAL_ENV'] = ''    # a project .venv confuses pio's own virtualenv detection
         logging.info(f"Running: {' '.join(command)}")
@@ -1004,7 +1036,6 @@ class _BaseTransfer:
         self._pending_messages: Deque[Dict[str, Any]] = deque()
 
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     # --- Abstract interface ---------------------------------------------------
 
@@ -1443,6 +1474,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     action.add_argument('--serial-flash', action='store_true', help="initial firmware flash over USB")
     action.add_argument('--file', metavar='NAME', help="transfer the file entry with this name")
     action.add_argument('--command', metavar='CMD', help="send this command")
+    parser.add_argument('--upload-port', metavar='PORT',
+                        help="serial port for --provision / --serial-flash; without it PlatformIO "
+                             "picks one itself, which is a guess when several boards are attached")
     return parser
 
 
@@ -1547,10 +1581,16 @@ def main():
     args = parser.parse_args()
     action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
                     or args.file is not None or args.command is not None)
-    if args.list and (args.device is not None or action_given):
+    if args.list and (args.device is not None or action_given or args.upload_port is not None):
         parser.error("--list takes no other arguments")
     if args.device is None and action_given:
         parser.error("an action needs --device MAC")
+    if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
+        parser.error("--upload-port applies to --provision and --serial-flash only")
+
+    # Configured here rather than in whichever object happens to be built: the USB actions run
+    # without any transfer worker, and their progress lines were dropped on the default level.
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     try:
         config_manager = ConfigManager(__file__)
@@ -1603,7 +1643,8 @@ def main():
             sys.exit(1)
 
         if result.provision or result.serial_flash:
-            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command())
+            provisioner = Provisioner(config_manager.parent_dir, config_manager.pio_command(),
+                                      cast(Optional[str], args.upload_port))
             if result.provision:
                 print("  Action:      Initial provisioning (USB)")
                 print()
