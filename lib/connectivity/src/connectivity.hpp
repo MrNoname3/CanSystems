@@ -129,6 +129,10 @@ public:
   /// @details That is the PubSubClient, HADiscovery's single payload buffer, and the handler
   /// metadata a discovery payload is built from. The mutex is recursive, so a caller holding it
   /// may go on to publish; off ESP32 the whole thing compiles away.
+  /// @note run() holds this across mqttClient.loop() and the whole reconnect, TLS handshake
+  /// included, and the wait here is untimed. A task blocking on it can be held off for seconds,
+  /// and esp_task_wdt_reset() only feeds the task that calls it - so a second task subscribed to
+  /// the task watchdog would have to survive that wait on its own.
   /// @return A guard holding the lock for its lifetime.
   [[nodiscard]] LockGuard lockShared() { return LockGuard(mqttMutex); }
 
