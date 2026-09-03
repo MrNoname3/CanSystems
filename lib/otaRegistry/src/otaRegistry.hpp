@@ -65,6 +65,14 @@ public:
   /// @return `true` when the caller should start; `false` when it should not.
   [[nodiscard]] static bool claimStart(OtaTarget& target, OtaImageInfo& image);
 
+  /// @brief Whether a transfer is still reading this file.
+  /// @details True from the moment the targets are queued until the last of them has finished with
+  /// it. A target holds the image open for the whole transfer, so replacing the file underneath it
+  /// would leave it reading blocks the filesystem has already freed.
+  /// @param fileName The file name to ask about (RAM string).
+  /// @return `true` while the file must not be replaced.
+  [[nodiscard]] static bool isFileInUse(const char* fileName);
+
   /// @brief Hands back what a target worked out about the image, for the rest of the batch.
   /// @param image Facts to keep; the next claim receives them.
   static void reportImage(const OtaImageInfo& image);

@@ -34,6 +34,7 @@ namespace Err {
   constexpr uint32_t FW_WRITE_FAILED    = 1UL << 22U;
   constexpr uint32_t FW_END_FAILED      = 1UL << 23U;
   constexpr uint32_t DATA_OVERRUN       = 1UL << 24U;
+  constexpr uint32_t FILE_IN_USE        = 1UL << 26U;
   // clang-format on
 }  // namespace Err
 
@@ -52,11 +53,21 @@ static void onCheckOk(bool valid) {
   ++g_cbCount;
 }
 
+// ---- fileInUse predicate capture ----
+static bool g_inUseAnswer;
+static std::string g_inUseAsked;
+static bool onFileInUse(const char* fileName) {
+  g_inUseAsked = (fileName != nullptr) ? fileName : "";
+  return g_inUseAnswer;
+}
+
 static void resetEnv() {
   LittleFS.reset();
   Update.reset();
   g_cbCount = 0;
   g_lastValid = false;
+  g_inUseAnswer = false;
+  g_inUseAsked.clear();
 }
 
 static std::string b64(const std::string& raw) {
@@ -71,6 +82,42 @@ static const char* fwName() { return FileName::getOtaFwLocation(); }        // "
 static const char* tempName() { return FileName::getTempFileLocation(); }     // "/temp.tmp"
 
 // ---- begin() validation ----
+
+bool test_begin_refuses_a_file_someone_is_still_reading() {
+  IT("begin() refuses a file the predicate reports as still being read");
+  resetEnv();
+  g_inUseAnswer = true;
+  DataTransfer dt(onCheckOk, onFileInUse);
+  // The transfer ends by renaming a new file onto this name; the reader that still holds the old
+  // one open would go on reading blocks the filesystem has freed by then.
+  IS_FALSE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_EQUAL(dt.getErrorCode(), Err::FILE_IN_USE);
+  IS_TRUE(g_inUseAsked == fileName());
+  IS_FALSE(LittleFS.exists(tempName()));   // nothing was opened for writing
+  END_IT
+}
+
+bool test_begin_proceeds_when_the_file_is_free() {
+  IT("begin() proceeds when the predicate reports the file as free");
+  resetEnv();
+  g_inUseAnswer = false;
+  DataTransfer dt(onCheckOk, onFileInUse);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  IS_EQUAL(dt.getErrorCode(), 0U);
+  IS_TRUE(g_inUseAsked == fileName());
+  END_IT
+}
+
+bool test_a_rejected_name_is_never_asked_about() {
+  IT("a name that is not allowed is rejected before the predicate is asked");
+  resetEnv();
+  g_inUseAnswer = true;
+  DataTransfer dt(onCheckOk, onFileInUse);
+  IS_FALSE(dt.begin(3U, kMd5_abc, "/etc/shadow"));
+  IS_EQUAL(dt.getErrorCode(), Err::NAME_NOT_ALLOWED);
+  IS_TRUE(g_inUseAsked.empty());
+  END_IT
+}
 
 bool test_begin_rejects_zero_size() {
   IT("begin() rejects a zero file size");
@@ -577,6 +624,9 @@ bool test_md5_builder_matches_known_vectors() {
 int main() {
   SUITE("DataTransfer");
   test_md5_builder_matches_known_vectors();
+  test_begin_refuses_a_file_someone_is_still_reading();
+  test_begin_proceeds_when_the_file_is_free();
+  test_a_rejected_name_is_never_asked_about();
   test_begin_rejects_zero_size();
   test_begin_rejects_null_md5();
   test_begin_rejects_empty_md5();

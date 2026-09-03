@@ -42,6 +42,17 @@ bool OtaRegistry::claimStart(OtaTarget& target, OtaImageInfo& image) {
   return true;
 }
 
+bool OtaRegistry::isFileInUse(const char* fileName) {
+  if(fileName == nullptr) { return false; }
+  const LockGuard guard(mutex);
+  for(OtaTarget* current = head; current != nullptr; current = current->next) {
+    const char* targetFile = current->getFwFileName();
+    if((targetFile == nullptr) || (strcmp_P(fileName, targetFile) != 0)) { continue; }
+    if(current->otaQueued || current->isOtaInProgress()) { return true; }
+  }
+  return false;
+}
+
 void OtaRegistry::reportImage(const OtaImageInfo& image) {
   const LockGuard guard(mutex);
   batchImage = image;

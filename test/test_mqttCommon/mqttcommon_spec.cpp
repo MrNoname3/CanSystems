@@ -7,11 +7,41 @@
 #include "BDDTest.h"
 #include <ArduinoJson.h>
 
+// OtaRegistry's list has no remove operation, so the target lives at file scope and every test
+// leaves it idle - one left queued would hold off the next upload of the same file.
+class TestOtaTarget final : public OtaTarget {
+public:
+  explicit TestOtaTarget(const char* name) :
+    name_(name) {}
+  [[nodiscard]] const char* getFwFileName() const override { return name_; }
+  [[nodiscard]] bool isOtaTargetOnline() const override { return true; }
+  [[nodiscard]] bool isOtaInProgress() const override { return inProgress; }
+
+  /// @brief One turn of the target's own run(), where a queued transfer is picked up.
+  void poll() {
+    OtaImageInfo image{};
+    if(OtaRegistry::claimStart(*this, image)) { triggered = true; }
+  }
+
+  bool triggered = false;
+  bool inProgress = false;      // What isOtaInProgress() reports.
+
+private:
+  const char* name_;
+};
+
+TestOtaTarget alertTarget{ "/canAlertFw.bin" };
+
 static void resetEnv() {
   LittleFS.reset();
   Update.reset();
   MqttBase::resetState();
   ResetHandler::resetState();
+  OtaRegistry::add(alertTarget);  // idempotent
+  alertTarget.triggered = false;
+  alertTarget.inProgress = false;
+  alertTarget.poll();             // drains a turn a previous test left queued
+  alertTarget.triggered = false;
 }
 
 static void deliver(MqttCommon& mc, const char* json) {
@@ -116,30 +146,9 @@ bool test_unknown_json_no_response() {
 
 // ---- end-to-end: receive -> verify (real MD5) -> route to OTA target ----
 
-class TestOtaTarget final : public OtaTarget {
-public:
-  explicit TestOtaTarget(const char* name) :
-    name_(name) {}
-  [[nodiscard]] const char* getFwFileName() const override { return name_; }
-  [[nodiscard]] bool isOtaTargetOnline() const override { return true; }
-  [[nodiscard]] bool isOtaInProgress() const override { return false; }
-  /// @brief One turn of the target's own run(), where a queued transfer is picked up.
-  void poll() {
-    OtaImageInfo image{};
-    if(OtaRegistry::claimStart(*this, image)) { triggered = true; }
-  }
-  bool triggered = false;
-
-private:
-  const char* name_;
-};
-
 bool test_end_to_end_file_routes_to_ota_target() {
   IT("a completed file transfer verifies the real MD5 and routes to the matching OTA target");
   resetEnv();
-  static TestOtaTarget target("/canAlertFw.bin");
-  target.triggered = false;
-  OtaRegistry::add(target);  // idempotent
 
   Connectivity conn;
   MqttCommon mc(conn, "common");
@@ -148,9 +157,9 @@ bool test_end_to_end_file_routes_to_ota_target() {
   (void)mc.run();                                          // CHECK: read + hash
   (void)mc.run();                                          // CHECK: real MD5 matches -> rename + mark valid
   (void)mc.run();                                          // consume completion -> ACK + queue the OTA target
-  target.poll();                                           // the target starts from its own run()
+  alertTarget.poll();                                      // the target starts from its own run()
 
-  IS_TRUE(target.triggered);
+  IS_TRUE(alertTarget.triggered);
   IS_TRUE(MqttBase::lastResponse == MqttBase::Response::ACK);
   IS_TRUE(LittleFS.exists("/canAlertFw.bin"));
   END_IT
@@ -171,9 +180,6 @@ bool test_firmware_without_a_binid_is_rebooted_into() {
 bool test_a_config_file_carrying_a_binid_is_not_rebooted_into() {
   IT("a file that is not firmware does not restart the device, whatever binId the message carries");
   resetEnv();
-  static TestOtaTarget target("/canAlertFw.bin");
-  target.triggered = false;
-  OtaRegistry::add(target);  // idempotent
 
   Connectivity conn;
   MqttCommon mc(conn, "common");
@@ -182,9 +188,9 @@ bool test_a_config_file_carrying_a_binid_is_not_rebooted_into() {
   (void)mc.run();                                          // CHECK: read + hash
   (void)mc.run();                                          // CHECK: MD5 matches -> rename
   (void)mc.run();                                          // consume completion
-  target.poll();
+  alertTarget.poll();
   IS_EQUAL(ResetHandler::restartCount, 0);
-  IS_TRUE(target.triggered);
+  IS_TRUE(alertTarget.triggered);
   END_IT
 }
 
@@ -241,6 +247,42 @@ bool test_a_binid_that_only_starts_with_the_env_name_is_rejected() {
   END_IT
 }
 
+bool test_an_upload_is_refused_while_its_target_still_reads_the_file() {
+  IT("an upload of a file an OTA is still reading is refused, and accepted once it ends");
+  resetEnv();
+  alertTarget.inProgress = true;   // the transfer to the CAN node is running
+
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  // Letting this through would rename a new file onto the name the running transfer holds open,
+  // and the blocks it is still reading would be free for the next allocation.
+  deliver(mc, R"({"name":"/canAlertFw.bin","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  IS_EQUAL(MqttBase::lastErrCode, 1UL << 26U);
+
+  alertTarget.inProgress = false;  // the node transfer ended
+  deliver(mc, R"({"name":"/canAlertFw.bin","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::ACK);
+  END_IT
+}
+
+bool test_an_upload_is_refused_while_its_target_is_only_queued() {
+  IT("an upload is refused while a target is queued for the file but has not started yet");
+  resetEnv();
+
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  // The queued target opens the file on its next run(); until then nothing reports "in progress",
+  // and a file renamed into that window would be pulled out from under it just the same.
+  OtaRegistry::queueForFile("/canAlertFw.bin");
+  deliver(mc, R"({"name":"/canAlertFw.bin","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  IS_EQUAL(MqttBase::lastErrCode, 1UL << 26U);
+
+  alertTarget.poll();              // the turn is taken, the queue is empty again
+  END_IT
+}
+
 int main() {
   SUITE("MqttCommon");
   test_init_returns_true();
@@ -259,5 +301,7 @@ int main() {
   test_firmware_without_a_binid_is_rebooted_into();
   test_a_config_file_carrying_a_binid_is_not_rebooted_into();
   test_a_binid_that_only_starts_with_the_env_name_is_rejected();
+  test_an_upload_is_refused_while_its_target_still_reads_the_file();
+  test_an_upload_is_refused_while_its_target_is_only_queued();
   FINISH
 }
