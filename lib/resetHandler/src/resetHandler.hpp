@@ -38,7 +38,8 @@ public:
     Unspecified = 0U,       // restartMCU() called without one.
     InitFailed,             // A task refused to initialise at startup.
     CommandedOverCan,       // The gateway asked for it.
-    OtaComplete             // Firmware was stored; rebooting into it.
+    OtaComplete,            // Firmware was stored; rebooting into it.
+    CanIdChanged            // A new CAN address was stored; the receive filter only takes it at startup.
   };
 
   /// @brief Position of RestartCause in the reset reason. Three bits, so eight causes fit.

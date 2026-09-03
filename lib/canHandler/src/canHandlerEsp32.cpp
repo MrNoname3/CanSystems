@@ -173,6 +173,13 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(
   return true;
 }
 
+bool CanHandlerEsp32::isClientIdRegistered(uint16_t clientCanId) const { // NOLINT(readability-convert-member-functions-to-static)
+  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return true; }  // Unknown: answer "taken".
+  const CanBase* device = deviceList.findIf([clientCanId](const CanBase* d) -> bool { return d->getClientCanId() == clientCanId; });
+  xSemaphoreGive(canDevicesListMutex);
+  return device != nullptr;
+}
+
 bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
   if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
   const bool appendResult = deviceList.append(canBasePtr);

@@ -46,6 +46,11 @@ bool CanAlertDriver::publishDiscovery() {
 }
 
 void CanAlertDriver::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+  JsonVariant canIdJsonVar = payloadJson[F("setCanId")];
+  if(canIdJsonVar.is<uint16_t>()) {
+    (void)requestCanIdChange(canIdJsonVar.as<uint16_t>());
+    return;
+  }
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

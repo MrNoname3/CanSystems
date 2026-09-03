@@ -55,6 +55,11 @@ public:
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
 
+  /// @brief Whether a registered device already answers on this client id.
+  /// @param clientCanId The id to look for.
+  /// @return `true` when one of this handler's devices holds it.
+  [[nodiscard]] bool isClientIdRegistered(uint16_t clientCanId) const;
+
   /// @brief Registers a callback for a CAN device.
   /// @param canBasePtr Pointer to the CAN device.
   /// @return `true` if the callback was successfully registered, `false` otherwise.
@@ -131,6 +136,15 @@ public:
   /// @brief Gets the client CAN ID.
   /// @return The client CAN ID.
   [[nodiscard]] inline uint16_t getClientCanId() const { return clientCanId; }
+
+  /// @brief Whether an id could be given to a device without colliding with something known.
+  /// @details Beyond the reserved pair, this rules out the ids the handler's own devices already
+  /// answer on - two of them on one address would talk over each other on the bus.
+  /// @param candidateCanId The id to test.
+  /// @return `true` when nothing known holds it.
+  [[nodiscard]] inline bool isClientCanIdFree(uint16_t candidateCanId) {
+    return isClientCanIdValid(candidateCanId) && !canHandler.isClientIdRegistered(candidateCanId);
+  }
 
   /// @brief Callback function for received CAN frames.
   /// @param canFrame The received CAN frame.

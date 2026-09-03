@@ -37,6 +37,22 @@ static void resetEnv() {
   seedCanIds(kMasterId, kLocalId);
 }
 
+/// The id bookkeeping on its own, with the protected helpers exposed. CanHandlerEsp32 is final,
+/// and the ids live one level up anyway - this is the layer SET_CAN_ID relies on.
+class TestIdHolder final : public CanHandlerBase {
+public:
+  bool init() override { return true; }
+  bool run() override { return true; }
+  bool send(uint16_t command, const uint8_t (&data)[8]) const override { // NOLINT(modernize-use-nodiscard)
+    (void)command;
+    (void)data;
+    return true;
+  }
+  using CanHandlerBase::loadCanIds;
+  using CanHandlerBase::saveCanIds;
+  using CanHandlerBase::storeCanIds;
+};
+
 /// A registered CAN device that records what it was handed.
 class TestDevice final : public CanBase {
 public:
@@ -311,6 +327,35 @@ bool test_bus_off_is_recovered() {
   END_IT
 }
 
+bool test_storing_ids_leaves_the_running_ones_alone() {
+  IT("storeCanIds writes the new ids without moving the ones the handler is running with");
+  resetEnv();
+  TestIdHolder handler;
+  IS_TRUE(handler.loadCanIds());
+  IS_EQUAL(handler.getLocalCanId(), kLocalId);
+
+  // Every outgoing frame is stamped with the running id, so an answer sent after a change has
+  // to still carry the old address - the master is not listening for the new one yet.
+  IS_TRUE(handler.storeCanIds(kMasterId, 28U));
+  IS_EQUAL(handler.getLocalCanId(), kLocalId);
+  IS_EQUAL(handler.getMasterCanId(), kMasterId);
+
+  // The next start is what picks the new address up.
+  IS_TRUE(handler.loadCanIds());
+  IS_EQUAL(handler.getLocalCanId(), 28U);
+  END_IT
+}
+
+bool test_saving_ids_moves_the_running_ones() {
+  IT("saveCanIds does move them, which is why the assignment path does not use it");
+  resetEnv();
+  TestIdHolder handler;
+  IS_TRUE(handler.loadCanIds());
+  IS_TRUE(handler.saveCanIds(kMasterId, 28U));
+  IS_EQUAL(handler.getLocalCanId(), 28U);
+  END_IT
+}
+
 int main() {
   SUITE("CanHandlerEsp32");
   test_init_brings_the_controller_up();
@@ -328,5 +373,7 @@ int main() {
   test_the_transmit_queue_refuses_what_it_cannot_hold();
   test_the_master_does_not_send_to_itself();
   test_bus_off_is_recovered();
+  test_storing_ids_leaves_the_running_ones_alone();
+  test_saving_ids_moves_the_running_ones();
   FINISH
 }

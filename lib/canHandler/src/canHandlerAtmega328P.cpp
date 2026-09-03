@@ -4,6 +4,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
+#include "canIdAssign.hpp"                                          /// SET_CAN_ID frame layout and admission rules.
 #include "otaCanResponse.hpp"                                       /// Host-testable OTA state -> CAN response decision.
 
 // The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
@@ -114,6 +115,22 @@ bool CanHandlerAtmega328P::handleRxFrame() {
       CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
+    } break;
+    case static_cast<uint16_t>(CanCmd::SET_CAN_ID): {
+      const CanIdAssign::Request request = CanIdAssign::unpack(canFrame.data);
+      if(!CanIdAssign::isAcceptable(request, getLocalCanId(), getMasterCanId(), static_cast<uint16_t>(canFrame.from))) {
+        CanHandlerBase::send(CanCmd::SET_CAN_ID, Response::NACK);
+        break;
+      }
+      // Stored rather than set: the answer below is stamped with the address this node is still
+      // running on, which is the only one the master is listening for. The new address is read
+      // back at the next start, together with the receive filter armed from it.
+      const bool saved = storeCanIds(getMasterCanId(), request.newLocal);
+      Logger::get()->print(F("New CAN id: "));
+      Logger::get()->println(Str::getStateStr(saved));
+      CanHandlerBase::send(CanCmd::SET_CAN_ID, saved ? Response::ACK : Response::NACK);
+      (void)CAN.flushTx();                                          // The answer is queued; the flush puts it on the bus.
+      if(saved) { ResetHandler::restartMCU(ResetHandler::RestartCause::CanIdChanged); }
     } break;
     default: {
       if(canCallback != nullptr) {

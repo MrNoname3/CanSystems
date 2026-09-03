@@ -171,6 +171,37 @@ bool test_publish_discovery_covers_all_entities() {
   END_IT
 }
 
+bool test_set_can_id_message_sends_the_request() {
+  IT("a setCanId message sends SET_CAN_ID and nothing else");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 28U, conn, "alert3");
+  injectMessage(driver, R"({"setCanId":29})");
+  const CanHandler::CanFrame* frame = lastFrame(static_cast<uint16_t>(CanCmd::SET_CAN_ID));
+  IS_TRUE(frame != nullptr);
+  if(frame != nullptr) {
+    const CanIdAssign::Request request = CanIdAssign::unpack(frame->data);
+    IS_EQUAL(request.expectedLocal, 28U);
+    IS_EQUAL(request.newLocal, 29U);
+  }
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(AlertCmd::PLAY_MP3)), 0U);
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::RGB_LED)), 0U);
+  END_IT
+}
+
+bool test_a_non_numeric_set_can_id_falls_through() {
+  IT("a setCanId that is not a number leaves the rest of the message to the usual handling");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 30U, conn, "alert4");
+  injectMessage(driver, R"({"setCanId":"twentynine","Colors":[1,2,3]})");
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  IS_TRUE(lastFrame(static_cast<uint16_t>(CanCmd::RGB_LED)) != nullptr);
+  END_IT
+}
+
 int main() {
   SUITE("CanAlertDriver");
   test_colors_only_sends_rgb_led();
@@ -181,5 +212,7 @@ int main() {
   test_temperature_decode_spans_the_int16_range();
   test_unknown_frame_is_ignored();
   test_publish_discovery_covers_all_entities();
+  test_set_can_id_message_sends_the_request();
+  test_a_non_numeric_set_can_id_falls_through();
   FINISH
 }
