@@ -394,7 +394,7 @@ bool Connectivity::syncNtpTime() {
 }
 
 bool Connectivity::publishEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config) {
-  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
+  LockGuard guard(mqttMutex);                                       // HADiscovery builds into one shared buffer.
   return haDiscovery.publishEntity(subtopic, config);
 }
 
@@ -415,7 +415,7 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
 }
 
 bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config, const HADiscovery::CanDeviceConfig& canDevConfig) {
-  // Builds the payload (read-only state), then publishes via publishRaw(), which takes the mutex.
+  LockGuard guard(mqttMutex);                                       // HADiscovery builds into one shared buffer.
   return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
 }
 

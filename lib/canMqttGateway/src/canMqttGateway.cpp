@@ -223,6 +223,9 @@ bool CanMqttGateway::sendOtaStatusMessage(const char* payload) { // NOLINT(reada
 }
 
 void CanMqttGateway::buildCanTopics() {
+  // These buffers are what a discovery payload is built from, and both this and the payload can
+  // be reached from either task once the CAN drivers run on one of their own.
+  const LockGuard guard = lockShared();
   if(canTopicsBuilt) { return; }
   const char* sender = MqttBase::getSenderTopicStr();
   const char* sub = MqttBase::getSubtopic();
@@ -324,7 +327,10 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
           (static_cast<uint32_t>(canFrame.data[5]) << 24U);
       const uint8_t gitDirty = canFrame.data[6];
       const uint8_t resetReason = canFrame.data[7];   // MCUSR bits plus the intentional-restart bit
-      (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
+      {
+        const LockGuard guard = lockShared();                       // canSwVersion feeds the discovery payload.
+        (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
+      }
       char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason,
                                              static_cast<uint8_t>(BootStage::Unknown));   // A CAN device runs no startup of ours to report.
