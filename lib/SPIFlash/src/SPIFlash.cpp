@@ -41,7 +41,9 @@ bool SPIFlash::initialize() {
     if(!command(CMD_STATUS_WRITE, true)) { return false; }        // Write Status Register.
     SPI.transfer(0U);                // Global Unprotect.
     unselect();
-    return true;
+    // Returning while the unprotect is still running would leave the first command a caller
+    // makes to absorb a wait longer than any it allows, and fail it.
+    return waitUntilReady(statusWriteTimeoutMs);
   }
   return false;
 }
@@ -106,7 +108,7 @@ bool SPIFlash::readBytes(uint32_t addr, void* buf, uint16_t len) {
   return true;
 }
 
-bool SPIFlash::waitUntilReady() {
+bool SPIFlash::waitUntilReady(uint32_t timeoutMs) {
   const uint32_t startTime = millis();
   for(;;) {
     const uint8_t status = readStatus();
@@ -114,7 +116,7 @@ bool SPIFlash::waitUntilReady() {
     // its own reads as set in that case, indistinguishable from a write in progress.
     if(status == statusNotResponding) { return false; }
     if((status & 1U) == 0U) { return true; }
-    if((millis() - startTime) > busyTimeoutMs) { return false; }
+    if((millis() - startTime) > timeoutMs) { return false; }
   }
 }
 

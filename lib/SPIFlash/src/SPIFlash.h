@@ -132,8 +132,9 @@ private:
   /// @param cmd Command byte.
   /// @param isWrite Set to `true` for write/erase commands.
   /// @brief Waits for the chip to leave its busy state.
-  /// @return `false` when no chip answers, or when it stays busy past `busyTimeoutMs`.
-  [[nodiscard]] bool waitUntilReady();
+  /// @param timeoutMs How long to keep waiting.
+  /// @return `false` when no chip answers, or when it stays busy past `timeoutMs`.
+  [[nodiscard]] bool waitUntilReady(uint32_t timeoutMs = busyTimeoutMs);
 
   /// @brief Waits for readiness, then selects the chip and sends one command byte.
   /// @param cmd Command opcode.
@@ -149,6 +150,10 @@ private:
   // operation can perform several waits back to back. Erases are not waited for here: they run
   // for orders of magnitude longer, so poll busy() for those instead.
   static constexpr uint32_t busyTimeoutMs = 5U;
+  // The global unprotect initialize() ends with is a status register write, which takes
+  // milliseconds rather than the microseconds a page program does - 8 on the W25Q64 this was
+  // measured on. Waiting that out is not the same wait as the one above.
+  static constexpr uint32_t statusWriteTimeoutMs = 25U;
 
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
 #ifdef SPI_HAS_TRANSACTION
