@@ -204,6 +204,7 @@ bool DataTransfer::storeBase64(uint32_t filePieceNumber, const char* fileData) {
   }
   nextFilePieceNumberLocal++;
   remainingFileSizeLocal -= decodedPostSize;
+  transferTimeoutTimer = millis();
   if(remainingFileSizeLocal == 0U) {
     return finalizeTransfer();
   }

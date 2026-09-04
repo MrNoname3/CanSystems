@@ -324,6 +324,21 @@ bool test_check_phase_timeout_aborts() {
   END_IT
 }
 
+bool test_an_arriving_piece_pushes_the_deadline_out() {
+  IT("a transfer whose pieces keep arriving is not cut off by the transfer timeout");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fileName()));
+  setFakeMillis(14U * 60U * 1000U);                 // inside the window begin() opened
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));
+  setFakeMillis(27U * 60U * 1000U);                 // 27 min since begin(), 13 min since that piece
+  dt.runValidityCheck();
+  IS_TRUE(dt.storeBase64(1U, b64("def").c_str()));  // still open
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_transfer_timeout_aborts() {
   IT("an idle transfer is aborted after the transfer timeout elapses");
   resetEnv();
@@ -646,6 +661,7 @@ int main() {
   test_store_invalid_base64_chars_fails();
   test_rebegin_replaces_open_transfer();
   test_check_phase_timeout_aborts();
+  test_an_arriving_piece_pushes_the_deadline_out();
   test_transfer_timeout_aborts();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
