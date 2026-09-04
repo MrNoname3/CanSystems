@@ -64,12 +64,12 @@ public:
     (void)config;
     return true;
   }
-  [[nodiscard]] bool doPublishCanDeviceEntityDiscovery(const char* subtopic,              // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,              // NOLINT(readability-convert-member-functions-to-static)
                                                        const HADiscovery::EntityConfig& config,
-                                                       const HADiscovery::CanDeviceConfig& canDevConfig) {
+                                                       const HADiscovery::SubDeviceConfig& subDevConfig) {
     (void)config;
-    (void)canDevConfig;
-    canDiscoverySubtopics.emplace_back(subtopic);
+    (void)subDevConfig;
+    subDeviceDiscoverySubtopics.emplace_back(subtopic);
     return true;
   }
   [[nodiscard]] bool sendRetainedSubtopic(const char* subSubTopic, const char* payload) { // NOLINT(readability-convert-member-functions-to-static)
@@ -104,7 +104,7 @@ public:
   static inline std::string lastMessage;                                        // Last sendMessage payload.
   static inline std::vector<std::pair<std::string, std::string>> retainedMessages;   // (subSubTopic, payload) pairs.
   static inline std::vector<std::pair<std::string, std::string>> subtopicMessages;   // (subSubTopic, payload) pairs.
-  static inline std::vector<std::string> canDiscoverySubtopics;                 // CAN device discovery entity subtopics.
+  static inline std::vector<std::string> subDeviceDiscoverySubtopics;                 // CAN device discovery entity subtopics.
   // Fixed connection identity matching the real Connectivity's formats ("iot/dtos/<mac>/" etc.).
   static constexpr const char senderTopicStr[] = "iot/dtos/aabbccddeeff/";
   static constexpr const char clientNameStr[] = "esp32_can_aabbccddeeff";
@@ -120,7 +120,7 @@ public:
     replyCount = 0;
     retainedMessages.clear();
     subtopicMessages.clear();
-    canDiscoverySubtopics.clear();
+    subDeviceDiscoverySubtopics.clear();
   }
 
   MqttBase(const MqttBase&) = delete;

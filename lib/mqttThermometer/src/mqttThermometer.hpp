@@ -13,7 +13,7 @@
 /// Each reading is published as JSON on a sub-sub topic keyed by the sensor's 64-bit ROM id (e.g.
 /// "temp/28ffaabbccddee01" -> {"tempC":23.50}); the ROM is a stable, globally unique identifier, so
 /// topics and Home Assistant entities survive bus reordering. Each sensor is exposed as its own HA
-/// device (via publishCanDeviceEntity), so no shared HADiscovery code needs changing.
+/// device (via publishSubDeviceEntity), so no shared HADiscovery code needs changing.
 /// @tparam MaxSensors Compile-time upper bound on the number of sensors.
 template<uint8_t MaxSensors>
 class MqttThermometer final : public MqttBase {
@@ -171,15 +171,15 @@ private:
     using HA = Connectivity::HADiscovery;
     const HA::EntityConfig config = HA::EntityConfig::sensor(
         entityName, valueTemplate, unitDegC, HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
-    HA::CanDeviceConfig devConfig{};
+    HA::SubDeviceConfig devConfig{};
     devConfig.deviceId = deviceId;
     devConfig.deviceName = deviceName;
     devConfig.swVersion = swVersion;
-    devConfig.extraAvailTopic = dataSub;          // Unused when skipCanAvailability is true; must be non-null.
+    devConfig.subDeviceAvailTopic = dataSub;          // Unused when skipSubDeviceAvailability is true; must be non-null.
     devConfig.dataSubtopic = dataSub;
     devConfig.hwVersion = hwVersion;
-    devConfig.skipCanAvailability = true;             // Follow the ESP node's availability (no per-probe LWT).
-    return doPublishCanDeviceEntityDiscovery(entitySub, config, devConfig);
+    devConfig.skipSubDeviceAvailability = true;             // Follow the ESP node's availability (no per-probe LWT).
+    return doPublishSubDeviceEntityDiscovery(entitySub, config, devConfig);
   }
 
   Ds18b20Reader<MaxSensors> reader;                                 // The underlying multi-sensor reader.

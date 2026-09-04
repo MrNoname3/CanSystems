@@ -74,18 +74,20 @@ public:
                                      const char* icon = nullptr);
   };
 
-  /// @brief Discovery configuration for a CAN sub-device (all pointers are RAM strings, not PROGMEM).
-  struct CanDeviceConfig {
+  /// @brief Discovery configuration for a device this one speaks for (all pointers are RAM
+  /// strings, not PROGMEM). A CAN node behind a gateway is one; so is a probe a thermometer
+  /// presents as a device of its own.
+  struct SubDeviceConfig {
     const char* deviceId;        // RAM: unique device identifier  (e.g. "esp32_can_aabbccddeeff_alert1").
     const char* deviceName;      // RAM: human-readable device name (e.g. "ALERT1 ddeeff").
     const char* swVersion;       // RAM: sw version string         (e.g. "1234 (deadbeef)").
-    const char* extraAvailTopic; // RAM: full CAN availability topic for dual-availability block.
+    const char* subDeviceAvailTopic; // RAM: the sub-device's own availability topic, for the dual-availability block.
     const char* dataSubtopic;    // RAM: driver's MQTT subtopic for state_topic (e.g. "alert2").
     const char* hwVersion;       // PROGMEM or RAM: hardware version string (e.g. "ATmega328P").
-    bool skipCanAvailability = false; // true → single availability (ESP32 only); use for the CAN connectivity sensor itself.
+    bool skipSubDeviceAvailability = false; // true → this device's availability alone; for a sub-device with no LWT of its own.
   };
 
-  /// HA MQTT binary sensor protocol strings for the connectivity entity — shared with CAN device drivers.
+  /// HA MQTT binary sensor protocol strings for the connectivity entity — shared with sub-device drivers.
   static constexpr const char PROGMEM connName[] = "Connection";
   static constexpr const char PROGMEM connValueTpl[] = "{{ value_json.state }}";
   static constexpr const char PROGMEM connPayloadOn[] = "online";
@@ -119,15 +121,16 @@ public:
   /// @return `true` if the discovery message was published successfully; otherwise, `false`.
   [[nodiscard]] bool publishEntity(const char* subtopic, const EntityConfig& config);
 
-  /// @brief Publishes the HA MQTT discovery config for a CAN sub-device entity.
-  /// Like publishEntity() but uses dual availability (ESP32 + CAN device) and a via_device link.
+  /// @brief Publishes the HA MQTT discovery config for an entity of a sub-device.
+  /// Like publishEntity() but uses dual availability (this device and the sub-device) and a
+  /// via_device link, so Home Assistant shows the sub-device as its own, reached through this one.
   /// @param subtopic     Entity subtopic — used to build unique_id and complete the topic URL.
   /// @param config       Typed entity discovery configuration.
-  /// @param canDevConfig CAN sub-device identification and availability data (RAM strings).
+  /// @param subDevConfig Sub-device identification and availability data (RAM strings).
   /// @return `true` if the discovery message was published successfully; otherwise, `false`.
-  [[nodiscard]] bool publishCanDeviceEntity(const char* subtopic,
+  [[nodiscard]] bool publishSubDeviceEntity(const char* subtopic,
                                             const EntityConfig& config,
-                                            const CanDeviceConfig& canDevConfig);
+                                            const SubDeviceConfig& subDevConfig);
 
   /// @brief Publishes the HA MQTT discovery config for the built-in connectivity binary sensor.
   [[nodiscard]] bool publishConnectivity();
@@ -142,7 +145,7 @@ public:
 private:
   static constexpr uint8_t discoveryTopicBufSize = 96U;     // "homeassistant/<type>/<uid>/config" topic buffer.
   static constexpr uint16_t discoveryPayloadBufSize = 656U; // HA MQTT discovery JSON payload buffer.
-  static constexpr uint16_t canDiscoveryPayloadBufSize = 752U; // CAN entity payload: dual avail + via_device.
+  static constexpr uint16_t subDeviceDiscoveryPayloadBufSize = 752U; // Sub-device entity payload: dual avail + via_device.
   static constexpr uint8_t swVersionBufSize = 24U;    // "65535 (ffffffff)" sw version string buffer.
   static constexpr uint8_t deviceNameBufSize = 32U;   // "CAN a1b2c3" device name buffer.
 #if defined(ESP8266)
@@ -181,7 +184,7 @@ private:
   /// @param pw Writer receiving the fields.
   /// @param config Entity configuration.
   /// @param uniqueIdOwner What the entity's unique_id is built from: the MQTT client for a local
-  ///        entity, the CAN device for one behind the gateway.
+  ///        entity, the sub-device for one this device only speaks for.
   /// @param subtopic Entity subtopic, the second half of its unique_id.
   template<typename Writer>
   static void appendCommonFields(Writer& pw, const EntityConfig& config, const char* uniqueIdOwner, const char* subtopic);
@@ -228,5 +231,5 @@ private:
   // frame the firmware has. Sharing it is what makes the owner's lock a requirement rather than
   // a detail: Connectivity holds it across the whole build and publish, so a second caller
   // cannot start building over a payload still in flight.
-  char payloadBuffer[canDiscoveryPayloadBufSize] = { '\0' };
+  char payloadBuffer[subDeviceDiscoveryPayloadBufSize] = { '\0' };
 };

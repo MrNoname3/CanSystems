@@ -163,11 +163,11 @@ bool test_publish_discovery_covers_all_entities() {
   static CanAlertDriver driver(can, 32U, conn, "alert7");
   MqttBase& mqttSide = driver;
   IS_TRUE(mqttSide.publishDiscovery());
-  IS_EQUAL(MqttBase::canDiscoverySubtopics.size(), 4U);
-  IS_TRUE(MqttBase::canDiscoverySubtopics[0] == "temperature");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[1] == "humidity");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[2] == "illuminance");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[3] == "connectivity");
+  IS_EQUAL(MqttBase::subDeviceDiscoverySubtopics.size(), 4U);
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[0] == "temperature");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[1] == "humidity");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[2] == "illuminance");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[3] == "connectivity");
   END_IT
 }
 

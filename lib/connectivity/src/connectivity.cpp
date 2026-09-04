@@ -408,9 +408,9 @@ bool Connectivity::publishRetained(const char* subSubTopic, const char* payload)
   return mqttClient.publish(actualTopic, payload, true);
 }
 
-bool Connectivity::publishCanDeviceEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config, const HADiscovery::CanDeviceConfig& canDevConfig) {
+bool Connectivity::publishSubDeviceEntityDiscovery(const char* subtopic, const HADiscovery::EntityConfig& config, const HADiscovery::SubDeviceConfig& subDevConfig) {
   LockGuard guard(mqttMutex);                                       // HADiscovery builds into one shared buffer.
-  return haDiscovery.publishCanDeviceEntity(subtopic, config, canDevConfig);
+  return haDiscovery.publishSubDeviceEntity(subtopic, config, subDevConfig);
 }
 
 void Connectivity::deliverMessage(const char* arrivedOn, JsonVariant message) {

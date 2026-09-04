@@ -123,14 +123,14 @@ public:
   /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
   void shutdownMqtt();
 
-  /// @brief Publishes a HA discovery config for a CAN sub-device entity via HADiscovery.
+  /// @brief Publishes a HA discovery config for an entity of a sub-device, via HADiscovery.
   /// @param subtopic     Entity subtopic.
   /// @param config       Typed entity discovery configuration.
-  /// @param canDevConfig CAN device identification struct (RAM strings).
+  /// @param subDevConfig Sub-device identification struct (RAM strings).
   /// @return `true` if published successfully; otherwise, `false`.
-  [[nodiscard]] bool publishCanDeviceEntityDiscovery(const char* subtopic,
+  [[nodiscard]] bool publishSubDeviceEntityDiscovery(const char* subtopic,
                                                      const HADiscovery::EntityConfig& config,
-                                                     const HADiscovery::CanDeviceConfig& canDevConfig);
+                                                     const HADiscovery::SubDeviceConfig& subDevConfig);
 
   /// @brief Returns the MQTT sender topic base (e.g. "iot/dtos/aabbccddeeff/"). Valid after init().
   [[nodiscard]] const char* getSenderTopic() const { return mqttCredentials.senderTopic; }
@@ -349,7 +349,7 @@ public:
   }
 
   /// @brief Publishes a retained MQTT message to senderTopic + subSubTopic.
-  /// Use for CAN device availability and info topics (e.g. "alert1/availability", "alert1/info").
+  /// Use for a sub-device's availability and info topics (e.g. "alert1/availability", "alert1/info").
   /// @param subSubTopic Extended subtopic (e.g. "alert1/availability") appended to the sender topic.
   /// @param payload     Message payload.
   /// @return `true` if published successfully; otherwise, `false`.
@@ -358,7 +358,7 @@ public:
   }
 
   /// @brief Publishes a non-retained MQTT message to senderTopic + subSubTopic.
-  /// Use for CAN device event sub-topics (e.g. "alert1/ota", "alert1/button").
+  /// Use for a sub-device's event sub-topics (e.g. "alert1/ota", "alert1/button").
   /// @param subSubTopic Extended subtopic (e.g. "alert1/ota") appended to the sender topic.
   /// @param payload     Message payload.
   /// @return `true` if published successfully; otherwise, `false`.
@@ -366,15 +366,15 @@ public:
     return connectivity.sendMqttMessage(subSubTopic, payload);
   }
 
-  /// @brief Publishes a HA discovery config for a CAN sub-device entity.
+  /// @brief Publishes a HA discovery config for an entity of a device this one speaks for.
   /// @param subtopic     Entity subtopic (e.g. "temperature").
   /// @param config       Entity discovery configuration.
-  /// @param canDevConfig CAN device identification and availability data.
+  /// @param subDevConfig Sub-device identification and availability data.
   /// @return `true` if published successfully; otherwise, `false`.
-  [[nodiscard]] bool doPublishCanDeviceEntityDiscovery(const char* subtopic,
+  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,
                                                        const HADiscovery::EntityConfig& config,
-                                                       const HADiscovery::CanDeviceConfig& canDevConfig) {
-    return connectivity.publishCanDeviceEntityDiscovery(subtopic, config, canDevConfig);
+                                                       const HADiscovery::SubDeviceConfig& subDevConfig) {
+    return connectivity.publishSubDeviceEntityDiscovery(subtopic, config, subDevConfig);
   }
 
   /// @brief Publishes the offline availability status and disconnects from the MQTT broker.
