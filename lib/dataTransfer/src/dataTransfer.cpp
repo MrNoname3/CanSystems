@@ -249,7 +249,11 @@ bool DataTransfer::finalizeTransfer() {
 
 void DataTransfer::runValidityCheck() {
   const uint32_t actualTime = millis();
-  if(Time::hasElapsed(actualTime, transferTimeoutTimer, transferTimeoutTime)) {
+  // Only the states that wait on the sender: CLEANUP and IDLE would otherwise keep re-arming the
+  // timeout, because nothing puts the timer forward again once it has fired.
+  const bool transferInProgress = (transferState == TransferState::STORING) || (transferState == TransferState::CHECK);
+  if(transferInProgress && Time::hasElapsed(actualTime, transferTimeoutTimer, transferTimeoutTime)) {
+    Logger::get()->printf_P(PSTR("[FT] Transfer timed out: %s\r\n"), fileNameLocal);
     transferState = TransferState::CLEANUP;
   }
   switch(transferState) {

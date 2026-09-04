@@ -354,6 +354,27 @@ bool test_transfer_timeout_aborts() {
   END_IT
 }
 
+bool test_a_timeout_is_carried_out_once() {
+  IT("a transfer given up on the timeout is torn down once, not on every pass after it");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  setFakeMillis(16U * 60U * 1000U);                 // > 15 min transfer timeout
+  dt.runValidityCheck();                            // timeout -> CLEANUP -> IDLE
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str())); // leaves BEGIN_NOT_CALLED pending
+  g_cbCount = 0;
+  // Kept running well past the window, so a timer the idle pass failed to put forward would show
+  // up as a tear-down on every one of these.
+  for(uint8_t i = 0U; i < 50U; ++i) {
+    setFakeMillis((17U + i) * 60U * 1000U);
+    dt.runValidityCheck();
+  }
+  IS_EQUAL(g_cbCount, 0);                           // an idle transfer has nothing left to clean up
+  clearFakeMillis();
+  END_IT
+}
+
 // ---- happy path (file transfer) ----
 
 bool test_full_file_transfer_succeeds() {
@@ -663,6 +684,7 @@ int main() {
   test_check_phase_timeout_aborts();
   test_an_arriving_piece_pushes_the_deadline_out();
   test_transfer_timeout_aborts();
+  test_a_timeout_is_carried_out_once();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
   test_md5_mismatch_fails_and_keeps_no_file();
