@@ -163,11 +163,58 @@ bool test_publish_discovery_covers_all_entities() {
   static CanAlertDriver driver(can, 32U, conn, "alert7");
   MqttBase& mqttSide = driver;
   IS_TRUE(mqttSide.publishDiscovery());
-  IS_EQUAL(MqttBase::canDiscoverySubtopics.size(), 4U);
-  IS_TRUE(MqttBase::canDiscoverySubtopics[0] == "temperature");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[1] == "humidity");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[2] == "illuminance");
-  IS_TRUE(MqttBase::canDiscoverySubtopics[3] == "connectivity");
+  IS_EQUAL(MqttBase::subDeviceDiscoverySubtopics.size(), 4U);
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[0] == "temperature");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[1] == "humidity");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[2] == "illuminance");
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[3] == "connectivity");
+  END_IT
+}
+
+bool test_set_can_id_message_sends_the_request() {
+  IT("a setCanId message sends SET_CAN_ID and nothing else");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 28U, conn, "alert3");
+  injectMessage(driver, R"({"setCanId":29})");
+  const CanHandler::CanFrame* frame = lastFrame(static_cast<uint16_t>(CanCmd::SET_CAN_ID));
+  IS_TRUE(frame != nullptr);
+  if(frame != nullptr) {
+    const CanIdAssign::Request request = CanIdAssign::unpack(frame->data);
+    IS_EQUAL(request.expectedLocal, 28U);
+    IS_EQUAL(request.newLocal, 29U);
+  }
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(AlertCmd::PLAY_MP3)), 0U);
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::RGB_LED)), 0U);
+  // The sender is told whether the request went out; the node's own answer comes later, on CAN.
+  IS_EQUAL(MqttBase::responseCount, 1);
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::ACK);
+  END_IT
+}
+
+bool test_a_refused_address_is_nacked() {
+  IT("an address the gateway refuses is NACKed to the sender");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 31U, conn, "alert5");
+  injectMessage(driver, R"({"setCanId":0})");
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  IS_EQUAL(MqttBase::responseCount, 1);
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  END_IT
+}
+
+bool test_a_non_numeric_set_can_id_falls_through() {
+  IT("a setCanId that is not a number leaves the rest of the message to the usual handling");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 30U, conn, "alert4");
+  injectMessage(driver, R"({"setCanId":"twentynine","Colors":[1,2,3]})");
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  IS_TRUE(lastFrame(static_cast<uint16_t>(CanCmd::RGB_LED)) != nullptr);
   END_IT
 }
 
@@ -181,5 +228,8 @@ int main() {
   test_temperature_decode_spans_the_int16_range();
   test_unknown_frame_is_ignored();
   test_publish_discovery_covers_all_entities();
+  test_set_can_id_message_sends_the_request();
+  test_a_non_numeric_set_can_id_falls_through();
+  test_a_refused_address_is_nacked();
   FINISH
 }

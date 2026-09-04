@@ -156,7 +156,16 @@ void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT
   // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
   const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
   CanBase* device = deviceList.findIf([nodeCanId](const CanBase* d) -> bool { return d->getClientCanId() == nodeCanId; });
-  if(device != nullptr) { device->canFrameArrivedCallback(frameIn); }
+  if(device != nullptr) {
+    device->canFrameArrivedCallback(frameIn);
+  } else if(unclaimedFrameCallback != nullptr) {
+    unclaimedFrameCallback(unclaimedFrameContext, frameIn);
+  }
+}
+
+void CanHandlerEsp32::setUnclaimedFrameCallback(void (*callback)(void*, const CanFrame&), void* context) {
+  unclaimedFrameCallback = callback;
+  unclaimedFrameContext = context;
 }
 
 bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
@@ -171,6 +180,13 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(
   }
   // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);
   return true;
+}
+
+bool CanHandlerEsp32::isClientIdRegistered(uint16_t clientCanId) const { // NOLINT(readability-convert-member-functions-to-static)
+  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return true; }  // Unknown: answer "taken".
+  const CanBase* device = deviceList.findIf([clientCanId](const CanBase* d) -> bool { return d->getClientCanId() == clientCanId; });
+  xSemaphoreGive(canDevicesListMutex);
+  return device != nullptr;
 }
 
 bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)

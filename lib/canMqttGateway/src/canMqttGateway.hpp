@@ -3,6 +3,7 @@
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include "canHandler.hpp"                                           /// CAN handler library.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
+#include "canIdAssign.hpp"                                          /// SET_CAN_ID frame layout and admission rules.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "crc16.hpp"                                                /// CRC16 calculator class.
 #include <LittleFS.h>                                               /// Use FLASH file system.
@@ -154,6 +155,14 @@ public:
 
   /// @brief Whether the CAN client has answered a ping recently enough to be worth sending to.
   [[nodiscard]] bool isOtaTargetOnline() const override { return clientOnline; }
+
+  /// @brief Asks this gateway's CAN node to take a new address.
+  /// @details The node stores it and restarts, so it answers on the new address from then on.
+  /// This gateway keeps addressing it on the old one until it is itself rebuilt: the node-to-
+  /// subtopic map is still compiled in (see src/main_esp32_can.cpp).
+  /// @param newLocalCanId The address the node should take.
+  /// @return `true` when the request reached the transmit queue; the node's answer arrives later.
+  [[nodiscard]] bool requestCanIdChange(uint16_t newLocalCanId);
 
   CanMqttGateway(const CanMqttGateway&) = delete;                       // Define copy constructor.
   CanMqttGateway& operator=(const CanMqttGateway&) = delete;            // Define copy assignment operator.

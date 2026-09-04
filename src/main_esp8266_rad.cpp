@@ -36,7 +36,7 @@ Connectivity iotConn(
     WdtHandler::resetWatchdog);
 
 //--- MQTT handler objects ---//
-MqttCommon mqttCommon(iotConn, "common");
+MqttCommon mqttCommon(iotConn, MqttTopics::getCommonSubtopic());
 Radiation radiation(iotConn, "radiation", RAD);
 RfHandler rfHandler(iotConn, "rf433", RF_RX, RF_TX);
 

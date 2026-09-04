@@ -40,7 +40,7 @@ public:
 
   [[nodiscard]] bool init() override = 0;
   [[nodiscard]] bool run() override = 0;
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
+  virtual void messageArrivedCallback(JsonVariant payloadJson) = 0;
   virtual bool publishDiscovery() { return true; }
 
   [[nodiscard]] static constexpr uint8_t getSubtopicSize() { return MqttTopics::getSubtopicSize(); }
@@ -64,12 +64,12 @@ public:
     (void)config;
     return true;
   }
-  [[nodiscard]] bool doPublishCanDeviceEntityDiscovery(const char* subtopic,              // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,              // NOLINT(readability-convert-member-functions-to-static)
                                                        const HADiscovery::EntityConfig& config,
-                                                       const HADiscovery::CanDeviceConfig& canDevConfig) {
+                                                       const HADiscovery::SubDeviceConfig& subDevConfig) {
     (void)config;
-    (void)canDevConfig;
-    canDiscoverySubtopics.emplace_back(subtopic);
+    (void)subDevConfig;
+    subDeviceDiscoverySubtopics.emplace_back(subtopic);
     return true;
   }
   [[nodiscard]] bool sendRetainedSubtopic(const char* subSubTopic, const char* payload) { // NOLINT(readability-convert-member-functions-to-static)
@@ -84,6 +84,12 @@ public:
   [[nodiscard]] const char* getClientNameStr() const { return clientNameStr; }            // NOLINT(readability-convert-member-functions-to-static)
   void shutdownMqtt() { ++shutdownCount; }                                  // NOLINT(readability-convert-member-functions-to-static)
   [[nodiscard]] LockGuard lockShared() { return connectivity.lockShared(); }
+  [[nodiscard]] bool sendReply(const char* payload) { // NOLINT(readability-convert-member-functions-to-static) mirrors the real reply path
+    if(payload == nullptr) { return false; }
+    lastReply = payload;
+    ++replyCount;
+    return sendResult;
+  }
   [[nodiscard]] const char* getSubtopic() const { return subtopic; }
 
   // ---- test inspection (static so tests can read them without a handle) ----
@@ -93,10 +99,12 @@ public:
   static inline int messageCount = 0;
   static inline int shutdownCount = 0;
   static inline bool sendResult = true;
+  static inline std::string lastReply;                                          // Last sendReply payload.
+  static inline int replyCount = 0;
   static inline std::string lastMessage;                                        // Last sendMessage payload.
   static inline std::vector<std::pair<std::string, std::string>> retainedMessages;   // (subSubTopic, payload) pairs.
   static inline std::vector<std::pair<std::string, std::string>> subtopicMessages;   // (subSubTopic, payload) pairs.
-  static inline std::vector<std::string> canDiscoverySubtopics;                 // CAN device discovery entity subtopics.
+  static inline std::vector<std::string> subDeviceDiscoverySubtopics;                 // CAN device discovery entity subtopics.
   // Fixed connection identity matching the real Connectivity's formats ("iot/dtos/<mac>/" etc.).
   static constexpr const char senderTopicStr[] = "iot/dtos/aabbccddeeff/";
   static constexpr const char clientNameStr[] = "esp32_can_aabbccddeeff";
@@ -108,9 +116,11 @@ public:
     shutdownCount = 0;
     sendResult = true;
     lastMessage.clear();
+    lastReply.clear();
+    replyCount = 0;
     retainedMessages.clear();
     subtopicMessages.clear();
-    canDiscoverySubtopics.clear();
+    subDeviceDiscoverySubtopics.clear();
   }
 
   MqttBase(const MqttBase&) = delete;

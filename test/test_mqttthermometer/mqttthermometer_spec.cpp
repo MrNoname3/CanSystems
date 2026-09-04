@@ -111,8 +111,8 @@ bool test_discovery_publishes_each_sensor_as_device() {
   IS_TRUE(task.init());
   MqttBase& mqttSide = thermometer;
   IS_TRUE(mqttSide.publishDiscovery());
-  IS_EQUAL(MqttBase::canDiscoverySubtopics.size(), 3U);
-  IS_TRUE(MqttBase::canDiscoverySubtopics[0] == "temperature");
+  IS_EQUAL(MqttBase::subDeviceDiscoverySubtopics.size(), 3U);
+  IS_TRUE(MqttBase::subDeviceDiscoverySubtopics[0] == "temperature");
   END_IT
 }
 

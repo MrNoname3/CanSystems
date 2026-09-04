@@ -22,6 +22,8 @@ enum class CanCmd : uint16_t {
   OTA_END,                                    // Signal the end of the OTA update process.
   RGB_LED,                                    // Set the color of WS2812 RGB LEDs.
   ROUND_TIME_MAX,                             // Longest gap between two turns of an ordinary task, in ms.
+  SET_CAN_ID,                                 // Give the addressed node a new local CAN address.
+  ANNOUNCE,                                   // A node with no address of its own, naming itself by its unique id.
 };
 
 /// @brief Commands only the ATmega328P alert node understands.
@@ -225,6 +227,26 @@ protected:
     setCanIds(master, local);
     return eepromHandler.save();
   }
+
+  /// @brief Stores new CAN IDs without touching the ones this handler is running with.
+  /// @details The running ids stamp every outgoing frame, so moving them before an answer is
+  /// sent would post it from an address the master is not listening for. They are read back at
+  /// the next start, which is also when the receive filter is armed from them.
+  /// @param master Master CAN ID to store.
+  /// @param local Local CAN ID to store.
+  /// @return `true` if the CAN IDs were stored successfully, `false` otherwise.
+  [[nodiscard]] static inline bool storeCanIds(uint16_t master, uint16_t local) {
+    CanId stored(static_cast<uint16_t>(master & canIdFilterMask), static_cast<uint16_t>(local & canIdFilterMask));
+    return EEPROMHandler<CanId, 0U>::save(&stored);
+  }
+
+  /// @brief Runs on ids that are not stored anywhere.
+  /// @details For a node that has no address yet: it has to answer on something to be given one,
+  /// and what it gives itself must not survive a restart. saveCanIds() is for an address that
+  /// should.
+  /// @param master Master CAN ID to use.
+  /// @param local Local CAN ID to use.
+  inline void useCanIds(uint16_t master, uint16_t local) { setCanIds(master, local); }
 
 private:
   /// @brief Sets the master and local CAN IDs.

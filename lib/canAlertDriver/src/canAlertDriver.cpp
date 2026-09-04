@@ -11,7 +11,7 @@ bool CanAlertDriver::publishDiscovery() {
   const LockGuard guard = lockShared();
   buildCanTopics();
 
-  const HA::CanDeviceConfig canDevConfig = {
+  const HA::SubDeviceConfig subDevConfig = {
     getCanDeviceId(),
     getCanDeviceName(),
     getCanSwVersion(),
@@ -23,29 +23,36 @@ bool CanAlertDriver::publishDiscovery() {
   const HA::EntityConfig tempConfig = HA::EntityConfig::sensor(
       entityNameTemp, valTplTemp, unitDegC,
       HA::StateClass::measurement, HA::DeviceClass::temperature, iconTherm);
-  bool result = doPublishCanDeviceEntityDiscovery(entitySubTemp, tempConfig, canDevConfig);
+  bool result = doPublishSubDeviceEntityDiscovery(entitySubTemp, tempConfig, subDevConfig);
 
   const HA::EntityConfig humConfig = HA::EntityConfig::sensor(
       entityNameHum, valTplHum, unitPct,
       HA::StateClass::measurement, HA::DeviceClass::humidity, iconWater);
-  result = doPublishCanDeviceEntityDiscovery(entitySubHum, humConfig, canDevConfig) && result;
+  result = doPublishSubDeviceEntityDiscovery(entitySubHum, humConfig, subDevConfig) && result;
 
   const HA::EntityConfig lightConfig = HA::EntityConfig::sensor(
       entityNameLight, valTplLight, unitLux,
       HA::StateClass::measurement, HA::DeviceClass::illuminance, iconBright);
-  result = doPublishCanDeviceEntityDiscovery(entitySubLight, lightConfig, canDevConfig) && result;
+  result = doPublishSubDeviceEntityDiscovery(entitySubLight, lightConfig, subDevConfig) && result;
 
   HA::EntityConfig connConfig = HA::EntityConfig::binarySensor(
       HA::connName, HA::connValueTpl, HA::connPayloadOn, HA::connPayloadOff, HA::DeviceClass::connectivity);
-  HA::CanDeviceConfig connDevConfig = canDevConfig;
+  HA::SubDeviceConfig connDevConfig = subDevConfig;
   connDevConfig.dataSubtopic = getCanAvailTopic() + (MqttTopics::getSenderTopicBufSize() - 1U);
-  connDevConfig.skipCanAvailability = true;
-  result = doPublishCanDeviceEntityDiscovery(entitySubConn, connConfig, connDevConfig) && result;
+  connDevConfig.skipSubDeviceAvailability = true;
+  result = doPublishSubDeviceEntityDiscovery(entitySubConn, connConfig, connDevConfig) && result;
 
   return result;
 }
 
-void CanAlertDriver::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+  JsonVariant canIdJsonVar = payloadJson[F("setCanId")];
+  if(canIdJsonVar.is<uint16_t>()) {
+    // Says only that the request went out; the node's own answer arrives later, over CAN.
+    const bool requestSent = requestCanIdChange(canIdJsonVar.as<uint16_t>());
+    (void)sendResponse(requestSent ? Response::ACK : Response::NACK, static_cast<uint16_t>(CanCmd::SET_CAN_ID));
+    return;
+  }
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

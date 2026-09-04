@@ -12,6 +12,7 @@
 #include "CAN.h"                /// The board's CAN controller instance.
 #include "canHandler.hpp"       /// CAN handler library.
 #include "canAlertDriver.hpp"   /// Driver for the alert client.
+#include "canCommissioner.hpp" /// Gives an address to a CAN node that has none.
 
 //--- Constants ---//
 // clang-format off
@@ -35,13 +36,14 @@ Connectivity iotConn(
     });
 
 //--- MQTT handler objects ---//
-MqttCommon mqttCommon(iotConn, "common");
+MqttCommon mqttCommon(iotConn, MqttTopics::getCommonSubtopic());
 CanHandler canHandler(CAN);
 CanAlertDriver canAlert1(canHandler, 26U, iotConn, "alert1", -0.5F);
 CanAlertDriver canAlert2(canHandler, 27U, iotConn, "alert2", -0.8F);
+CanCommissioner canCommissioner(canHandler, iotConn, "can");
 
 //--- Handling tasks ---//
-Task* task[] = { &iotConn, &performance, &mqttCommon, &canHandler, &canAlert1, &canAlert2 };
+Task* task[] = { &iotConn, &performance, &mqttCommon, &canHandler, &canAlert1, &canAlert2, &canCommissioner };
 static constexpr uint8_t taskNum = arraySize(task);
 TaskHandler<taskNum, false> taskHandler(task);
 

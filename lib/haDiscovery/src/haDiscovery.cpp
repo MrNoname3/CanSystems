@@ -143,15 +143,15 @@ void HADiscovery::appendCommonFields(Writer& pw, const EntityConfig& config, con
   if(config.attributesTemplate != nullptr) { appendP(pw, fmtAttrTemplate, config.attributesTemplate); }
 }
 
-bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
+bool HADiscovery::publishSubDeviceEntity(const char* subtopic,
                                          const EntityConfig& config,
-                                         const CanDeviceConfig& canDevConfig) {
+                                         const SubDeviceConfig& subDevConfig) {
   const char* haType = getTypeStr(config.type);
-  if(subtopic == nullptr || haType == nullptr || config.name == nullptr || canDevConfig.deviceId == nullptr || canDevConfig.deviceName == nullptr || canDevConfig.swVersion == nullptr || canDevConfig.extraAvailTopic == nullptr || canDevConfig.dataSubtopic == nullptr || canDevConfig.hwVersion == nullptr) { return false; }
+  if(subtopic == nullptr || haType == nullptr || config.name == nullptr || subDevConfig.deviceId == nullptr || subDevConfig.deviceName == nullptr || subDevConfig.swVersion == nullptr || subDevConfig.subDeviceAvailTopic == nullptr || subDevConfig.dataSubtopic == nullptr || subDevConfig.hwVersion == nullptr) { return false; }
 
   char discTopic[discoveryTopicBufSize] = { '\0' };
   {
-    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic, haType, canDevConfig.deviceId, subtopic);
+    const int32_t n = snprintf_P(discTopic, sizeof(discTopic), mqttDiscoveryTopic, haType, subDevConfig.deviceId, subtopic);
     if(n < 0 || n >= static_cast<int32_t>(sizeof(discTopic))) { return false; }
   }
   // Discovery disabled: retract the entity by clearing its retained config topic.
@@ -167,19 +167,19 @@ bool HADiscovery::publishCanDeviceEntity(const char* subtopic,
 
   // Each entity kind keeps its own budget over the shared buffer; PayloadWriter writes from the
   // start and terminates, so nothing of a previous payload survives into this one.
-  PayloadWriter pw(payloadBuffer, canDiscoveryPayloadBufSize);
+  PayloadWriter pw(payloadBuffer, subDeviceDiscoveryPayloadBufSize);
 
-  appendCommonFields(pw, config, canDevConfig.deviceId, subtopic);
-  appendP(pw, fmtTopicField, topicField, topicBase, canDevConfig.dataSubtopic);
-  if(!config.isCommandTopic) { appendP(pw, fmtAttrTopic, topicBase, canDevConfig.dataSubtopic); }
-  if(canDevConfig.skipCanAvailability) {
+  appendCommonFields(pw, config, subDevConfig.deviceId, subtopic);
+  appendP(pw, fmtTopicField, topicField, topicBase, subDevConfig.dataSubtopic);
+  if(!config.isCommandTopic) { appendP(pw, fmtAttrTopic, topicBase, subDevConfig.dataSubtopic); }
+  if(subDevConfig.skipSubDeviceAvailability) {
     appendP(pw, fmtAvailSingle, availabilityTopic);
   } else {
     appendP(pw, PSTR(R"(,"availability":[{"topic":"%s","value_template":"{{ value_json.state }}"},)"), availabilityTopic);
-    appendP(pw, PSTR(R"({"topic":"%s","value_template":"{{ value_json.state }}"}],"availability_mode":"all")"), canDevConfig.extraAvailTopic);
+    appendP(pw, PSTR(R"({"topic":"%s","value_template":"{{ value_json.state }}"}],"availability_mode":"all")"), subDevConfig.subDeviceAvailTopic);
   }
   appendP(pw, PSTR(R"(,"device":{"identifiers":["%s"],"name":"%s","sw_version":"%s","hw_version":"%s","via_device":"%s"}})"),
-          canDevConfig.deviceId, canDevConfig.deviceName, canDevConfig.swVersion, canDevConfig.hwVersion, clientName);
+          subDevConfig.deviceId, subDevConfig.deviceName, subDevConfig.swVersion, subDevConfig.hwVersion, clientName);
 
   if(!pw.ok()) { return false; }
   return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.

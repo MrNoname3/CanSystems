@@ -65,7 +65,7 @@ void RfHandler::transmitCommand(const RfData& command) {
   }
 }
 
-void RfHandler::messageArrivedCallback(JsonDocument& payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void RfHandler::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant dataJsonVar = payloadJson[F("Data")];
   JsonVariant bitsJsonVar = payloadJson[F("Bits")];
   JsonVariant protocolJsonVar = payloadJson[F("Protocol")];

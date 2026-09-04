@@ -4,6 +4,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "otaCanFrame.hpp"                                          /// Shared OTA-over-CAN frame layout (pack/unpack).
+#include "canIdAssign.hpp"                                          /// SET_CAN_ID frame layout and admission rules.
 #include "otaCanResponse.hpp"                                       /// Host-testable OTA state -> CAN response decision.
 
 // The OTA_SEND piece carried on the wire must match the size OTA storage consumes per chunk,
@@ -43,16 +44,6 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   Logger::get()->println(Str::getStateStr(canIdsSavingResult));
   if(!canIdsSavingResult) { return false; }
 #endif
-  // Load CAN ID's.
-  Logger::get()->print(F("CAN IDs: "));
-  if(loadCanIds()) {
-    Logger::get()->print(getMasterCanId());
-    Logger::get()->print(Str::getSpacerStr());
-    Logger::get()->println(getLocalCanId());
-  } else {
-    Logger::get()->println(Str::getErrStr());
-    return false;
-  }
   { // Initialise SPI CAN shield.
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
@@ -60,6 +51,28 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     Logger::get()->print(F("CAN: "));
     Logger::get()->println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
+  }
+  // Where the node's identity comes from. After CAN.begin(), which is what drives the controller's
+  // chip select: the two share the SPI bus, and a floating select lets the controller answer this
+  // read too. Before the ids, because a node with none derives its address from what is read here.
+  const bool flashInitResult = flash.initialize();
+  if(flashInitResult) { flash.readUniqueId(uid); }
+  { // Load CAN ID's.
+    Logger::get()->print(F("CAN IDs: "));
+    if(loadCanIds()) {
+      addressed = true;
+      Logger::get()->print(getMasterCanId());
+      Logger::get()->print(Str::getSpacerStr());
+      Logger::get()->println(getLocalCanId());
+    } else {
+      // No address stored, so nothing can reach this node yet. Answering on one derived from the
+      // unique id is what lets the master find it and give it a real one; it is deliberately not
+      // stored, so a node still waiting comes back waiting.
+      addressed = false;
+      useCanIds(static_cast<uint16_t>(MASTER_CAN_ADDRESS), CanIdAssign::provisionalId(uid));
+      Logger::get()->print(F("none, waiting on "));
+      Logger::get()->println(getLocalCanId());
+    }
   }
   { // Set up the CAN filtering.
     Logger::get()->print(F("Filter: "));
@@ -72,9 +85,9 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion() && CAN.flushTx();
     if(!sendResult) { return false; }
   }
-  { // Check SPI FLASH modul.
+  { // Check SPI FLASH module. Judged after the startup send, so a node whose flash is dead is
+    // visible on the bus instead of caught in a silent boot loop.
     Logger::get()->print(F("FLASH: "));
-    const bool flashInitResult = flash.initialize();
     Logger::get()->println(Str::getStateStr(flashInitResult));
     if(!flashInitResult) { return false; }
   }
@@ -115,6 +128,20 @@ bool CanHandlerAtmega328P::handleRxFrame() {
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
     } break;
+    case static_cast<uint16_t>(CanCmd::SET_CAN_ID): {
+      const CanIdAssign::Request request = CanIdAssign::unpack(canFrame.data);
+      if(!CanIdAssign::isAcceptable(request, getLocalCanId(), getMasterCanId(), static_cast<uint16_t>(canFrame.from))) {
+        CanHandlerBase::send(CanCmd::SET_CAN_ID, Response::NACK);
+        break;
+      }
+      // Stored, not set: the answer below still goes out from the address the request reached.
+      const bool saved = storeCanIds(getMasterCanId(), request.newLocal);
+      Logger::get()->print(F("New CAN id: "));
+      Logger::get()->println(Str::getStateStr(saved));
+      CanHandlerBase::send(CanCmd::SET_CAN_ID, saved ? Response::ACK : Response::NACK);
+      (void)CAN.flushTx();                                          // The answer is queued; the flush puts it on the bus.
+      if(saved) { ResetHandler::restartMCU(ResetHandler::RestartCause::CanIdChanged); }
+    } break;
     default: {
       if(canCallback != nullptr) {
         canCallback(static_cast<uint16_t>(canFrame.cmd), canFrame.data);
@@ -136,6 +163,12 @@ bool CanHandlerAtmega328P::run() {
         [this]() -> bool { return handleRxFrame(); },
         maxRxFramesPerRun);
     if(rxResult.failed) { return false; }
+  }
+  // A node with no address of its own says who it is, until someone gives it one. The gap is
+  // wide enough that two of them landing on the same derived address still interleave.
+  if(!addressed && Time::hasElapsed(actualTime, announceTimer, announceTime)) {
+    announceTimer = actualTime;
+    CanHandlerBase::send(CanCmd::ANNOUNCE, uid);
   }
   const OTA::OtaState otaState = ota.run();
   const OtaCanResponse::Decision otaDecision = OtaCanResponse::decide(lastOtaState, otaState, ota.isOwnFw());

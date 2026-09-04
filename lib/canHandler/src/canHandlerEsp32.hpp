@@ -55,6 +55,18 @@ public:
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
 
+  /// @brief Registers the receiver for frames from a sender no registered device answers to.
+  /// @details A node with no address of its own is exactly that: it announces from an address it
+  /// derived, which no device is built for. Without a receiver such a frame is dropped.
+  /// @param callback Called with `context` and the frame; nullptr clears it.
+  /// @param context Handed back to `callback` unchanged.
+  void setUnclaimedFrameCallback(void (*callback)(void* context, const CanFrame& frameIn), void* context);
+
+  /// @brief Whether a registered device already answers on this client id.
+  /// @param clientCanId The id to look for.
+  /// @return `true` when one of this handler's devices holds it.
+  [[nodiscard]] bool isClientIdRegistered(uint16_t clientCanId) const;
+
   /// @brief Registers a callback for a CAN device.
   /// @param canBasePtr Pointer to the CAN device.
   /// @return `true` if the callback was successfully registered, `false` otherwise.
@@ -101,6 +113,8 @@ private:
   ESP32SJA1000& controller;                                               // CAN controller this handler drives.
   QueueHandle_t canTxQueue;                                               // Queue for transmitting CAN frames.
   IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
+  void (*unclaimedFrameCallback)(void*, const CanFrame&) = nullptr;       // Receiver for frames no device answers to.
+  void* unclaimedFrameContext = nullptr;                                  // Handed back to that receiver.
   DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
   DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
   DeltaCounter txAbandonedReporter;                                       // Mark for the driver's abandoned-frame counter.
@@ -131,6 +145,15 @@ public:
   /// @brief Gets the client CAN ID.
   /// @return The client CAN ID.
   [[nodiscard]] inline uint16_t getClientCanId() const { return clientCanId; }
+
+  /// @brief Whether an id could be given to a device without colliding with something known.
+  /// @details Beyond the reserved pair, this rules out the ids the handler's own devices already
+  /// answer on - two of them on one address would talk over each other on the bus.
+  /// @param candidateCanId The id to test.
+  /// @return `true` when nothing known holds it.
+  [[nodiscard]] inline bool isClientCanIdFree(uint16_t candidateCanId) {
+    return isClientCanIdValid(candidateCanId) && !canHandler.isClientIdRegistered(candidateCanId);
+  }
 
   /// @brief Callback function for received CAN frames.
   /// @param canFrame The received CAN frame.

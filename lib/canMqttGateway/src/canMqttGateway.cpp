@@ -223,6 +223,23 @@ bool CanMqttGateway::sendOtaStatusMessage(const char* payload) { // NOLINT(reada
   return MqttBase::sendSubtopicMessage(subSubTopic, payload);
 }
 
+bool CanMqttGateway::requestCanIdChange(uint16_t newLocalCanId) { // NOLINT(readability-convert-member-functions-to-static)
+  // The address this device already answers on counts as free: being told to keep it is a valid
+  // request, and the node accepts it too. A master that lost an answer can repeat itself.
+  const bool addressIsAlreadyMine = (newLocalCanId == getClientCanId());
+  if(!CanIdAssign::isAssignableId(newLocalCanId) || (!addressIsAlreadyMine && !isClientCanIdFree(newLocalCanId))) {
+    Logger::get()->printf_P(PSTR("[CAN] Refusing address %hu for \"%s\"\r\n"), newLocalCanId, MqttBase::getSubtopic());
+    return false;
+  }
+  CanIdAssign::Request request;
+  request.expectedLocal = getClientCanId();
+  request.newLocal = newLocalCanId;
+  uint8_t canData[8] = { 0U };
+  CanIdAssign::pack(request, canData);
+  Logger::get()->printf_P(PSTR("[CAN] Address %hu -> %hu for \"%s\"\r\n"), request.expectedLocal, newLocalCanId, MqttBase::getSubtopic());
+  return sendCanFrame(CanCmd::SET_CAN_ID, canData);
+}
+
 void CanMqttGateway::buildCanTopics() {
   // These buffers are what a discovery payload is built from, and both this and the payload can
   // be reached from either task once the CAN drivers run on one of their own.
@@ -350,6 +367,13 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
         clientOnline = true;
       }
       (void)publishDiscovery();
+    } break;
+    case static_cast<uint16_t>(CanCmd::SET_CAN_ID): {
+      // The only confirmation the master gets. The node restarts right after answering, so a
+      // refusal is the difference between "it moved" and "it is still where it was".
+      const bool accepted = (canFrame.data[0] == static_cast<uint8_t>(CanHandler::Response::ACK));
+      Logger::get()->printf_P(PSTR("[CAN] \"%s\" %s the new address\r\n"), MqttBase::getSubtopic(),
+                              accepted ? PSTR("took") : PSTR("refused"));
     } break;
     case static_cast<uint16_t>(CanCmd::BUTTON_EVENT): {
       const uint8_t buttonState = canFrame.data[0];

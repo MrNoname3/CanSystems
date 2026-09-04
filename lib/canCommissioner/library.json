@@ -1,0 +1,8 @@
+{
+  "name": "canCommissioner",
+  "description": "Gives an address to a CAN node that announces itself without one.",
+  "dependencies": {
+    "canHandler": "*",
+    "connectivity": "*"
+  }
+}

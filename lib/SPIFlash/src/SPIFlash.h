@@ -132,8 +132,9 @@ private:
   /// @param cmd Command byte.
   /// @param isWrite Set to `true` for write/erase commands.
   /// @brief Waits for the chip to leave its busy state.
-  /// @return `false` when no chip answers, or when it stays busy past `busyTimeoutMs`.
-  [[nodiscard]] bool waitUntilReady();
+  /// @param timeoutMs How long to keep waiting.
+  /// @return `false` when no chip answers, or when it stays busy past `timeoutMs`.
+  [[nodiscard]] bool waitUntilReady(uint32_t timeoutMs = busyTimeoutMs);
 
   /// @brief Waits for readiness, then selects the chip and sends one command byte.
   /// @param cmd Command opcode.
@@ -144,11 +145,16 @@ private:
 
   uint8_t slaveSelectPin;                                           // SPI chip-select pin.
   static constexpr uint8_t statusNotResponding = 0xFFU;             // All ones: nothing is driving MISO.
-  // Upper bound for one readiness wait. Covers the programming this class waits on - a byte or
-  // short page program, tens of microseconds - and stays short because a single caller
-  // operation can perform several waits back to back. Erases are not waited for here: they run
-  // for orders of magnitude longer, so poll busy() for those instead.
-  static constexpr uint32_t busyTimeoutMs = 5U;
+  // Upper bound for one readiness wait. Covers the program writeBytes() issues - up to a full
+  // 256-byte page, the longest operation this wait has to cover - with room for a part slower
+  // than a fresh one. A single caller operation can perform several of these waits back to back,
+  // so it is not made generous beyond that. Erases are not waited for here: they run for orders
+  // of magnitude longer, so poll busy() for those instead.
+  static constexpr uint32_t busyTimeoutMs = 10U;
+  // The global unprotect initialize() ends with is a status register write, which outlasts every
+  // wait above. It is made once at startup and nothing waits behind it, so its bound is the
+  // generous one.
+  static constexpr uint32_t statusWriteTimeoutMs = 50U;
 
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
 #ifdef SPI_HAS_TRANSACTION

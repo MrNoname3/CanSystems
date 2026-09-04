@@ -23,6 +23,7 @@ static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (min
 #include "taskHandler.hpp"                                          /// Class for task scheduling.
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "mqttTopics.hpp"                                           /// MQTT topic format strings and derived buffer sizes.
+#include "messageRoute.hpp"                                       /// Envelope reading for messages routed between subtopics.
 #include "haDiscovery.hpp"                                          /// Home Assistant MQTT auto-discovery handler.
 #include "sync.hpp"                                                 /// RecursiveMutex/LockGuard (no-op off-ESP32).
 
@@ -83,6 +84,18 @@ public:
   /// @return `true` if the callback is registered successfully; otherwise, `false`.
   bool registerCallback(MqttBase* mqttBasePtr);
 
+  /// @brief The subtopic a handler should answer on right now, or `nullptr` outside a delivery.
+  /// @details Valid only during one delivery, and only to a caller holding the connectivity
+  /// lock: the string lives in the receive buffer for no longer than the delivery does.
+  [[nodiscard]] const char* getReplySubtopic() const { return replySubtopic; }
+
+  /// @brief Hands one parsed message to the handler it belongs to.
+  /// @details A message naming a `to` subtopic is delivered to that handler instead of the one
+  /// the subscription matched. The envelope is opened once and never re-routed.
+  /// @param arrivedOn Subtopic the message was published to.
+  /// @param message The parsed payload.
+  void deliverMessage(const char* arrivedOn, JsonVariant message);
+
   /// @brief Publishes a Home Assistant MQTT discovery config for any entity type.
   /// Delegates to `HADiscovery::publishEntity()`; unique_id, topic, availability, and device
   /// blocks are filled in automatically from the known connection credentials.
@@ -110,14 +123,14 @@ public:
   /// Call before a planned restart to avoid leaving a zombie TCP connection in the broker.
   void shutdownMqtt();
 
-  /// @brief Publishes a HA discovery config for a CAN sub-device entity via HADiscovery.
+  /// @brief Publishes a HA discovery config for an entity of a sub-device, via HADiscovery.
   /// @param subtopic     Entity subtopic.
   /// @param config       Typed entity discovery configuration.
-  /// @param canDevConfig CAN device identification struct (RAM strings).
+  /// @param subDevConfig Sub-device identification struct (RAM strings).
   /// @return `true` if published successfully; otherwise, `false`.
-  [[nodiscard]] bool publishCanDeviceEntityDiscovery(const char* subtopic,
+  [[nodiscard]] bool publishSubDeviceEntityDiscovery(const char* subtopic,
                                                      const HADiscovery::EntityConfig& config,
-                                                     const HADiscovery::CanDeviceConfig& canDevConfig);
+                                                     const HADiscovery::SubDeviceConfig& subDevConfig);
 
   /// @brief Returns the MQTT sender topic base (e.g. "iot/dtos/aabbccddeeff/"). Valid after init().
   [[nodiscard]] const char* getSenderTopic() const { return mqttCredentials.senderTopic; }
@@ -166,6 +179,10 @@ private:
   /// @brief Establishes a connection to the MQTT broker.
   /// @return `true` if the connection was successfully established; otherwise, `false`.
   bool connectToMqttServer();
+
+  /// @brief Answers a message that reached no handler, on the subtopic it arrived on.
+  /// @param subTopic Where to publish the refusal.
+  void sendRoutingNack(const char* subTopic);
 
   /// @brief Synchronizes the system time using NTP.
   /// @return `true` if synchronisation completed within the timeout; `false` if it timed out.
@@ -217,6 +234,7 @@ private:
   std::optional<X509List> serverCert;                               // Optional server certificate for SSL on ESP8266.
 #endif
   IntrusiveList<MqttBase> handlerList;                              // Registered MQTT message handlers, keyed by subtopic.
+  const char* replySubtopic = nullptr;                              // Where the delivery in progress should be answered; null between deliveries.
   HADiscovery haDiscovery;                                          // HA auto-discovery handler; holds device name and all HA infrastructure.
 };
 
@@ -262,7 +280,7 @@ public:
   /// @brief Callback invoked when an MQTT message arrives, with the payload already parsed into a JSON document.
   /// Derived classes must implement this to handle incoming messages.
   /// @param payloadJson Reference to a `JsonDocument` containing the parsed payload of the incoming message.
-  virtual void messageArrivedCallback(JsonDocument& payloadJson) = 0;
+  virtual void messageArrivedCallback(JsonVariant payloadJson) = 0;
 
   /// @brief Sends an MQTT message with the specified payload.
   /// @param payload Pointer to the message payload.
@@ -272,17 +290,48 @@ public:
     return connectivity.sendMqttMessage(subtopic, payload);
   }
 
+  /// @brief Size a buffer handed to formatResponse() has to have.
+  [[nodiscard]] static constexpr uint8_t getResponseBufferSize() { return responseBufferSize; }
+
+  /// @brief Writes the payload every answer carries.
+  /// @details Shared with the router, which answers on a handler's behalf when it cannot find one.
+  /// @param buffer Destination; its size is fixed by getResponseBufferSize().
+  /// @param response Response type (ACK or NACK).
+  /// @param command Command identifier associated with the response.
+  /// @param errCode Error code included in the response; 0 means no error.
+  /// @return `true` when the whole payload fit.
+  [[nodiscard]] static bool formatResponse(char (&buffer)[responseBufferSize], Response response, uint16_t command, uint32_t errCode) {
+    const int32_t written = snprintf_P(buffer, responseBufferSize, PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
+    return (written >= 0) && (written < static_cast<int32_t>(responseBufferSize));
+  }
+
+  /// @brief Answers the command being handled with a payload of the handler's own choosing.
+  /// @details Goes where the command came from, unlike sendMessage(), which publishes what the
+  /// module has to say of its own accord and so stays on the module's own subtopic.
+  /// @param payload Pointer to the message payload.
+  /// @return `true` if the message was sent successfully; otherwise, `false`.
+  [[nodiscard]] bool sendReply(const char* payload) {
+    if(payload == nullptr) { return false; }
+    const LockGuard guard = lockShared();
+    const char* replyTo = connectivity.getReplySubtopic();
+    return connectivity.sendMqttMessage((replyTo != nullptr) ? replyTo : subtopic, payload);
+  }
+
   /// @brief Sends a response message with the specified response type and command.
+  /// @details Answered where the command arrived, which is this handler's own subtopic unless
+  /// the message was routed here from another one.
   /// @param response Response type to be sent (ACK or NACK).
   /// @param command Command identifier associated with the response (default: 0).
   /// @param errCode Error code included in the response; 0 means no error (default: 0).
   /// @return `true` if the response was sent successfully; otherwise, `false`.
   [[nodiscard]] virtual bool sendResponse(Response response, uint16_t command = 0U, uint32_t errCode = 0U) {
     char responseBuffer[responseBufferSize] = { '\0' };
-    const int32_t responseBufferActualSize = snprintf_P(responseBuffer, sizeof(responseBuffer), PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
-    const bool responseBufferValid = ((responseBufferActualSize >= 0) && (responseBufferActualSize < static_cast<int32_t>(sizeof(responseBuffer))));
-    if(!responseBufferValid) { return false; }
-    return sendMessage(responseBuffer);
+    if(!formatResponse(responseBuffer, response, command, errCode)) { return false; }
+    // Under the lock the delivery holds: another task would otherwise read a subtopic - and a
+    // pointer into the receive buffer - belonging to a delivery in progress here.
+    const LockGuard guard = lockShared();
+    const char* replyTo = connectivity.getReplySubtopic();
+    return connectivity.sendMqttMessage((replyTo != nullptr) ? replyTo : subtopic, responseBuffer);
   }
 
   /// @brief Called on every MQTT connect to publish the HA discovery config for this entity.
@@ -300,7 +349,7 @@ public:
   }
 
   /// @brief Publishes a retained MQTT message to senderTopic + subSubTopic.
-  /// Use for CAN device availability and info topics (e.g. "alert1/availability", "alert1/info").
+  /// Use for a sub-device's availability and info topics (e.g. "alert1/availability", "alert1/info").
   /// @param subSubTopic Extended subtopic (e.g. "alert1/availability") appended to the sender topic.
   /// @param payload     Message payload.
   /// @return `true` if published successfully; otherwise, `false`.
@@ -309,7 +358,7 @@ public:
   }
 
   /// @brief Publishes a non-retained MQTT message to senderTopic + subSubTopic.
-  /// Use for CAN device event sub-topics (e.g. "alert1/ota", "alert1/button").
+  /// Use for a sub-device's event sub-topics (e.g. "alert1/ota", "alert1/button").
   /// @param subSubTopic Extended subtopic (e.g. "alert1/ota") appended to the sender topic.
   /// @param payload     Message payload.
   /// @return `true` if published successfully; otherwise, `false`.
@@ -317,15 +366,15 @@ public:
     return connectivity.sendMqttMessage(subSubTopic, payload);
   }
 
-  /// @brief Publishes a HA discovery config for a CAN sub-device entity.
+  /// @brief Publishes a HA discovery config for an entity of a device this one speaks for.
   /// @param subtopic     Entity subtopic (e.g. "temperature").
   /// @param config       Entity discovery configuration.
-  /// @param canDevConfig CAN device identification and availability data.
+  /// @param subDevConfig Sub-device identification and availability data.
   /// @return `true` if published successfully; otherwise, `false`.
-  [[nodiscard]] bool doPublishCanDeviceEntityDiscovery(const char* subtopic,
+  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,
                                                        const HADiscovery::EntityConfig& config,
-                                                       const HADiscovery::CanDeviceConfig& canDevConfig) {
-    return connectivity.publishCanDeviceEntityDiscovery(subtopic, config, canDevConfig);
+                                                       const HADiscovery::SubDeviceConfig& subDevConfig) {
+    return connectivity.publishSubDeviceEntityDiscovery(subtopic, config, subDevConfig);
   }
 
   /// @brief Publishes the offline availability status and disconnects from the MQTT broker.

@@ -33,7 +33,7 @@ public:
 private:
   bool initLocal() override { return true; }
   bool runLocal() override { return true; }
-  void messageArrivedCallback(JsonDocument& payloadJson) override {
+  void messageArrivedCallback(JsonVariant payloadJson) override {
     (void)payloadJson;
     ++customMessages;
   }
@@ -537,6 +537,100 @@ bool test_ota_contract_gateway_to_device_storage() {
   END_IT
 }
 
+// ---- address assignment ----
+
+bool test_an_address_request_reaches_the_bus() {
+  IT("requestCanIdChange puts a SET_CAN_ID frame naming both addresses on the bus");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+
+  IS_TRUE(gateway.requestCanIdChange(28U));
+  const CanHandler::CanFrame* frame = lastCanFrame(static_cast<uint16_t>(CanCmd::SET_CAN_ID));
+  IS_TRUE(frame != nullptr);
+  if(frame != nullptr) {
+    IS_EQUAL(static_cast<uint16_t>(frame->to), 26U);   // still addressed on the id it holds now
+    const CanIdAssign::Request request = CanIdAssign::unpack(frame->data);
+    IS_EQUAL(request.expectedLocal, 26U);
+    IS_EQUAL(request.newLocal, 28U);
+    IS_TRUE(request.reservedClear);
+  }
+  END_IT
+}
+
+bool test_the_address_it_already_holds_is_sent() {
+  IT("being told to keep the address it already holds is passed on, not refused as a duplicate");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+
+  // The device is registered on 26 itself, so the duplicate check has to look past it - a master
+  // that lost an answer repeats the request, and the node accepts it.
+  IS_TRUE(gateway.requestCanIdChange(26U));
+  const CanHandler::CanFrame* frame = lastCanFrame(static_cast<uint16_t>(CanCmd::SET_CAN_ID));
+  IS_TRUE(frame != nullptr);
+  if(frame != nullptr) {
+    const CanIdAssign::Request request = CanIdAssign::unpack(frame->data);
+    IS_EQUAL(request.expectedLocal, 26U);
+    IS_EQUAL(request.newLocal, 26U);
+  }
+  END_IT
+}
+
+bool test_the_nodes_answer_is_consumed_here() {
+  IT("the node's answer to SET_CAN_ID is handled by the gateway, not passed to the derived class");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+  TestGateway::resetState();
+
+  const uint8_t ack[8] = { static_cast<uint8_t>(CanHandler::Response::ACK), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
+  CanBase& canSide = gateway;
+  canSide.canFrameArrivedCallback(CanHandler::CanFrame(10U, static_cast<uint16_t>(CanCmd::SET_CAN_ID), 26U, ack));
+  IS_EQUAL(TestGateway::customFrames, 0);
+  END_IT
+}
+
+bool test_an_address_another_device_holds_is_refused() {
+  IT("an address one of the handler's own devices answers on is refused");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  const TestGateway neighbour(can, 27U, conn, "alert2");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+
+  // Two of them on one address would talk over each other on the bus.
+  IS_FALSE(gateway.requestCanIdChange(27U));
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  END_IT
+}
+
+bool test_an_unusable_address_is_refused() {
+  IT("zero and an address past the 10-bit field never reach the bus");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  TestGateway gateway(can, 26U, conn, "alert1");
+  Task& task = gateway;
+  IS_TRUE(task.init());
+
+  IS_FALSE(gateway.requestCanIdChange(0U));
+  IS_FALSE(gateway.requestCanIdChange(CanIdAssign::idMask + 1U));
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  END_IT
+}
+
 int main() {
   SUITE("CanMqttGateway");
   test_init_builds_topics_and_publishes_offline();
@@ -558,5 +652,10 @@ int main() {
   test_ota_rejects_empty_file();
   test_a_known_checksum_skips_the_read_pass();
   test_ota_contract_gateway_to_device_storage();
+  test_an_address_request_reaches_the_bus();
+  test_the_address_it_already_holds_is_sent();
+  test_the_nodes_answer_is_consumed_here();
+  test_an_address_another_device_holds_is_refused();
+  test_an_unusable_address_is_refused();
   FINISH
 }

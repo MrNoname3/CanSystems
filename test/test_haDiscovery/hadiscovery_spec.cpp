@@ -262,15 +262,15 @@ bool test_publishConnectivity_skips_availability_block() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_discovery_topic() {
-  IT("publishCanDeviceEntity builds discovery topic from canDevConfig.deviceId");
+bool test_publishSubDeviceEntity_discovery_topic() {
+  IT("publishSubDeviceEntity builds discovery topic from subDevConfig.deviceId");
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor(
       "Temperature", "{{ value_json.t }}", nullptr,
       HADiscovery::StateClass::measurement, HADiscovery::DeviceClass::temperature);
 
-  const HADiscovery::CanDeviceConfig canCfg = {
+  const HADiscovery::SubDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
     "ALERT1 DDEEFF",
     "771 (12345678)",
@@ -280,7 +280,7 @@ bool test_publishCanDeviceEntity_discovery_topic() {
     false
   };
 
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, canCfg));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, canCfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -289,13 +289,13 @@ bool test_publishCanDeviceEntity_discovery_topic() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_state_topic_uses_dataSubtopic() {
-  IT("publishCanDeviceEntity state_topic uses canDevConfig.dataSubtopic, not subtopic");
+bool test_publishSubDeviceEntity_state_topic_uses_dataSubtopic() {
+  IT("publishSubDeviceEntity state_topic uses subDevConfig.dataSubtopic, not subtopic");
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
-  const HADiscovery::CanDeviceConfig canCfg = {
+  const HADiscovery::SubDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
     "ALERT1 DDEEFF",
     "771 (12345678)",
@@ -305,7 +305,7 @@ bool test_publishCanDeviceEntity_state_topic_uses_dataSubtopic() {
     false
   };
 
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, canCfg));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, canCfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -314,13 +314,13 @@ bool test_publishCanDeviceEntity_state_topic_uses_dataSubtopic() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_dual_availability() {
-  IT("publishCanDeviceEntity includes both availability topics and availability_mode");
+bool test_publishSubDeviceEntity_dual_availability() {
+  IT("publishSubDeviceEntity includes both availability topics and availability_mode");
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
-  const HADiscovery::CanDeviceConfig canCfg = {
+  const HADiscovery::SubDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
     "ALERT1 DDEEFF",
     "771 (12345678)",
@@ -330,7 +330,7 @@ bool test_publishCanDeviceEntity_dual_availability() {
     false
   };
 
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, canCfg));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, canCfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -340,25 +340,25 @@ bool test_publishCanDeviceEntity_dual_availability() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_skip_can_avail() {
-  IT("publishCanDeviceEntity with skipCanAvailability omits the second avail entry");
+bool test_publishSubDeviceEntity_skip_can_avail() {
+  IT("publishSubDeviceEntity with skipSubDeviceAvailability omits the second avail entry");
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::binarySensor(
       "Connection", "{{ value_json.state }}", "online", "offline",
       HADiscovery::DeviceClass::connectivity);
 
-  const HADiscovery::CanDeviceConfig canCfg = {
+  const HADiscovery::SubDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
     "ALERT1 DDEEFF",
     "771 (12345678)",
     "iot/dtos/AABBCCDDEEFF/alert1/availability",
     "alert1/availability",
     "ATmega328P",
-    true   // skipCanAvailability
+    true   // skipSubDeviceAvailability
   };
 
-  IS_TRUE(f.had.publishCanDeviceEntity("connectivity", cfg, canCfg));
+  IS_TRUE(f.had.publishSubDeviceEntity("connectivity", cfg, canCfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -414,13 +414,13 @@ bool test_publishEntity_no_via_device() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_via_device_and_unique_id() {
-  IT("publishCanDeviceEntity sets via_device and unique_id uses entity subtopic");
+bool test_publishSubDeviceEntity_via_device_and_unique_id() {
+  IT("publishSubDeviceEntity sets via_device and unique_id uses entity subtopic");
   Fixture f;
 
   const HADiscovery::EntityConfig cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
 
-  const HADiscovery::CanDeviceConfig canCfg = {
+  const HADiscovery::SubDeviceConfig canCfg = {
     "esp32_can_AABBCCDDEEFF_alert1",
     "ALERT1 DDEEFF",
     "771 (12345678)",
@@ -430,7 +430,7 @@ bool test_publishCanDeviceEntity_via_device_and_unique_id() {
     false
   };
 
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, canCfg));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, canCfg));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -472,20 +472,20 @@ bool test_publishEntity_disabled_retracts_with_empty_payload() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_disabled_retracts_with_empty_payload() {
-  IT("publishCanDeviceEntity sends an empty retained payload when discovery is disabled");
+bool test_publishSubDeviceEntity_disabled_retracts_with_empty_payload() {
+  IT("publishSubDeviceEntity sends an empty retained payload when discovery is disabled");
   Fixture f;
   f.had.setDiscoveryEnabled(false);
 
   const auto cfg = HADiscovery::EntityConfig::sensor("Temperature", "{{ value_json.t }}");
-  HADiscovery::CanDeviceConfig dev{};
+  HADiscovery::SubDeviceConfig dev{};
   dev.deviceId = "esp32_can_AABBCCDDEEFF_alert1";
   dev.deviceName = "ALERT1 DDEEFF";
   dev.swVersion = "1 (deadbeef)";
-  dev.extraAvailTopic = "iot/dtos/AABBCCDDEEFF/alert1/availability";
+  dev.subDeviceAvailTopic = "iot/dtos/AABBCCDDEEFF/alert1/availability";
   dev.dataSubtopic = "alert1";
   dev.hwVersion = "ATmega328P";
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, dev));
 
   const PublishRecord rec = f.capture();
   IS_TRUE(rec.valid);
@@ -510,8 +510,8 @@ bool test_publishEntity_overflow_returns_false() {
   END_IT
 }
 
-bool test_publishCanDeviceEntity_overflow_returns_false() {
-  IT("publishCanDeviceEntity returns false and publishes nothing on payload overflow");
+bool test_publishSubDeviceEntity_overflow_returns_false() {
+  IT("publishSubDeviceEntity returns false and publishes nothing on payload overflow");
   Fixture f;
   static char hugeTemplate[800];
   memset(hugeTemplate, 'x', sizeof(hugeTemplate) - 1U);
@@ -520,11 +520,11 @@ bool test_publishCanDeviceEntity_overflow_returns_false() {
       "Temperature", "{{ value_json.t }}", nullptr,
       HADiscovery::StateClass::none, HADiscovery::DeviceClass::none,
       nullptr, hugeTemplate);
-  const HADiscovery::CanDeviceConfig dev = {
+  const HADiscovery::SubDeviceConfig dev = {
     "esp32_can_AABBCCDDEEFF_alert1", "ALERT1 DDEEFF", "1 (deadbeef)",
     "iot/dtos/AABBCCDDEEFF/alert1/availability", "alert1", "ATmega328P"
   };
-  IS_FALSE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+  IS_FALSE(f.had.publishSubDeviceEntity("temperature", cfg, dev));
   IS_EQUAL(f.cap.capLen, 0U);
   END_IT
 }
@@ -562,7 +562,7 @@ bool test_publishEntity_keeps_its_own_smaller_payload_budget() {
   IT("publishEntity rejects a payload that only a CAN entity's larger budget would hold");
   Fixture f;
   // A plain entity's payload is capped at discoveryPayloadBufSize, a CAN entity's at the larger
-  // canDiscoveryPayloadBufSize. This template lands between the two: the entity body comes to
+  // subDeviceDiscoveryPayloadBufSize. This template lands between the two: the entity body comes to
   // roughly 710 bytes, over the plain budget and under the CAN one. The two budgets share their
   // storage, so nothing but this pins them apart.
   static char midTemplate[250];
@@ -601,11 +601,11 @@ bool test_both_entity_kinds_carry_the_same_shared_fields() {
   f.cap.resetCapture();
   // Single availability, so the fields under test fit the CAN entity's budget: the availability
   // and device blocks are the part that legitimately differs, and other tests cover those.
-  const HADiscovery::CanDeviceConfig dev = {
+  const HADiscovery::SubDeviceConfig dev = {
     "esp32_can_AABBCCDDEEFF_alert1", "ALERT1 DDEEFF", "1 (deadbeef)",
     "iot/dtos/AABBCCDDEEFF/alert1/availability", "alert1", "ATmega328P", true
   };
-  IS_TRUE(f.had.publishCanDeviceEntity("temperature", cfg, dev));
+  IS_TRUE(f.had.publishSubDeviceEntity("temperature", cfg, dev));
   const PublishRecord canDev = f.capture();
   IS_TRUE(canDev.valid);
 
@@ -638,19 +638,19 @@ int main() {
   test_publishEntity_sensor_attributes_topic();
   test_publishEntity_button_command_topic();
   test_publishConnectivity_skips_availability_block();
-  test_publishCanDeviceEntity_discovery_topic();
-  test_publishCanDeviceEntity_state_topic_uses_dataSubtopic();
-  test_publishCanDeviceEntity_dual_availability();
-  test_publishCanDeviceEntity_skip_can_avail();
+  test_publishSubDeviceEntity_discovery_topic();
+  test_publishSubDeviceEntity_state_topic_uses_dataSubtopic();
+  test_publishSubDeviceEntity_dual_availability();
+  test_publishSubDeviceEntity_skip_can_avail();
   test_publishEntity_button_command_topic_url();
   test_publishEntity_sw_version_in_device_block();
   test_publishEntity_no_via_device();
-  test_publishCanDeviceEntity_via_device_and_unique_id();
+  test_publishSubDeviceEntity_via_device_and_unique_id();
   test_publishEntity_returns_false_when_disconnected();
   test_publishEntity_disabled_retracts_with_empty_payload();
-  test_publishCanDeviceEntity_disabled_retracts_with_empty_payload();
+  test_publishSubDeviceEntity_disabled_retracts_with_empty_payload();
   test_publishEntity_overflow_returns_false();
-  test_publishCanDeviceEntity_overflow_returns_false();
+  test_publishSubDeviceEntity_overflow_returns_false();
   test_a_later_payload_carries_nothing_from_an_earlier_one();
   test_both_entity_kinds_carry_the_same_shared_fields();
   test_publishEntity_keeps_its_own_smaller_payload_budget();
