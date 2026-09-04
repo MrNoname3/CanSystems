@@ -52,16 +52,13 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     Logger::get()->println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
   }
-  { // Check SPI FLASH modul. After CAN.begin(), which is what drives the controller's chip select:
-    // the two share the SPI bus, and a floating select lets the controller answer this read too.
-    // Before the filter, because a node with no address of its own derives one from what is read
-    // here.
-    Logger::get()->print(F("FLASH: "));
-    const bool flashInitResult = flash.initialize();
-    Logger::get()->println(Str::getStateStr(flashInitResult));
-    if(!flashInitResult) { return false; }
-    flash.readUniqueId(uid);
-  }
+  // Where the node's identity comes from. After CAN.begin(), which is what drives the controller's
+  // chip select: the two share the SPI bus, and a floating select lets the controller answer this
+  // read too. Before the ids, because a node with none derives its address from what is read here.
+  // Whether the flash works is judged further down - after the node has announced itself, so a
+  // dead one is visible on the bus instead of a silent boot loop.
+  const bool flashInitResult = flash.initialize();
+  if(flashInitResult) { flash.readUniqueId(uid); }
   { // Load CAN ID's.
     Logger::get()->print(F("CAN IDs: "));
     if(loadCanIds()) {
@@ -89,6 +86,11 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     // above only reach a transmit buffer, and it is the bus that empties it.
     const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion() && CAN.flushTx();
     if(!sendResult) { return false; }
+  }
+  { // Check SPI FLASH modul.
+    Logger::get()->print(F("FLASH: "));
+    Logger::get()->println(Str::getStateStr(flashInitResult));
+    if(!flashInitResult) { return false; }
   }
   eventTimer = millis();
   return true;
