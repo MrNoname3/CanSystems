@@ -252,6 +252,8 @@ bool test_an_unusable_address_is_refused() {
 
   announce(can.handler, kUid);
   deliver(commissioner, R"({"assign":{"uid":"1122334455667788","id":0}})");
+  // A driver's own address is not among them: giving a waiting node the slot a driver is built
+  // for is the ordinary case.
   // One from the provisional block would be indistinguishable from an address a node gave itself.
   deliver(commissioner, R"({"assign":{"uid":"1122334455667788","id":800}})");
   IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
