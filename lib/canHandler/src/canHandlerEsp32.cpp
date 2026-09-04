@@ -156,7 +156,16 @@ void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT
   // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
   const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
   CanBase* device = deviceList.findIf([nodeCanId](const CanBase* d) -> bool { return d->getClientCanId() == nodeCanId; });
-  if(device != nullptr) { device->canFrameArrivedCallback(frameIn); }
+  if(device != nullptr) {
+    device->canFrameArrivedCallback(frameIn);
+  } else if(unclaimedFrameCallback != nullptr) {
+    unclaimedFrameCallback(unclaimedFrameContext, frameIn);
+  }
+}
+
+void CanHandlerEsp32::setUnclaimedFrameCallback(void (*callback)(void*, const CanFrame&), void* context) {
+  unclaimedFrameCallback = callback;
+  unclaimedFrameContext = context;
 }
 
 bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
