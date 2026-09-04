@@ -44,30 +44,6 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   Logger::get()->println(Str::getStateStr(canIdsSavingResult));
   if(!canIdsSavingResult) { return false; }
 #endif
-  { // Check SPI FLASH modul. Ahead of the ids: a node with none derives its address from the
-    // unique id this chip carries.
-    Logger::get()->print(F("FLASH: "));
-    const bool flashInitResult = flash.initialize();
-    Logger::get()->println(Str::getStateStr(flashInitResult));
-    if(!flashInitResult) { return false; }
-    flash.readUniqueId(uid);
-  }
-  // Load CAN ID's.
-  Logger::get()->print(F("CAN IDs: "));
-  if(loadCanIds()) {
-    addressed = true;
-    Logger::get()->print(getMasterCanId());
-    Logger::get()->print(Str::getSpacerStr());
-    Logger::get()->println(getLocalCanId());
-  } else {
-    // No address stored, so nothing can reach this node yet. Answering on one derived from the
-    // unique id is what lets the master find it and give it a real one; it is deliberately not
-    // stored, so a node still waiting comes back waiting.
-    addressed = false;
-    useCanIds(static_cast<uint16_t>(MASTER_CAN_ADDRESS), CanIdAssign::provisionalId(uid));
-    Logger::get()->print(F("none, waiting on "));
-    Logger::get()->println(getLocalCanId());
-  }
   { // Initialise SPI CAN shield.
     CAN.setClockFrequency(8E6);                     // SPI CAN controller runs from 8MHz crystal.
     CAN.setSPIFrequency(4E6);
@@ -75,6 +51,33 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     Logger::get()->print(F("CAN: "));
     Logger::get()->println(Str::getStateStr(canBeginResult));
     if(!canBeginResult) { return false; }
+  }
+  { // Check SPI FLASH modul. After CAN.begin(), which is what drives the controller's chip select:
+    // the two share the SPI bus, and a floating select lets the controller answer this read too.
+    // Before the filter, because a node with no address of its own derives one from what is read
+    // here.
+    Logger::get()->print(F("FLASH: "));
+    const bool flashInitResult = flash.initialize();
+    Logger::get()->println(Str::getStateStr(flashInitResult));
+    if(!flashInitResult) { return false; }
+    flash.readUniqueId(uid);
+  }
+  { // Load CAN ID's.
+    Logger::get()->print(F("CAN IDs: "));
+    if(loadCanIds()) {
+      addressed = true;
+      Logger::get()->print(getMasterCanId());
+      Logger::get()->print(Str::getSpacerStr());
+      Logger::get()->println(getLocalCanId());
+    } else {
+      // No address stored, so nothing can reach this node yet. Answering on one derived from the
+      // unique id is what lets the master find it and give it a real one; it is deliberately not
+      // stored, so a node still waiting comes back waiting.
+      addressed = false;
+      useCanIds(static_cast<uint16_t>(MASTER_CAN_ADDRESS), CanIdAssign::provisionalId(uid));
+      Logger::get()->print(F("none, waiting on "));
+      Logger::get()->println(getLocalCanId());
+    }
   }
   { // Set up the CAN filtering.
     Logger::get()->print(F("Filter: "));
