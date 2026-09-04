@@ -58,14 +58,55 @@ bool test_dirty_reserved_bytes_are_reported() {
   END_IT
 }
 
+// ---- the address a node gives itself while it waits ----
+
+bool test_a_provisional_address_comes_from_the_unique_id() {
+  IT("the address a node gives itself is inside the provisional block");
+  const uint8_t uid[CanIdAssign::uidLength] = { 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U, 0x88U };
+  const uint16_t id = CanIdAssign::provisionalId(uid);
+  IS_TRUE(id >= CanIdAssign::provisionalBase);
+  IS_TRUE(id <= CanIdAssign::idMask);
+  IS_TRUE(CanIdAssign::isProvisionalId(id));
+  END_IT
+}
+
+bool test_the_same_node_always_gives_itself_the_same_address() {
+  IT("the same unique id always yields the same provisional address");
+  // A node that restarts while still waiting has to come back where the master last saw it.
+  const uint8_t uid[CanIdAssign::uidLength] = { 0xDEU, 0xADU, 0xBEU, 0xEFU, 0x01U, 0x02U, 0x03U, 0x04U };
+  IS_EQUAL(CanIdAssign::provisionalId(uid), CanIdAssign::provisionalId(uid));
+  END_IT
+}
+
+bool test_different_nodes_usually_differ() {
+  IT("unique ids that differ in one byte land on different provisional addresses");
+  const uint8_t first[CanIdAssign::uidLength] = { 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U, 0x88U };
+  const uint8_t second[CanIdAssign::uidLength] = { 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U, 0x89U };
+  IS_TRUE(CanIdAssign::provisionalId(first) != CanIdAssign::provisionalId(second));
+  END_IT
+}
+
+bool test_the_provisional_block_is_recognised() {
+  IT("the provisional block is the top of the address space and nothing below it");
+  IS_FALSE(CanIdAssign::isProvisionalId(CanIdAssign::provisionalBase - 1U));
+  IS_TRUE(CanIdAssign::isProvisionalId(CanIdAssign::provisionalBase));
+  IS_TRUE(CanIdAssign::isProvisionalId(CanIdAssign::idMask));
+  IS_FALSE(CanIdAssign::isProvisionalId(CanIdAssign::idMask + 1U));
+  IS_FALSE(CanIdAssign::isProvisionalId(26U));
+  END_IT
+}
+
 // ---- which ids may be handed out ----
 
 bool test_assignable_ids() {
-  IT("zero and anything past the 10-bit field are not addresses");
+  IT("zero, the provisional block and anything past the 10-bit field are not handed out");
   // Zero is what an unset address reads as, so it can never be handed out on purpose.
   IS_FALSE(CanIdAssign::isAssignableId(0U));
   IS_TRUE(CanIdAssign::isAssignableId(1U));
-  IS_TRUE(CanIdAssign::isAssignableId(CanIdAssign::idMask));
+  IS_TRUE(CanIdAssign::isAssignableId(CanIdAssign::provisionalBase - 1U));
+  // The provisional block is what a node gives itself; handing one out would be indistinguishable.
+  IS_FALSE(CanIdAssign::isAssignableId(CanIdAssign::provisionalBase));
+  IS_FALSE(CanIdAssign::isAssignableId(CanIdAssign::idMask));
   IS_FALSE(CanIdAssign::isAssignableId(CanIdAssign::idMask + 1U));
   IS_FALSE(CanIdAssign::isAssignableId(0xFFFFU));
   END_IT
@@ -132,6 +173,10 @@ int main() {
   test_byte_layout();
   test_round_trip();
   test_dirty_reserved_bytes_are_reported();
+  test_a_provisional_address_comes_from_the_unique_id();
+  test_the_same_node_always_gives_itself_the_same_address();
+  test_different_nodes_usually_differ();
+  test_the_provisional_block_is_recognised();
   test_assignable_ids();
   test_a_well_formed_request_from_the_master_is_obeyed();
   test_only_the_master_may_renumber();

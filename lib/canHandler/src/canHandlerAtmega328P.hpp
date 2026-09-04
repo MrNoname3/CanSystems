@@ -7,6 +7,7 @@
 #include "debugLedHandler.hpp"                                      /// Handles the debug LED.
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "canFramePump.hpp"                                            /// Bounded receive-buffer drain.
+#include "canIdAssign.hpp"                                          /// Provisional address and SET_CAN_ID rules.
 
 /// @brief Handles CAN communication, OTA updates, and peripheral interactions.
 class CanHandlerAtmega328P final : public CanHandlerBase {
@@ -71,7 +72,12 @@ private:
   bool sendFwVersion() const; // NOLINT(modernize-use-nodiscard)
 
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
+  static constexpr uint32_t announceTime = Time::secToMs(5U);                // Gap between two announcements while waiting for an address.
+
   SPIFlash flash;                                                           // SPI flash module driver object.
+  uint8_t uid[CanIdAssign::uidLength] = { 0U };                             // The flash unique id this node is known by until it has an address.
+  uint32_t announceTimer = 0U;                                              // Timer for the announcements.
+  bool addressed = true;                                                    // False while the node runs on an address it gave itself.
   OTA ota;                                                                  // OTA update handler.
   void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.

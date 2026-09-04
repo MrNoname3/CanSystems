@@ -5,7 +5,8 @@
     "CANDriver": "*",
     "common": "*",
     "taskHandler": "*",
-    "eepromHandler": "*"
+    "eepromHandler": "*",
+    "crc16": "*"
   },
   "comment": "Explicit dependencies on the local libraries these headers name in their own interfaces: the controller drivers (canHandlerEsp32.hpp declares an ESP32SJA1000 member), the Task base, the EEPROM-backed CAN ids, and common's IntrusiveList/DeltaCounter. The LDF (chain mode) attaches a library only where the translation unit it is scanning includes it directly, so a source that reaches this one through canHandlerBase.hpp alone - pushButtonHandler and ambientSensor do - would otherwise compile canHandlerEsp32.cpp with none of them on the path. Declaring them here propagates the dependency to every consumer, on every environment."
 }

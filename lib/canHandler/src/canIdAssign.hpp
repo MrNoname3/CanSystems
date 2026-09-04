@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "crc16.hpp"                                                /// Folds the unique id into a provisional address.
 
 /// @brief Wire format and admission rules for the SET_CAN_ID frame.
 /// @details The gateway packs it, the node unpacks it and decides whether to obey. Both sides
@@ -12,7 +13,27 @@
 /// SET_CAN_ID that is repeated after the node already changed would otherwise be obeyed by
 /// whichever node has since taken that id.
 namespace CanIdAssign {
-  static constexpr uint16_t idMask = 0x3FFU;  // The 10 bits the extended id reserves for an address.
+  static constexpr uint16_t idMask = 0x3FFU;         // The 10 bits the extended id reserves for an address.
+  static constexpr uint16_t provisionalBase = 0x300U;  // First address of the block a node uses until it is given one.
+  static constexpr uint8_t uidLength = 8U;          // Bytes of the flash unique id a node is known by.
+
+  /// @brief The address a node answers on until it is given one.
+  /// @details Taken from a block no configured node uses, and derived from the node's own unique
+  /// id rather than fixed, so two nodes waiting for an address at the same time usually answer on
+  /// different ones. Usually, not always: 256 addresses cannot separate every pair, which is why
+  /// the announcement carries the whole unique id.
+  /// @param uid The node's flash unique id.
+  /// @return An address inside the provisional block.
+  [[nodiscard]] inline uint16_t provisionalId(const uint8_t (&uid)[uidLength]) {
+    return static_cast<uint16_t>(provisionalBase | (Crc16::calculate(uid, uidLength) & 0xFFU));
+  }
+
+  /// @brief Whether an address belongs to the provisional block.
+  /// @param id The address to test.
+  /// @return `true` when it is one a node gave itself.
+  [[nodiscard]] inline bool isProvisionalId(uint16_t id) {
+    return (id >= provisionalBase) && (id <= idMask);
+  }
 
   /// @brief Fields of a SET_CAN_ID frame.
   struct Request {
@@ -48,11 +69,12 @@ namespace CanIdAssign {
 
   /// @brief Whether an id may be given to a node.
   /// @details Zero is what an unset address reads as - the ids default to it and a failed EEPROM
-  /// load leaves them there - so it can never be handed out deliberately.
+  /// load leaves them there - so it can never be handed out deliberately. Neither can one from
+  /// the provisional block: those are what a node gives itself while it waits for a real one.
   /// @param id The candidate address.
   /// @return `true` when the id is usable as a node address.
   [[nodiscard]] inline bool isAssignableId(uint16_t id) {
-    return (id != 0U) && (id <= idMask);
+    return (id != 0U) && (id <= idMask) && !isProvisionalId(id);
   }
 
   /// @brief Whether a node should obey the request it just received.

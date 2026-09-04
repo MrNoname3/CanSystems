@@ -23,6 +23,7 @@ enum class CanCmd : uint16_t {
   RGB_LED,                                    // Set the color of WS2812 RGB LEDs.
   ROUND_TIME_MAX,                             // Longest gap between two turns of an ordinary task, in ms.
   SET_CAN_ID,                                 // Give the addressed node a new local CAN address.
+  ANNOUNCE,                                   // A node with no address of its own, naming itself by its unique id.
 };
 
 /// @brief Commands only the ATmega328P alert node understands.
@@ -238,6 +239,14 @@ protected:
     CanId stored(static_cast<uint16_t>(master & canIdFilterMask), static_cast<uint16_t>(local & canIdFilterMask));
     return EEPROMHandler<CanId, 0U>::save(&stored);
   }
+
+  /// @brief Runs on ids that are not stored anywhere.
+  /// @details For a node that has no address yet: it has to answer on something to be given one,
+  /// and what it gives itself must not survive a restart. saveCanIds() is for an address that
+  /// should.
+  /// @param master Master CAN ID to use.
+  /// @param local Local CAN ID to use.
+  inline void useCanIds(uint16_t master, uint16_t local) { setCanIds(master, local); }
 
 private:
   /// @brief Sets the master and local CAN IDs.
