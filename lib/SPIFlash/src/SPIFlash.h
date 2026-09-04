@@ -145,15 +145,16 @@ private:
 
   uint8_t slaveSelectPin;                                           // SPI chip-select pin.
   static constexpr uint8_t statusNotResponding = 0xFFU;             // All ones: nothing is driving MISO.
-  // Upper bound for one readiness wait. Covers the programming this class waits on - a byte or
-  // short page program, tens of microseconds - and stays short because a single caller
-  // operation can perform several waits back to back. Erases are not waited for here: they run
-  // for orders of magnitude longer, so poll busy() for those instead.
-  static constexpr uint32_t busyTimeoutMs = 5U;
-  // The global unprotect initialize() ends with is a status register write, which takes
-  // milliseconds rather than the microseconds a page program does - 8 on the W25Q64 this was
-  // measured on. Waiting that out is not the same wait as the one above.
-  static constexpr uint32_t statusWriteTimeoutMs = 25U;
+  // Upper bound for one readiness wait. Covers the program writeBytes() issues - up to a full
+  // 256-byte page - with room for a part slower than the one this was sized on, which finishes
+  // one in under a millisecond. A single caller operation can perform several of these waits
+  // back to back, so it is not made generous beyond that. Erases are not waited for here: they
+  // run for orders of magnitude longer, so poll busy() for those instead.
+  static constexpr uint32_t busyTimeoutMs = 10U;
+  // The global unprotect initialize() ends with is a status register write, which outlasts every
+  // wait above - 8 ms on the part this was sized on. It is made once at startup and nothing waits
+  // behind it, so its bound is the generous one.
+  static constexpr uint32_t statusWriteTimeoutMs = 50U;
 
   uint16_t jedecID;                                                 // Expected JEDEC device ID (0 = skip check).
 #ifdef SPI_HAS_TRANSACTION
