@@ -55,8 +55,6 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   // Where the node's identity comes from. After CAN.begin(), which is what drives the controller's
   // chip select: the two share the SPI bus, and a floating select lets the controller answer this
   // read too. Before the ids, because a node with none derives its address from what is read here.
-  // Whether the flash works is judged further down - after the node has announced itself, so a
-  // dead one is visible on the bus instead of a silent boot loop.
   const bool flashInitResult = flash.initialize();
   if(flashInitResult) { flash.readUniqueId(uid); }
   { // Load CAN ID's.
@@ -87,7 +85,8 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
     const bool sendResult = CanHandlerBase::send(CanCmd::RESTART) && sendFwVersion() && CAN.flushTx();
     if(!sendResult) { return false; }
   }
-  { // Check SPI FLASH modul.
+  { // Check SPI FLASH module. Judged after the startup send, so a node whose flash is dead is
+    // visible on the bus instead of caught in a silent boot loop.
     Logger::get()->print(F("FLASH: "));
     Logger::get()->println(Str::getStateStr(flashInitResult));
     if(!flashInitResult) { return false; }
@@ -135,9 +134,7 @@ bool CanHandlerAtmega328P::handleRxFrame() {
         CanHandlerBase::send(CanCmd::SET_CAN_ID, Response::NACK);
         break;
       }
-      // Stored rather than set: the answer below is stamped with the address this node is still
-      // running on, which is the only one the master is listening for. The new address is read
-      // back at the next start, together with the receive filter armed from it.
+      // Stored, not set: the answer below still goes out from the address the request reached.
       const bool saved = storeCanIds(getMasterCanId(), request.newLocal);
       Logger::get()->print(F("New CAN id: "));
       Logger::get()->println(Str::getStateStr(saved));

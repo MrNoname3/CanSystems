@@ -118,10 +118,8 @@ bool CanCommissioner::formatWaiting(char (&buffer)[listBufSize]) const {
 bool CanCommissioner::assign(const char* uidHex, uint16_t newLocalCanId) {
   uint8_t uid[CanIdAssign::uidLength] = { 0U };
   if(!parseUid(uidHex, uid)) { return false; }
-  // An address one of this gateway's drivers is built for is not refused: that is what a waiting
-  // node is usually being given - the driver exists so a node can serve it. What this cannot see
-  // is whether something already answers there, so naming an address is the caller's word that
-  // the slot is free.
+  // Naming an address is the caller's word that it is free: nothing here can see whether
+  // something already answers on it.
   if(!CanIdAssign::isAssignableId(newLocalCanId)) { return false; }
 
   for(const Waiting& entry : waiting) {
