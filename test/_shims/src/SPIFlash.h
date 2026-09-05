@@ -42,19 +42,27 @@ public:
   }
 
   bool writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
-    assert(addr < flashCapacity);
     if(failWrite) { return false; }      // NOLINT(readability-simplify-boolean-expr) guard, not a boolean return: the write below still has to run
-    memory[addr] = readByte(addr) & byt; // NOR: write can only clear bits (1→0); erase resets to 0xFF
+    programCommands++;
+    program(addr, byt);
     return true;
   }
 
   bool writeBytes(uint32_t addr, const void* buf, uint16_t len) {
+    if(failWrite) { return false; }      // NOLINT(readability-simplify-boolean-expr)
+    // One command however long the run is, as the chip charges it: the program cycle is what
+    // costs the time, and a page program runs one of them for the whole run.
+    programCommands++;
     const uint8_t* bytes = static_cast<const uint8_t*>(buf);
     for(uint16_t i = 0U; i < len; i++) {
-      if(!writeByte(addr + static_cast<uint32_t>(i), bytes[i])) { return false; }
+      program(addr + static_cast<uint32_t>(i), bytes[i]);
     }
     return true;
   }
+
+  /// @brief Program commands issued since the last clear, which is what a real chip charges for.
+  [[nodiscard]] uint32_t getProgramCommands() const { return programCommands; }
+  void clearProgramCommands() { programCommands = 0U; }
 
   [[nodiscard]] bool busy() const { return busyFlag; }
   void setBusy(bool b) { busyFlag = b; }
@@ -100,6 +108,12 @@ public:
   SPIFlash& operator=(SPIFlash&&) = delete;
 
 private:
+  /// @brief Stores one byte the way NOR does: a write can only clear bits, an erase resets them.
+  void program(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
+    assert(addr < flashCapacity);
+    memory[addr] = readByte(addr) & byt;
+  }
+
   void eraseRange(uint32_t base, uint32_t size) { // NOLINT(readability-convert-member-functions-to-static)
     std::map<uint32_t, uint8_t>::iterator it = memory.lower_bound(base);
     while(it != memory.end() && it->first < base + size) {
@@ -114,4 +128,5 @@ private:
   bool failWrite = false;
   bool failRead = false;
   bool failErase = false;
+  uint32_t programCommands = 0U;
 };

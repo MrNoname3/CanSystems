@@ -40,20 +40,24 @@ bool OTA::storeNextData(uint8_t sequence, const uint8_t (&fwData)[fwPieceSize]) 
   const uint32_t remainingBytes = fwSize - flashPointer;
   const uint8_t expectedDataSize = static_cast<uint8_t>(remainingBytes < fwPieceSize ? remainingBytes : fwPieceSize);
 
-  // Iterates trough the received FW bytes.
+  // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
+  uint8_t keptBytes = 0U;
   // cppcheck-suppress knownConditionTrueFalse
-  for(uint8_t i = 0U; i < expectedDataSize; i++) {
-    // Save the first 2 bytes only in memory for safety reason (bootloader triggers OTA only, if the first 2 byte is a jmp opcode).
-    if(flashPointer < sizeof(firstFwBytes)) {
-      firstFwBytes[flashPointer] = fwData[i];
-    } else {
-      // Save the other bytes to the FLASH.
-      if(!flash.writeByte(flashBlockBeginAddress + flashPointer, fwData[i])) {
-        otaState = OtaState::INVALID;   // stop now instead of streaming the rest into a dead chip
-        return false;
-      }
-    }
+  while((flashPointer < sizeof(firstFwBytes)) && (keptBytes < expectedDataSize)) {
+    firstFwBytes[flashPointer] = fwData[keptBytes];
     flashPointer++;
+    keptBytes++;
+  }
+  // The rest of the piece in one call: the chip charges a program cycle per command rather than
+  // per byte, and that cycle is inside the round trip the sender is waiting on.
+  const uint8_t flashBytes = static_cast<uint8_t>(expectedDataSize - keptBytes);
+  // cppcheck-suppress knownConditionTrueFalse
+  if(flashBytes > 0U) {
+    if(!flash.writeBytes(flashBlockBeginAddress + flashPointer, &fwData[keptBytes], flashBytes)) {
+      otaState = OtaState::INVALID;   // stop now instead of streaming the rest into a dead chip
+      return false;
+    }
+    flashPointer += flashBytes;
   }
   stallTimer = millis();                                     // The sender is still there.
   return true;

@@ -90,6 +90,21 @@ bool test_store_repeated_piece_rejected() {
   END_IT
 }
 
+bool test_store_programs_a_piece_in_one_command() {
+  IT("a whole piece costs one program command, not one per byte");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  IS_TRUE(ota.start(0U, 3U * OTA::fwPieceSize, 0U));
+  uint8_t chunk[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
+  IS_TRUE(ota.storeNextData(0U, chunk));                  // the piece holding the two kept bytes
+  flash.clearProgramCommands();
+  // The chip charges per program cycle, not per byte, and that cycle sits in the round trip the
+  // sender waits on: a piece written byte by byte pays it once for every byte.
+  IS_TRUE(ota.storeNextData(OTA::fwPieceSize, chunk));
+  IS_EQUAL(flash.getProgramCommands(), 1U);
+  END_IT
+}
+
 bool test_store_first_two_bytes_in_memory_not_flash() {
   IT("first two bytes stay in OTA memory; bytes 2+ are written to flash");
   SPIFlash flash(0U);
@@ -416,6 +431,7 @@ int main() {
   test_store_before_start_rejected();
   test_store_wrong_sequence_rejected();
   test_store_repeated_piece_rejected();
+  test_store_programs_a_piece_in_one_command();
   test_store_first_two_bytes_in_memory_not_flash();
   test_store_partial_last_chunk();
   test_store_overflow_rejected();
