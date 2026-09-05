@@ -130,6 +130,30 @@ bool test_idle_reports_pump_overrun_on_standby_current() {
   END_IT
 }
 
+bool test_a_silent_current_sensor_reads_as_no_current() {
+  IT("a current sensor that stops answering reads as no current, not as a large one");
+  resetErr();
+  Wire.reset();
+  PCF8574 pcf(5000U, 0x27U);
+  RgbLedWrapper led(1U, 6U);
+  PumpControl pc(pcf, led, kPwmPin, kIntPin, kCurrentPin, onError);
+  // Settles above the 511 zero point, so calibration comes out with a negative offset - which is
+  // what a reading of 0 has to be added to below.
+  driveToIdle(pc, 540U);
+  resetErr();
+  setAnalogReadValue(0U);                 // sensor output collapses: unpowered, or a broken wire
+  setFakeMillis(6000U);
+  bool everReadCurrent = false;
+  for(uint8_t i = 0U; i < 20U; ++i) {
+    (void)pc.run();                       // IDLE with an empty queue: the standby-current check
+    if(pc.getPositiveCurrent() > 0U) { everReadCurrent = true; }
+  }
+  IS_FALSE(everReadCurrent);
+  IS_EQUAL(g_errCount, 0U);               // no PUMP_OVERRUN: nothing is drawing anything
+  clearFakeMillis();
+  END_IT
+}
+
 // ---- queue overflow ----
 
 bool test_queue_full_is_reported() {
@@ -440,6 +464,7 @@ int main() {
   test_current_just_below_zero_clamps();
   test_run_returns_true();
   test_idle_reports_pump_overrun_on_standby_current();
+  test_a_silent_current_sensor_reads_as_no_current();
   test_queue_full_is_reported();
   test_full_irrigation_cycle();
   test_encoded_irrigation_selects_channel();
