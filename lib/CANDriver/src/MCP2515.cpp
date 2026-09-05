@@ -263,6 +263,11 @@ uint8_t MCP2515::parsePacket() {
 void MCP2515::onReceive(void (*callback)(int)) {
   CANController::onReceive(callback);
 
+  // No line to attach to, so nothing is wired up and the stored callback stays unreachable. A
+  // host that shares the SPI bus between this controller and something else cannot afford an ISR
+  // that reaches the controller over it.
+  if(intPin == noIntPin) { return; }
+
   pinMode(intPin, INPUT);
 
   if(callback != nullptr) {
