@@ -154,10 +154,13 @@ int16_t ShimClient::read() {
   return static_cast<int16_t>(this->responseBuffer->next());
 }
 int16_t ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
-  for(size_t i = 0; i < size; i++) {
-    buf[i] = static_cast<uint8_t>(this->read());
+  // Only what it actually holds, as a socket does: a caller asking for more has to come back.
+  size_t taken = 0U;
+  while((taken < size) && this->responseBuffer->available()) {
+    buf[taken] = static_cast<uint8_t>(this->read());
+    taken++;
   }
-  return static_cast<int16_t>(size);
+  return static_cast<int16_t>(taken);
 }
 int16_t ShimClient::peek() {
   return 0;

@@ -75,6 +75,7 @@ void CanCommissioner::noteAnnouncement(const CanHandler::CanFrame& frameIn) {
   const uint16_t from = static_cast<uint16_t>(frameIn.from);
   if(!CanIdAssign::isProvisionalId(from)) { return; }
 
+  const uint32_t actualTime = millis();
   Waiting* slot = nullptr;
   Waiting* oldest = &waiting[0];
   for(Waiting& entry : waiting) {
@@ -83,7 +84,7 @@ void CanCommissioner::noteAnnouncement(const CanHandler::CanFrame& frameIn) {
       break;
     }
     if(!entry.inUse) { slot = (slot == nullptr) ? &entry : slot; }
-    if(entry.lastHeard < oldest->lastHeard) { oldest = &entry; }
+    if(Time::elapsedSince(actualTime, entry.lastHeard) > Time::elapsedSince(actualTime, oldest->lastHeard)) { oldest = &entry; }
   }
   // Full, and none of them is this node: the one heard from longest ago makes way. It announces
   // again in a few seconds, so nothing is lost for good.
@@ -92,7 +93,7 @@ void CanCommissioner::noteAnnouncement(const CanHandler::CanFrame& frameIn) {
   const bool isNew = !slot->inUse || (memcmp(slot->uid, frameIn.data, sizeof(slot->uid)) != 0);
   memcpy(slot->uid, frameIn.data, sizeof(slot->uid));
   slot->provisionalId = from;
-  slot->lastHeard = millis();
+  slot->lastHeard = actualTime;
   slot->inUse = true;
   if(isNew) { Logger::get()->printf_P(PSTR("[CAN] Node waiting for an address on %hu\r\n"), from); }
 }
@@ -129,8 +130,7 @@ bool CanCommissioner::assign(const char* uidHex, uint16_t newLocalCanId) {
     request.newLocal = newLocalCanId;
     uint8_t canData[8] = { 0U };
     CanIdAssign::pack(request, canData);
-    Logger::get()->printf_P(PSTR("[CAN] Address %hu -> %hu for the node on %hu\r\n"),
-                            entry.provisionalId, newLocalCanId, entry.provisionalId);
+    Logger::get()->printf_P(PSTR("[CAN] Address %hu -> %hu\r\n"), entry.provisionalId, newLocalCanId);
     return canHandler.send(CanHandler::CanFrame{ entry.provisionalId, static_cast<uint16_t>(CanCmd::SET_CAN_ID),
                                                  canHandler.getLocalCanId(), canData });
   }

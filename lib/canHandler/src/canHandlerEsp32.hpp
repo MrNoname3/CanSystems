@@ -118,6 +118,8 @@ private:
   DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
   DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
   DeltaCounter txAbandonedReporter;                                       // Mark for the driver's abandoned-frame counter.
+  // Recursive: dispatchRxFrame() calls a device's callback while holding this, and that callback
+  // may ask the handler what else is registered - a plain mutex would answer its own timeout.
   SemaphoreHandle_t canDevicesListMutex;                                  // Mutex for accessing the CAN devices list.
 };
 using CanHandler = CanHandlerEsp32;                                       // Alias `CanHandler` to `CanHandlerEsp32`.

@@ -175,6 +175,41 @@ bool test_a_silent_node_is_forgotten() {
   END_IT
 }
 
+bool test_a_full_list_drops_the_one_heard_from_longest_ago() {
+  IT("a full list drops the node heard from longest ago, across the millis() wrap");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  CanCommissioner commissioner(can, conn, "can");
+  Task& canTask = can.handler;
+  Task& task = commissioner;
+  IS_TRUE(canTask.init());
+  IS_TRUE(task.init());
+
+  static const uint8_t uidA[8] = { 0xA0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+  static const uint8_t uidB[8] = { 0xB0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+  static const uint8_t uidC[8] = { 0xC0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+  static const uint8_t uidD[8] = { 0xD0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+  static const uint8_t uidE[8] = { 0xE0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+
+  setFakeMillis(0xFFFFFFF0U);           // heard first, just before the counter wraps
+  announce(can.handler, uidA);
+  setFakeMillis(0x00000010U);           // the rest arrive after it wrapped, so they read smaller
+  announce(can.handler, uidB);
+  setFakeMillis(0x00000014U);
+  announce(can.handler, uidC);
+  setFakeMillis(0x00000018U);
+  announce(can.handler, uidD);
+  setFakeMillis(0x00000020U);
+  announce(can.handler, uidE);          // full, and none of them is this node
+
+  deliver(commissioner, R"({"list":true})");
+  IS_TRUE(MqttBase::lastReply.find("a001020304050607") == std::string::npos);   // made way
+  IS_TRUE(MqttBase::lastReply.find("b001020304050607") != std::string::npos);
+  IS_TRUE(MqttBase::lastReply.find("e001020304050607") != std::string::npos);
+  END_IT
+}
+
 // ---- handing an address out ----
 
 bool test_assigning_sends_the_request_to_the_provisional_address() {
@@ -267,6 +302,7 @@ int main() {
   test_a_frame_that_is_not_an_announcement_is_ignored();
   test_an_announcement_from_a_real_address_is_ignored();
   test_a_silent_node_is_forgotten();
+  test_a_full_list_drops_the_one_heard_from_longest_ago();
   test_assigning_sends_the_request_to_the_provisional_address();
   test_an_unknown_node_is_refused();
   test_a_malformed_unique_id_is_refused();

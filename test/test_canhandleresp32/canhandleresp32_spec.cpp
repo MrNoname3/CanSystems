@@ -75,6 +75,28 @@ public:
   uint8_t lastData0 = 0U;
 };
 
+/// A device that asks the handler about another address from inside its frame callback, which is
+/// where a driver handling a renumbering answer would ask.
+class TestAskingDevice final : public CanBase {
+public:
+  TestAskingDevice(CanHandler& canHandler, uint16_t clientCanId, uint16_t askedAbout) :
+    CanBase(canHandler, clientCanId),
+    askedAbout(askedAbout) {}
+
+  bool init() override { return true; }  // NOLINT(readability-make-member-function-const)
+  bool run() override { return true; }   // NOLINT(readability-make-member-function-const)
+
+  void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override {
+    (void)canFrame;
+    answeredFree = isClientCanIdFree(askedAbout);
+    ++received;
+  }
+
+  uint16_t askedAbout;
+  bool answeredFree = false;
+  uint32_t received = 0U;
+};
+
 /// Builds the extended identifier the handler packs a frame into.
 static uint32_t extIdOf(uint16_t to, uint16_t cmd, uint16_t from) {
   const uint8_t empty[8] = { 0U };
@@ -356,6 +378,24 @@ bool test_saving_ids_moves_the_running_ones() {
   END_IT
 }
 
+bool test_a_device_can_ask_about_an_address_from_its_own_callback() {
+  IT("a device asking whether an address is free from its frame callback gets the real answer");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  static constexpr uint16_t kFreeId = 30U;
+  TestAskingDevice device(handler, kDeviceId, kFreeId);
+  Task& task = handler;
+  IS_TRUE(task.init());
+
+  // The callback runs while the handler holds the device list, so the question arrives from
+  // inside the lock the answer needs.
+  deliverFrame(handler, kDeviceId, static_cast<uint16_t>(CanCmd::PING), 0U);
+  IS_EQUAL(device.received, 1U);
+  IS_TRUE(device.answeredFree);            // nothing is registered on kFreeId
+  END_IT
+}
+
 int main() {
   SUITE("CanHandlerEsp32");
   test_init_brings_the_controller_up();
@@ -375,5 +415,6 @@ int main() {
   test_bus_off_is_recovered();
   test_storing_ids_leaves_the_running_ones_alone();
   test_saving_ids_moves_the_running_ones();
+  test_a_device_can_ask_about_an_address_from_its_own_callback();
   FINISH
 }

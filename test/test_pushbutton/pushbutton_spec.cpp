@@ -20,6 +20,16 @@ bool test_idle_returns_zero() {
   END_IT
 }
 
+bool test_the_first_sample_carries_no_press_time() {
+  IT("the first sample does not count the time before it as time the button was held");
+  PushButton btn = make();
+  // The first turn only comes once the startup is done, so millis() is well past zero by then.
+  IS_EQUAL(btn.buttonCheck(900U, false), 0U);
+  IS_EQUAL(btn.buttonCheck(1300U, false), 0U);   // 400 ms held: short of longPressTime
+  IS_EQUAL(btn.buttonCheck(1450U, false), 1U);   // 550 ms held: the long press is this one
+  END_IT
+}
+
 // ---- debounce ----
 
 bool test_bounce_below_debounce_no_event() {
@@ -152,6 +162,7 @@ bool test_high_polarity_pressed_when_high() {
 int main() {
   SUITE("PushButton");
   test_idle_returns_zero();
+  test_the_first_sample_carries_no_press_time();
   test_bounce_below_debounce_no_event();
   test_press_exactly_debounce_no_event();
   test_single_tap_returns_3();

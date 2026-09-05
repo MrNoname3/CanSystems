@@ -168,6 +168,28 @@ bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(reada
   return false;
 }
 
+bool PubSubClient::readBytes(uint8_t* result, uint32_t length) {  // NOLINT(readability-convert-member-functions-to-static,readability-non-const-parameter) filled by the socket read
+  const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
+  uint32_t previousMillis = millis();
+  uint32_t taken = 0U;
+  while(taken < length) {
+    uint8_t discard[discardChunkSize];
+    const uint32_t wanted = (result != nullptr) ? (length - taken)
+                                                : (((length - taken) < discardChunkSize) ? (length - taken) : discardChunkSize);
+    const int16_t got = tcpClient->read((result != nullptr) ? (result + taken) : discard, wanted);
+    if(got > 0) {
+      taken += static_cast<uint32_t>(got);
+      previousMillis = millis();
+    } else {
+      yield();
+      if(millis() - previousMillis >= timeoutMs) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 uint32_t PubSubClient::abortIncompletePacket() {
   connectionState = State::CONNECTION_TIMEOUT;
   tcpClient->stop();
@@ -218,20 +240,36 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   const uint32_t start = isPublish ? 2U : 0U;
   uint32_t idx = static_cast<uint32_t>(len);
 
-  for(uint32_t i = start; i < length; i++) {
-    uint8_t dataByte = 0U;
-    if(!readByte(&dataByte)) {
+  if(this->stream != nullptr) {
+    for(uint32_t i = start; i < length; i++) {
+      uint8_t dataByte = 0U;
+      if(!readByte(&dataByte)) {
+        return abortIncompletePacket();
+      }
+      if(isPublish && idx - *lengthLength - 2U > skip) {
+        this->stream->write(dataByte);
+      }
+
+      if(len < this->bufferSize) {
+        this->buffer[len] = dataByte;
+        len++;
+      }
+      idx++;
+    }
+  } else {
+    const uint32_t payloadLength = length - start;
+    const uint32_t room = (len < this->bufferSize) ? static_cast<uint32_t>(this->bufferSize - len) : 0U;
+    const uint32_t kept = (room < payloadLength) ? room : payloadLength;
+    if(!readBytes(&this->buffer[len], kept)) {
       return abortIncompletePacket();
     }
-    if(this->stream != nullptr && isPublish && idx - *lengthLength - 2U > skip) {
-      this->stream->write(dataByte);
+    len = static_cast<uint16_t>(len + kept);
+    // The rest is still taken off the socket: what is left there would be read as the next
+    // packet's header.
+    if(!readBytes(nullptr, payloadLength - kept)) {
+      return abortIncompletePacket();
     }
-
-    if(len < this->bufferSize) {
-      this->buffer[len] = dataByte;
-      len++;
-    }
-    idx++;
+    idx += payloadLength;
   }
 
   if(this->stream == nullptr && idx > this->bufferSize) {

@@ -331,6 +331,13 @@ private:
   /// @return `true` if a byte was read; `false` on timeout.
   bool readByte(uint8_t* result, uint16_t* index);  // NOLINT(readability-convert-member-functions-to-static)
 
+  /// @brief Reads a run of bytes, taking as many at a time as the socket will give.
+  /// @details The deadline is per read that made progress, which is what a byte at a time gets.
+  /// @param result Where to put them; `nullptr` takes them off the socket and throws them away.
+  /// @param length How many to read.
+  /// @return `true` when the whole run arrived; `false` on timeout.
+  bool readBytes(uint8_t* result, uint32_t length);  // NOLINT(readability-convert-member-functions-to-static)
+
   /// @brief Reads one complete MQTT packet into the internal buffer.
   /// @param lengthLength Output: set to the number of bytes in the variable-length field.
   /// @return Total number of bytes in the packet; 0 on error or oversized packet.
@@ -381,6 +388,9 @@ private:
 
   Client* tcpClient = nullptr;                    // Pointer to the TCP client used for the connection.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
+  // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
+  static constexpr uint8_t discardChunkSize = 64U;
+
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
   uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds.
   uint16_t socketTimeout = defaultSocketTimeout;  // Socket read timeout in seconds.
