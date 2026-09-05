@@ -184,6 +184,49 @@ bool test_volume_is_masked_into_range() {
   END_IT
 }
 
+bool test_an_in_range_volume_reaches_the_module_unchanged() {
+  IT("play() passes an in-range volume through instead of clearing its low bit");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(1U, 1U, 0U, 0U, 0U);                  // the quietest audible level, not silence
+  const uint32_t now = walkToPlaying(task);
+  IS_EQUAL(packetCmd(0U), CMD_VOLUME);
+  IS_EQUAL(packetLsb(0U), 1U);
+  finishTrack(task, now);
+  END_IT
+}
+
+bool test_an_out_of_range_volume_is_clamped_to_the_limit() {
+  IT("play() clamps a volume above the limit down to it, rather than wrapping it");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(1U, 32U, 0U, 0U, 0U);                 // one past the limit
+  const uint32_t now = walkToPlaying(task);
+  IS_EQUAL(packetCmd(0U), CMD_VOLUME);
+  IS_EQUAL(packetLsb(0U), 30U);
+  finishTrack(task, now);
+  END_IT
+}
+
+bool test_an_in_range_track_reaches_the_module_unchanged() {
+  IT("play() passes an in-range track number through untouched");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(16U, 10U, 0U, 0U, 0U);                // first track number a 9999 mask would zero
+  const uint32_t now = walkToPlaying(task);
+  IS_EQUAL(packetCmd(1U), CMD_PLAY);
+  IS_EQUAL(packetMsb(1U), 0U);
+  IS_EQUAL(packetLsb(1U), 16U);
+  finishTrack(task, now);
+  END_IT
+}
+
 bool test_every_packet_carries_its_own_checksum() {
   IT("every packet sent carries the checksum of its own fields");
   resetEnv();
@@ -210,6 +253,9 @@ int main() {
   test_busy_timeout_sends_stop();
   test_queue_capacity_drops_sixth_track();
   test_volume_is_masked_into_range();
+  test_an_in_range_volume_reaches_the_module_unchanged();
+  test_an_out_of_range_volume_is_clamped_to_the_limit();
+  test_an_in_range_track_reaches_the_module_unchanged();
   test_every_packet_carries_its_own_checksum();
   FINISH
 }

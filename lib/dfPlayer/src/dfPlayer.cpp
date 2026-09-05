@@ -23,8 +23,8 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t 
 }
 
 void DFPlayer::play(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) { // NOLINT(readability-convert-member-functions-to-static)
-  track &= 9999U;                                                 // Protect variables from high value.
-  volume &= 30U;
+  if(track > maxTrack) { track = maxTrack; }
+  if(volume > maxVolume) { volume = maxVolume; }
   if(!playingQueue.isFull()) {                                    // Put item to playing queue, if it is not full.
     playingQueue.put(PlayQueueItem(track, volume, red, green, blue));
   }
