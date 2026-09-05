@@ -170,13 +170,16 @@ bool test_queue_capacity_drops_sixth_track() {
   END_IT
 }
 
-bool test_volume_is_masked_into_range() {
-  IT("play() masks the volume to the 0-30 range before it reaches the module");
+// The value one step past the limit is the only one a mask and a clamp agree on, so on its own
+// it says nothing about which of the two play() performs; the cases around it are what pin that
+// down. It stays for the boundary itself.
+bool test_the_first_volume_past_the_limit_is_clamped() {
+  IT("play() clamps the first volume past the limit down to the limit");
   resetEnv();
   RgbLedWrapper rgbLed(19U, 7U);
   DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
   Task& task = player;
-  player.play(1U, 31U, 0U, 0U, 0U);                 // 31 & 30 = 30
+  player.play(1U, 31U, 0U, 0U, 0U);
   const uint32_t now = walkToPlaying(task);
   IS_EQUAL(packetCmd(0U), CMD_VOLUME);
   IS_EQUAL(packetLsb(0U), 30U);
@@ -252,7 +255,7 @@ int main() {
   test_sound_only_leaves_leds_untouched();
   test_busy_timeout_sends_stop();
   test_queue_capacity_drops_sixth_track();
-  test_volume_is_masked_into_range();
+  test_the_first_volume_past_the_limit_is_clamped();
   test_an_in_range_volume_reaches_the_module_unchanged();
   test_an_out_of_range_volume_is_clamped_to_the_limit();
   test_an_in_range_track_reaches_the_module_unchanged();
