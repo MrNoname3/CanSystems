@@ -129,8 +129,7 @@ bool CanCommissioner::assign(const char* uidHex, uint16_t newLocalCanId) {
     request.newLocal = newLocalCanId;
     uint8_t canData[8] = { 0U };
     CanIdAssign::pack(request, canData);
-    Logger::get()->printf_P(PSTR("[CAN] Address %hu -> %hu for the node on %hu\r\n"),
-                            entry.provisionalId, newLocalCanId, entry.provisionalId);
+    Logger::get()->printf_P(PSTR("[CAN] Address %hu -> %hu\r\n"), entry.provisionalId, newLocalCanId);
     return canHandler.send(CanHandler::CanFrame{ entry.provisionalId, static_cast<uint16_t>(CanCmd::SET_CAN_ID),
                                                  canHandler.getLocalCanId(), canData });
   }
