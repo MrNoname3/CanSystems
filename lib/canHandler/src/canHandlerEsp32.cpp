@@ -11,7 +11,7 @@ ESP32SJA1000* CanHandlerEsp32::isrController = nullptr;
 CanHandlerEsp32::CanHandlerEsp32(ESP32SJA1000& controller) :
   controller(controller),
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
-  canDevicesListMutex(xSemaphoreCreateMutex()) {
+  canDevicesListMutex(xSemaphoreCreateRecursiveMutex()) {
   isrController = &controller;
 }
 
@@ -60,7 +60,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   // the EEPROM, so the check it makes there has nothing to compare against yet.
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
   bool deviceIdsFree = true;
-  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
+  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
     uint8_t deviceIndex = 0U;
     for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
       const uint16_t clientCanId = d->getClientCanId();
@@ -69,7 +69,7 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
                               reserved ? PSTR(" <- reserved id!") : PSTR(""));
       if(reserved) { deviceIdsFree = false; }
     }
-    xSemaphoreGive(canDevicesListMutex);
+    xSemaphoreGiveRecursive(canDevicesListMutex);
   }
   return deviceIdsFree;
 }
@@ -113,13 +113,13 @@ bool CanHandlerEsp32::run() {
     // The mutex is taken around the whole pass rather than per frame: it guards the device list,
     // which only changes at registration time. Taking it first also means a timeout leaves the
     // frames queued instead of dequeueing one and dropping it.
-    if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
+    if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
       CanFrame frameIn;
       (void)CanFramePump::drain(
           [&frameIn]() -> bool { return xQueueReceive(canRxQueue, &frameIn, static_cast<TickType_t>(0U)) == pdTRUE; },
           [this, &frameIn]() -> bool { dispatchRxFrame(frameIn); return true; },
           maxFramesPerRun);
-      xSemaphoreGive(canDevicesListMutex);
+      xSemaphoreGiveRecursive(canDevicesListMutex);
     }
   }
   { // Handle CAN frame sending.
@@ -183,16 +183,16 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(
 }
 
 bool CanHandlerEsp32::isClientIdRegistered(uint16_t clientCanId) const { // NOLINT(readability-convert-member-functions-to-static)
-  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return true; }  // Unknown: answer "taken".
+  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return true; }  // Unknown: answer "taken".
   const CanBase* device = deviceList.findIf([clientCanId](const CanBase* d) -> bool { return d->getClientCanId() == clientCanId; });
-  xSemaphoreGive(canDevicesListMutex);
+  xSemaphoreGiveRecursive(canDevicesListMutex);
   return device != nullptr;
 }
 
 bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
-  if(xSemaphoreTake(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
+  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
   const bool appendResult = deviceList.append(canBasePtr);
-  xSemaphoreGive(canDevicesListMutex);
+  xSemaphoreGiveRecursive(canDevicesListMutex);
   return appendResult;
 }
 #endif // ESP32 || NATIVE_TEST
