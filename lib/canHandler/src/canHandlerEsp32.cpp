@@ -83,8 +83,13 @@ bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
   return (xQueueSend(canTxQueue, &frameOut, canTxQueueTimeout) == pdTRUE);
 }
 
-void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-convert-member-functions-to-static)
-  if((packetsNum <= 0) || (isrController == nullptr)) { return; }
+void CanHandlerEsp32::rxInterrupt(int payloadBytes) { // NOLINT(readability-convert-member-functions-to-static)
+  // Every frame this protocol puts on the bus carries all eight data bytes (transmitFrame()
+  // sends sizeof(CanFrame::data)), so one with an empty payload - a remote-transmission request,
+  // or a zero-length data frame - came from something else on the bus. Dropped rather than
+  // queued, because a device callback reads its meaning out of data[] and would be handed the
+  // frame's absent payload as zeros.
+  if((payloadBytes <= 0) || (isrController == nullptr)) { return; }
   CanFrame rxCanData;
   rxCanData.extId = isrController->packetId();
   if(!isrController->packetRtr()) {

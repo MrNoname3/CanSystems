@@ -87,8 +87,10 @@ private:
   /// @details Runs with the flash cache enabled, so it does not belong in IRAM: the driver
   /// allocates the interrupt without `ESP_INTR_FLAG_IRAM`, and the controller accessors this
   /// reads the frame through live in flash themselves.
-  /// @param packetsNum Number of packets available in the RX buffer.
-  static void rxInterrupt(int packetsNum);
+  /// @param payloadBytes Payload length of the frame the controller has just parsed, as
+  /// CANController::onReceive() hands it over. A frame with none is dropped here; see the
+  /// definition for why.
+  static void rxInterrupt(int payloadBytes);
 
   /// @brief Hands one received frame to the device registered for its sender id.
   /// @param frameIn Frame taken from the receive queue.
