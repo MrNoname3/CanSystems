@@ -32,23 +32,19 @@ bool test_start_frame_byte_layout() {
 }
 
 bool test_send_frame_byte_layout() {
-  IT("packSend lays the data piece in bytes 0-3 and the offset little-endian in bytes 4-7");
+  IT("packSend lays the data piece in bytes 0-6 and the sequence in byte 7");
   OtaCanFrame::SendFrame fields;
-  fields.data[0] = 0xAAU;
-  fields.data[1] = 0xBBU;
-  fields.data[2] = 0xCCU;
-  fields.data[3] = 0xDDU;
-  fields.dataAddress = 0x44332211UL;
+  const uint8_t piece[OtaCanFrame::dataPieceSize] = { 0xAAU, 0xBBU, 0xCCU, 0xDDU, 0xEEU, 0x11U, 0x22U };
+  for(uint8_t i = 0U; i < OtaCanFrame::dataPieceSize; i++) {
+    fields.data[i] = piece[i];
+  }
+  fields.sequence = 0x5AU;
   uint8_t canData[8] = { 0U };
   OtaCanFrame::packSend(fields, canData);
-  IS_EQUAL(canData[0], 0xAAU);
-  IS_EQUAL(canData[1], 0xBBU);
-  IS_EQUAL(canData[2], 0xCCU);
-  IS_EQUAL(canData[3], 0xDDU);
-  IS_EQUAL(canData[4], 0x11U);                       // dataAddress byte 0
-  IS_EQUAL(canData[5], 0x22U);                       // dataAddress byte 1
-  IS_EQUAL(canData[6], 0x33U);                       // dataAddress byte 2
-  IS_EQUAL(canData[7], 0x44U);                       // dataAddress byte 3
+  for(uint8_t i = 0U; i < OtaCanFrame::dataPieceSize; i++) {
+    IS_EQUAL(canData[i], piece[i]);
+  }
+  IS_EQUAL(canData[7], 0x5AU);
   END_IT
 }
 
@@ -70,21 +66,19 @@ bool test_start_frame_round_trip() {
 }
 
 bool test_send_frame_round_trip() {
-  IT("unpackSend restores the data piece and the byte offset packSend wrote");
+  IT("unpackSend restores the data piece and the sequence packSend wrote");
   OtaCanFrame::SendFrame in;
-  in.data[0] = 0x12U;
-  in.data[1] = 0x34U;
-  in.data[2] = 0x56U;
-  in.data[3] = 0x78U;
-  in.dataAddress = 0xFFFFFFFFUL;
+  for(uint8_t i = 0U; i < OtaCanFrame::dataPieceSize; i++) {
+    in.data[i] = static_cast<uint8_t>(0x12U + i);
+  }
+  in.sequence = 0xFFU;
   uint8_t canData[8] = { 0U };
   OtaCanFrame::packSend(in, canData);
   const OtaCanFrame::SendFrame out = OtaCanFrame::unpackSend(canData);
-  IS_EQUAL(out.data[0], 0x12U);
-  IS_EQUAL(out.data[1], 0x34U);
-  IS_EQUAL(out.data[2], 0x56U);
-  IS_EQUAL(out.data[3], 0x78U);
-  IS_EQUAL(out.dataAddress, 0xFFFFFFFFUL);
+  for(uint8_t i = 0U; i < OtaCanFrame::dataPieceSize; i++) {
+    IS_EQUAL(out.data[i], static_cast<uint8_t>(0x12U + i));
+  }
+  IS_EQUAL(out.sequence, 0xFFU);
   END_IT
 }
 
@@ -113,11 +107,11 @@ static OTA::OtaState streamThroughDevice(OTA& ota, const uint8_t* fw, uint32_t f
     for(uint8_t i = 0U; i < pieceLength; i++) {
       sendFields.data[i] = fw[offset + i];
     }
-    sendFields.dataAddress = offset;
+    sendFields.sequence = static_cast<uint8_t>(offset & 0xFFU);
     uint8_t sendData[8] = { 0U };
     OtaCanFrame::packSend(sendFields, sendData);
     const OtaCanFrame::SendFrame parsedSend = OtaCanFrame::unpackSend(sendData);
-    if(!ota.storeNextData(parsedSend.dataAddress, parsedSend.data)) {
+    if(!ota.storeNextData(parsedSend.sequence, parsedSend.data)) {
       return OTA::OtaState::INVALID;
     }
     offset += pieceLength;
@@ -134,7 +128,7 @@ bool test_device_parse_reconstructs_firmware() {
   IT("packed frames parsed by the device reconstruct the firmware byte-for-byte and validate");
   SPIFlash flash(0U);
   OTA ota(flash);
-  // 10 bytes: not a multiple of the 4-byte piece size, so the last piece is partial.
+  // 10 bytes: not a multiple of the piece size, so the last piece is partial.
   const uint8_t fw[10] = { 0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U, 0x70U, 0x80U, 0x90U, 0xA0U };
   const uint16_t crc = Crc16::calculate(fw, sizeof(fw));
   IS_EQUAL(streamThroughDevice(ota, fw, sizeof(fw), crc), OTA::OtaState::VALID);
@@ -155,24 +149,20 @@ bool test_device_parse_crc_mismatch_is_invalid() {
   END_IT
 }
 
-bool test_device_parse_rejects_wrong_offset() {
-  IT("an OTA_SEND frame carrying an out-of-sequence offset is rejected by storeNextData");
+bool test_device_parse_rejects_wrong_sequence() {
+  IT("an OTA_SEND frame carrying an out-of-sequence piece is rejected by storeNextData");
   SPIFlash flash(0U);
   OTA ota(flash);
-  const uint8_t fw[8] = { 0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U };
+  const uint8_t fw[16] = { 0U };
   IS_TRUE(ota.start(0U, sizeof(fw), 0U));
-  // Craft a SEND frame for offset 4 while the device still expects offset 0.
+  // Craft the second piece while the device still expects the first.
   OtaCanFrame::SendFrame sendFields;
-  sendFields.data[0] = fw[4];
-  sendFields.data[1] = fw[5];
-  sendFields.data[2] = fw[6];
-  sendFields.data[3] = fw[7];
-  sendFields.dataAddress = 4U;
+  sendFields.sequence = OtaCanFrame::dataPieceSize;
   uint8_t sendData[8] = { 0U };
   OtaCanFrame::packSend(sendFields, sendData);
   const OtaCanFrame::SendFrame parsed = OtaCanFrame::unpackSend(sendData);
-  IS_EQUAL(parsed.dataAddress, 4U);
-  IS_FALSE(ota.storeNextData(parsed.dataAddress, parsed.data));   // device would answer NACK
+  IS_EQUAL(parsed.sequence, OtaCanFrame::dataPieceSize);
+  IS_FALSE(ota.storeNextData(parsed.sequence, parsed.data));   // device would answer NACK
   END_IT
 }
 
@@ -244,7 +234,7 @@ int main() {
   test_send_frame_round_trip();
   test_device_parse_reconstructs_firmware();
   test_device_parse_crc_mismatch_is_invalid();
-  test_device_parse_rejects_wrong_offset();
+  test_device_parse_rejects_wrong_sequence();
   test_decide_ack_start_on_store_entry();
   test_decide_ack_end_and_reboot_for_own_fw();
   test_decide_ack_end_no_reboot_for_other_fw();

@@ -254,14 +254,14 @@ static bool pumpUntilFrame(CanMqttGateway& gateway, uint16_t cmd, size_t expecte
 }
 
 bool test_ota_happy_path() {
-  IT(R"(a full CAN OTA streams the file in 4-byte pieces and reports {"OTA":"[OK]"})");
+  IT(R"(a full CAN OTA streams the whole file and reports {"OTA":"[OK]"})");
   resetEnv();
   TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
   Task& task = gateway;
   IS_TRUE(task.init());
-  const std::string content = "ABCDEFGH";             // 8 bytes -> 2 pieces
+  const std::string content = "ABCDEFGH";             // one full piece plus a short one
   LittleFS.setFile(kFwFile, content);
   IS_TRUE(gateway.startOta(kFwFile));
   IS_TRUE(gateway.isOtaInProgress());
@@ -285,16 +285,16 @@ bool test_ota_happy_path() {
   const CanHandler::CanFrame* piece0 = lastFrame(static_cast<uint16_t>(CanCmd::OTA_SEND));
   IS_TRUE(piece0 != nullptr);
   IS_EQUAL(piece0->data[0], static_cast<uint8_t>('A'));
-  IS_EQUAL(piece0->data[3], static_cast<uint8_t>('D'));
-  IS_EQUAL(piece0->data[4], 0U);                      // frame number 0
+  IS_EQUAL(piece0->data[OtaCanFrame::dataPieceSize - 1U], static_cast<uint8_t>('G'));
+  IS_EQUAL(piece0->data[7], 0U);                      // sequence 0
 
   // Second piece after the first ack.
   injectAck(gateway, CanCmd::OTA_SEND);
   IS_TRUE(pumpUntilFrame(gateway, static_cast<uint16_t>(CanCmd::OTA_SEND), 2U));
   const CanHandler::CanFrame* piece1 = lastFrame(static_cast<uint16_t>(CanCmd::OTA_SEND));
   IS_TRUE(piece1 != nullptr);
-  IS_EQUAL(piece1->data[0], static_cast<uint8_t>('E'));
-  IS_EQUAL(piece1->data[4], 4U);                      // frame number 4
+  IS_EQUAL(piece1->data[0], static_cast<uint8_t>('H'));
+  IS_EQUAL(piece1->data[7], OtaCanFrame::dataPieceSize); // sequence of the second piece
 
   // Client validates and confirms with OTA_END ACK.
   injectAck(gateway, CanCmd::OTA_SEND);
@@ -520,7 +520,7 @@ bool test_ota_contract_gateway_to_device_storage() {
     const CanHandler::CanFrame* piece = lastFrame(static_cast<uint16_t>(CanCmd::OTA_SEND));
     IS_TRUE(piece != nullptr);
     const OtaCanFrame::SendFrame parsedSend = OtaCanFrame::unpackSend(piece->data);
-    IS_TRUE(ota.storeNextData(parsedSend.dataAddress, parsedSend.data));
+    IS_TRUE(ota.storeNextData(parsedSend.sequence, parsedSend.data));
     injectAck(gateway, CanCmd::OTA_SEND);
   }
 

@@ -30,9 +30,11 @@ bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   return true;                                                    // Return success.
 }
 
-bool OTA::storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]) {
+bool OTA::storeNextData(uint8_t sequence, const uint8_t (&fwData)[fwPieceSize]) {
   if(flashPointer >= fwSize) { return false; }               // Check for overwrites.
-  if(flashPointer != dataAddress) { return false; }          // Check if the dataAddress matches the expected address.
+  // Compared modulo 256, which is all the sender sends: a repeated or skipped piece moves the two
+  // by one piece, and 256 shares no factor with the piece size, so it takes 256 to alias.
+  if(static_cast<uint8_t>(flashPointer & 0xFFU) != sequence) { return false; }
 
   // Calculate valid data size, this only matters if less bytes remains than fwPieceSize.
   const uint32_t remainingBytes = fwSize - flashPointer;

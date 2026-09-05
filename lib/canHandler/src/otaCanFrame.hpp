@@ -11,8 +11,9 @@
 /// little-endian, matching the original hand-written shifts on both ends.
 namespace OtaCanFrame {
   // Number of firmware data bytes carried by a single OTA_SEND frame (must equal OTA::fwPieceSize;
-  // the device side static-asserts that). The remaining 4 bytes hold the byte offset.
-  static constexpr uint8_t dataPieceSize = 4U;
+  // the device side static-asserts that). The remaining byte holds the sequence number. Odd on
+  // purpose: it shares no factor with 256, so the sequence only repeats after 256 pieces.
+  static constexpr uint8_t dataPieceSize = 7U;
 
   /// @brief Fields of an OTA_START frame: where to store, how much, and the expected checksum.
   struct StartFrame {
@@ -21,10 +22,13 @@ namespace OtaCanFrame {
     uint16_t fwCrc = 0U;                      // CRC16 of the whole firmware.
   };
 
-  /// @brief Fields of an OTA_SEND frame: one firmware piece and the byte offset it belongs to.
+  /// @brief Fields of an OTA_SEND frame: one firmware piece and the place it takes in the stream.
+  /// @details The sequence is the low byte of the piece's byte offset, not the offset itself. The
+  /// two sides agree on where they are from OTA_START onwards, so all this has to catch is one of
+  /// them slipping - which the transfer's frame-by-frame acknowledgement limits to a single piece.
   struct SendFrame {
-    uint8_t data[dataPieceSize] = { 0U };       // Firmware bytes for this piece (trailing bytes 0 on the last, short piece).
-    uint32_t dataAddress = 0U;                // Byte offset of this piece within the firmware.
+    uint8_t data[dataPieceSize] = { 0U };     // Firmware bytes for this piece (trailing bytes 0 on the last, short piece).
+    uint8_t sequence = 0U;                    // Low byte of this piece's byte offset within the firmware.
   };
 
   /// @brief Serializes an OTA_START frame into the 8 CAN data bytes.
@@ -58,28 +62,19 @@ namespace OtaCanFrame {
 
   /// @brief Serializes an OTA_SEND frame into the 8 CAN data bytes.
   inline void packSend(const SendFrame& fields, uint8_t (&canData)[8]) {
-    canData[0] = fields.data[0];
-    canData[1] = fields.data[1];
-    canData[2] = fields.data[2];
-    canData[3] = fields.data[3];
-    canData[4] = static_cast<uint8_t>(fields.dataAddress & 0xFFU);
-    canData[5] = static_cast<uint8_t>((fields.dataAddress >> 8U) & 0xFFU);
-    canData[6] = static_cast<uint8_t>((fields.dataAddress >> 16U) & 0xFFU);
-    canData[7] = static_cast<uint8_t>((fields.dataAddress >> 24U) & 0xFFU);
+    for(uint8_t i = 0U; i < dataPieceSize; i++) {
+      canData[i] = fields.data[i];
+    }
+    canData[dataPieceSize] = fields.sequence;
   }
 
   /// @brief Parses the 8 CAN data bytes of an OTA_SEND frame back into its fields.
   [[nodiscard]] inline SendFrame unpackSend(const uint8_t (&canData)[8]) {
     SendFrame fields;
-    fields.data[0] = canData[0];
-    fields.data[1] = canData[1];
-    fields.data[2] = canData[2];
-    fields.data[3] = canData[3];
-    fields.dataAddress =
-        static_cast<uint32_t>(canData[4]) |
-        (static_cast<uint32_t>(canData[5]) << 8U) |
-        (static_cast<uint32_t>(canData[6]) << 16U) |
-        (static_cast<uint32_t>(canData[7]) << 24U);
+    for(uint8_t i = 0U; i < dataPieceSize; i++) {
+      fields.data[i] = canData[i];
+    }
+    fields.sequence = canData[dataPieceSize];
     return fields;
   }
 } // namespace OtaCanFrame

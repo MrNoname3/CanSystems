@@ -6,7 +6,7 @@
 #include "common.hpp"                                               /// Time helpers for the stall timeout.
 
 #ifndef FW_PIECE_SIZE
-#define FW_PIECE_SIZE 4U                                            // Default size of firmware pieces for chunked updates.
+#define FW_PIECE_SIZE 7U                                            // Default size of firmware pieces for chunked updates.
 #endif
 
 /// @brief Class to handle Over-The-Air (OTA) firmware updates using SPI Flash.
@@ -59,10 +59,11 @@ public:
   [[nodiscard]] bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
 
   /// @brief Stores the next firmware chunk.
-  /// @param dataAddress Expected address of the firmware chunk.
+  /// @param sequence Low byte of the offset the sender believes this chunk belongs at; a chunk
+  /// that does not continue where this one left off is refused.
   /// @param fwData Firmware chunk data array.
   /// @return `true` if the data is stored successfully, `false` otherwise.
-  [[nodiscard]] bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
+  [[nodiscard]] bool storeNextData(uint8_t sequence, const uint8_t (&fwData)[fwPieceSize]);
 
   /// @brief Runs the OTA state machine to handle firmware updates.
   /// @return The current state of the OTA process.

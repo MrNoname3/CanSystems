@@ -114,7 +114,7 @@ void CanOta::sendNextPiece() {
   const uint8_t bytesNumber = (remainingFileSize >= filePieceSize) ? filePieceSize : remainingFileSize;
   OtaCanFrame::SendFrame sendFrame;
   if(!readFilePiece(sendFrame.data, bytesNumber)) { return; }
-  sendFrame.dataAddress = frameNumber;
+  sendFrame.sequence = static_cast<uint8_t>(frameNumber & 0xFFU);
   uint8_t canData[8] = { 0U };
   OtaCanFrame::packSend(sendFrame, canData);
   frameNumber += bytesNumber;
