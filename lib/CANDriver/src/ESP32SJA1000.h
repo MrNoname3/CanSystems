@@ -93,7 +93,6 @@ private:
   static constexpr gpio_num_t defaultRxPin = GPIO_NUM_4;
   static constexpr gpio_num_t defaultTxPin = GPIO_NUM_5;
 
-  void reset();
   void handleInterrupt();
 
   static uint8_t readRegister(uint8_t address);
