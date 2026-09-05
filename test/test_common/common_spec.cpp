@@ -44,6 +44,18 @@ bool test_time_ms_to_us() {
   END_IT
 }
 
+bool test_time_elapsed_since() {
+  IT("elapsedSince measures back to the event, across the counter's wrap");
+  IS_EQUAL(Time::elapsedSince(200U, 100U), 100U);
+  IS_EQUAL(Time::elapsedSince(100U, 100U), 0U);
+  IS_EQUAL(Time::elapsedSince(0x00000005U, 0xFFFFFFF0U), 21U);  // wrapped: 21 ms ago, not a huge one
+  // The point of measuring back rather than comparing stamps: after the wrap the newer event
+  // holds the smaller value, so the stamps rank the wrong way round and the ages do not.
+  IS_TRUE(0x00000005U < 0xFFFFFFF0U);
+  IS_TRUE(Time::elapsedSince(0x00000010U, 0xFFFFFFF0U) < Time::elapsedSince(0x00000010U, 0xFFFFFFC0U));
+  END_IT
+}
+
 bool test_time_has_elapsed() {
   IT("hasElapsed returns true only when duration is strictly exceeded");
   IS_TRUE(Time::hasElapsed(200U, 100U, 50U));   // delta=100, 100 > 50 -> elapsed
@@ -214,6 +226,7 @@ int main() {
   test_time_sec_to_ms();
   test_time_hr_to_min();
   test_time_ms_to_us();
+  test_time_elapsed_since();
   test_time_has_elapsed();
   test_time_has_elapsed_overflow();
   test_time_has_elapsed_zero_duration();

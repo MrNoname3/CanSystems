@@ -48,13 +48,24 @@ public:
     return ms * 1000UL;
   }
 
+  /// @brief How long ago an event was, measured from a later reading of the same clock.
+  /// @details The subtraction is unsigned, so the answer stays right across the clock's wrap.
+  /// That is what makes two of these safe to compare with each other, which the timestamps they
+  /// are taken from are not: after a wrap the newer one holds the smaller value.
+  /// @param currentTime The current time (e.g., from a timer or clock).
+  /// @param eventTimer The time of the event.
+  /// @return Time since the event, in the clock's own unit.
+  static constexpr uint32_t elapsedSince(uint32_t currentTime, uint32_t eventTimer) {
+    return currentTime - eventTimer;
+  }
+
   /// @brief Checks if a specified duration has elapsed since an event.
   /// @param currentTime The current time (e.g., from a timer or clock).
   /// @param eventTimer The time of the event's start.
   /// @param duration The duration to check against.
   /// @return `true` if the duration has elapsed, `false` otherwise.
   static constexpr bool hasElapsed(uint32_t currentTime, uint32_t eventTimer, uint32_t duration) {
-    return (currentTime - eventTimer) > duration;
+    return elapsedSince(currentTime, eventTimer) > duration;
   }
 
 #if defined(ESP8266) || defined(ESP32)

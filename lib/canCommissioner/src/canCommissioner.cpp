@@ -84,8 +84,7 @@ void CanCommissioner::noteAnnouncement(const CanHandler::CanFrame& frameIn) {
       break;
     }
     if(!entry.inUse) { slot = (slot == nullptr) ? &entry : slot; }
-    // Ages rather than timestamps: the subtraction wraps with the clock, a comparison would not.
-    if((actualTime - entry.lastHeard) > (actualTime - oldest->lastHeard)) { oldest = &entry; }
+    if(Time::elapsedSince(actualTime, entry.lastHeard) > Time::elapsedSince(actualTime, oldest->lastHeard)) { oldest = &entry; }
   }
   // Full, and none of them is this node: the one heard from longest ago makes way. It announces
   // again in a few seconds, so nothing is lost for good.
