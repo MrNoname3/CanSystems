@@ -19,8 +19,7 @@ public:
 
   /// @brief Checks for button press events.
   /// @details Determines the type of button event based on the timing of button presses and releases.
-  /// The first call only takes the timestamp to measure the next interval from: nothing was
-  /// sampled before it, so the time that had passed by then is not time the button spent held.
+  /// The first call only takes the timestamp that the next interval is measured from.
   /// @param currentMillis Current time in milliseconds, typically provided by a timer like `millis()`.
   /// @param currentPinStatus Current pin status, typically from a `digitalRead()` function.
   /// @return Event code:
