@@ -8,11 +8,17 @@ PushButton::PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounc
   lastCheckedTime(0U),
   pressedDuration(0U),
   lastEventTime(0U),
+  baselineTaken(false),
   longPressflag(false),
   shortPressedCnt(2U) {}
 
 uint8_t PushButton::buttonCheck(const uint32_t currentMillis, bool currentPinStatus) {
   uint8_t output = 0U;
+  if(!baselineTaken) {
+    baselineTaken = true;
+    lastCheckedTime = currentMillis;
+    return output;
+  }
   if(currentPinStatus == buttonPolarity) {
     pressedDuration += currentMillis - lastCheckedTime;
     if(pressedDuration > longPressTime && !longPressflag) {

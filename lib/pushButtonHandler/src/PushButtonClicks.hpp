@@ -19,6 +19,8 @@ public:
 
   /// @brief Checks for button press events.
   /// @details Determines the type of button event based on the timing of button presses and releases.
+  /// The first call only takes the timestamp to measure the next interval from: nothing was
+  /// sampled before it, so the time that had passed by then is not time the button spent held.
   /// @param currentMillis Current time in milliseconds, typically provided by a timer like `millis()`.
   /// @param currentPinStatus Current pin status, typically from a `digitalRead()` function.
   /// @return Event code:
@@ -41,6 +43,7 @@ private:
   uint32_t lastCheckedTime;                             // Timestamp of the last button check.
   uint32_t pressedDuration;                             // Duration (in ms) the button has been pressed.
   uint32_t lastEventTime;                               // Timestamp of the last processed event.
+  bool baselineTaken;                                   // Whether a sample has been taken to measure the next interval from.
   bool longPressflag;                                   // Flag indicating whether a long press event has been triggered.
   uint8_t shortPressedCnt;                              // Counter for short presses (used for multi-tap detection).
 };
