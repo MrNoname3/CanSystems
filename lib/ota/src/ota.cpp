@@ -63,6 +63,41 @@ bool OTA::storeNextData(uint8_t sequence, const uint8_t (&fwData)[fwPieceSize]) 
   return true;
 }
 
+void OTA::readNextCheckChunk() {
+  uint8_t readBuffer[checkChunkSize] = { 0U };
+  const uint32_t remainingBytes = fwSize - flashPointer;
+  uint8_t chunkSize = (remainingBytes < checkChunkSize) ? static_cast<uint8_t>(remainingBytes) : checkChunkSize;
+  // The first bytes were never written to the flash, so they come back one at a time from memory;
+  // from there on the block read covers the rest.
+  if(flashPointer < sizeof(firstFwBytes)) {
+    chunkSize = 1U;
+    readBuffer[0] = firstFwBytes[flashPointer];
+  } else {
+    // A read the chip refuses zero-fills the buffer, which the closing checksum then rejects.
+    (void)flash.readBytes(flashBlockBeginAddress + flashPointer, readBuffer, chunkSize);
+  }
+  crc16.next(readBuffer, chunkSize);
+  flashPointer += chunkSize;
+}
+
+void OTA::finishCheck() {
+  if(fwCrc != crc16.get()) {
+    otaState = OtaState::INVALID;
+    return;
+  }
+  uint8_t dataReadBack[sizeof(firstFwBytes)] = { 0 };
+  const bool writeBackOk = flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
+  const bool readBackOk = flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
+  // The read-back stays even though the write now reports itself: a program the chip accepted
+  // still lands wrong on cells that were not erased. Leaving the state alone on a mismatch
+  // would re-run the same write on every pass instead of ending the transfer.
+  if(writeBackOk && readBackOk && (memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0)) {
+    otaState = OtaState::VALID;
+  } else {
+    otaState = OtaState::INVALID;
+  }
+}
+
 OTA::OtaState OTA::run() {
   // Nothing else ends a transfer the gateway walked away from: STORE only advances on the next
   // piece, and START only on a chip that comes ready. Both would otherwise hold the stale image
@@ -90,35 +125,8 @@ OTA::OtaState OTA::run() {
       }
     } break;
     case OtaState::CHECK: {
-      if(flashPointer < fwSize) {
-        uint8_t readedByte = 0U;
-        // Read the first bytes from the memory.
-        if(flashPointer < sizeof(firstFwBytes)) {
-          readedByte = firstFwBytes[flashPointer];
-        } else { // Read the other bytes from FLASH.
-          readedByte = flash.readByte(flashBlockBeginAddress + flashPointer);
-        }
-        crc16.next(readedByte);
-        flashPointer++;
-      }
-      if(flashPointer == fwSize) {
-        if(fwCrc != crc16.get()) {
-          otaState = OtaState::INVALID;
-          return otaState;
-        }
-        // If everything is good, write the remaining bytes from memory to FLASH and read it back.
-        uint8_t dataReadBack[sizeof(firstFwBytes)] = { 0 };
-        const bool writeBackOk = flash.writeBytes(flashBlockBeginAddress, firstFwBytes, sizeof(firstFwBytes));
-        const bool readBackOk = flash.readBytes(flashBlockBeginAddress, dataReadBack, sizeof(firstFwBytes));
-        // The read-back stays even though the write now reports itself: a program the chip accepted
-        // still lands wrong on cells that were not erased. Leaving the state alone on a mismatch
-        // would re-run the same write on every pass instead of ending the transfer.
-        if(writeBackOk && readBackOk && (memcmp(firstFwBytes, dataReadBack, sizeof(firstFwBytes)) == 0)) {
-          otaState = OtaState::VALID;
-        } else {
-          otaState = OtaState::INVALID;
-        }
-      }
+      if(flashPointer < fwSize) { readNextCheckChunk(); }
+      if(flashPointer == fwSize) { finishCheck(); }
     } break;
     case OtaState::VALID: {
       otaState = OtaState::IDLE;

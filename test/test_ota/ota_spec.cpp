@@ -144,6 +144,46 @@ bool test_store_overflow_rejected() {
   END_IT
 }
 
+bool test_check_does_not_cost_a_pass_per_byte() {
+  IT("the closing CRC check reads the image in blocks, not one pass per firmware byte");
+  SPIFlash flash(0U);
+  OTA ota(flash);
+  static constexpr uint32_t fwSize = 100U;
+  uint8_t fw[fwSize];
+  for(uint32_t i = 0U; i < fwSize; i++) { fw[i] = static_cast<uint8_t>(i); }
+  const uint16_t crc = Crc16::calculate(fw, fwSize);
+  IS_TRUE(ota.start(0U, fwSize, crc));
+  uint32_t offset = 0U;
+  while(offset < fwSize) {
+    uint8_t chunk[OTA::fwPieceSize] = { 0U };
+    const uint8_t pieceLength = ((fwSize - offset) < OTA::fwPieceSize) ? static_cast<uint8_t>(fwSize - offset) : OTA::fwPieceSize;
+    for(uint8_t i = 0U; i < pieceLength; i++) { chunk[i] = fw[offset + i]; }
+    IS_TRUE(ota.storeNextData(static_cast<uint8_t>(offset & 0xFFU), chunk));
+    offset += pieceLength;
+  }
+  // The sender is waiting on this: the node only acknowledges the end of the transfer once the
+  // check has a verdict, so every pass it takes is time the transfer is still running.
+  uint16_t passes = 0U;
+  OtaState state = OtaState::STORE;
+  while((state != OtaState::VALID) && (state != OtaState::INVALID) && (passes < 4U * fwSize)) {
+    state = ota.run();
+    passes++;
+  }
+  IS_EQUAL(state, OtaState::VALID);
+  IS_TRUE(passes < fwSize / 4U);
+  END_IT
+}
+
+/// @brief Runs the state machine until it reaches a verdict, so a test that is about the outcome
+/// does not have to know how many passes the check takes.
+static OtaState runToVerdict(OTA& ota) {
+  for(uint16_t i = 0U; i < 1024U; i++) {
+    const OtaState state = ota.run();
+    if((state == OtaState::VALID) || (state == OtaState::INVALID)) { return state; }
+  }
+  return OtaState::IDLE;
+}
+
 // ---- run() state machine ----
 
 bool test_run_idle_stays_idle() {
@@ -176,10 +216,7 @@ bool test_run_full_valid_flow() {
   IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
   IS_TRUE(ota.storeNextData(0U, fw));
   IS_EQUAL(ota.run(), OtaState::STORE);  // START → STORE
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // STORE → CHECK, then one firmware byte per pass
-  }
-  IS_EQUAL(ota.run(), OtaState::VALID);  // last byte read, CRC OK, write-back → VALID
+  IS_EQUAL(runToVerdict(ota), OtaState::VALID);  // CRC OK, write-back → VALID
   IS_EQUAL(ota.run(), OtaState::IDLE);   // VALID → IDLE
   END_IT
 }
@@ -192,11 +229,7 @@ bool test_run_crc_mismatch_goes_invalid() {
   const uint16_t correctCrc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
   IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), correctCrc + 1U));
   IS_TRUE(ota.storeNextData(0U, fw));
-  IS_EQUAL(ota.run(), OtaState::STORE);
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // the transition, then one firmware byte per pass
-  }
-  IS_EQUAL(ota.run(), OtaState::INVALID); // CRC mismatch → INVALID (early return)
+  IS_EQUAL(runToVerdict(ota), OtaState::INVALID); // CRC mismatch → INVALID
   IS_EQUAL(ota.run(), OtaState::IDLE);    // INVALID cleanup → IDLE
   END_IT
 }
@@ -205,18 +238,15 @@ bool test_run_write_back_failure_goes_invalid() {
   IT("a failed write-back of the first two bytes ends the check as INVALID, not a stuck CHECK");
   SPIFlash flash(0U);
   OTA ota(flash);
-  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
-  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
-  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  // An image of exactly the two bytes kept in RAM: the check reads no flash at all, so the only
+  // flash access left is the write-back this fails.
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U };
+  const uint16_t crc = Crc16::calculate(fw, 2U);
+  IS_TRUE(ota.start(0U, 2U, crc));
   IS_TRUE(ota.storeNextData(0U, fw));
-  IS_EQUAL(ota.run(), OtaState::STORE);
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // the transition, then one firmware byte per pass
-  }
-  // The CRC is correct, so CHECK reaches the write-back of the two bytes it kept in RAM. That
-  // write silently does nothing, so the read-back cannot match - the only signal the device gets.
+  // That write silently does nothing, so the read-back cannot match - the only signal the device gets.
   flash.setFailWrite(true);
-  IS_EQUAL(ota.run(), OtaState::INVALID);
+  IS_EQUAL(runToVerdict(ota), OtaState::INVALID);
   IS_EQUAL(ota.run(), OtaState::IDLE);    // INVALID cleanup → IDLE
   END_IT
 }
@@ -265,16 +295,13 @@ bool test_run_read_back_failure_goes_invalid() {
   IT("a read-back the flash refuses ends the check as INVALID");
   SPIFlash flash(0U);
   OTA ota(flash);
-  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U, 0x03U, 0x04U };
-  const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
-  IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
+  // Two bytes, so the check reads them from RAM and the only flash read left is the verification.
+  uint8_t fw[OTA::fwPieceSize] = { 0x01U, 0x02U };
+  const uint16_t crc = Crc16::calculate(fw, 2U);
+  IS_TRUE(ota.start(0U, 2U, crc));
   IS_TRUE(ota.storeNextData(0U, fw));
-  IS_EQUAL(ota.run(), OtaState::STORE);
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // the transition, then one firmware byte per pass
-  }
   flash.setFailRead(true);                // the write lands, but the verification read does not
-  IS_EQUAL(ota.run(), OtaState::INVALID);
+  IS_EQUAL(runToVerdict(ota), OtaState::INVALID);
   END_IT
 }
 
@@ -335,11 +362,7 @@ bool test_run_invalid_clears_flash() {
   IS_TRUE(ota.start(0U, static_cast<uint32_t>(OTA::fwPieceSize), correctCrc + 1U));
   IS_TRUE(ota.storeNextData(0U, fw));
   IS_EQUAL(flash.readByte(2U), 0x03U); // byte 2 was written to flash by storeNextData
-  IS_EQUAL(ota.run(), OtaState::STORE);
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // the transition, then one firmware byte per pass
-  }
-  IS_EQUAL(ota.run(), OtaState::INVALID);
+  IS_EQUAL(runToVerdict(ota), OtaState::INVALID);
   IS_EQUAL(ota.run(), OtaState::IDLE);    // INVALID: chipErase + reset → IDLE
   IS_EQUAL(flash.readByte(2U), 0xFFU);   // flash erased by INVALID handler
   END_IT
@@ -383,11 +406,7 @@ bool test_run_full_valid_flow_block1() {
   const uint16_t crc = Crc16::calculate(fw, static_cast<uint32_t>(OTA::fwPieceSize));
   IS_TRUE(ota.start(1U, static_cast<uint32_t>(OTA::fwPieceSize), crc));
   IS_TRUE(ota.storeNextData(0U, fw));
-  IS_EQUAL(ota.run(), OtaState::STORE);
-  for(uint8_t i = 0U; i < OTA::fwPieceSize; i++) {
-    IS_EQUAL(ota.run(), OtaState::CHECK); // the transition, then one firmware byte per pass
-  }
-  IS_EQUAL(ota.run(), OtaState::VALID);
+  IS_EQUAL(runToVerdict(ota), OtaState::VALID);
   IS_EQUAL(ota.run(), OtaState::IDLE);
   END_IT
 }
@@ -435,6 +454,7 @@ int main() {
   test_store_first_two_bytes_in_memory_not_flash();
   test_store_partial_last_chunk();
   test_store_overflow_rejected();
+  test_check_does_not_cost_a_pass_per_byte();
   test_run_idle_stays_idle();
   test_run_start_stays_when_busy();
   test_run_full_valid_flow();

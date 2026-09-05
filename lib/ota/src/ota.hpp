@@ -19,6 +19,9 @@ private:
   // Bounds START and STORE, the two states that wait on somebody else: above the ~100 s a full
   // W25Q64 erase can take, below the gateway's own 5 minute timeout.
   static constexpr uint32_t stallTimeoutTime = Time::minToMs(3U);
+  // Firmware bytes the closing check reads per pass. A stack buffer, so it costs no static RAM;
+  // kept small because the pass it sits in also has to keep servicing the CAN bus.
+  static constexpr uint8_t checkChunkSize = 32U;
 
 #ifndef PROGRAM_MEMORY_SIZE
   static_assert(false, "PROGRAM_MEMORY_SIZE macro is not defined!");
@@ -79,6 +82,14 @@ public:
   OTA& operator=(OTA&&) = delete;                                   // Define move assignment operator.
 
 private:
+  /// @brief Folds the next block of the stored image into the running checksum.
+  /// @details Advances `flashPointer`; the bytes held back from the flash come from memory.
+  void readNextCheckChunk();
+
+  /// @brief Settles the check: compares the checksum and writes back the bytes kept in memory.
+  /// @details Leaves the state on VALID or INVALID.
+  void finishCheck();
+
   SPIFlash& flash;                                                  // Reference to the SPI Flash handler.
   uint8_t firstFwBytes[2];                                          // Stores the first two bytes of the firmware.
   uint32_t fwSize;                                                  // Size of the firmware in bytes.
