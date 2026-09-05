@@ -4,6 +4,11 @@
 // command() -> waitUntilReady(), which gives up after busyTimeoutMs and reports false; the three
 // setFail*() hooks reproduce that refusal per operation kind, so each OTA failure branch can be
 // reached on its own.
+//
+// This stands in for the whole class, so none of lib/SPIFlash is built into native_test: its
+// readiness waits, its page splitting and its JEDEC decoding run on hardware only. What the
+// hooks give back is the shape of a refusal, not the driver's own way of arriving at one - a
+// suite that is green here says nothing about that code.
 #include <stdint.h>
 #include <cassert>
 #include <cstring>
