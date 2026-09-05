@@ -6,7 +6,7 @@
 #include "common.hpp"                                               /// Time helpers for the stall timeout.
 
 #ifndef FW_PIECE_SIZE
-#define FW_PIECE_SIZE 4U                                            // Default size of firmware pieces for chunked updates.
+#define FW_PIECE_SIZE 7U                                            // Default size of firmware pieces for chunked updates.
 #endif
 
 /// @brief Class to handle Over-The-Air (OTA) firmware updates using SPI Flash.
@@ -19,6 +19,9 @@ private:
   // Bounds START and STORE, the two states that wait on somebody else: above the ~100 s a full
   // W25Q64 erase can take, below the gateway's own 5 minute timeout.
   static constexpr uint32_t stallTimeoutTime = Time::minToMs(3U);
+  // Firmware bytes the closing check reads per pass. A stack buffer, so it costs no static RAM;
+  // kept small because the pass it sits in also has to keep servicing the CAN bus.
+  static constexpr uint8_t checkChunkSize = 32U;
 
 #ifndef PROGRAM_MEMORY_SIZE
   static_assert(false, "PROGRAM_MEMORY_SIZE macro is not defined!");
@@ -59,10 +62,11 @@ public:
   [[nodiscard]] bool start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc);
 
   /// @brief Stores the next firmware chunk.
-  /// @param dataAddress Expected address of the firmware chunk.
+  /// @param sequence Low byte of the offset the sender believes this chunk belongs at; a chunk
+  /// that does not continue where this one left off is refused.
   /// @param fwData Firmware chunk data array.
   /// @return `true` if the data is stored successfully, `false` otherwise.
-  [[nodiscard]] bool storeNextData(uint32_t dataAddress, const uint8_t (&fwData)[fwPieceSize]);
+  [[nodiscard]] bool storeNextData(uint8_t sequence, const uint8_t (&fwData)[fwPieceSize]);
 
   /// @brief Runs the OTA state machine to handle firmware updates.
   /// @return The current state of the OTA process.
@@ -78,6 +82,14 @@ public:
   OTA& operator=(OTA&&) = delete;                                   // Define move assignment operator.
 
 private:
+  /// @brief Folds the next block of the stored image into the running checksum.
+  /// @details Advances `flashPointer`; the bytes held back from the flash come from memory.
+  void readNextCheckChunk();
+
+  /// @brief Settles the check: compares the checksum and writes back the bytes kept in memory.
+  /// @details Leaves the state on VALID or INVALID.
+  void finishCheck();
+
   SPIFlash& flash;                                                  // Reference to the SPI Flash handler.
   uint8_t firstFwBytes[2];                                          // Stores the first two bytes of the firmware.
   uint32_t fwSize;                                                  // Size of the firmware in bytes.

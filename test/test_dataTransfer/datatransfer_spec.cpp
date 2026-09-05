@@ -324,6 +324,21 @@ bool test_check_phase_timeout_aborts() {
   END_IT
 }
 
+bool test_an_arriving_piece_pushes_the_deadline_out() {
+  IT("a transfer whose pieces keep arriving is not cut off by the transfer timeout");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(6U, kMd5_abcdef, fileName()));
+  setFakeMillis(14U * 60U * 1000U);                 // inside the window begin() opened
+  IS_TRUE(dt.storeBase64(0U, b64("abc").c_str()));
+  setFakeMillis(27U * 60U * 1000U);                 // 27 min since begin(), 13 min since that piece
+  dt.runValidityCheck();
+  IS_TRUE(dt.storeBase64(1U, b64("def").c_str()));  // still open
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_transfer_timeout_aborts() {
   IT("an idle transfer is aborted after the transfer timeout elapses");
   resetEnv();
@@ -335,6 +350,27 @@ bool test_transfer_timeout_aborts() {
   // Transfer is gone: a piece is now rejected as if begin() was never called.
   IS_FALSE(dt.storeBase64(0U, b64("abc").c_str()));
   IS_EQUAL(dt.getErrorCode(), 1UL << 7U);          // BEGIN_NOT_CALLED
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_a_timeout_is_carried_out_once() {
+  IT("a transfer given up on the timeout is torn down once, not on every pass after it");
+  resetEnv();
+  setFakeMillis(0U);
+  DataTransfer dt(onCheckOk);
+  IS_TRUE(dt.begin(3U, kMd5_abc, fileName()));
+  setFakeMillis(16U * 60U * 1000U);                 // > 15 min transfer timeout
+  dt.runValidityCheck();                            // timeout -> CLEANUP -> IDLE
+  IS_FALSE(dt.storeBase64(0U, b64("abc").c_str())); // leaves BEGIN_NOT_CALLED pending
+  g_cbCount = 0;
+  // Kept running well past the window, so a timer the idle pass failed to put forward would show
+  // up as a tear-down on every one of these.
+  for(uint8_t i = 0U; i < 50U; ++i) {
+    setFakeMillis((17U + i) * 60U * 1000U);
+    dt.runValidityCheck();
+  }
+  IS_EQUAL(g_cbCount, 0);                           // an idle transfer has nothing left to clean up
   clearFakeMillis();
   END_IT
 }
@@ -646,7 +682,9 @@ int main() {
   test_store_invalid_base64_chars_fails();
   test_rebegin_replaces_open_transfer();
   test_check_phase_timeout_aborts();
+  test_an_arriving_piece_pushes_the_deadline_out();
   test_transfer_timeout_aborts();
+  test_a_timeout_is_carried_out_once();
   test_full_file_transfer_succeeds();
   test_multi_piece_transfer_succeeds();
   test_md5_mismatch_fails_and_keeps_no_file();

@@ -122,7 +122,7 @@ bool CanHandlerAtmega328P::handleRxFrame() {
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
       const OtaCanFrame::SendFrame sendFrame = OtaCanFrame::unpackSend(canFrame.data);
-      const bool otaStoreResult = ota.storeNextData(sendFrame.dataAddress, sendFrame.data);
+      const bool otaStoreResult = ota.storeNextData(sendFrame.sequence, sendFrame.data);
       if(!otaStoreResult) { Logger::get()->println(F("OTA storing failed!")); }
       CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
     } break;

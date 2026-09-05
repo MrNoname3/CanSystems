@@ -9,7 +9,7 @@ class DataTransfer final {
 private:
   static constexpr uint8_t fileNameSize = 32U;                          // Maximum length of the file name.
   static constexpr uint8_t fileMd5Size = 33U;                           // MD5 hex string length (32 chars + null terminator).
-  static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);   // Timeout period for the transfer process.
+  static constexpr uint32_t transferTimeoutTime = Time::minToMs(15U);   // Silence after which a transfer is given up.
   static constexpr uint8_t readBufferSize = 64U;                        // Buffer size for reading file chunks.
   static constexpr uint32_t invalidFilePieceNumber = 0xFFFFFFFFU;       // Indicator for an invalid file piece number.
   // Piece-size cap: 126 is the closest multiple of 3 to 128, so a full piece encodes to whole
