@@ -438,6 +438,40 @@ bool test_repeat_irrigation_runs_again() {
   END_IT
 }
 
+bool test_a_repeat_outranks_a_safety_irrigation_for_the_last_slot() {
+  IT("a repeat keeps the slot its own cycle freed, even with a safety irrigation due");
+  Wire.reset();
+  Wire.setEndTransmissionResult(0U);
+  PCF8574 pcf(5000U, 0x27U);
+  (void)pcf.init();
+  RgbLedWrapper led(1U, 6U);
+  PumpControl pc(pcf, led, kPwmPin, kIntPin, kCurrentPin, onError);
+  driveToIdle(pc, 512U);                                 // millis() == 6000
+  resetErr();
+  pc.addSafetyIrrigation(1U, 0U, 1U, false, false, 100U, 0U);  // channel 0, due a minute from now
+  // A full queue, so the pop in handleStop leaves room for exactly one of the two.
+  pc.createIrrigation(0U, 1U, false, false, 200U, 1U);   // repeats once
+  pc.createIrrigation(1U, 1U, false, false, 210U, 0U);
+  pc.createIrrigation(2U, 1U, false, false, 220U, 0U);
+  pc.createIrrigation(3U, 1U, false, false, 230U, 0U);
+
+  // Walks one irrigation from IDLE through its minute and off the queue again.
+  uint32_t now = 6000U;
+  for(uint8_t cycle = 0U; cycle < 4U; ++cycle) {
+    setFakeMillis(now);
+    (void)pc.run();                                      // IDLE -> RUN
+    now += 60001U;
+    setFakeMillis(now);
+    (void)pc.run();                                      // RUN -> STOP
+    (void)pc.run();                                      // STOP -> IDLE
+  }
+  setFakeMillis(now);
+  (void)pc.run();                                        // IDLE -> RUN on whatever kept the slot
+  IS_EQUAL(getDigitalWriteValue(kPwmPin), 200U);         // the repeat, not the safety's 100
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_safety_irrigation_triggers() {
   IT("a safety irrigation starts automatically once its time has elapsed");
   Wire.reset();
@@ -477,6 +511,7 @@ int main() {
   test_skip_all_irrigations_defers_an_overdue_safety_irrigation();
   test_limit_switch_stops_run();
   test_repeat_irrigation_runs_again();
+  test_a_repeat_outranks_a_safety_irrigation_for_the_last_slot();
   test_safety_irrigation_triggers();
   FINISH
 }

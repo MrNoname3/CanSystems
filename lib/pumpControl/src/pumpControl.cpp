@@ -143,8 +143,11 @@ void PumpControl::handleStop() {
   IrrigationQueueElement actualElement = irrigationQueue.pop();
   if(actualElement.repeatNum > 0U) {
     actualElement.repeatNum--;
-    checkSafetyIrrigations();
+    // The repeat takes the slot the pop above just freed, before anything else is offered one:
+    // a safety irrigation that loses its place here is still overdue and comes back on the next
+    // idle pass, while a repeat that loses its place is gone.
     createIrrigation(actualElement);
+    checkSafetyIrrigations();
   }
   if(irrigationQueue.isEmpty()) {
     digitalWrite(pwmPin, LOW);
