@@ -415,6 +415,36 @@ bool test_topic_length_past_the_packet_is_dropped() {
   END_IT
 }
 
+bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
+  IT("drops a PUBLISH whose remaining length cannot even hold the topic-length field");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setSocketTimeout(1U);                      // keep the read timeout out of the suite's runtime
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // Remaining length 1, followed by what a PINGRESP would look like. The topic-length field is
+  // two bytes, so this packet does not contain one; reading it anyway would consume the next
+  // packet's header and leave the payload length wrapped just short of 4 GB.
+  const uint8_t publish[] = { 0x30U, 0x01U, 0xAAU, 0xD0U, 0x00U };
+  shimClient.respond(publish, 5U);
+
+  rc = client.loop();
+
+  IS_FALSE(rc);
+  IS_FALSE(callback_called);
+  IS_TRUE(client.state() == PubSubClient::State::DISCONNECTED);
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -428,6 +458,7 @@ int main() {
   test_receive_oversized_stream_message();
   test_receive_qos1();
   test_topic_length_past_the_packet_is_dropped();
+  test_a_publish_too_short_for_its_topic_length_is_dropped();
 
   FINISH
 }

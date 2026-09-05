@@ -224,6 +224,15 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readabilit
   *lengthLength = static_cast<uint8_t>(len - 1U);
 
   if(isPublish) {
+    // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
+    // announces fewer has none to give: the two reads below would take bytes belonging to the
+    // next packet, and the payload length derived from it would wrap to nearly 4 GB. Malformed
+    // the same way an invalid remaining length is, and dropped the same way.
+    if(length < 2U) {
+      connectionState = State::DISCONNECTED;
+      tcpClient->stop();
+      return 0U;
+    }
     // Read in topic length to calculate bytes to skip over for Stream writing
     if(!readByte(this->buffer, &len)) {
       return abortIncompletePacket();
