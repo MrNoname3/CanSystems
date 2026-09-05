@@ -3,7 +3,6 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
-volatile uint32_t CanHandlerEsp32::rxIncompleteFrames = 0U;
 volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
 ESP32SJA1000* CanHandlerEsp32::isrController = nullptr;
@@ -94,11 +93,11 @@ void CanHandlerEsp32::rxInterrupt(int payloadBytes) { // NOLINT(readability-conv
   rxCanData.extId = isrController->packetId();
   if(!isrController->packetRtr()) {
     const uint8_t canDataDlc = isrController->packetDlc();
+    // parsePacket() leaves the whole payload unread, so readBytes() answers with the full DLC
+    // and this cannot come up short. Kept as a bound on what reached rxCanData.data: a driver
+    // that ever did return less would otherwise hand the device the missing bytes as zeros.
     const uint8_t bytesReaded = static_cast<uint8_t>(isrController->readBytes(rxCanData.data, canDataDlc));
-    if(canDataDlc != bytesReaded) {
-      ++rxIncompleteFrames;
-      return;
-    }
+    if(canDataDlc != bytesReaded) { return; }
   }
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   if(xQueueSendFromISR(canRxQueue, &rxCanData, &xHigherPriorityTaskWoken) != pdTRUE) {
@@ -144,10 +143,9 @@ bool CanHandlerEsp32::run() {
 }
 
 void CanHandlerEsp32::reportDroppedFrames() {
-  const uint32_t incomplete = rxIncompleteReporter.takeGrowth(rxIncompleteFrames);
   const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
-  if((incomplete != 0U) || (queueFull != 0U)) {
-    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
+  if(queueFull != 0U) {
+    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u frames the queue had no room for\r\n"), queueFull);
   }
   // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
   // never took is reported.
