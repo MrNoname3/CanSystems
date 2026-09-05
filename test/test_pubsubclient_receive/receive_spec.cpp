@@ -166,6 +166,42 @@ bool test_receive_oversized_message() {
   END_IT
 }
 
+bool test_an_oversized_message_leaves_the_next_one_readable() {
+  IT("an oversized message is drained whole, so the message behind it still parses");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  const uint8_t length = 80U;
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.setBufferSize(static_cast<uint16_t>(length - 1U)));
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  uint8_t bigPublish[length];
+  memset(bigPublish, 'A', length);
+  memcpy(bigPublish, publish, 16U);
+  shimClient.respond(bigPublish, length);
+  // Right behind it, a message that fits: it can only be read if every byte of the one before it
+  // was taken off the socket rather than left there to be read as this one's header.
+  const uint8_t smallPublish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(smallPublish, 16U);
+
+  IS_TRUE(client.loop());          // the oversized one, dropped
+  IS_FALSE(callback_called);
+  IS_TRUE(client.loop());          // the one behind it
+  IS_TRUE(callback_called);
+  IS_TRUE(strcmp(lastTopic, "topic") == 0);
+  IS_TRUE(memcmp(lastPayload, "payload", 7U) == 0);
+
+  IS_FALSE(shimClient.error());
+  END_IT
+}
+
 bool test_drop_invalid_remaining_length_message() {
   IT("drops invalid remaining length message");
   reset_callback();
@@ -387,6 +423,7 @@ int main() {
   test_drop_invalid_remaining_length_message();
   test_truncated_message_drops_the_connection();
   test_receive_oversized_message();
+  test_an_oversized_message_leaves_the_next_one_readable();
   test_resize_buffer();
   test_receive_oversized_stream_message();
   test_receive_qos1();
