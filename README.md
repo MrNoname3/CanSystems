@@ -63,17 +63,13 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
   (fw version = git commit count, git hash, dirty flag, reset reason).
 - The info topic's `rr` is the SDK's own enum on the ESP nodes. On the CAN nodes it is the
   bitmask `ResetHandler::getResetReason()` builds — MCUSR in bits 0-3, a deliberate-restart flag
-  in bit 4, and why in bits 5-7:
+  in bit 4, and why in bits 5-7. Read it back as three fields rather than looking a value up:
 
-  | `rr` | Meaning |
-  |------|---------|
-  | `0x05` | power-on (the brown-out flag comes up with it) |
-  | `0x04` | brown-out while running — the urboot envs set BOD to 4.3 V |
-  | `0x08` | reset pin, or a hang the watchdog caught: urboot consumes EXTRF, so the two look alike |
-  | `0x38` | a task failed to initialise at startup |
-  | `0x58` | the gateway commanded a restart |
-  | `0x78` | rebooted into freshly stored firmware |
-  | `0x00` | the node is not running urboot, which is the only bootloader that hands MCUSR on |
+  | Bits | What they carry |
+  |------|-----------------|
+  | 0-3 | MCUSR as the hardware left it. `0x05` is a power-on (brown-out comes up with it), `0x04` a brown-out while running — the urboot envs set BOD to 4.3 V — and `0x08` a reset pin *or* a hang the watchdog caught: urboot consumes EXTRF, so the two look alike. A whole `rr` of `0x00` means the node is not running urboot, the only bootloader that hands MCUSR on. |
+  | 4 | Set when the reset came from `restartMCU()`. Those always arrive through the watchdog, so bit 3 is set alongside. |
+  | 5-7 | The `ResetHandler::RestartCause` ordinal, meaningful only while bit 4 is set. The enum is the list; a new cause needs no change here. |
 - After every reconnect the node publishes a retained `diag` topic: the cause of the last
   disconnect (MQTT status or `NETWORK_LOST`), its UTC timestamp, the offline duration in
   seconds (measured from client-side detection, i.e. up to ~2x keepalive after the actual
@@ -111,9 +107,10 @@ measured slower in practice.
 
 **CAN device firmware (two-stage):** the ATmega firmware is first uploaded to the gateway's
 LittleFS as `/canAlertFw.bin` (this also auto-triggers the CAN OTA), then streamed over the CAN
-bus in 4-byte pieces with a CRC16. The ATmega stages it to its SPI flash (W25Q64); on reset the
-urboot **dual-boot** bootloader programs the MCU from SPI flash. Result: `{"OTA":"[OK]"}` /
-`{"OTA":"[ERR]"}` on the device's `ota` subtopic.
+bus one `OtaCanFrame::dataPieceSize` chunk per frame — the eighth data byte carries the piece's
+place in the stream — checked against a CRC16 over the whole image. The ATmega stages it to its
+SPI flash (W25Q64); on reset the urboot **dual-boot** bootloader programs the MCU from SPI
+flash. Result: `{"OTA":"[OK]"}` / `{"OTA":"[ERR]"}` on the device's `ota` subtopic.
 
 Every node expecting that file is updated from the one upload, **one transfer at a time**: they
 share a CAN bus and a controller that holds a single frame, so running them together finishes no

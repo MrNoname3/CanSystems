@@ -29,8 +29,9 @@ public:
   [[nodiscard]] uint8_t parsePacket();
 
   /// @brief Set the receive interrupt callback.
-  /// @note Needs an interrupt pin from setPins(); the callback runs in interrupt context and
-  /// reaches the controller over SPI.
+  /// @note Attaches a handler only when setPins() was given a real interrupt pin; with
+  /// `noIntPin` the callback is stored but nothing fires it. The handler runs in interrupt
+  /// context and reaches the controller over SPI.
   void onReceive(void (*callback)(int));
 
   /// @brief Installs an acceptance filter for standard 11-bit identifiers.
@@ -73,9 +74,12 @@ public:
   static constexpr uint8_t defaultIntPin = 2U;                       // INT line, held low while a frame waits.
 #endif
 
+  /// @brief Value for `irq` that leaves onReceive() without a line to attach to.
+  static constexpr uint8_t noIntPin = 0xFFU;
+
   /// @brief Selects the pins the controller is wired to.
   /// @param cs Chip select pin.
-  /// @param irq Interrupt pin; 0xFF leaves onReceive() without a line to attach to.
+  /// @param irq Interrupt pin, or `noIntPin` to keep onReceive() from attaching a handler.
   /// @note Must be called before begin().
   void setPins(uint8_t cs = defaultCsPin, uint8_t irq = defaultIntPin);
 

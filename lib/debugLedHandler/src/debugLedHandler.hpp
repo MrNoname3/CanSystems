@@ -7,6 +7,10 @@
 #endif
 
 /// @brief A utility class for controlling a debug LED.
+/// @details The pin and its state are class-wide, which makes this single-instance: a second
+/// handler would take the first one's pin over. That is what lets ledOn()/ledOff()/ledToggle()
+/// be static, which they have to be - the Ticker takes a plain function pointer with no context,
+/// and callers such as the AVR CAN handler reach the LED without holding a reference to one.
 class DebugLedHandler final {
 public:
   /// @brief Constructor to initialize the debug LED.
@@ -50,6 +54,7 @@ public:
 
 private:
   static constexpr uint8_t invalidPin = 0xFF;                             // Sentinel value indicating no pin is assigned.
+  // Class-wide, not per instance: see the note on the class about what that costs and buys.
   static uint8_t dbgLedPin;                                               // The GPIO pin connected to the LED.
   static uint8_t dbgLedOnState;                                           // The logic level to turn the LED on.
   static uint8_t ledState;                                                // Cached pin output level, avoids digitalRead() in ISR.

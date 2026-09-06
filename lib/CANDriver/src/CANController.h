@@ -67,6 +67,8 @@ public:
   size_t readBytes(uint8_t* buffer, size_t length);
 
   /// @brief Set the receive interrupt callback.
+  /// @param callback Called with what available() reports for the frame just parsed, which is
+  /// its unread payload length in bytes - not a count of frames waiting.
   void onReceive(void (*callback)(int));
 
 protected:

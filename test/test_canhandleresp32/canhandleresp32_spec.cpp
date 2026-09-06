@@ -396,6 +396,26 @@ bool test_a_device_can_ask_about_an_address_from_its_own_callback() {
   END_IT
 }
 
+// Characterisation, not a regression guard: the behaviour below is unchanged, and the case is
+// here so that dropping an empty frame is a stated decision rather than a side effect of the
+// interrupt's argument being a payload length.
+bool test_a_frame_with_no_payload_is_not_dispatched() {
+  IT("a frame carrying no payload is dropped instead of reaching the device as zeros");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  TestDevice device(handler, kDeviceId);
+  IS_TRUE(handler.init());
+
+  const uint8_t none[8] = { 0U };
+  esp32Can.queueExtendedFrame(extIdOf(kLocalId, static_cast<uint16_t>(CanCmd::PING), kDeviceId), none, 0U);
+  esp32TriggerCanInterrupt();
+  (void)handler.run();
+
+  IS_EQUAL(device.received, 0U);
+  END_IT
+}
+
 int main() {
   SUITE("CanHandlerEsp32");
   test_init_brings_the_controller_up();
@@ -403,6 +423,7 @@ int main() {
   test_a_frame_reaches_the_device_registered_for_its_sender();
   test_a_frame_from_an_unknown_sender_reaches_nobody();
   test_each_device_only_sees_its_own_sender();
+  test_a_frame_with_no_payload_is_not_dispatched();
   test_a_device_on_the_handlers_own_id_is_not_registered();
   test_a_device_built_before_init_on_a_reserved_id_stops_init();
   test_a_device_built_before_init_on_the_master_id_stops_init();

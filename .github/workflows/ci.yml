@@ -1,10 +1,8 @@
 name: CI
 
-# Mirrors the local release gate (scripts/release_check.py), in the same order:
-#   0. git working-tree check  (warning unless --strict)
-#   1. pio run                 (build every default environment)
-#   2. pio test -e native_test (native unit-test suite)
-#   3. pio check --fail-on-defect (cppcheck + clang-tidy; any defect fails)
+# This is the release gate, not a copy of it: the job below runs scripts/release_check.py, which
+# owns the list of steps and the order they run in. Nothing about them is repeated here, so the
+# two cannot fall out of step with each other.
 
 on:
   push:
@@ -58,7 +56,7 @@ jobs:
         # requirements-ci.txt adds the two that are not installed locally: platformio and intelhex.
         run: pip install -r requirements-ci.txt -r requirements-dev.txt
 
-      - name: Release gate (build all envs + native tests + static analysis)
+      - name: Release gate
         run: python scripts/release_check.py
 
   size-diff:

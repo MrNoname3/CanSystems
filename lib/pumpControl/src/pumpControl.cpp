@@ -55,7 +55,12 @@ bool PumpControl::init() {
 
 bool PumpControl::run() {
   const uint32_t actualTime = millis();
-  analogValue = Analog::complementaryFilter10(static_cast<uint16_t>(analogRead(currentSensePin) + calibrationValue), analogValue);
+  // The offset is signed, so a reading below it makes the sum negative. Without the floor
+  // below, the cast would turn that into a value near 65535, which the filter converges up to
+  // and holds: a sensor reading nothing would report a large current for ever.
+  const int16_t offsetReading = static_cast<int16_t>(analogRead(currentSensePin) + calibrationValue);
+  const uint16_t correctedReading = (offsetReading < 0) ? 0U : static_cast<uint16_t>(offsetReading);
+  analogValue = Analog::complementaryFilter10(correctedReading, analogValue);
   switch(irrigationState) {
     case IrrigationState::IDLE: handleIdle(actualTime); break;
     case IrrigationState::RUN: handleRun(actualTime); break;
@@ -138,8 +143,11 @@ void PumpControl::handleStop() {
   IrrigationQueueElement actualElement = irrigationQueue.pop();
   if(actualElement.repeatNum > 0U) {
     actualElement.repeatNum--;
-    checkSafetyIrrigations();
+    // The repeat takes the slot the pop above just freed, before anything else is offered one:
+    // a safety irrigation that loses its place here is still overdue and comes back on the next
+    // idle pass, while a repeat that loses its place is gone.
     createIrrigation(actualElement);
+    checkSafetyIrrigations();
   }
   if(irrigationQueue.isEmpty()) {
     digitalWrite(pwmPin, LOW);

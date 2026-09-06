@@ -119,9 +119,12 @@ bool CanCommissioner::formatWaiting(char (&buffer)[listBufSize]) const {
 bool CanCommissioner::assign(const char* uidHex, uint16_t newLocalCanId) {
   uint8_t uid[CanIdAssign::uidLength] = { 0U };
   if(!parseUid(uidHex, uid)) { return false; }
-  // Naming an address is the caller's word that it is free: nothing here can see whether
-  // something already answers on it.
   if(!CanIdAssign::isAssignableId(newLocalCanId)) { return false; }
+  // As much of the bus as this can see: the handler's own pair, and the ids its drivers already
+  // answer on. That is the same set CanMqttGateway::requestCanIdChange() refuses, so an address
+  // is not taken here that would be refused there. Anything beyond it is the caller's word.
+  const bool reservedHere = (newLocalCanId == canHandler.getLocalCanId()) || (newLocalCanId == canHandler.getMasterCanId());
+  if(reservedHere || canHandler.isClientIdRegistered(newLocalCanId)) { return false; }
 
   for(const Waiting& entry : waiting) {
     if(!entry.inUse || (memcmp(entry.uid, uid, sizeof(uid)) != 0)) { continue; }

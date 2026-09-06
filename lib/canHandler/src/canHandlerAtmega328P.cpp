@@ -23,10 +23,10 @@ CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t ca
   eventTimer(0U),
   canIntPin(canIntPin),
   lastOtaState(OTA::OtaState::IDLE) {
-  // 0xFF tells the driver it has no interrupt pin, so onReceive() cannot attach its own handler:
-  // that one reads the controller over SPI from inside the ISR, and the same bus carries the
-  // W25Q64 the OTA writes. This handler polls the line in run() instead.
-  CAN.setPins(canCsPin, 0xFFU);
+  // MCP2515::noIntPin keeps the driver from attaching its own handler: that one reads the
+  // controller over SPI from inside the ISR, and the same bus carries the W25Q64 the OTA writes.
+  // This handler polls the line in run() instead, which is why it is read as a plain input.
+  CAN.setPins(canCsPin, MCP2515::noIntPin);
   pinMode(this->canIntPin, INPUT);
 }
 
@@ -95,13 +95,17 @@ bool CanHandlerAtmega328P::init(uint32_t canBaud) {
   return true;
 }
 
-bool CanHandlerAtmega328P::handleRxFrame() {
+void CanHandlerAtmega328P::handleRxFrame() {
   CanFrame canFrame;
   canFrame.extId = CAN.packetId();
   if(!CAN.packetRtr()) {
     const uint8_t canDataDlc = CAN.packetDlc();
+    // parsePacket() leaves the whole payload unread, so readBytes() answers with the full DLC
+    // and this cannot come up short. Kept as a bound on what reached canFrame.data: a driver
+    // that ever did return less would otherwise let the switch below read the missing bytes as
+    // zeros. Only this frame is given up on; the rest of the pass still runs.
     const uint8_t bytesReaded = static_cast<uint8_t>(CAN.readBytes(canFrame.data, canDataDlc));
-    if(canDataDlc != bytesReaded) { return false; }
+    if(canDataDlc != bytesReaded) { return; }
   }
   switch(static_cast<uint16_t>(canFrame.cmd)) {
     case static_cast<uint16_t>(CanCmd::PING): {
@@ -148,7 +152,6 @@ bool CanHandlerAtmega328P::handleRxFrame() {
       }
     } break;
   }
-  return true;
 }
 
 bool CanHandlerAtmega328P::run() {
@@ -158,11 +161,10 @@ bool CanHandlerAtmega328P::run() {
   if(digitalRead(canIntPin) == LOW) {
     eventTimer = actualTime;
     DebugLedHandler::ledOff();
-    const CanFramePump::Result rxResult = CanFramePump::drain(
+    (void)CanFramePump::drain(
         []() -> bool { return (CAN.parsePacket() != 0U) || (CAN.packetId() != CANController::noId); },
-        [this]() -> bool { return handleRxFrame(); },
+        [this]() -> bool { handleRxFrame(); return true; },
         maxRxFramesPerRun);
-    if(rxResult.failed) { return false; }
   }
   // A node with no address of its own says who it is, until someone gives it one. The gap is
   // wide enough that two of them landing on the same derived address still interleave.

@@ -21,7 +21,11 @@ class File {
 public:
   File() = default;
 
-  // Read handle over a snapshot of the stored content.
+  // Read handle over a snapshot of the stored content. That snapshot is the one way this differs
+  // from fs::File, which reads the live filesystem: here a reader cannot be disturbed by a write
+  // to the same path, so the hazard DataTransfer::begin()'s in-use check exists for - littlefs
+  // freeing the blocks of a file a reader still holds open - has no equivalent on the host, and
+  // nothing here can fail if that check is ever dropped.
   explicit File(std::string content) :
     buf_(std::move(content)),
     valid_(true) {}

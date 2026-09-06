@@ -29,6 +29,19 @@ static void seedCanIds(uint16_t master, uint16_t local) {
   EEPROM.put(0U, stored);
 }
 
+/// A driver already answering on an address, so the commissioner can be asked to hand out a
+/// taken one. Registers itself with the handler from its constructor, like the real drivers.
+class SpecDevice final : public CanBase {
+public:
+  SpecDevice(CanHandler& canHandler, uint16_t clientCanId) :
+    CanBase(canHandler, clientCanId) {}
+
+  bool init() override { return true; }  // NOLINT(readability-make-member-function-const)
+  bool run() override { return true; }   // NOLINT(readability-make-member-function-const)
+
+  void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override { (void)canFrame; }
+};
+
 static void resetEnv() {
   EEPROM.clear();
   seedCanIds(kMasterId, kLocalId);
@@ -294,6 +307,25 @@ bool test_an_unusable_address_is_refused() {
   END_IT
 }
 
+bool test_an_address_a_driver_already_holds_is_refused() {
+  IT("an address one of the gateway's own drivers answers on is refused before anything is sent");
+  resetEnv();
+  TestCan can;
+  Connectivity conn;
+  CanCommissioner commissioner(can, conn, "can");
+  SpecDevice taken(can.handler, 28U);
+  Task& canTask = can.handler;
+  Task& task = commissioner;
+  IS_TRUE(canTask.init());
+  IS_TRUE(task.init());
+
+  announce(can.handler, kUid);
+  deliver(commissioner, R"({"assign":{"uid":"1122334455667788","id":28}})");
+  IS_EQUAL(countCanFrames(static_cast<uint16_t>(CanCmd::SET_CAN_ID)), 0U);
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  END_IT
+}
+
 int main() {
   SUITE("CanCommissioner");
   test_an_announcement_is_noticed();
@@ -307,5 +339,6 @@ int main() {
   test_an_unknown_node_is_refused();
   test_a_malformed_unique_id_is_refused();
   test_an_unusable_address_is_refused();
+  test_an_address_a_driver_already_holds_is_refused();
   FINISH
 }

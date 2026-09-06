@@ -64,8 +64,9 @@ private:
   [[nodiscard]] bool init(uint32_t canBaud);
 
   /// @brief Parses and dispatches a single received CAN frame.
-  /// @return `true` if successful, `false` otherwise.
-  bool handleRxFrame();
+  /// @details A frame it cannot read in full is given up on; the receive pass carries on with
+  /// the next one, so nothing later in run() is skipped over one bad frame.
+  void handleRxFrame();
 
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.

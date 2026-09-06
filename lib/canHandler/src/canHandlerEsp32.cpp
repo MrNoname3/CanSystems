@@ -3,7 +3,6 @@
 #include "common.hpp"                                               /// Common definitions and functions.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
-volatile uint32_t CanHandlerEsp32::rxIncompleteFrames = 0U;
 volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
 ESP32SJA1000* CanHandlerEsp32::isrController = nullptr;
@@ -59,18 +58,23 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   // a device registers from its own constructor, which runs before anything has been read out of
   // the EEPROM, so the check it makes there has nothing to compare against yet.
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
-  bool deviceIdsFree = true;
-  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    uint8_t deviceIndex = 0U;
-    for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
-      const uint16_t clientCanId = d->getClientCanId();
-      const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
-      Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
-                              reserved ? PSTR(" <- reserved id!") : PSTR(""));
-      if(reserved) { deviceIdsFree = false; }
-    }
-    xSemaphoreGiveRecursive(canDevicesListMutex);
+  // A list that cannot be read is a check that did not happen, and this one decides whether the
+  // node comes up at all. Reported as a failed start rather than a clean one, the way
+  // isClientIdRegistered() answers "taken" when it cannot look.
+  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) {
+    Logger::get()->printf_P(PSTR("  device list unreadable; ids not checked\r\n"));
+    return false;
   }
+  bool deviceIdsFree = true;
+  uint8_t deviceIndex = 0U;
+  for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
+    const uint16_t clientCanId = d->getClientCanId();
+    const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
+    Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
+                            reserved ? PSTR(" <- reserved id!") : PSTR(""));
+    if(reserved) { deviceIdsFree = false; }
+  }
+  xSemaphoreGiveRecursive(canDevicesListMutex);
   return deviceIdsFree;
 }
 
@@ -83,17 +87,22 @@ bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
   return (xQueueSend(canTxQueue, &frameOut, canTxQueueTimeout) == pdTRUE);
 }
 
-void CanHandlerEsp32::rxInterrupt(int packetsNum) { // NOLINT(readability-convert-member-functions-to-static)
-  if((packetsNum <= 0) || (isrController == nullptr)) { return; }
+void CanHandlerEsp32::rxInterrupt(int payloadBytes) { // NOLINT(readability-convert-member-functions-to-static)
+  // Every frame this protocol puts on the bus carries all eight data bytes (transmitFrame()
+  // sends sizeof(CanFrame::data)), so one with an empty payload - a remote-transmission request,
+  // or a zero-length data frame - came from something else on the bus. Dropped rather than
+  // queued, because a device callback reads its meaning out of data[] and would be handed the
+  // frame's absent payload as zeros.
+  if((payloadBytes <= 0) || (isrController == nullptr)) { return; }
   CanFrame rxCanData;
   rxCanData.extId = isrController->packetId();
   if(!isrController->packetRtr()) {
     const uint8_t canDataDlc = isrController->packetDlc();
+    // parsePacket() leaves the whole payload unread, so readBytes() answers with the full DLC
+    // and this cannot come up short. Kept as a bound on what reached rxCanData.data: a driver
+    // that ever did return less would otherwise hand the device the missing bytes as zeros.
     const uint8_t bytesReaded = static_cast<uint8_t>(isrController->readBytes(rxCanData.data, canDataDlc));
-    if(canDataDlc != bytesReaded) {
-      ++rxIncompleteFrames;
-      return;
-    }
+    if(canDataDlc != bytesReaded) { return; }
   }
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   if(xQueueSendFromISR(canRxQueue, &rxCanData, &xHigherPriorityTaskWoken) != pdTRUE) {
@@ -139,10 +148,9 @@ bool CanHandlerEsp32::run() {
 }
 
 void CanHandlerEsp32::reportDroppedFrames() {
-  const uint32_t incomplete = rxIncompleteReporter.takeGrowth(rxIncompleteFrames);
   const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
-  if((incomplete != 0U) || (queueFull != 0U)) {
-    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u incomplete, %u queue full\r\n"), incomplete, queueFull);
+  if(queueFull != 0U) {
+    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u frames the queue had no room for\r\n"), queueFull);
   }
   // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
   // never took is reported.

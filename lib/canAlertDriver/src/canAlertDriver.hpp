@@ -64,6 +64,12 @@ private:
   /// @param payloadJson The JSON document containing the received message payload.
   void messageArrivedCallback(JsonVariant payloadJson) override;
 
+  /// @brief Turns a colour and/or sound request into the single CAN frame it maps to.
+  /// @details Handles everything a message can ask of the device itself; the requests that
+  /// administer the node's address stay in messageArrivedCallback().
+  /// @param payloadJson The JSON document containing the received message payload.
+  void sendAlertCommand(JsonVariant payloadJson);
+
   /// @brief Process a received CAN frame.
   /// @param canFrame The CAN frame containing command and data bytes.
   void processCanFrameArrived(const CanHandler::CanFrame& canFrame) override;

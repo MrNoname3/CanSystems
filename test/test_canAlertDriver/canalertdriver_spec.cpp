@@ -98,6 +98,21 @@ bool test_malformed_colors_drops_message() {
   END_IT
 }
 
+bool test_an_unusable_sound_request_drops_the_message() {
+  IT("a Sound that cannot be played drops the message instead of turning into a colour command");
+  resetEnv();
+  static TestCan can;
+  static Connectivity conn;
+  static CanAlertDriver driver(can, 30U, conn, "alert5");
+  injectMessage(driver, R"({"Sound":5,"Colors":[1,2,3]})");          // no Volume
+  injectMessage(driver, R"({"Sound":5,"Volume":300,"Colors":[1,2,3]})");  // Volume out of range
+  injectMessage(driver, R"({"Sound":"beep","Colors":[1,2,3]})");     // Sound of the wrong type
+  injectMessage(driver, R"({"Sound":5})");                           // nothing to play it with
+  pumpCanBus();
+  IS_EQUAL(esp32Can.transmitted().size(), 0U);
+  END_IT
+}
+
 // ---- CAN frame -> MQTT message mapping ----
 
 // Feeds one raw int16 temperature (hundredths of a degree, as the node packs it) through the
@@ -224,6 +239,7 @@ int main() {
   test_sound_volume_colors_sends_play_mp3();
   test_sound_without_colors_plays_with_dark_leds();
   test_malformed_colors_drops_message();
+  test_an_unusable_sound_request_drops_the_message();
   test_hum_temp_ldr_frame_publishes_json();
   test_temperature_decode_spans_the_int16_range();
   test_unknown_frame_is_ignored();

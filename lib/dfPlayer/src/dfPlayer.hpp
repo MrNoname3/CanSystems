@@ -16,7 +16,7 @@ private:
   struct __attribute__((packed))
   PlayQueueItem {
     uint16_t track;                 // Track number.
-    uint8_t volume;                 // Volume level (0-30).
+    uint8_t volume;                 // Volume level, already clamped to maxVolume by play().
     uint8_t red;                    // Red LED color component.
     uint8_t green;                  // Green LED color component.
     uint8_t blue;                   // Blue LED color component.
@@ -30,11 +30,12 @@ private:
       blue(0U) {}
 
     /// @brief Constructs a PlayQueueItem with specified parameters.
-    /// @param track The track number to be played (1-9999). Values above 9999 will be capped.
-    /// @param volume The playback volume (0-30). Values above 30 will be capped.
-    /// @param red The red color component for the LED strip (0-255).
-    /// @param green The green color component for the LED strip (0-255).
-    /// @param blue The blue color component for the LED strip (0-255).
+    /// @note Stores what it is given; the limits are applied by play(), which is the only caller.
+    /// @param track The track number to be played.
+    /// @param volume The playback volume.
+    /// @param red The red color component for the LED strip.
+    /// @param green The green color component for the LED strip.
+    /// @param blue The blue color component for the LED strip.
     PlayQueueItem(uint16_t track, uint8_t volume, uint8_t red, uint8_t green, uint8_t blue) :
       track(track),
       volume(volume),
@@ -57,8 +58,8 @@ public:
   ~DFPlayer() override = default;
 
   /// @brief Adds a track to the play queue.
-  /// @param track Track number (1-9999).
-  /// @param volume Volume level (0-30).
+  /// @param track Track number; anything above `maxTrack` is clamped down to it.
+  /// @param volume Volume level; anything above `maxVolume` is clamped down to it.
   /// @param red Red LED color component.
   /// @param green Green LED color component.
   /// @param blue Blue LED color component.
@@ -111,6 +112,8 @@ private:
     TURN_OFF,                       // Turn off the DFPlayer module.
   };
 
+  static constexpr uint16_t maxTrack = 9999U;                               // Highest track number the module addresses.
+  static constexpr uint8_t maxVolume = 30U;                                 // Highest volume level the module accepts.
   static constexpr uint16_t bootTime = Time::secToMs(1U);                   // DFPlayer boot time (ms).
   static constexpr uint8_t cmdExecTime = 120U;                              // Command execution time (ms).
   static constexpr uint16_t playDelayTime = 400U;                           // Delay between tracks (ms).

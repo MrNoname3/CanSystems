@@ -87,8 +87,10 @@ private:
   /// @details Runs with the flash cache enabled, so it does not belong in IRAM: the driver
   /// allocates the interrupt without `ESP_INTR_FLAG_IRAM`, and the controller accessors this
   /// reads the frame through live in flash themselves.
-  /// @param packetsNum Number of packets available in the RX buffer.
-  static void rxInterrupt(int packetsNum);
+  /// @param payloadBytes Payload length of the frame the controller has just parsed, as
+  /// CANController::onReceive() hands it over. A frame with none is dropped here; see the
+  /// definition for why.
+  static void rxInterrupt(int payloadBytes);
 
   /// @brief Hands one received frame to the device registered for its sender id.
   /// @param frameIn Frame taken from the receive queue.
@@ -107,7 +109,6 @@ private:
   static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
   // Written only by rxInterrupt(), read only by reportDroppedFrames(). Free-running: the
   // reader keeps its own mark, so the interrupt never competes with a reset.
-  static volatile uint32_t rxIncompleteFrames;                            // Payload was not fully read from the controller.
   static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
 
   ESP32SJA1000& controller;                                               // CAN controller this handler drives.
@@ -115,7 +116,6 @@ private:
   IntrusiveList<CanBase> deviceList;                                      // Registered CAN devices, keyed by client CAN id.
   void (*unclaimedFrameCallback)(void*, const CanFrame&) = nullptr;       // Receiver for frames no device answers to.
   void* unclaimedFrameContext = nullptr;                                  // Handed back to that receiver.
-  DeltaCounter rxIncompleteReporter;                                      // Mark for the incomplete-frame counter.
   DeltaCounter rxQueueFullReporter;                                       // Mark for the queue-full counter.
   DeltaCounter txAbandonedReporter;                                       // Mark for the driver's abandoned-frame counter.
   // Recursive: dispatchRxFrame() calls a device's callback while holding this, and that callback

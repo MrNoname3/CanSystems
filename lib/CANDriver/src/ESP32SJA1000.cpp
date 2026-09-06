@@ -354,6 +354,8 @@ void ESP32SJA1000::setPins(uint8_t rx, uint8_t tx) {
   txPin = static_cast<gpio_num_t>(tx);
 }
 
+// The suppression is load-bearing: this is declared static in the header, and an out-of-line
+// definition may not repeat the keyword, which the check does not account for.
 void ESP32SJA1000::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-functions-to-static)
   for(uint8_t i = 0U; i < 32U; i++) {
     const uint8_t b = readRegister(i);

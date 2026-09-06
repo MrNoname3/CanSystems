@@ -148,6 +148,24 @@ bool test_an_empty_controller_leaves_no_frame_behind() {
   END_IT
 }
 
+bool test_no_interrupt_pin_attaches_no_handler() {
+  IT("onReceive() attaches nothing when setPins() was told there is no interrupt line");
+  IS_TRUE(startController());
+  static uint8_t callbackCount;
+  callbackCount = 0U;
+  CAN.setPins(kCsPin, MCP2515::noIntPin);
+  CAN.onReceive([](int) -> void { ++callbackCount; });
+  // A frame is waiting, so an attached handler would drain it and call back. Firing whatever
+  // "pin 0xFF" resolves to is what an attach on a pin that is not one would have armed.
+  const uint8_t payload[1] = { 0x55U };
+  mcp2515.deliverExtendedFrame(0U, 0x0000004DU, payload, 1U);
+  triggerInterrupt(MCP2515::noIntPin);
+  IS_EQUAL(callbackCount, 0U);
+  CAN.onReceive(nullptr);
+  CAN.setPins(kCsPin, kIntPin);                            // leave the shared controller as found
+  END_IT
+}
+
 bool test_on_receive_drains_every_pending_frame() {
   IT("the driver's own interrupt path drains both buffers in one go");
   IS_TRUE(startController());
@@ -293,6 +311,7 @@ int main() {
   test_parse_packet_drains_one_buffer_per_call();
   test_zero_length_frame_is_still_a_frame();
   test_an_empty_controller_leaves_no_frame_behind();
+  test_no_interrupt_pin_attaches_no_handler();
   test_on_receive_drains_every_pending_frame();
   test_queued_frames_keep_their_sending_order();
   test_transmit_gives_up_when_the_bus_never_takes_a_frame();
