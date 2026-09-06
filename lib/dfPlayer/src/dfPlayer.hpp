@@ -85,8 +85,11 @@ public:
 private:
   /// @brief Attaches an interrupt to the specified pin.
   void attachInt() const {
-    // Clear interrupt flag, because it stores the interrupt event, even it is not attached.
-    bitSet(EIFR, digitalPinToInterrupt(intPin));
+    // Clear the flag the line may have left standing while nothing was attached, so the first
+    // pass does not read the previous track's end as this one's. Written, not bit-set: a one
+    // clears the flag it names, so a read-modify-write would write back - and clear - every other
+    // flag it happened to read as well.
+    EIFR = static_cast<uint8_t>(1U << digitalPinToInterrupt(intPin));
     attachInterrupt(digitalPinToInterrupt(intPin), irqHandler, RISING);
   }
 

@@ -72,6 +72,28 @@ static void finishTrack(Task& task, uint32_t now) {
 
 // ---- tests ----
 
+bool test_arming_the_busy_interrupt_leaves_the_other_flags_alone() {
+  IT("arming the busy interrupt clears its own pending flag and no other");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+
+  static constexpr uint8_t busyFlag = static_cast<uint8_t>(1U << BUSY_PIN);
+  static constexpr uint8_t otherFlag = 0x80U;      // whatever else on the part left a flag standing
+  EIFR.raise(busyFlag);
+  EIFR.raise(otherFlag);
+
+  player.play(1U, 20U, 0U, 0U, 0U);
+  (void)walkToPlaying(task);                       // reaches PLAY, which arms the interrupt
+
+  // The stale busy flag has to go, or the very first pass would read the previous track's end
+  // as this one's. Clearing anything else would take an event nobody handled with it.
+  IS_EQUAL(static_cast<uint8_t>(EIFR) & busyFlag, 0U);
+  IS_EQUAL(static_cast<uint8_t>(EIFR) & otherFlag, otherFlag);
+  END_IT
+}
+
 bool test_idle_without_queue_does_nothing() {
   IT("an empty queue keeps the module powered off and sends nothing");
   resetEnv();
@@ -250,6 +272,7 @@ bool test_every_packet_carries_its_own_checksum() {
 
 int main() {
   SUITE("DFPlayer");
+  test_arming_the_busy_interrupt_leaves_the_other_flags_alone();
   test_idle_without_queue_does_nothing();
   test_happy_path_plays_one_track();
   test_sound_only_leaves_leds_untouched();
