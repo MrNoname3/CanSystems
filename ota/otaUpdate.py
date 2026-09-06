@@ -1144,10 +1144,12 @@ class _BaseTransfer:
             self.state = TransferState.DONE
 
         elif answers_a_repeat:
-            # A late acknowledgment already moved the transfer past the repeated piece, so this is
-            # the repeat's answer catching up. Failing here would abort a transfer that the retry
-            # had just recovered; acknowledging with it would credit a piece nobody answered.
-            logging.info("The repeated piece was already stored; its answer arrived after the acknowledgment")
+            # A late acknowledgment already moved the transfer past the repeated piece, so this
+            # names a piece that is no longer the one in flight. Failing here would abort a
+            # transfer that the retry had just recovered; acknowledging with it would credit a
+            # piece nobody answered.
+            logging.info(f"A refusal naming piece {self._resent_piece}, which is behind the one in "
+                         f"flight: the repeat's own answer, and it acknowledges nothing")
             self._resent_piece = None
 
         else:
@@ -1173,6 +1175,11 @@ class _BaseTransfer:
 
     def _send_piece(self):
         """Send the next data piece to the device."""
+        # The device answers pieces in order, so a repeat's own answer can be at most one piece
+        # late. Past that, a refusal is the device genuinely out of step and has to fail the
+        # transfer rather than be read as an echo of a repeat sent long ago.
+        if (self._resent_piece is not None) and (self.piece_number > self._resent_piece + 1):
+            self._resent_piece = None
         offset = self.size - self.remaining_bytes
         read_size = min(self.remaining_bytes, self.piece_size)
 

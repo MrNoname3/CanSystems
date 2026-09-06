@@ -949,9 +949,9 @@ def test_timeout_in_wait_state_errors(tmp_path: Path) -> None:
 
 # --- Lost-acknowledgment recovery -------------------------------------------
 
-def _updater_awaiting_piece_ack(tmp_path: Path) -> "ota.OTAUpdater":
+def _updater_awaiting_piece_ack(tmp_path: Path, firmware: bytes = b"x" * 250) -> "ota.OTAUpdater":
     """Sends the first piece, so the transfer sits in WAIT_PIECE_ACK with a piece to repeat."""
-    updater = _make_updater(tmp_path, b"x" * 250)
+    updater = _make_updater(tmp_path, firmware)
     updater.remaining_bytes = updater.size
     updater._send_piece()
     return updater
@@ -1067,6 +1067,23 @@ def test_only_one_answer_per_repeat_is_absorbed(tmp_path: Path) -> None:
     updater._process_response({"type": 1})                 # late acknowledgment
     updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})   # the repeat's answer
     # A second one has no repeat behind it any more, so the device really is out of step.
+    updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
+    assert updater.state == ota.TransferState.ERROR
+
+
+def test_a_repeat_stops_absorbing_once_the_transfer_has_moved_on(tmp_path: Path) -> None:
+    updater = _updater_awaiting_piece_ack(tmp_path, firmware=b"x" * 500)
+    _expire(updater)                                       # the repeat of piece 0 goes out
+    # The device never had the original: it stores the repeat and acknowledges that one, so
+    # nothing further is coming about piece 0.
+    updater._process_response({"type": 1})
+
+    # Two pieces later the device really is out of step. Saying so has to fail the transfer
+    # instead of being read as the long-gone repeat's answer.
+    for _ in range(2):
+        updater._process_state()                           # puts the next piece on the wire
+        updater._process_response({"type": 1})
+    updater._process_state()
     updater._process_response({"type": 0, "err": ota.WRONG_FILE_PIECE_NUMBER})
     assert updater.state == ota.TransferState.ERROR
 
