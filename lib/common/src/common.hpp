@@ -59,11 +59,14 @@ public:
     return currentTime - eventTimer;
   }
 
-  /// @brief Checks if a specified duration has elapsed since an event.
+  /// @brief Checks whether more than a given duration has passed since an event.
+  /// @details The comparison is strict: a period built on this first reads elapsed one tick
+  /// past the duration named, and `hasElapsed(t, t, 0)` is false.
+  /// Every caller works in seconds or minutes, where that tick does not show.
   /// @param currentTime The current time (e.g., from a timer or clock).
   /// @param eventTimer The time of the event's start.
-  /// @param duration The duration to check against.
-  /// @return `true` if the duration has elapsed, `false` otherwise.
+  /// @param duration The duration to compare against.
+  /// @return `true` once strictly more than `duration` has passed, `false` otherwise.
   static constexpr bool hasElapsed(uint32_t currentTime, uint32_t eventTimer, uint32_t duration) {
     return elapsedSince(currentTime, eventTimer) > duration;
   }
