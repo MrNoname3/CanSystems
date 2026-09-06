@@ -58,18 +58,23 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
   // a device registers from its own constructor, which runs before anything has been read out of
   // the EEPROM, so the check it makes there has nothing to compare against yet.
   Logger::get()->printf_P(PSTR("[CAN] Drivers for devices:\r\n"));
-  bool deviceIdsFree = true;
-  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) == pdTRUE) {
-    uint8_t deviceIndex = 0U;
-    for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
-      const uint16_t clientCanId = d->getClientCanId();
-      const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
-      Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
-                              reserved ? PSTR(" <- reserved id!") : PSTR(""));
-      if(reserved) { deviceIdsFree = false; }
-    }
-    xSemaphoreGiveRecursive(canDevicesListMutex);
+  // A list that cannot be read is a check that did not happen, and this one decides whether the
+  // node comes up at all. Reported as a failed start rather than a clean one, the way
+  // isClientIdRegistered() answers "taken" when it cannot look.
+  if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) {
+    Logger::get()->printf_P(PSTR("  device list unreadable; ids not checked\r\n"));
+    return false;
   }
+  bool deviceIdsFree = true;
+  uint8_t deviceIndex = 0U;
+  for(CanBase* d = deviceList.first(); d != nullptr; d = d->getNext()) {
+    const uint16_t clientCanId = d->getClientCanId();
+    const bool reserved = (clientCanId == getLocalCanId()) || (clientCanId == getMasterCanId());
+    Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
+                            reserved ? PSTR(" <- reserved id!") : PSTR(""));
+    if(reserved) { deviceIdsFree = false; }
+  }
+  xSemaphoreGiveRecursive(canDevicesListMutex);
   return deviceIdsFree;
 }
 
