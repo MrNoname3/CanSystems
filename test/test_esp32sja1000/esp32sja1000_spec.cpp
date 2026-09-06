@@ -184,6 +184,23 @@ bool test_an_extended_filter_admits_the_address_it_is_set_to() {
   END_IT
 }
 
+bool test_an_extended_filter_turns_away_every_other_address() {
+  IT("filterExtended() turns away a frame addressed to somebody else");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_EQUAL(controller().filterExtended(10U, 0x3FFU), 1U);
+
+  // The mask names all ten receiver-address bits, so the neighbours of this address are as
+  // foreign as any other: the gateway routes an arriving frame by its sender, and would hand a
+  // frame addressed elsewhere to whichever driver answers for that sender.
+  for(uint16_t to = 0U; to < 16U; to++) {
+    if(to == 10U) { continue; }
+    IS_FALSE(receiveOneExtendedFrame(extIdOf(to, 4U, 26U), 2U));
+    IS_EQUAL(controller().packetId(), CANController::noId);
+  }
+  IS_EQUAL(esp32Can.getFilteredFrames(), 15U);
+  END_IT
+}
+
 int main() {
   SUITE("ESP32SJA1000");
   test_begin_leaves_the_controller_out_of_reset();
@@ -196,5 +213,6 @@ int main() {
   test_an_unfiltered_controller_takes_every_frame();
   test_a_standard_filter_admits_only_its_own_identifier();
   test_an_extended_filter_admits_the_address_it_is_set_to();
+  test_an_extended_filter_turns_away_every_other_address();
   FINISH
 }
