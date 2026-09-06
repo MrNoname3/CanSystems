@@ -112,8 +112,11 @@ class Analog final {
 public:
 #if defined(__AVR_ATmega328P__)
   /// @brief Configures the analog input settings.
-  /// This function sets up the analog reference voltage to 5V and configures the ADC
-  /// for fast sampling by setting the prescaler to 16.
+  /// @details Takes the reference from the supply and shortens the conversion: the prescaler set
+  /// below runs the ADC faster than the clock range the part specifies for its full resolution.
+  /// Every reading on these nodes is either filtered over many samples or compared against a
+  /// threshold, so the accuracy traded away does not show; a reading that needed the last bit
+  /// would have to say so and slow the prescaler back down.
   static void config() {
     analogReference(DEFAULT);
     bitSet(ADCSRA, ADPS2);
