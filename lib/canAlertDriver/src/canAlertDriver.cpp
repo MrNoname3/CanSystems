@@ -53,13 +53,24 @@ void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT
     (void)sendResponse(requestSent ? Response::ACK : Response::NACK, static_cast<uint16_t>(CanCmd::SET_CAN_ID));
     return;
   }
+  sendAlertCommand(payloadJson);
+}
+
+void CanAlertDriver::sendAlertCommand(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];
   uint8_t colorsOffset = 0U;
   uint8_t canData[8] = { 0U };
 
-  if(soundJsonVar.is<uint16_t>() && volumeJsonVar.is<uint8_t>()) {
+  // A play request that cannot be read - "Sound" without a usable "Volume", or either out of
+  // range - is dropped whole. Letting it through would leave colorsOffset at 0, and a message
+  // that also carried "Colors" would go out as an RGB_LED frame: the lights asked for, the
+  // sound silently gone.
+  const bool soundUsable = soundJsonVar.is<uint16_t>() && volumeJsonVar.is<uint8_t>();
+  if(!soundJsonVar.isNull() && !soundUsable) { return; }
+
+  if(soundUsable) {
     const uint16_t sound = soundJsonVar.as<uint16_t>();
     const uint8_t volume = volumeJsonVar.as<uint8_t>();
     canData[0] = static_cast<uint8_t>(sound & 0xFF);
