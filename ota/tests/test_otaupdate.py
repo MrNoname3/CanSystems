@@ -322,6 +322,23 @@ def test_parse_file_content_must_be_mapping(tmp_path: Path) -> None:
         )
 
 
+def test_parse_file_pio_env_needs_a_local_path(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        _file_parser(tmp_path)._parse_file(
+            {"name": "x", "render": "server_json", "device_path": "/x", "pio_env": "some_env"},
+            mac="aabbccddeeff",
+        )
+
+
+def test_parse_file_keeps_the_named_environment(tmp_path: Path) -> None:
+    entry = _file_parser(tmp_path)._parse_file(
+        {"name": "fw", "local_path": "fw.bin", "device_path": "/fw.bin",
+         "pio_env": "nanoatmega328_alert"},
+        mac="aabbccddeeff",
+    )
+    assert entry.pio_env == "nanoatmega328_alert"
+
+
 def test_parse_file_content_and_render_conflict(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         _file_parser(tmp_path)._parse_file(
@@ -369,6 +386,24 @@ def test_provider_serializes_inline_content(tmp_path: Path) -> None:
     entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
                           content={"tube": 1})
     assert ota.build_file_provider(entry, device, manager).data == b'{"tube":1}'
+
+
+def test_provider_accepts_an_image_from_the_named_environment(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    source = _write(tmp_path, "fw.bin", b"\x00nanoatmega328_alert\x00\xff")
+    entry = ota.FileEntry(name="fw", device_path="/canAlertFw.bin", local_path=source,
+                          pio_env="nanoatmega328_alert")
+    assert ota.build_file_provider(entry, device, manager).size == len(source.read_bytes())
+
+
+def test_provider_refuses_an_image_from_another_environment(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    # A valid image of the other CAN node: same shape, same checksum machinery, wrong device.
+    source = _write(tmp_path, "fw.bin", b"\x00nanoatmega328_irrigation\x00\xff")
+    entry = ota.FileEntry(name="fw", device_path="/canAlertFw.bin", local_path=source,
+                          pio_env="nanoatmega328_alert")
+    with pytest.raises(ValueError):
+        ota.build_file_provider(entry, device, manager)
 
 
 def test_provider_missing_local_file_raises(tmp_path: Path) -> None:

@@ -129,6 +129,7 @@ class FileEntry:
     local_path: Optional[Path] = None  # Local path to the file (relative to ota/ directory)
     render: Optional[str] = None       # Renderer id for generated content ("server_json")
     content: Optional[Dict[str, Any]] = None  # Inline JSON content from devices.yaml
+    pio_env: Optional[str] = None      # Build environment the file must belong to, checked before sending
 
 
 @dataclass
@@ -261,12 +262,18 @@ class DeviceManager:
             raise ValueError(
                 f"'content' must be a mapping in file entry '{f['name']}' (device: {mac})"
             )
+        if 'pio_env' in f and 'local_path' not in f:
+            raise ValueError(
+                f"'pio_env' names the build a file on disk has to come from, so it only goes with "
+                f"'local_path' (file entry '{f['name']}', device: {mac})"
+            )
         return FileEntry(
             name=f['name'],
             device_path=f['device_path'],
             local_path=self.script_dir / f['local_path'] if 'local_path' in f else None,
             render=f.get('render'),
-            content=cast(Optional[Dict[str, Any]], f.get('content'))
+            content=cast(Optional[Dict[str, Any]], f.get('content')),
+            pio_env=f.get('pio_env')
         )
 
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
@@ -514,6 +521,24 @@ class ConfigManager:
 # Firmware manager
 # ---------------------------------------------------------------------------
 
+def verify_image_environment(data: bytes, pio_env: str, source: str) -> None:
+    """Fail unless an image carries the build environment it is being sent as.
+
+    A device compares what it is told against its own BUILD_ENV_NAME, which catches the right
+    image going to the wrong node. It cannot catch the wrong image going to the right node - for
+    that the file has to be asked what it is, and the build stamps the environment name into every
+    image (platformio.ini: -D BUILD_ENV_NAME="$PIOENV"). The CAN nodes have no check of their own
+    at all: their firmware travels as an ordinary file and is only checksummed, so this is the
+    only place a stale or mismatched image is caught before the bootloader programs it.
+    """
+    if pio_env.encode('utf-8') + b'\0' not in data:
+        raise ValueError(
+            f"{source} does not carry the environment name '{pio_env}', "
+            f"so it is not that environment's firmware"
+        )
+    logging.info(f"Firmware ID: \"{pio_env}\"")
+
+
 class FirmwareManager:
     """Handles firmware file operations and validation"""
 
@@ -558,20 +583,8 @@ class FirmwareManager:
             raise OSError(f"Failed to read firmware file: {e}") from e
 
     def _verify_firmware_id(self) -> None:
-        """Fail unless the image carries the environment name it is being sent as.
-
-        The device compares binId against its own BUILD_ENV_NAME, which catches the right image
-        going to the wrong node. It cannot catch the wrong image going to the right node - for
-        that the file has to be asked what it is, and the build stamps the environment name into
-        every image (platformio.ini: -D BUILD_ENV_NAME="$PIOENV").
-        """
-        marker = self.pio_project.encode('utf-8') + b'\0'
-        if marker not in self.firmware_data:
-            raise ValueError(
-                f"{self.firmware_path} does not carry the environment name '{self.pio_project}', "
-                f"so it is not that environment's firmware"
-            )
-        logging.info(f"Firmware ID: \"{self.pio_project}\"")
+        """Fail unless the image carries the environment name it is being sent as."""
+        verify_image_environment(self.firmware_data, self.pio_project, str(self.firmware_path))
 
 
 # ---------------------------------------------------------------------------
@@ -747,7 +760,10 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
         ensure_ca_bundle(config_manager)
     if not file_entry.local_path.exists():
         raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
-    return FileDataProvider(file_entry.local_path)
+    provider = FileDataProvider(file_entry.local_path)
+    if file_entry.pio_env is not None:
+        verify_image_environment(provider.data, file_entry.pio_env, str(file_entry.local_path))
+    return provider
 
 
 # ---------------------------------------------------------------------------

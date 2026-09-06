@@ -55,6 +55,7 @@ projects:
             device_path: /config/server.json
           - name: "CAN alert firmware upload"
             local_path: ../.pio/build/nanoatmega328_alert/firmware.bin
+            pio_env: nanoatmega328_alert
             device_path: /canAlertFw.bin
 
   - name: "Thermometer"
