@@ -73,6 +73,10 @@ bool FileName::isValidFileName(const char* fileName) {
   }
   return false;
 }
+
+bool FileName::isOwnFirmwareFileName(const char* fileName) {
+  return strcmp_P(fileName, otaFwLocation) == 0;
+}
 #endif
 
 void Build::printBuildInfo() {

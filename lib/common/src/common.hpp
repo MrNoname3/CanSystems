@@ -298,6 +298,14 @@ public:
   /// @param fileName The file name to validate (must not be nullptr).
   /// @return True if the file name is in the list of accepted locations, false otherwise.
   static bool isValidFileName(const char* fileName);
+
+  /// @brief Whether a file name names this device's own firmware image.
+  /// @details What is written decides what happens when the transfer ends - the image is handed
+  /// to the updater and the device reboots into it - so both the acceptance of the message and
+  /// the handling of the transfer have to read the name the same way.
+  /// @param fileName The file name to test (must not be nullptr).
+  /// @return True when a transfer under this name replaces the running firmware.
+  static bool isOwnFirmwareFileName(const char* fileName);
 #endif
 
   FileName() = delete;                                   // Delete constructor.

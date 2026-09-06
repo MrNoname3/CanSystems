@@ -91,7 +91,7 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   if(isFwTransfer) {
     abortFirmwareUpdate();
   }
-  isFwTransfer = (strncmp_P(fileNameLocal, FileName::getOtaFwLocation(), sizeof(fileNameLocal)) == 0);
+  isFwTransfer = FileName::isOwnFirmwareFileName(fileNameLocal);
   if(isFwTransfer) {
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get()->printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));

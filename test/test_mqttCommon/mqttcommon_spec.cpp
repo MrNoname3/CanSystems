@@ -165,15 +165,32 @@ bool test_end_to_end_file_routes_to_ota_target() {
   END_IT
 }
 
-bool test_firmware_without_a_binid_is_rebooted_into() {
-  IT("firmware that arrives without a binId is rebooted into, not left staged");
+bool test_firmware_is_rebooted_into_for_the_name_it_carries() {
+  IT("what the device reboots into follows the name being written");
   resetEnv();
   Connectivity conn;
   MqttCommon mc(conn, "common");
-  deliver(mc, R"({"name":"espFirmware","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");  // begin
+  deliver(mc, R"({"binId":"native_test","name":"espFirmware","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
   deliver(mc, R"({"piece":0,"data":"YWJj"})");             // base64("abc") -> Update.end() verifies it
   (void)mc.run();                                          // consume completion
   IS_EQUAL(ResetHandler::restartCount, 1);
+  END_IT
+}
+
+bool test_firmware_without_a_binid_is_refused() {
+  IT("firmware that does not say which build it carries is refused before anything is written");
+  resetEnv();
+  Connectivity conn;
+  MqttCommon mc(conn, "common");
+  deliver(mc, R"({"name":"espFirmware","fileSize":3,"md5":"900150983cd24fb0d6963f7d28e17f72"})");
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  IS_FALSE(Update.isOpen());                               // the updater was never opened
+
+  // No transfer was started, so the pieces that would have followed have nothing to join.
+  deliver(mc, R"({"piece":0,"data":"YWJj"})");
+  IS_TRUE(MqttBase::lastResponse == MqttBase::Response::NACK);
+  (void)mc.run();
+  IS_EQUAL(ResetHandler::restartCount, 0);
   END_IT
 }
 
@@ -298,7 +315,8 @@ int main() {
   test_file_piece_stored();
   test_unknown_json_no_response();
   test_end_to_end_file_routes_to_ota_target();
-  test_firmware_without_a_binid_is_rebooted_into();
+  test_firmware_is_rebooted_into_for_the_name_it_carries();
+  test_firmware_without_a_binid_is_refused();
   test_a_config_file_carrying_a_binid_is_not_rebooted_into();
   test_a_binid_that_only_starts_with_the_env_name_is_rejected();
   test_an_upload_is_refused_while_its_target_still_reads_the_file();
