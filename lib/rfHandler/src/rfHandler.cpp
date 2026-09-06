@@ -23,6 +23,7 @@ RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t r
 
 bool RfHandler::run() {
   const uint32_t actualTime = millis();
+  bool reported = true;
   if(rfTransceiver.available()) {
     RfData actualRfData(rfTransceiver.getReceivedValue(), rfTransceiver.getReceivedBitlength(),
                         rfTransceiver.getReceivedProtocol(), rfTransceiver.getReceivedDelay());
@@ -40,17 +41,19 @@ bool RfHandler::run() {
       // LP64 host, so the cast keeps the format and the argument in agreement on every platform.
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), rfMessageFrame, static_cast<unsigned long long>(actualRfData.data), actualRfData.bitLength, actualRfData.protocol, actualRfData.pulseLength);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
-      if(!dataOutValid) { return false; }
-      if(!MqttBase::sendMessage(dataOut)) { return false; }
-      lastRfData = actualRfData;
+      reported = dataOutValid && MqttBase::sendMessage(dataOut);
+      // Only a frame that was actually reported arms the filter, so one that could not go out is
+      // published by the repeat that follows it rather than swallowed as a duplicate.
+      if(reported) { lastRfData = actualRfData; }
     }
     dataCheckTimer = actualTime;
   }
   // One command per pass: transmitting is a blocking, timing-critical bit-bang, so a burst must
   // not hold the cooperative loop for several frames' air time in a row. Done after the receive
-  // side, because the transceiver goes deaf for the whole transmission.
+  // side, because the transceiver goes deaf for the whole transmission - and done whatever the
+  // report did, which is somebody else's trouble and not the queue's.
   if(!pendingTx.isEmpty()) { transmitCommand(pendingTx.pop()); }
-  return true;
+  return reported;
 }
 
 void RfHandler::transmitCommand(const RfData& command) {
