@@ -50,10 +50,13 @@ def find_clang_format() -> str:
 
 
 def git_ls_files(*patterns: str) -> list[str]:
-    """Tracked files matching the given pathspecs, relative to the project root."""
-    result = subprocess.run(["git", "ls-files", *patterns], cwd=PROJECT_DIR,
+    """Tracked files matching the given pathspecs, relative to the project root.
+
+    Read NUL-separated, because a path is allowed to contain whitespace and every name here goes
+    on to be opened or handed to clang-format as one argument."""
+    result = subprocess.run(["git", "ls-files", "-z", *patterns], cwd=PROJECT_DIR,
                             capture_output=True, text=True, check=True)
-    return sorted(result.stdout.split())
+    return sorted(name for name in result.stdout.split("\0") if name)
 
 
 def is_text_file(path: Path) -> bool:
