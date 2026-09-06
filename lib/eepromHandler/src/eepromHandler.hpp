@@ -41,7 +41,7 @@ public:
     if(data == nullptr) { return false; }
     EEPROMData eepromData;
     eepromData.data = *data;
-    eepromData.crc = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
+    eepromData.crc = checksumOf(eepromData);
 
     // Write the data to EEPROM.
     EEPROM.put(eepromAddress, eepromData);
@@ -76,11 +76,7 @@ public:
     EEPROM.get(eepromAddress, eepromData);
 
     // Validate CRC.
-    uint16_t crcReceived = eepromData.crc;
-    eepromData.crc = 0U;
-    uint16_t crcCalculated = Crc16::calculate(reinterpret_cast<uint8_t*>(&eepromData), sizeof(EEPROMData));
-
-    if(crcReceived == crcCalculated) {
+    if(eepromData.crc == checksumOf(eepromData)) {
       *data = eepromData.data;
       return true;  // CRC validation succeeded.
     }
@@ -116,6 +112,20 @@ private:
     T data{};                                       // User-defined data type, value-initialized to zero.
     EEPROMData() = default;
   };
+
+  /// @brief Checksum of a record, taken over the whole of it with its own checksum field zeroed.
+  /// @details Both directions have to agree on what the checksum covers, so both take it from
+  /// here. Zeroing the field on a copy is what states that rule, rather than leaving it to hold
+  /// wherever a caller happens to compute the checksum relative to assigning it.
+  /// @param record The record to checksum. By value rather than by const reference because the
+  /// zeroing below is the whole point: a reference would need a copy of its own, and the version
+  /// that avoids the copy has to checksum the fields one range at a time, which puts the layout
+  /// assumption back into the code this exists to keep it out of.
+  /// @return The checksum to store in, or compare against, `record.crc`.
+  [[nodiscard]] static uint16_t checksumOf(EEPROMData record) {
+    record.crc = 0U;
+    return Crc16::calculate(reinterpret_cast<uint8_t*>(&record), sizeof(EEPROMData));
+  }
 #if defined(ESP8266) || defined(ESP32)
   static inline bool eepromInitialised = false;     // Tracks whether the EEPROM has been initialized.
 #endif
