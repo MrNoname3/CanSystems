@@ -1,12 +1,15 @@
 #pragma once
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
-/// @brief A handful of bytes that survive a reset but not a power cycle.
-/// @details That lifetime is what the users are after: a reset - watchdog, restartMCU() or
-/// otherwise - keeps what the previous run left, while pulling the plug is a deliberate clean
-/// slate. Where the bytes live is platform business: RTC user memory on the ESP8266,
-/// RTC_NOINIT_ATTR variables on the ESP32, plain statics on the host so everything above this can
-/// be unit-tested.
+/// @brief A handful of bytes that survive a reset the firmware asked for, but not a power cycle.
+/// @details That lifetime is what the users are after: a watchdog reset or a restartMCU() keeps
+/// what the previous run left, while pulling the plug is a deliberate clean slate. Where a reset
+/// driven from outside falls is the part's business, and on the ESP32 it falls with the power
+/// cycle: a pulse on the EN pin is reported as a power-on and the bytes come up blank, so
+/// resetting a board over its serial adapter's DTR/RTS lines drops the record exactly as
+/// unplugging it would. Where the bytes live is platform business too: RTC user memory on the
+/// ESP8266, RTC_NOINIT_ATTR variables on the ESP32, plain statics on the host so everything above
+/// this can be unit-tested.
 /// @details Each slot carries its own written marker, so a slot no earlier run has written still
 /// reads back as absent after another slot has been written in this one - which is what keeps a
 /// power-on start from mistaking a neighbour's fresh value for its own history.

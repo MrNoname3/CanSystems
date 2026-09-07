@@ -21,10 +21,12 @@ enum class BootStage : uint8_t {
   Running = 12U,       // Startup finished; the main loop has the device.
 };
 
-/// @brief Records how far startup got, in memory that outlives a reset but not a power cycle.
-/// @details That lifetime is the point: a reset - watchdog, restartMCU() or otherwise - keeps the
-/// record, so the next run can say which step the device died on, while pulling the plug is a
-/// deliberate clean slate. Where the record lives is platform business and stays in the .cpp.
+/// @brief Records how far startup got, in memory that outlives a reset the firmware asked for.
+/// @details That lifetime is the point: a watchdog reset or a restartMCU() keeps the record, so
+/// the next run can say which step the device died on, while a power cycle is a deliberate clean
+/// slate - and so is a reset driven from outside, on a part that cannot tell the two apart; see
+/// rtcStore.hpp, which owns that rule. Where the record lives is platform business and stays in
+/// the .cpp.
 class BootProgress final {
 public:
   /// @brief Reads what the previous run reached, then marks this one as started.
