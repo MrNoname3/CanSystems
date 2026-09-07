@@ -1,5 +1,5 @@
 # CI-only tooling, pinned exact so a release of either cannot change what the gate runs without
-# a commit. Not installed locally: PlatformIO runs from its own penv there (see CLAUDE.md), and
+# a commit. Not installed locally: PlatformIO runs from its own penv there (see AGENTS.md), and
 # intelhex already lives in that penv.
 #
 #   platformio - the gate's build/test/check driver.
