@@ -11,8 +11,7 @@ pip requirements-file feature and not part of the requirement syntax. Constraint
 through the parsed specifier, so a `>=` pin is compared rather than skipped.
 
 The environment checked is the one the other guards will use, found the same way they find their
-tools: the project-root .venv when there is one, otherwise the interpreter this runs under - which
-is how CI has it, installing the pins into the runner's own Python.
+tools: the project-root .venv when there is one, otherwise the interpreter this runs under.
 
 requirements-ci.txt is deliberately not read: platformio and intelhex are installed only in CI,
 and PlatformIO itself runs from its own penv.
