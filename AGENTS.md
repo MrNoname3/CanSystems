@@ -50,9 +50,11 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 ## Git workflow
 
 - Always merge with `git merge --no-ff` (never fast-forward).
-- Build features on a branch; merge to `master` only when done, reviewed, and CI-green, then
-  delete the branch (local + remote) and push `master` to `origin` (= the self-hosted Gitea,
-  which **push-mirrors to GitHub** automatically — no second remote needed).
+- A branch is for work that spans several commits — a single commit goes straight onto `master`
+  unless a branch is asked for. Build a feature on a branch and merge it to `master` only when
+  done, reviewed, and CI-green, then delete the branch (local + remote) and push `master` to
+  `origin` (= the self-hosted Gitea, which **push-mirrors to GitHub** automatically — no second
+  remote needed).
 - CI runs the release gate plus non-blocking firmware size-diff and native-coverage jobs, and a
   weekly PlatformIO outdated report. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
