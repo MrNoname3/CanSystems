@@ -30,6 +30,10 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   deps, and `requirements-ci.txt` the two CI-only ones (platformio, intelhex). All three are
   pinned exact.
 - urboot bootloader: `scripts/build_urboot.sh [771|800|801]` (podman/docker; see `bootloader/README.md`)
+- Bench console: `python scripts/board_console.py --board esp|avr [--listen SECONDS]` - resets the
+  attached board over the adapter's control lines and prints what it says next. The wiring has to
+  be named: an ESP resets from RTS and is undisturbed by attaching, an ATmega resets from DTR,
+  which opening the port already asserts, so it cannot be watched without restarting it.
 
 The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it that way.
 

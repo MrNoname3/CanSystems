@@ -21,3 +21,5 @@ pyright==1.1.411            # typecheck_check.py (strict)
 pytest==9.1.1               # pytest_check.py
 gcovr==8.6                  # CI coverage job (native_test line coverage over lib/)
 packaging==26.3             # deps_check.py parses the requirement lines with it (also a pytest dep)
+pyserial==3.5               # board_console.py drives the boards' DTR/RTS reset lines
+types-pyserial==3.5.0.20260712  # pyserial ships no py.typed, and pyright runs strict over scripts/

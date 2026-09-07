@@ -144,6 +144,20 @@ action serial-flashes the firmware, and **Initial provisioning** flashes the fir
 config image (it generates `data/` and runs `uploadfs` itself — see
 [`ota/README.md`](ota/README.md)).
 
+Watching a board on the bench goes through `scripts/board_console.py`, which restarts it over the
+USB-serial adapter's control lines and prints what it says next:
+
+```sh
+python scripts/board_console.py --board esp               # ESP8266 / ESP32
+python scripts/board_console.py --board avr --listen 20   # ATmega328P
+```
+
+The wiring has to be named because nothing in the USB descriptors reveals it — the same CH340 sits
+under a D1 mini and under a Nano — and the two differ in a way that matters: an ESP board restarts
+from RTS and is left alone by merely attaching, while an ATmega restarts from DTR, which opening
+the port already asserts, so there is no way to watch one without restarting it first. The script's
+own docstring carries the rest, including what each board then reports about the restart.
+
 The whole build is warning-clean under `-Wall -Wextra -Werror`; keep it that way.
 Firmware version comes from the git commit count, so commit before flashing release builds
 (the `dirty` flag is published in the info topic).
