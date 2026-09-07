@@ -242,6 +242,14 @@ public:
   /// @return Length of the `pioEnv` string excluding the null terminator.
   static constexpr uint32_t getPioEnvLength() { return sizeof(pioEnv) - 1U; }
 
+#if defined(__AVR_ATmega328P__)
+  /// @brief Gets the PlatformIO environment name as a flash string.
+  /// @details The same name getPioEnv() returns, in the form this part can print: a 2 KB device
+  /// has no room to keep it in RAM as well.
+  /// @return The environment name, to be printed rather than compared.
+  static const __FlashStringHelper* getPioEnvFlash() { return F(BUILD_ENV_NAME); }
+#endif
+
   /// @brief Retrieves the PlatformIO environment information in JSON format.
   /// @return A constant string in JSON format with the environment name.
   static constexpr const char* getPioEnvJson() { return pioEnvJson; }

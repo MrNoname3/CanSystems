@@ -81,12 +81,12 @@ bool FileName::isOwnFirmwareFileName(const char* fileName) {
 
 void Build::printBuildInfo() {
 #if defined(__AVR_ATmega328P__)
-  // Printing the environment name is also what puts it into the image: nothing else on this part
-  // reads getPioEnv(), so without a reference the string is not linked in at all. ota/otaUpdate.py
-  // reads it back out of the .bin to refuse sending one node's firmware to the other, which is the
-  // only identity check the CAN update path has - the device end only sees a checksum.
+  // This print is also what puts the environment name into the image: nothing else on this part
+  // reads it, so without a reference the string is not linked in at all. ota/otaUpdate.py reads it
+  // back out of the .bin to refuse sending one node's firmware to the other, which is the only
+  // identity check the CAN update path has - the device end only sees a checksum.
   Logger::get()->print(F("Env: "));
-  Logger::get()->println(F(BUILD_ENV_NAME));
+  Logger::get()->println(getPioEnvFlash());
   Logger::get()->print(F("CPP: "));
   Logger::get()->println(getCppVersion());
   Logger::get()->print(F("FW: "));
@@ -112,6 +112,7 @@ void Build::printBuildInfo() {
   Logger::get()->println(ResetHandler::getResetReason(), HEX);
 #elif defined(ESP8266) || defined(ESP32)
   Logger::get()->printf_P(PSTR("Build info:\r\n"));
+  Logger::get()->printf_P(PSTR("  Env: %s\r\n"), getPioEnv());
   Logger::get()->printf_P(PSTR("  CPP: %u\r\n"), getCppVersion());
   Logger::get()->printf_P(PSTR("  FW: %hu\r\n"), getFwVersion());
   Logger::get()->printf_P(PSTR("  GIT: %08x\r\n"), getGitHash());
