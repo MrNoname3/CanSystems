@@ -17,8 +17,12 @@ bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   // reports 0 for an absent/unreadable chip, which rejects every transfer (fail-safe: never
   // write to a flash we cannot size).
   if(static_cast<uint32_t>(flashBlockNumber) * flashBlockTobytes + fwSize > flash.capacity()) { return false; }
-  // A chip still running an earlier erase cannot take this image: writing into cells that were
-  // never cleared would only be caught by the CRC, after the whole firmware has crossed the bus.
+  // The whole chip, not the 32 KB block this image lands in: the class is written for parts with
+  // more flash than this one, where erasing one block leaves the rest of the image writing into
+  // cells that were never cleared. NOR takes those writes without complaint - bits only travel one
+  // way - so the narrower erase passes on an ATmega328P and fails exactly where the wider reach is
+  // the point, with nothing but the closing checksum to say so. The answer is checked because a
+  // chip still running an earlier erase cannot take the image either.
   if(!flash.chipErase()) { return false; }
   this->fwSize = fwSize;                                          // Save FW size.
   this->fwCrc = fwCrc;                                            // Store FW CRC.
