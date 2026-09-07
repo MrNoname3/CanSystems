@@ -1,4 +1,13 @@
-"""Fixes an invalid escape sequence in the ESP8266 framework's elf2bin.py tool."""
+"""Fixes an invalid escape sequence in the ESP8266 framework's elf2bin.py tool.
+
+This writes into an installed framework package on every build, which is what `patch_new_lib.py`
+was removed for doing to the Arduino AVR core. It stays anyway, and on purpose: without it the
+tool still works - same regex result, same exit code - but Python 3.12 and newer print a
+SyntaxWarning, and elf2bin.py runs as `__main__`, so nothing is cached and the warning is reprinted
+at every link of every ESP8266 environment. The framework is pinned, so no version bump retires it.
+Deleting this script, silencing the warning from the build environment and vendoring elf2bin.py
+were each weighed and turned down; leave it as it is.
+"""
 
 import os
 
