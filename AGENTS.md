@@ -19,6 +19,10 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
+- Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
+  `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
+  `typecheck_check.py` and `pytest_check.py`; anything that compiles needs the whole gate. Run the
+  whole gate before a merge whatever the changes were, and say which guard ran.
 - Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
   there is none - matches the pins; `--sync` installs them),
   `scripts/format_check.py` (clang-format + final newline),
@@ -39,8 +43,18 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 
 ## Editing conventions
 
-- **Explicit types**, not `auto` (modernize-use-auto is deliberately suppressed).
+- **Explicit types**, not `auto` (modernize-use-auto is deliberately suppressed; suppress it
+  further rather than rewriting to `auto`). A lambda names its return type too — `[]() -> bool`,
+  in tests as much as in production code.
 - **English** comments and identifiers only — even when the conversation is in Hungarian.
+- A comment says what the code does and why the tricky part of it is that way: the reasoning goes
+  in the `.cpp`, the contract in the header. Never describe something the code does not do, and
+  never put the story of a change here — that belongs in its commit message.
+- New headers open with `#pragma once`, and an `#ifndef` guard in a header you are editing anyway
+  gets converted, so the old style retires without a churn commit. Watch for an `#endif` that
+  closes a platform guard rather than the include guard: that one stays.
+- `#if not defined(X)` is the spelling used here; leave it alone rather than normalising it to
+  `#if !defined(X)`.
 - Preserve **manually column-aligned trailing comments**: clang-format runs with
   `AlignTrailingComments: Leave`, and `ruff format` is **never** run (it would collapse them) —
   ruff is lint-only.
@@ -69,6 +83,9 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). Dependabot is deliberately not used: it only runs on GitHub,
   and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
   pins in `platformio.ini` stay manual.
+- A commit message describes what is in its diff — not the paths that were tried and dropped, not
+  a correction of an earlier analysis, not the measurements behind it, and not the circumstances of
+  whoever wrote it.
 - End commit messages with the `Co-Authored-By` trailer.
 
 ## Dependencies
@@ -85,6 +102,8 @@ Python tooling.
   in time-driven tests.
 - **AVR `int` is 16-bit** (ESP `int` is 32-bit): shifts past bit 15 need
   `static_cast<uint32_t>(1) << i`; native tests run on the host and won't catch this.
+- A change in behaviour comes with a test that fails without it. Confirm that by taking the change
+  back out and running the test again — one that passes either way is proving nothing.
 
 ## Gotchas
 
