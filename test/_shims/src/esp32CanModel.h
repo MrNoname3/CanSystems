@@ -23,6 +23,12 @@ public:
   static constexpr uint8_t regEcc = 0x0CU;    // Error code capture.
   static constexpr uint8_t regTxErr = 0x0FU;  // Transmit error counter.
   static constexpr uint8_t regSff = 0x10U;    // Standard-frame receive window: header, then payload.
+  // 0x10-0x17 mean two different things depending on the mode: the transmit/receive window while
+  // the controller is operating, the acceptance code and mask registers while it is in reset mode.
+  // The chip decodes them by mode and so does this model - sharing one array would let a queued
+  // frame overwrite the filter the driver programmed.
+  static constexpr uint8_t regAcr0 = 0x10U;   // Acceptance code, four bytes (reset mode only).
+  static constexpr uint8_t regAmr0 = 0x14U;   // Acceptance mask, four bytes (reset mode only).
 
   static constexpr uint8_t modResetMode = 0x01U;
   static constexpr uint8_t irReceive = 0x01U;
@@ -56,6 +62,12 @@ public:
   void reset() {
     memset(registers, 0, sizeof(registers));
     registers[regSr] = static_cast<uint32_t>(srTxBufferFree) | srTxComplete;
+    // The part powers up in reset mode, which is what makes the acceptance registers reachable:
+    // begin() programs them before it puts the controller into operating mode.
+    registers[regMod] = modResetMode;
+    memset(acceptanceCode, 0, sizeof(acceptanceCode));
+    memset(acceptanceMask, 0xFF, sizeof(acceptanceMask));      // undefined on the part; open here
+    filteredFrames = 0U;
     txBehaviour = TxBehaviour::Completes;
     pollDurationMs = 0U;
     statusReads = 0U;
@@ -70,6 +82,14 @@ public:
   /// status, the way the controller does when a frame arrives.
   /// @note The model holds one frame: the release command clears the status again.
   void queueStandardFrame(uint16_t id, const uint8_t* data, uint8_t dlc) {
+    // Standard single filter: identifier, RTR, then the first two data bytes.
+    const uint8_t candidate[4] = {
+      static_cast<uint8_t>(id >> 3U),
+      static_cast<uint8_t>(id << 5U),
+      ((dlc > 0U) && (data != nullptr)) ? data[0] : static_cast<uint8_t>(0U),
+      ((dlc > 1U) && (data != nullptr)) ? data[1] : static_cast<uint8_t>(0U)
+    };
+    if(!accepts(candidate)) { return; }
     registers[regSff] = dlc & 0x0FU;
     registers[regSff + 1U] = static_cast<uint8_t>(id >> 3U);
     registers[regSff + 2U] = static_cast<uint8_t>(id << 5U);
@@ -81,6 +101,14 @@ public:
   /// status, the way the controller does when one arrives.
   /// @note The model holds one frame: the release command clears the status again.
   void queueExtendedFrame(uint32_t id, const uint8_t* data, uint8_t dlc) {
+    // Extended single filter: the 29 identifier bits, the RTR bit, then two unused bits.
+    const uint8_t candidate[4] = {
+      static_cast<uint8_t>(id >> 21U),
+      static_cast<uint8_t>(id >> 13U),
+      static_cast<uint8_t>(id >> 5U),
+      static_cast<uint8_t>(id << 3U)
+    };
+    if(!accepts(candidate)) { return; }
     registers[regSff] = static_cast<uint32_t>(0x80U | (dlc & 0x0FU));
     registers[regSff + 1U] = static_cast<uint8_t>(id >> 21U);
     registers[regSff + 2U] = static_cast<uint8_t>(id >> 13U);
@@ -101,6 +129,8 @@ public:
   [[nodiscard]] uint32_t getTransmitRequests() const { return transmitRequests; }
   /// @brief How many transmissions the driver aborted since the last reset.
   [[nodiscard]] uint32_t getTransmitAborts() const { return transmitAborts; }
+  /// @brief How many arriving frames the acceptance filter turned away since the last reset.
+  [[nodiscard]] uint32_t getFilteredFrames() const { return filteredFrames; }
   [[nodiscard]] bool isInResetMode() const { return (registers[regMod] & modResetMode) != 0U; }
 
   [[nodiscard]] uint32_t* file() { return registers; }
@@ -111,11 +141,38 @@ public:
   /// @param address Register being touched.
   /// @param isWrite `true` for a write, `false` for a read.
   void onAccess(uint8_t address, bool isWrite) {
+    if(isInResetMode() && (address >= regAcr0) && (address < regAmr0 + 4U)) {
+      // The hook runs after a write and before a read, so moving the byte in each direction here
+      // is enough to keep the acceptance registers out of the receive window's storage.
+      const uint8_t index = static_cast<uint8_t>(address - regAcr0);
+      uint8_t* const acceptance = (index < 4U) ? &acceptanceCode[index] : &acceptanceMask[index - 4U];
+      if(isWrite) {
+        *acceptance = static_cast<uint8_t>(registers[address]);
+      } else {
+        registers[address] = *acceptance;
+      }
+      return;
+    }
     if(isWrite && (address == regCmr)) { onCommand(); }
     if(!isWrite && (address == regSr)) { onStatusRead(); }
   }
 
 private:
+  /// @brief Whether the acceptance filter lets a frame through.
+  /// @details Single filter mode, which is the only one the driver programs (begin() sets MOD.AFM).
+  /// A mask bit set means "do not care"; every bit left clear has to match the code.
+  /// @param candidate The four bytes the filter compares, laid out per the frame format.
+  /// @return `true` when the controller would take the frame.
+  [[nodiscard]] bool accepts(const uint8_t (&candidate)[4]) {
+    for(uint8_t i = 0U; i < 4U; i++) {
+      if(((candidate[i] ^ acceptanceCode[i]) & static_cast<uint8_t>(~acceptanceMask[i])) != 0U) {
+        ++filteredFrames;
+        return false;
+      }
+    }
+    return true;
+  }
+
   void onCommand() {
     const uint8_t command = static_cast<uint8_t>(registers[regCmr]);
     if((command & 0x01U) != 0U) {                                // transmission request
@@ -186,6 +243,9 @@ private:
   uint32_t statusReads = 0U;
   uint32_t transmitRequests = 0U;
   uint32_t transmitAborts = 0U;
+  uint32_t filteredFrames = 0U;
+  uint8_t acceptanceCode[4] = {};
+  uint8_t acceptanceMask[4] = { 0xFFU, 0xFFU, 0xFFU, 0xFFU };
   std::vector<SentFrame> sentFrames;
 };
 

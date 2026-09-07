@@ -15,7 +15,7 @@ static uint8_t pinValues[256] = {};
 static uint16_t analogReadValue = 0U;
 static void (*isrTable[256])() = {};                 // Handlers stored by attachInterrupt().
 
-uint8_t EIFR = 0U;                                   // AVR external interrupt flag register stand-in.
+FlagRegister EIFR;                                   // AVR external interrupt flag register stand-in.
 
 void setFakeMillis(uint32_t t) {
   fakeMillisValue = t;
@@ -33,7 +33,7 @@ void resetGpioState() {
   memset(pinValues, 0, sizeof(pinValues));
   memset(isrTable, 0, sizeof(isrTable));
   analogReadValue = 0U;
-  EIFR = 0U;
+  EIFR.clearAll();
 }
 
 extern "C" {

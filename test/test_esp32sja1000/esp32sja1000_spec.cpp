@@ -35,6 +35,20 @@ static bool receiveOneFrame(uint16_t id, uint8_t dlc) {
   return controller().parsePacket() == dlc;
 }
 
+// Hands the model one extended frame and takes it back out through the driver.
+static bool receiveOneExtendedFrame(uint32_t extId, uint8_t dlc) {
+  const uint8_t payload[8] = { 0x5AU, 0xC3U, 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U };
+  esp32Can.queueExtendedFrame(extId, payload, dlc);
+  return controller().parsePacket() == dlc;
+}
+
+// The 29-bit identifier this protocol packs: receiver, command, sender.
+static uint32_t extIdOf(uint16_t to, uint16_t cmd, uint16_t from) {
+  return (static_cast<uint32_t>(to) & 0x3FFU) |
+         ((static_cast<uint32_t>(cmd) & 0x1FFU) << 10U) |
+         ((static_cast<uint32_t>(from) & 0x3FFU) << 19U);
+}
+
 bool test_begin_leaves_the_controller_out_of_reset() {
   IT("begin() brings the controller out of reset mode");
   IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
@@ -134,6 +148,59 @@ bool test_an_empty_controller_leaves_no_frame_behind() {
   END_IT
 }
 
+bool test_an_unfiltered_controller_takes_every_frame() {
+  IT("begin() leaves the acceptance filter open, so any identifier arrives");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_TRUE(receiveOneFrame(0x123U, 2U));
+  IS_TRUE(receiveOneFrame(0x456U, 2U));
+  IS_EQUAL(esp32Can.getFilteredFrames(), 0U);
+  END_IT
+}
+
+bool test_a_standard_filter_admits_only_its_own_identifier() {
+  IT("filter() lets the configured standard identifier through and turns the others away");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_EQUAL(controller().filter(0x123U, 0x7FFU), 1U);
+
+  IS_TRUE(receiveOneFrame(0x123U, 2U));
+  IS_EQUAL(controller().packetId(), 0x123U);
+
+  // One bit apart, and the mask covers every identifier bit, so the controller never holds it.
+  IS_FALSE(receiveOneFrame(0x122U, 2U));
+  IS_EQUAL(controller().packetId(), CANController::noId);
+  IS_EQUAL(esp32Can.getFilteredFrames(), 1U);
+  END_IT
+}
+
+bool test_an_extended_filter_admits_the_address_it_is_set_to() {
+  IT("filterExtended() lets a frame addressed to the configured receiver through");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_EQUAL(controller().filterExtended(10U, 0x3FFU), 1U);
+
+  const uint32_t addressed = extIdOf(10U, 4U, 26U);
+  IS_TRUE(receiveOneExtendedFrame(addressed, 2U));
+  IS_EQUAL(controller().packetId(), addressed);
+  IS_EQUAL(esp32Can.getFilteredFrames(), 0U);
+  END_IT
+}
+
+bool test_an_extended_filter_turns_away_every_other_address() {
+  IT("filterExtended() turns away a frame addressed to somebody else");
+  IS_TRUE(startController(Esp32CanModel::TxBehaviour::Completes));
+  IS_EQUAL(controller().filterExtended(10U, 0x3FFU), 1U);
+
+  // The mask names all ten receiver-address bits, so the neighbours of this address are as
+  // foreign as any other: the gateway routes an arriving frame by its sender, and would hand a
+  // frame addressed elsewhere to whichever driver answers for that sender.
+  for(uint16_t to = 0U; to < 16U; to++) {
+    if(to == 10U) { continue; }
+    IS_FALSE(receiveOneExtendedFrame(extIdOf(to, 4U, 26U), 2U));
+    IS_EQUAL(controller().packetId(), CANController::noId);
+  }
+  IS_EQUAL(esp32Can.getFilteredFrames(), 15U);
+  END_IT
+}
+
 int main() {
   SUITE("ESP32SJA1000");
   test_begin_leaves_the_controller_out_of_reset();
@@ -143,5 +210,9 @@ int main() {
   test_bus_off_is_recovered();
   test_a_standard_frame_is_decoded();
   test_an_empty_controller_leaves_no_frame_behind();
+  test_an_unfiltered_controller_takes_every_frame();
+  test_a_standard_filter_admits_only_its_own_identifier();
+  test_an_extended_filter_admits_the_address_it_is_set_to();
+  test_an_extended_filter_turns_away_every_other_address();
   FINISH
 }

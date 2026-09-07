@@ -63,7 +63,36 @@ uint8_t getPinMode(uint8_t pin);
 void triggerInterrupt(uint8_t pin);    // Fires the handler stored by attachInterrupt(), if any.
 void resetGpioState();
 
-extern uint8_t EIFR;                       // AVR external interrupt flag register stand-in (dfPlayer).
+/// @brief Stand-in for an AVR interrupt flag register: a bit is cleared by writing a one to it.
+/// @details Plain storage would make `EIFR = bit` and `EIFR |= bit` behave alike, which on the
+/// part they do not - the read-modify-write writes back every flag it just read, and so clears
+/// each of them. Modelling that is what lets a test tell the two apart.
+class FlagRegister final {
+public:
+  /// @brief Writing ones clears the flags they name and leaves the rest standing.
+  FlagRegister& operator=(uint8_t written) {
+    flags = static_cast<uint8_t>(flags & ~written);
+    return *this;
+  }
+
+  /// @brief The read-modify-write a bit-set expands to, which writes back the flags it read.
+  FlagRegister& operator|=(uint32_t written) {
+    return *this = static_cast<uint8_t>(flags | written);
+  }
+
+  operator uint8_t() const { return flags; }   // NOLINT(google-explicit-constructor) mirrors the register read
+
+  /// @brief The hardware raising a flag, which no write of ours can do.
+  void raise(uint8_t bit) { flags = static_cast<uint8_t>(flags | bit); }
+
+  /// @brief Puts the register back to its powered-up state, for a test starting over.
+  void clearAll() { flags = 0U; }
+
+private:
+  uint8_t flags = 0U;
+};
+
+extern FlagRegister EIFR;                  // AVR external interrupt flag register stand-in (dfPlayer).
 
 #ifndef PROGMEM
 #define PROGMEM

@@ -189,6 +189,26 @@ bool test_a_received_frame_survives_a_transmit_in_the_same_pass() {
   END_IT
 }
 
+bool test_a_queued_command_goes_out_even_when_the_report_fails() {
+  IT("a queued command still goes out when the frame sharing its pass cannot be published");
+  resetEnv();
+  Connectivity conn;
+  RfHandler rf(conn, "rf433", RX_PIN, TX_PIN);
+  MqttBase& mqttSide = rf;
+
+  JsonDocument doc;
+  IS_TRUE(deserializeJson(doc, R"({"Data":4096,"Bits":24,"Protocol":1,"Pulse":350})") == DeserializationError::Ok);
+  mqttSide.messageArrivedCallback(doc);
+  RCSwitch::injectReceived(0x1234U, 24U, 1U, 350U);
+
+  // Nothing can be published while the link is down. What the queue is holding has nothing to do
+  // with that, and the queue is the only place it is being kept.
+  MqttBase::sendResult = false;
+  IS_FALSE(rf.run());
+  IS_EQUAL(RCSwitch::sendCount, 1);
+  END_IT
+}
+
 bool test_an_implausible_pulse_length_is_rejected() {
   IT("a pulse length no 433 MHz remote could use is rejected instead of transmitted");
   resetEnv();
@@ -299,6 +319,7 @@ int main() {
   test_the_callback_itself_does_not_touch_the_transceiver();
   test_queued_commands_transmit_in_arrival_order();
   test_a_received_frame_survives_a_transmit_in_the_same_pass();
+  test_a_queued_command_goes_out_even_when_the_report_fails();
   test_an_implausible_pulse_length_is_rejected();
   test_a_too_short_pulse_length_is_rejected();
   test_a_zero_pulse_length_keeps_the_current_one();

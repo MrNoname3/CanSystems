@@ -309,7 +309,10 @@ uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) { // NOLINT(rea
   writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 21));
   writeRegister(regAmrN(1U), static_cast<uint8_t>(amr >> 13));
   writeRegister(regAmrN(2U), static_cast<uint8_t>(amr >> 5));
-  writeRegister(regAmrN(3U), static_cast<uint8_t>((amr << 3) | 0x7FU));
+  // The last acceptance byte holds ID.4-ID.0 in its top five bits, then RTR, then two bits the
+  // format does not use. Only those three low bits may be forced to "don't care"; the mask above
+  // owns everything over them.
+  writeRegister(regAmrN(3U), static_cast<uint8_t>((amr << 3) | 0x07U));
 
   modifyRegister(regMod, 0x17U, 0x00U); // normal
 

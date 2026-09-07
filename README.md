@@ -100,10 +100,10 @@ the device's `/config/*` files into the transient, git-ignored `data/` directory
 **ESP firmware / files (MQTT):** `ota/otaUpdate.py` (interactive curses menu; configured by
 `ota/secrets.yaml` + `ota/devices.yaml`) sends files as base64 pieces with per-piece ACK.
 See [`ota/README.md`](ota/README.md) for setup and a copy-paste `secrets.yaml` example.
-Firmware uploads carry a `binId` that the running firmware checks against its own PIO env, then
-stream into the Updater and reboot; other files go to a temp file, are MD5-verified and renamed
-into place (file names are allow-listed). The 100-byte piece size is deliberate — larger pieces
-measured slower in practice.
+A firmware upload must carry a `binId`, which the running firmware checks against its own PIO env
+before accepting the transfer; from there it streams into the Updater and reboots. Other files go
+to a temp file, are MD5-verified and renamed into place (file names are allow-listed). The
+100-byte piece size is deliberate — larger pieces measured slower in practice.
 
 **CAN device firmware (two-stage):** the ATmega firmware is first uploaded to the gateway's
 LittleFS as `/canAlertFw.bin` (this also auto-triggers the CAN OTA), then streamed over the CAN
@@ -206,8 +206,8 @@ Exit code is 0 only on a fully clean run (~5 minutes).
 
 ## Gotchas
 
-- **Cross-project reflash:** a running firmware rejects an OTA image whose `binId` does not match
-  its own environment, so converting a board to another project needs a one-time serial flash.
+- **Cross-project reflash:** a running firmware only accepts an OTA image that names its own
+  environment, so converting a board to another project needs a one-time serial flash.
 - **CAN IDs** are stored in EEPROM (CRC-protected). To provision a new node, build once with
   `NEW_CAN_ADDRESS` defined in `platformio.ini` (master ID is `MASTER_CAN_ADDRESS=10`), then
   remove it again.

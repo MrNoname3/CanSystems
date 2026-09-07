@@ -72,6 +72,17 @@ void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
   const bool fileDataPresented = fileDataJsonVar.is<const char*>();
 
   if(fileNamePresented && fileSizePresented && fileMd5Presented) {
+    const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
+    const char* fileMd5 = fileMd5JsonVar.as<const char*>();
+    const char* fileName = fileNameJsonVar.as<const char*>();
+    // A message replacing the running firmware has to say which build it carries. The check is
+    // tied to the name being written rather than to the presence of the field, so a sender cannot
+    // opt out of it by leaving the field off.
+    if(FileName::isOwnFirmwareFileName(fileName) && !binIdPresented) {
+      Logger::get()->printf_P(PSTR("[COMMON] FW file ID is missing, expected: '%s'\r\n"), Build::getPioEnv());
+      sendResult(false);
+      return;
+    }
     if(binIdPresented) {
       const char* binId = binIdJsonVar.as<const char*>();
       // The terminator is part of the comparison: without it every id that merely starts with this
@@ -82,9 +93,6 @@ void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
         return;
       }
     }
-    const uint32_t fileSize = fileSizeJsonVar.as<uint32_t>();
-    const char* fileMd5 = fileMd5JsonVar.as<const char*>();
-    const char* fileName = fileNameJsonVar.as<const char*>();
     const bool transferBeginResult = dataTransfer.begin(fileSize, fileMd5, fileName);
     // What the device reboots into is decided by what is being written, which the transfer
     // works out from the file name; binId only says whether this image belongs to this device.

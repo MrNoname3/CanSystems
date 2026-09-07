@@ -112,8 +112,11 @@ class Analog final {
 public:
 #if defined(__AVR_ATmega328P__)
   /// @brief Configures the analog input settings.
-  /// This function sets up the analog reference voltage to 5V and configures the ADC
-  /// for fast sampling by setting the prescaler to 16.
+  /// @details Takes the reference from the supply and shortens the conversion: the prescaler set
+  /// below runs the ADC faster than the clock range the part specifies for its full resolution.
+  /// Every reading on these nodes is either filtered over many samples or compared against a
+  /// threshold, so the accuracy traded away does not show; a reading that needed the last bit
+  /// would have to say so and slow the prescaler back down.
   static void config() {
     analogReference(DEFAULT);
     bitSet(ADCSRA, ADPS2);
@@ -239,6 +242,14 @@ public:
   /// @return Length of the `pioEnv` string excluding the null terminator.
   static constexpr uint32_t getPioEnvLength() { return sizeof(pioEnv) - 1U; }
 
+#if defined(__AVR_ATmega328P__)
+  /// @brief Gets the PlatformIO environment name as a flash string.
+  /// @details The same name getPioEnv() returns, in the form this part can print: a 2 KB device
+  /// has no room to keep it in RAM as well.
+  /// @return The environment name, to be printed rather than compared.
+  static const __FlashStringHelper* getPioEnvFlash() { return F(BUILD_ENV_NAME); }
+#endif
+
   /// @brief Retrieves the PlatformIO environment information in JSON format.
   /// @return A constant string in JSON format with the environment name.
   static constexpr const char* getPioEnvJson() { return pioEnvJson; }
@@ -298,6 +309,14 @@ public:
   /// @param fileName The file name to validate (must not be nullptr).
   /// @return True if the file name is in the list of accepted locations, false otherwise.
   static bool isValidFileName(const char* fileName);
+
+  /// @brief Whether a file name names this device's own firmware image.
+  /// @details What is written decides what happens when the transfer ends - the image is handed
+  /// to the updater and the device reboots into it - so both the acceptance of the message and
+  /// the handling of the transfer have to read the name the same way.
+  /// @param fileName The file name to test (must not be nullptr).
+  /// @return True when a transfer under this name replaces the running firmware.
+  static bool isOwnFirmwareFileName(const char* fileName);
 #endif
 
   FileName() = delete;                                   // Delete constructor.

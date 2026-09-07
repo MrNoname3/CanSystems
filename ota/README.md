@@ -118,6 +118,12 @@ inlined the same way instead of pointing `local_path` at a file.
 **`mosq-ca.crt`** — the broker's CA bundle at `ota/mosq-ca.crt` (git-ignored); generated
 from the system trust store when missing (see the note above).
 
+A `local_path` entry that ships a firmware image adds `pio_env:` naming the build environment
+the image has to come from. Every build stamps its environment name into the binary, so the tool
+reads it back out of the file and refuses to send one that does not carry it — which is what
+stands in for the `binId` check on the CAN nodes, whose firmware travels as an ordinary file and
+is only checksummed on the way.
+
 ## Running
 
 ```sh
