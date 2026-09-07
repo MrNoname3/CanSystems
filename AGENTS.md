@@ -86,7 +86,6 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - A commit message describes what is in its diff — not the paths that were tried and dropped, not
   a correction of an earlier analysis, not the measurements behind it, and not the circumstances of
   whoever wrote it.
-- End commit messages with the `Co-Authored-By` trailer.
 
 ## Dependencies
 
