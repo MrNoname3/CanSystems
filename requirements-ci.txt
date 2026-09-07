@@ -4,5 +4,5 @@
 #
 #   platformio - the gate's build/test/check driver.
 #   intelhex   - imported by the ESP32 esptool (tool-esptoolpy) when it creates the flash image.
-platformio==6.1.19
+platformio==6.2.0
 intelhex==2.3.0
