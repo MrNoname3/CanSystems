@@ -19,8 +19,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
 - **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
-- Individual guards: `scripts/deps_check.py` (the .venv - or CI's own Python - matches the
-  pins; `--sync` installs them),
+- Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
+  there is none - matches the pins; `--sync` installs them),
   `scripts/format_check.py` (clang-format + final newline),
   `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;

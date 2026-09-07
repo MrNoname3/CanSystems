@@ -54,7 +54,14 @@ jobs:
         # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
         # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
         # requirements-ci.txt adds the two that are not installed locally: platformio and intelhex.
-        run: pip install -r requirements-ci.txt -r requirements-dev.txt
+        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
+        # job of a run shares, so a pin that has moved has all of them uninstalling the old
+        # version at the same moment, and whichever loses that race fails on a file the winner
+        # has already taken away. A virtualenv in the workspace is the job's alone.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Release gate
         run: python scripts/release_check.py
@@ -93,7 +100,14 @@ jobs:
             pio-${{ runner.os }}-
 
       - name: Install PlatformIO + intelhex
-        run: pip install -r requirements-ci.txt
+        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
+        # job of a run shares, so a pin that has moved has all of them uninstalling the old
+        # version at the same moment, and whichever loses that race fails on a file the winner
+        # has already taken away. A virtualenv in the workspace is the job's alone.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-ci.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Determine baseline commit
         id: base
@@ -153,7 +167,14 @@ jobs:
 
       - name: Install PlatformIO + gcovr
         # gcovr comes from requirements-dev.txt, platformio from requirements-ci.txt (see release-gate).
-        run: pip install -r requirements-ci.txt -r requirements-dev.txt
+        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
+        # job of a run shares, so a pin that has moved has all of them uninstalling the old
+        # version at the same moment, and whichever loses that race fails on a file the winner
+        # has already taken away. A virtualenv in the workspace is the job's alone.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Native tests with coverage instrumentation
         run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test
