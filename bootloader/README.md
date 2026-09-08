@@ -58,3 +58,8 @@ The variant → tag mapping and any extra make options live in `variant_ref()` /
 `variant_extra()` near the top of the script; `801` (urboot u8.0.1) is wired up for
 future use. When it finishes, the script offers to delete the build images to
 reclaim space.
+
+Adding a version starts by pushing its tag to the fork: a GitHub fork does not copy
+tags, and the image clones with `git clone --branch <tag>`. Without it the build fails
+inside the container with `tag not found`, which reads like a Dockerfile problem rather
+than a missing tag.
