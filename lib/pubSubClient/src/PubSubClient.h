@@ -3,7 +3,6 @@
 #include <Arduino.h>    /// Arduino core functions and types.
 #include "IPAddress.h"  /// IP address representation.
 #include "Client.h"     /// Abstract TCP client interface.
-#include "Stream.h"     /// Abstract stream interface.
 
 #define MQTT_VERSION_3_1 3    // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.
 #define MQTT_VERSION_3_1_1 4  // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.1.
@@ -114,19 +113,6 @@ public:
   /// @param client Reference to the TCP client.
   PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client);
 
-  /// @brief Constructs a PubSubClient with a server IP byte array, callback and stream.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
-
-  /// @brief Constructs a PubSubClient with a server domain name and callback.
-  /// @param domain Null-terminated server domain name string.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
   PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client);
 
   /// @brief Default destructor.
@@ -164,11 +150,6 @@ public:
   /// @param client Reference to the TCP client.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setClient(Client& client);
-
-  /// @brief Sets the stream used for large payload passthrough.
-  /// @param stream Reference to the stream.
-  /// @return Reference to this instance for method chaining.
-  PubSubClient& setStream(Stream& stream);
 
   /// @brief Sets the MQTT keep-alive interval.
   /// @param keepAlive Keep-alive interval in seconds.
@@ -394,15 +375,9 @@ private:
   /// @return `Complete` once every announced byte has been taken off the socket.
   RxResult advancePayload();
 
-  /// @brief Takes one payload byte, offering it to the stream when it belongs to the stream's part.
-  void takePayloadByte();
-
   /// @brief Takes several payload bytes at once, keeping what fits and discarding the rest.
   /// @param take How many bytes to take; the caller has checked that many are ready.
   void takePayloadBulk(uint32_t take);
-
-  /// @brief Reads `rxSkip` out of the payload's first two bytes, once they are in the buffer.
-  void noteTopicLength();
 
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
@@ -437,9 +412,6 @@ private:
   uint32_t rxMultiplier = 1U;                     // Place value of the next remaining-length digit.
   uint32_t rxRemaining = 0U;                      // Bytes the remaining-length field announced.
   uint32_t rxPayloadDone = 0U;                    // Announced bytes taken off the socket so far.
-  uint16_t rxSkip = 0U;                           // Payload bytes before the part a stream wants.
-  bool rxSkipKnown = false;                       // Whether `rxSkip` has been read out of the payload yet.
-  bool rxIsPublish = false;                       // Whether the packet in progress is a PUBLISH.
   bool rxOversized = false;                       // Packet longer than the buffer: taken off the socket, then dropped.
   uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
@@ -451,6 +423,5 @@ private:
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.
   uint16_t port = 0U;                             // Server port number.
-  Stream* stream = nullptr;                       // Optional stream for large payload passthrough.
   State connectionState = State::DISCONNECTED;    // Current MQTT connection state.
 };

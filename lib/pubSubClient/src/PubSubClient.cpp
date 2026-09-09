@@ -14,13 +14,6 @@ PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callba
   setCallback(callback);
   setClient(client);
 }
-PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream) {
-  setServer(ip, port);
-  setCallback(callback);
-  setClient(client);
-  setStream(stream);
-}
-
 PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) {
   setServer(domain, port);
   setCallback(callback);
@@ -156,9 +149,6 @@ void PubSubClient::resetReader() {
   rxMultiplier = 1U;
   rxRemaining = 0U;
   rxPayloadDone = 0U;
-  rxSkip = 0U;
-  rxSkipKnown = false;
-  rxIsPublish = false;
   rxOversized = false;
 }
 
@@ -185,7 +175,6 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
     if(rxLen == 0U) {
       this->buffer[0] = byteIn;
       rxLen = 1U;
-      rxIsPublish = ((byteIn & 0xF0U) == MQTTPUBLISH);
       continue;
     }
     this->buffer[rxLen] = byteIn;
@@ -197,9 +186,10 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
       // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
       // announces fewer has none to give: the payload length derived from it would wrap to nearly
       // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
-      if(rxIsPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
+      const bool isPublish = ((this->buffer[0] & 0xF0U) == MQTTPUBLISH);
+      if(isPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
       // Marked here, acted on as the payload arrives: it is taken off the socket either way.
-      rxOversized = (this->stream == nullptr) && ((rxLen + rxRemaining) > this->bufferSize);
+      rxOversized = (rxLen + rxRemaining) > this->bufferSize;
       rxPhase = RxPhase::Payload;
       return RxResult::Complete;
     }
@@ -213,29 +203,9 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
     const int16_t ready = tcpClient->available();
     if(ready <= 0) { return RxResult::Incomplete; }
     const uint32_t left = rxRemaining - rxPayloadDone;
-    const uint32_t offered = (static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left;
-    // A stream is fed byte by byte because only part of the payload belongs to it, and the first
-    // two bytes have to be in the buffer before rxSkip can say which part that is.
-    if((this->stream != nullptr) || !rxSkipKnown) {
-      takePayloadByte();
-    } else {
-      takePayloadBulk(offered);
-    }
-    noteTopicLength();
+    takePayloadBulk((static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left);
   }
   return RxResult::Complete;
-}
-
-void PubSubClient::takePayloadByte() {
-  const uint8_t byteIn = static_cast<uint8_t>(tcpClient->read());
-  if(rxIsPublish && (this->stream != nullptr) && rxSkipKnown && (rxPayloadDone >= (rxSkip + 2U))) {
-    this->stream->write(byteIn);
-  }
-  if(rxLen < this->bufferSize) {
-    this->buffer[rxLen] = byteIn;
-    rxLen++;
-  }
-  rxPayloadDone++;
 }
 
 void PubSubClient::takePayloadBulk(uint32_t take) {
@@ -262,15 +232,6 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
     dropped += static_cast<uint32_t>(got);
   }
   rxPayloadDone += dropped;
-}
-
-void PubSubClient::noteTopicLength() {
-  // The two bytes the topic length is written in are the first of the payload; once they are in
-  // the buffer the stream knows where its own part starts.
-  if(!rxIsPublish || rxSkipKnown || (rxPayloadDone < 2U)) { return; }
-  rxSkip = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
-  if((this->buffer[0] & MQTTQOS1) != 0U) { rxSkip += 2U; }  // The message id sits between the topic and the payload.
-  rxSkipKnown = true;
 }
 
 void PubSubClient::dispatchPacket(uint32_t t) {
@@ -625,11 +586,6 @@ PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
 
 PubSubClient& PubSubClient::setClient(Client& client) {
   this->tcpClient = &client;
-  return *this;
-}
-
-PubSubClient& PubSubClient::setStream(Stream& stream) {
-  this->stream = &stream;
   return *this;
 }
 
