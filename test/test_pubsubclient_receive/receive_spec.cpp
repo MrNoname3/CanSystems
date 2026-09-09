@@ -58,40 +58,6 @@ bool test_receive_callback() {
   END_IT
 }
 
-bool test_receive_stream() {
-  IT("receives a streamed callback message");
-  reset_callback();
-
-  Stream stream;
-  stream.expect(reinterpret_cast<const uint8_t*>("payload"), 7U);
-
-  ShimClient shimClient;
-  shimClient.setAllowConnect(true);
-
-  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
-  shimClient.respond(connack, 4U);
-
-  PubSubClient client(server, 1883U, callback, shimClient, stream);
-  bool rc = client.connect("client_test1");
-  IS_TRUE(rc);
-
-  const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
-  shimClient.respond(publish, 16U);
-
-  rc = client.loop();
-
-  IS_TRUE(rc);
-
-  IS_TRUE(callback_called);
-  IS_TRUE(strcmp(lastTopic, "topic") == 0);
-  IS_TRUE(lastLength == 7U);
-
-  IS_FALSE(stream.error());
-  IS_FALSE(shimClient.error());
-
-  END_IT
-}
-
 bool test_receive_max_sized_message() {
   IT("receives an max-sized message");
   reset_callback();
@@ -348,50 +314,6 @@ bool test_resize_buffer() {
   END_IT
 }
 
-bool test_receive_oversized_stream_message() {
-  IT("receive an oversized streamed message");
-  reset_callback();
-
-  Stream stream;
-
-  ShimClient shimClient;
-  shimClient.setAllowConnect(true);
-
-  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
-  shimClient.respond(connack, 4U);
-
-  uint8_t length = 80U;  // See comment in test_receive_max_sized_message before changing this value
-
-  PubSubClient client(server, 1883U, callback, shimClient, stream);
-  IS_TRUE(client.setBufferSize(static_cast<uint16_t>(length - 1U)));
-  bool rc = client.connect("client_test1");
-  IS_TRUE(rc);
-
-  const uint8_t publish[] = { 0x30U, static_cast<uint8_t>(length - 2U), 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
-
-  uint8_t bigPublish[length + 1];                    // +1: bigPublish[length] holds a guard byte set below
-  memset(bigPublish, 'A', length);
-  bigPublish[length] = 'B';
-  memcpy(bigPublish, publish, 16U);
-
-  shimClient.respond(bigPublish, length);
-  stream.expect(bigPublish + 9U, static_cast<uint16_t>(length - 9U));
-
-  rc = client.loop();
-
-  IS_TRUE(rc);
-
-  IS_TRUE(callback_called);
-  IS_TRUE(strcmp(lastTopic, "topic") == 0);
-
-  IS_TRUE(lastLength == length - 10U);
-
-  IS_FALSE(stream.error());
-  IS_FALSE(shimClient.error());
-
-  END_IT
-}
-
 bool test_receive_qos1() {
   IT("receives a qos1 message");
   reset_callback();
@@ -487,7 +409,6 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
 int main() {
   SUITE("Receive");
   test_receive_callback();
-  test_receive_stream();
   test_receive_max_sized_message();
   test_drop_invalid_remaining_length_message();
   test_a_message_still_arriving_is_waited_for();
@@ -495,7 +416,6 @@ int main() {
   test_receive_oversized_message();
   test_an_oversized_message_leaves_the_next_one_readable();
   test_resize_buffer();
-  test_receive_oversized_stream_message();
   test_receive_qos1();
   test_topic_length_past_the_packet_is_dropped();
   test_a_publish_too_short_for_its_topic_length_is_dropped();

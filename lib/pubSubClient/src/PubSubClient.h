@@ -3,7 +3,6 @@
 #include <Arduino.h>    /// Arduino core functions and types.
 #include "IPAddress.h"  /// IP address representation.
 #include "Client.h"     /// Abstract TCP client interface.
-#include "Stream.h"     /// Abstract stream interface.
 
 #define MQTT_VERSION_3_1 3    // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.
 #define MQTT_VERSION_3_1_1 4  // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.1.
@@ -35,9 +34,9 @@
 
 /// @brief Lightweight MQTT client for embedded Arduino-compatible systems.
 ///
-/// Supports MQTT 3.1 and 3.1.1, QoS 0 and 1, retain flags, Last Will, and
-/// streaming large payloads via beginPublish() / write() / endPublish().
-class PubSubClient final : public Print {
+/// Supports MQTT 3.1 and 3.1.1, retain flags and Last Will. Publishing is QoS 0; an inbound
+/// QoS 1 PUBLISH is acknowledged, and a subscription may ask for QoS 0 or 1.
+class PubSubClient final {
 private:
   // clang-format off
   enum PacketType : uint8_t {
@@ -94,9 +93,6 @@ public:
   };
   // clang-format on
 
-  /// @brief Constructs a default PubSubClient with no server or client configured.
-  PubSubClient() = default;
-
   /// @brief Constructs a PubSubClient with a TCP client.
   /// @param client Reference to the TCP client used for the connection.
   explicit PubSubClient(Client& client);
@@ -113,14 +109,6 @@ public:
   /// @param callback Callback invoked when a message is received.
   /// @param client Reference to the TCP client.
   PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client);
-
-  /// @brief Constructs a PubSubClient with a server IP byte array, callback and stream.
-  /// @param ip Pointer to a 4-byte array holding the server IP address.
-  /// @param port Server port number.
-  /// @param callback Callback invoked when a message is received.
-  /// @param client Reference to the TCP client.
-  /// @param stream Reference to the stream for large payload passthrough.
-  PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client, Stream& stream);
 
   /// @brief Constructs a PubSubClient with a server domain name and callback.
   /// @param domain Null-terminated server domain name string.
@@ -160,16 +148,6 @@ public:
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
 
-  /// @brief Sets the TCP client used for the connection.
-  /// @param client Reference to the TCP client.
-  /// @return Reference to this instance for method chaining.
-  PubSubClient& setClient(Client& client);
-
-  /// @brief Sets the stream used for large payload passthrough.
-  /// @param stream Reference to the stream.
-  /// @return Reference to this instance for method chaining.
-  PubSubClient& setStream(Stream& stream);
-
   /// @brief Sets the MQTT keep-alive interval.
   /// @param keepAlive Keep-alive interval in seconds.
   /// @return Reference to this instance for method chaining.
@@ -184,10 +162,6 @@ public:
   /// @param size New buffer size in bytes; must be between 1 and MQTT_MAX_PACKET_SIZE.
   /// @return `true` if the size is valid and was applied; otherwise `false`.
   [[nodiscard]] bool setBufferSize(uint16_t size);
-
-  /// @brief Returns the current internal packet buffer size.
-  /// @return Buffer size in bytes.
-  [[nodiscard]] uint16_t getBufferSize() const;
 
   /// @brief Connects to the MQTT broker with the given client ID.
   /// @param id Null-terminated MQTT client identifier.
@@ -265,35 +239,6 @@ public:
   /// @param retained Whether the broker should retain the message.
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
-
-  /// @brief Begins a streaming publish for payloads larger than the internal buffer.
-  ///
-  /// Use this API when the payload is too large to fit in the internal buffer at once:
-  /// @code
-  ///   beginPublish(topic, totalLength, retained);
-  ///   write(data, dataLen);  // one or more calls
-  ///   endPublish();
-  /// @endcode
-  /// @param topic Null-terminated MQTT topic.
-  /// @param plength Total payload length in bytes.
-  /// @param retained Whether the broker should retain the message.
-  /// @return `true` if the MQTT header was sent successfully; otherwise `false`.
-  [[nodiscard]] bool beginPublish(const char* topic, uint16_t plength, bool retained);
-
-  /// @brief Finishes a streaming publish started with beginPublish().
-  /// @return Always `true`.
-  [[nodiscard]] bool endPublish();
-
-  /// @brief Writes a single payload byte (only valid between beginPublish() and endPublish()).
-  /// @param data Byte to write.
-  /// @return Number of bytes written.
-  size_t write(uint8_t data) override;
-
-  /// @brief Writes a block of payload bytes (only valid between beginPublish() and endPublish()).
-  /// @param buffer Pointer to the data buffer.
-  /// @param size Number of bytes to write.
-  /// @return Number of bytes written.
-  size_t write(const uint8_t* buffer, size_t size) override;
 
   /// @brief Subscribes to a topic.
   /// @param topic Null-terminated MQTT topic filter.
@@ -394,15 +339,9 @@ private:
   /// @return `Complete` once every announced byte has been taken off the socket.
   RxResult advancePayload();
 
-  /// @brief Takes one payload byte, offering it to the stream when it belongs to the stream's part.
-  void takePayloadByte();
-
   /// @brief Takes several payload bytes at once, keeping what fits and discarding the rest.
   /// @param take How many bytes to take; the caller has checked that many are ready.
   void takePayloadBulk(uint32_t take);
-
-  /// @brief Reads `rxSkip` out of the payload's first two bytes, once they are in the buffer.
-  void noteTopicLength();
 
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
@@ -420,7 +359,7 @@ private:
   /// @param t Current timestamp from millis(), used to update lastOutActivity when it answers.
   void dispatchPacket(uint32_t t);
 
-  Client* tcpClient = nullptr;                    // Pointer to the TCP client used for the connection.
+  Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
   // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
   static constexpr uint8_t discardChunkSize = 64U;
@@ -437,9 +376,6 @@ private:
   uint32_t rxMultiplier = 1U;                     // Place value of the next remaining-length digit.
   uint32_t rxRemaining = 0U;                      // Bytes the remaining-length field announced.
   uint32_t rxPayloadDone = 0U;                    // Announced bytes taken off the socket so far.
-  uint16_t rxSkip = 0U;                           // Payload bytes before the part a stream wants.
-  bool rxSkipKnown = false;                       // Whether `rxSkip` has been read out of the payload yet.
-  bool rxIsPublish = false;                       // Whether the packet in progress is a PUBLISH.
   bool rxOversized = false;                       // Packet longer than the buffer: taken off the socket, then dropped.
   uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
@@ -451,6 +387,5 @@ private:
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.
   uint16_t port = 0U;                             // Server port number.
-  Stream* stream = nullptr;                       // Optional stream for large payload passthrough.
   State connectionState = State::DISCONNECTED;    // Current MQTT connection state.
 };
