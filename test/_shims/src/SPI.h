@@ -158,9 +158,9 @@ class SPIClass final {
 public:
   void begin() {}
   void end() {}
-  void beginTransaction(SPISettings /*settings*/) { mcp2515.beginMessage(); }  // NOLINT(readability-convert-member-functions-to-static) mirrors the Arduino API
+  void beginTransaction(SPISettings /*settings*/) { mcp2515.beginMessage(); }
   void endTransaction() {}
-  uint8_t transfer(uint8_t out) { return mcp2515.transfer(out); }              // NOLINT(readability-convert-member-functions-to-static) mirrors the Arduino API
+  uint8_t transfer(uint8_t out) { return mcp2515.transfer(out); }
   void usingInterrupt(uint8_t /*interruptNumber*/) {}
   void notUsingInterrupt(uint8_t /*interruptNumber*/) {}
 };

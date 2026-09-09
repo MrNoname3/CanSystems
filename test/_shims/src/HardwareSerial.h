@@ -11,9 +11,9 @@ public:
   }
   // Generic no-op print/println accepting any Arduino overload (string, value, value+base).
   template<typename... Args>
-  size_t print(Args... /*args*/) { return 0U; }      // NOLINT(readability-convert-member-functions-to-static)
+  size_t print(Args... /*args*/) { return 0U; }
   template<typename... Args>
-  size_t println(Args... /*args*/) { return 0U; }    // NOLINT(readability-convert-member-functions-to-static)
+  size_t println(Args... /*args*/) { return 0U; }
 };
 
 inline HardwareSerial Serial;

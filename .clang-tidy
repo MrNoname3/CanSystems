@@ -21,4 +21,5 @@ Checks: >
   -bugprone-easily-swappable-parameters,
   -bugprone-branch-clone,
   -modernize-deprecated-headers,
-  -modernize-use-auto
+  -modernize-use-auto,
+  -readability-convert-member-functions-to-static

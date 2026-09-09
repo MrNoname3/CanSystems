@@ -24,28 +24,28 @@ namespace {
   }
 }  // namespace
 
-bool Time::getIsoUtcString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+bool Time::getIsoUtcString(char* buf, size_t bufSize) {
   const tm* utc = utcNow();
   if(utc == nullptr) { return false; }
   const size_t formattedSize = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%SZ", utc);
   return (formattedSize > 0U && formattedSize < bufSize);
 }
 
-bool Time::getUtcFileStamp(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+bool Time::getUtcFileStamp(char* buf, size_t bufSize) {
   const tm* utc = utcNow();
   if(utc == nullptr) { return false; }
   const size_t formattedSize = strftime(buf, bufSize, "%Y%m%d_%H%M%SZ", utc);
   return (formattedSize > 0U && formattedSize < bufSize);
 }
 
-bool Time::getLocalString(char* buf, size_t bufSize) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+bool Time::getLocalString(char* buf, size_t bufSize) {
   const tm* local = localNow();
   if(local == nullptr) { return false; }
   const size_t formattedSize = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S%z", local);
   return (formattedSize > 0U && formattedSize < bufSize);
 }
 
-bool Time::getLocalTm(tm& out) {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header (out-of-line definition)
+bool Time::getLocalTm(tm& out) {
   const tm* local = localNow();
   if(local == nullptr) { return false; }
   out = *local;

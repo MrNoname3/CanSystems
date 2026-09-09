@@ -5,7 +5,7 @@ SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
   jedecID(jedecID) {}
 
-void SPIFlash::select() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
+void SPIFlash::select() { // NOLINT(readability-make-member-function-const)
 #ifndef SPI_HAS_TRANSACTION
   noInterrupts();
 #endif
@@ -19,7 +19,7 @@ void SPIFlash::select() { // NOLINT(readability-convert-member-functions-to-stat
   digitalWrite(slaveSelectPin, LOW);
 }
 
-void SPIFlash::unselect() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
+void SPIFlash::unselect() { // NOLINT(readability-make-member-function-const)
   digitalWrite(slaveSelectPin, HIGH);
   // Restore SPI settings to what they were before talking to the FLASH chip.
 #ifdef SPI_HAS_TRANSACTION
@@ -217,6 +217,6 @@ void SPIFlash::wakeup() {
   unselect();
 }
 
-void SPIFlash::end() { // NOLINT(readability-convert-member-functions-to-static) mirrors the instance API
+void SPIFlash::end() {
   SPI.end();
 }

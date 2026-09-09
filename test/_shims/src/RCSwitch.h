@@ -11,19 +11,19 @@ public:
   RCSwitch() = default;
 
   // ---- receiver ----
-  void enableReceive(int32_t /*interrupt*/) {}                          // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] bool available() const { return rxAvailable; }     // NOLINT(readability-convert-member-functions-to-static)
-  void resetAvailable() { rxAvailable = false; }                   // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] uint64_t getReceivedValue() const { return rxValue; }       // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] uint32_t getReceivedBitlength() const { return rxBitLength; }      // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] uint32_t getReceivedProtocol() const { return rxProtocol; }        // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] uint32_t getReceivedDelay() const { return rxDelay; }              // NOLINT(readability-convert-member-functions-to-static)
+  void enableReceive(int32_t /*interrupt*/) {}
+  [[nodiscard]] bool available() const { return rxAvailable; }
+  void resetAvailable() { rxAvailable = false; }
+  [[nodiscard]] uint64_t getReceivedValue() const { return rxValue; }
+  [[nodiscard]] uint32_t getReceivedBitlength() const { return rxBitLength; }
+  [[nodiscard]] uint32_t getReceivedProtocol() const { return rxProtocol; }
+  [[nodiscard]] uint32_t getReceivedDelay() const { return rxDelay; }
 
   // ---- transmitter ----
-  void enableTransmit(int32_t /*pin*/) {}                              // NOLINT(readability-convert-member-functions-to-static)
-  void setProtocol(int32_t protocol) { lastProtocol = protocol; }     // NOLINT(readability-convert-member-functions-to-static)
-  void setPulseLength(int32_t pulseLength) { lastPulseLength = pulseLength; }  // NOLINT(readability-convert-member-functions-to-static)
-  void send(uint64_t code, uint32_t length) {       // NOLINT(readability-convert-member-functions-to-static)
+  void enableTransmit(int32_t /*pin*/) {}
+  void setProtocol(int32_t protocol) { lastProtocol = protocol; }
+  void setPulseLength(int32_t pulseLength) { lastPulseLength = pulseLength; }
+  void send(uint64_t code, uint32_t length) {
     lastSentCode = code;
     lastSentLength = length;
     ++sendCount;

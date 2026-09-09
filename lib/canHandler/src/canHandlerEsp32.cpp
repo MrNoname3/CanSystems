@@ -87,7 +87,7 @@ bool CanHandlerEsp32::send(const CanFrame& frameOut) const {
   return (xQueueSend(canTxQueue, &frameOut, canTxQueueTimeout) == pdTRUE);
 }
 
-void CanHandlerEsp32::rxInterrupt(int payloadBytes) { // NOLINT(readability-convert-member-functions-to-static)
+void CanHandlerEsp32::rxInterrupt(int payloadBytes) {
   // Every frame this protocol puts on the bus carries all eight data bytes (transmitFrame()
   // sends sizeof(CanFrame::data)), so one with an empty payload - a remote-transmission request,
   // or a zero-length data frame - came from something else on the bus. Dropped rather than
@@ -160,7 +160,7 @@ void CanHandlerEsp32::reportDroppedFrames() {
   }
 }
 
-void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const { // NOLINT(readability-convert-member-functions-to-static)
+void CanHandlerEsp32::dispatchRxFrame(const CanFrame& frameIn) const {
   // Logger::get()->printf_P(PSTR("[CAN] Receiving: %hu | %hu | %hu\r\n"), frameIn.to, frameIn.cmd, frameIn.from);
   const uint16_t nodeCanId = static_cast<uint16_t>(frameIn.from);
   CanBase* device = deviceList.findIf([nodeCanId](const CanBase* d) -> bool { return d->getClientCanId() == nodeCanId; });
@@ -176,7 +176,7 @@ void CanHandlerEsp32::setUnclaimedFrameCallback(void (*callback)(void*, const Ca
   unclaimedFrameContext = context;
 }
 
-bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(readability-convert-member-functions-to-static)
+bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const {
   const bool beginPacketResult = controller.beginExtendedPacket(frameOut.extId, sizeof(frameOut.data)) != 0U;
   const bool packetWriteResult = beginPacketResult && (controller.write(frameOut.data, sizeof(frameOut.data)) == sizeof(frameOut.data));
   const bool endPacketResult = packetWriteResult && (controller.endPacket() != 0U);
@@ -190,14 +190,14 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const { // NOLINT(
   return true;
 }
 
-bool CanHandlerEsp32::isClientIdRegistered(uint16_t clientCanId) const { // NOLINT(readability-convert-member-functions-to-static)
+bool CanHandlerEsp32::isClientIdRegistered(uint16_t clientCanId) const {
   if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return true; }  // Unknown: answer "taken".
   const CanBase* device = deviceList.findIf([clientCanId](const CanBase* d) -> bool { return d->getClientCanId() == clientCanId; });
   xSemaphoreGiveRecursive(canDevicesListMutex);
   return device != nullptr;
 }
 
-bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
+bool CanHandlerEsp32::registerCallback(CanBase* canBasePtr) {
   if(xSemaphoreTakeRecursive(canDevicesListMutex, semaphoreTimeout) != pdTRUE) { return false; }
   const bool appendResult = deviceList.append(canBasePtr);
   xSemaphoreGiveRecursive(canDevicesListMutex);

@@ -63,7 +63,7 @@ CanOta::OtaStartErrorType CanOta::startOta(const char* fileName, uint16_t storag
   return otaStartErrState.getRawErrorState();
 }
 
-void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) { // NOLINT(readability-convert-member-functions-to-static)
+void CanOta::handleOtaCanFrames(const CanHandler::CanFrame& canFrame) {
   if(transferState != TransferState::WAIT_FOR_ACK) { return; }
   const uint16_t cmd = static_cast<uint16_t>(canFrame.cmd);
   const CanHandler::Response response = static_cast<CanHandler::Response>(canFrame.data[0]);
@@ -199,11 +199,11 @@ bool CanMqttGateway::startOta(const char* fileName, OtaImageInfo& image) {
   return startOta(fileName, &image);
 }
 
-bool CanMqttGateway::startOta(const char* fileName) { // NOLINT(readability-convert-member-functions-to-static)
+bool CanMqttGateway::startOta(const char* fileName) {
   return startOta(fileName, nullptr);
 }
 
-bool CanMqttGateway::startOta(const char* fileName, OtaImageInfo* image) { // NOLINT(readability-convert-member-functions-to-static)
+bool CanMqttGateway::startOta(const char* fileName, OtaImageInfo* image) {
   const uint8_t otaStartResultCode = canOta.startOta(fileName, 0U, image);
   const bool fileTransferStartResult = (otaStartResultCode == 0U);
   Logger::get()->printf_P(PSTR("[CAN] File transfer starts to \"%s\": %s\r\n"),
@@ -218,12 +218,12 @@ bool CanMqttGateway::isOtaInProgress() const {
   return canOta.isOtaInProgress();
 }
 
-bool CanMqttGateway::sendOtaStatusMessage(const char* payload) { // NOLINT(readability-convert-member-functions-to-static)
+bool CanMqttGateway::sendOtaStatusMessage(const char* payload) {
   const char* subSubTopic = canOtaTopic + (MqttTopics::getSenderTopicBufSize() - 1U);
   return MqttBase::sendSubtopicMessage(subSubTopic, payload);
 }
 
-bool CanMqttGateway::requestCanIdChange(uint16_t newLocalCanId) { // NOLINT(readability-convert-member-functions-to-static)
+bool CanMqttGateway::requestCanIdChange(uint16_t newLocalCanId) {
   // The address this device already answers on counts as free: being told to keep it is a valid
   // request, and the node accepts it too. A master that lost an answer can repeat itself.
   const bool addressIsAlreadyMine = (newLocalCanId == getClientCanId());

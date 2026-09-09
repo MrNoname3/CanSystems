@@ -323,7 +323,7 @@ void DataTransfer::cleanupTransfer() {
   }
 }
 
-DataTransfer::DataTransferErrorType DataTransfer::getErrorCode() { // NOLINT(readability-convert-member-functions-to-static)
+DataTransfer::DataTransferErrorType DataTransfer::getErrorCode() {
   const DataTransferErrorType errCode = dataTransferErrState.getRawErrorState();
   dataTransferErrState.clearAllErrors();
   return errCode;

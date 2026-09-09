@@ -44,7 +44,7 @@ void captureResetFlags() {
   bootResetFlags = flags;
 }
 
-uint8_t ResetHandler::getResetReason() {  // NOLINT(readability-convert-member-functions-to-static) declared static in the header
+uint8_t ResetHandler::getResetReason() {
   return bootResetFlags;
 }
 #endif

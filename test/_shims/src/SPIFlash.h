@@ -119,7 +119,7 @@ private:
     memory[addr] = readByte(addr) & byt;
   }
 
-  void eraseRange(uint32_t base, uint32_t size) { // NOLINT(readability-convert-member-functions-to-static)
+  void eraseRange(uint32_t base, uint32_t size) {
     std::map<uint32_t, uint8_t>::iterator it = memory.lower_bound(base);
     while(it != memory.end() && it->first < base + size) {
       it = memory.erase(it);

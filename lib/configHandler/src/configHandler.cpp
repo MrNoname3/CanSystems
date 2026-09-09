@@ -1,6 +1,6 @@
 #include "configHandler.hpp"
 
-bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) { // NOLINT(readability-convert-member-functions-to-static)
+bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) {
   const bool initFS = LittleFS.begin();
   if(!initFS) { return false; } // NOLINT(readability-simplify-boolean-expr)
 #if defined(ESP8266)
@@ -19,7 +19,7 @@ bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, 
   return true;
 }
 
-ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) { // NOLINT(readability-convert-member-functions-to-static)
+ConfigHandler::JsonLoadResult ConfigHandler::loadJsonFile(const char* filePath_P, JsonDocument& doc) {
   File file = LittleFS.open(FPSTR(filePath_P), "r");
   if(!file) { return JsonLoadResult::FileOpenFailed; }
   const DeserializationError err = deserializeJson(doc, file);

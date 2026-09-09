@@ -45,7 +45,7 @@ bool CanAlertDriver::publishDiscovery() {
   return result;
 }
 
-void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) {
   JsonVariant canIdJsonVar = payloadJson[F("setCanId")];
   if(canIdJsonVar.is<uint16_t>()) {
     // Says only that the request went out; the node's own answer arrives later, over CAN.
@@ -56,7 +56,7 @@ void CanAlertDriver::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT
   sendAlertCommand(payloadJson);
 }
 
-void CanAlertDriver::sendAlertCommand(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void CanAlertDriver::sendAlertCommand(JsonVariant payloadJson) {
   JsonVariant soundJsonVar = payloadJson[F("Sound")];
   JsonVariant volumeJsonVar = payloadJson[F("Volume")];
   JsonVariant colorsJsonVar = payloadJson[F("Colors")];

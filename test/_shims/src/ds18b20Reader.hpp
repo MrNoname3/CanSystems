@@ -25,11 +25,11 @@ public:
 
   [[nodiscard]] uint8_t count() const { return sensorCount; }
 
-  void requestConversion() { ++requestCount; }                     // NOLINT(readability-convert-member-functions-to-static)
+  void requestConversion() { ++requestCount; }
 
-  [[nodiscard]] uint16_t conversionDelayMs() const { return 750U; }  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] uint16_t conversionDelayMs() const { return 750U; }
 
-  [[nodiscard]] float readTempC(uint8_t index) {                   // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] float readTempC(uint8_t index) {
     if(index >= sensorCount) { return invalidTempC; }
     return fakeTempsC[index];
   }

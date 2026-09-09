@@ -186,7 +186,7 @@ uint8_t MCP2515::takeTxBuffer() {
   return txBuffersLeft;
 }
 
-bool MCP2515::flushTx() const { // NOLINT(readability-convert-member-functions-to-static)
+bool MCP2515::flushTx() const {
   const uint32_t startTime = millis();
   for(;;) {
     uint8_t pending = 0U;
@@ -376,7 +376,7 @@ void MCP2515::setClockFrequency(uint32_t freq) {
   clockFrequency = freq;
 }
 
-void MCP2515::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::dumpRegisters(Stream& out) {
   for(uint8_t i = 0U; i < 128U; i++) {
     const uint8_t b = readRegister(i);
 
@@ -389,7 +389,7 @@ void MCP2515::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-
   }
 }
 
-void MCP2515::reset() const { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::reset() const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0xC0U);
@@ -412,7 +412,7 @@ void MCP2515::handleInterrupt() {
   }
 }
 
-uint8_t MCP2515::readRegister(uint8_t address) const { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t MCP2515::readRegister(uint8_t address) const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x03U);
@@ -424,7 +424,7 @@ uint8_t MCP2515::readRegister(uint8_t address) const { // NOLINT(readability-con
   return value;
 }
 
-void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) const { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::readBurst(uint8_t address, uint8_t* data, uint8_t length) const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x03U);
@@ -457,7 +457,7 @@ void MCP2515::writeRegister(uint8_t address, uint8_t value) const {
   SPI.endTransaction();
 }
 
-void MCP2515::writeBurst(uint8_t address, const uint8_t* data, uint8_t length) const { // NOLINT(readability-convert-member-functions-to-static)
+void MCP2515::writeBurst(uint8_t address, const uint8_t* data, uint8_t length) const {
   SPI.beginTransaction(spiSettings);
   digitalWrite(csPin, LOW);
   SPI.transfer(0x02U);
