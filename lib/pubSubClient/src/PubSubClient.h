@@ -68,6 +68,7 @@ private:
   static constexpr uint16_t defaultBufferSize = static_cast<uint16_t>(MQTT_MAX_PACKET_SIZE);    // Default packet buffer size.
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
+  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
 
 #if defined(ESP8266) || defined(ESP32)
 #include <functional>                                               /// std::function for the message callback.
@@ -380,6 +381,12 @@ private:
   /// @return Total header size (fixed byte + variable-length field bytes).
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
 
+  /// @brief Hands the due keep-alive ping to the TCP client, retrying a refusal at intervals.
+  /// @param t Current timestamp from millis().
+  /// @return `false` once the ping has gone unsent for a whole keep-alive interval; `true` while
+  ///         it is still worth asking.
+  [[nodiscard]] bool keepAlivePing(uint32_t t);
+
   /// @brief Reads and dispatches one incoming MQTT packet.
   /// @param t Current timestamp from millis(), used to update lastInActivity and lastOutActivity.
   /// @return `true` if a packet was processed or the connection is still open;
@@ -398,6 +405,9 @@ private:
   uint32_t lastOutActivity = 0U;                  // Timestamp (ms) of the last outgoing packet.
   uint32_t lastInActivity = 0U;                   // Timestamp (ms) of the last incoming packet.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
+  bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
+  uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
+  uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.

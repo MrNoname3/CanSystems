@@ -207,6 +207,107 @@ bool test_keepalive_disconnects_hung() {
   END_IT
 }
 
+bool test_keepalive_retries_a_refused_ping() {
+  IT("sends the ping again at once when the client refused to take it");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Past the keep-alive boundary, so the next loop() owes the broker a ping.
+  setFakeMillis(baseMs + (16U * tickMs));
+  shimClient.failNextWrites(1U);
+  const uint16_t beforeRefusal = shimClient.received();
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), beforeRefusal);   // Nothing reached the client.
+
+  // A ping the client would not take is still owed, so a later pass has to try again rather than
+  // wait out another keep-alive interval in silence.
+  setFakeMillis(baseMs + (17U * tickMs));
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(beforeRefusal + 2U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_waits_before_asking_the_client_again() {
+  IT("does not ask again within the retry interval after a refusal");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  setFakeMillis(baseMs + (16U * tickMs));
+  shimClient.failNextWrites(1U);
+  IS_TRUE(client.loop());
+  const uint16_t afterRefusal = shimClient.received();
+
+  // Half a second on, the client would take it now - but asking again this soon would mean asking
+  // on every pass of the caller's loop, hundreds of times a second, for the rest of the interval.
+  setFakeMillis(baseMs + (16U * tickMs) + 500U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), afterRefusal);
+
+  // A second after the refusal it is worth asking again.
+  setFakeMillis(baseMs + (17U * tickMs));
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterRefusal + 2U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
+  IT("reports a timeout when the client refuses the ping for a whole keep-alive interval");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Retrying is only right while it can still come to something; a client that never takes the
+  // ping is as dead as one that never answers it, and has to end the same way.
+  shimClient.failNextWrites(100U);
+  setFakeMillis(baseMs + (16U * tickMs));
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (32U * tickMs));
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -214,6 +315,9 @@ int main() {
   test_keepalive_pings_with_inbound_qos0();
   test_keepalive_no_pings_inbound_qos1();
   test_keepalive_disconnects_hung();
+  test_keepalive_retries_a_refused_ping();
+  test_keepalive_waits_before_asking_the_client_again();
+  test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
 
   FINISH
 }

@@ -63,6 +63,7 @@ ShimClient::ShimClient() {
   this->_error = false;
   this->expectAnything = true;
   this->_received = 0;
+  this->_writesToFail = 0;
   this->_expectedPort = 0;
   this->_expectedHost = nullptr;
 }
@@ -122,7 +123,30 @@ size_t ShimClient::write(uint8_t b) {
         << std::dec);
   return 1;
 }
+void ShimClient::failNextWrites(uint16_t count) {
+  this->_writesToFail = count;
+}
+
+void ShimClient::checkExpected(uint8_t actual) {
+  if(this->expectAnything) {
+    return;
+  }
+  if(!this->expectBuffer->available()) {
+    this->_error = true;
+    return;
+  }
+  const uint8_t expected = this->expectBuffer->next();
+  if(expected != actual) {
+    this->_error = true;
+    TRACE("!=" << static_cast<unsigned int>(expected));
+  }
+}
+
 size_t ShimClient::write(const uint8_t* buf, size_t size) {
+  if(this->_writesToFail > 0U) {
+    this->_writesToFail--;
+    return 0U;
+  }
   this->_received += size;
   TRACE("[" << std::dec << static_cast<unsigned int>(size) << "] ");
   for(size_t i = 0; i < size; i++) {
@@ -131,17 +155,7 @@ size_t ShimClient::write(const uint8_t* buf, size_t size) {
     }
     TRACE(std::hex << static_cast<unsigned int>(buf[i]));
 
-    if(!this->expectAnything) {
-      if(this->expectBuffer->available()) {
-        uint8_t expected = this->expectBuffer->next();
-        if(expected != buf[i]) {
-          this->_error = true;
-          TRACE("!=" << static_cast<unsigned int>(expected));
-        }
-      } else {
-        this->_error = true;
-      }
-    }
+    this->checkExpected(buf[i]);
   }
   TRACE("\n"
         << std::dec);
