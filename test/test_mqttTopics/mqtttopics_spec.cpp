@@ -71,9 +71,9 @@ bool test_diagPayloadBufSize() {
   IT("diagPayloadBufSize fits the maximum-length diagnostics payload");
   char buf[MqttTopics::getDiagPayloadBufSize()];
   // Longest cause string published by Connectivity plus maximal numeric fields.
-  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttDiagPayload(), "MQTT_CONNECT_BAD_CREDENTIALS", "2026-08-29T10:12:33Z", 4294967295U, 4294967295U);
+  const int n = snprintf(buf, sizeof(buf), MqttTopics::getMqttDiagPayload(), "MQTT_CONNECT_BAD_CREDENTIALS", "2026-08-29T10:12:33Z", 4294967295U, 4294967295U, static_cast<uint16_t>(65535U));
   TEST(n > 0 && static_cast<size_t>(n) < sizeof(buf));
-  IS_EQUAL(strcmp(buf, R"({"cause":"MQTT_CONNECT_BAD_CREDENTIALS","at":"2026-08-29T10:12:33Z","downSec":4294967295,"n":4294967295})"), 0);
+  IS_EQUAL(strcmp(buf, R"({"cause":"MQTT_CONNECT_BAD_CREDENTIALS","at":"2026-08-29T10:12:33Z","downSec":4294967295,"n":4294967295,"pingRetry":65535})"), 0);
   END_IT
 }
 

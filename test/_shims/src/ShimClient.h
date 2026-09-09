@@ -14,6 +14,10 @@ private:
   bool expectAnything;
   bool _error;
   uint16_t _received;
+  uint16_t _writesToFail;
+
+  /// @brief Matches one written byte against what the test said to expect.
+  void checkExpected(uint8_t actual);
   IPAddress _expectedIP;
   uint16_t _expectedPort;
   const char* _expectedHost;
@@ -47,4 +51,10 @@ public:
 
   void setAllowConnect(bool b);
   void setConnected(bool b);
+
+  /// @brief Makes the next `count` writes report that nothing was sent.
+  /// @details Models what the secure client does when its engine cannot take application data:
+  /// it returns 0 rather than failing outright. A refused write consumes nothing, so the bytes
+  /// the caller retries are still matched against `expect()`.
+  void failNextWrites(uint16_t count);
 };

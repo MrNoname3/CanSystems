@@ -337,21 +337,43 @@ bool PubSubClient::handlePacket(uint32_t t) {
   return connected();
 }
 
-bool PubSubClient::loop() {
+bool PubSubClient::keepAlivePing(uint32_t t) {
+  const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
+  // A client that would not take the ping has not pinged: counting it as sent would leave the
+  // broker in silence for the rest of the interval and end the connection over a ping it never
+  // saw. The timers stay put so a later pass asks again - a second apart, because loop() runs at
+  // the caller's pass rate and one that just refused will not take it a millisecond later.
+  const bool firstAttempt = !pingUnsent;
+  if(firstAttempt || ((t - lastPingAttempt) >= pingRetryIntervalMs)) {
+    lastPingAttempt = t;
+    this->buffer[0] = MQTTPINGREQ;
+    this->buffer[1] = 0U;
+    if(tcpClient->write(this->buffer, 2U) == 2U) {
+      lastOutActivity = lastInActivity = t;
+      pingOutstanding = true;
+      pingUnsent = false;
+    } else if(firstAttempt) {
+      pingUnsent = true;
+      pingUnsentSince = t;
+      if(refusedPings < UINT16_MAX) { refusedPings++; }
+    } else {
+      // A later refusal of the same ping; the deadline below is what ends it.
+    }
+  }
+  // A client that never takes it is as dead as a broker that never answers.
+  return !pingUnsent || ((t - pingUnsentSince) <= keepAliveMs);
+}
+
+bool PubSubClient::loop() {  // NOLINT(readability-convert-member-functions-to-static)
   if(connected()) {
     const uint32_t t = millis();
     const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
     if((t - lastInActivity > keepAliveMs) || (t - lastOutActivity > keepAliveMs)) {
-      if(pingOutstanding) {
+      if(pingOutstanding || !keepAlivePing(t)) {
         this->connectionState = State::CONNECTION_TIMEOUT;
         tcpClient->stop();
         return false;
       }
-      this->buffer[0] = MQTTPINGREQ;
-      this->buffer[1] = 0U;
-      tcpClient->write(this->buffer, 2U);
-      lastOutActivity = lastInActivity = t;
-      pingOutstanding = true;
     }
     if(tcpClient->available() != 0) {
       return handlePacket(t);
@@ -605,6 +627,10 @@ PubSubClient& PubSubClient::setSocketTimeout(uint16_t timeout) {
 
 PubSubClient::State PubSubClient::state() const {
   return this->connectionState;
+}
+
+uint16_t PubSubClient::getRefusedPingCount() const {
+  return this->refusedPings;
 }
 
 uint16_t PubSubClient::getBufferSize() const {
