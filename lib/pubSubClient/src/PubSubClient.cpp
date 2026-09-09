@@ -355,6 +355,7 @@ bool PubSubClient::keepAlivePing(uint32_t t) {
     } else if(firstAttempt) {
       pingUnsent = true;
       pingUnsentSince = t;
+      if(refusedPings < UINT16_MAX) { refusedPings++; }
     } else {
       // A later refusal of the same ping; the deadline below is what ends it.
     }
@@ -626,6 +627,10 @@ PubSubClient& PubSubClient::setSocketTimeout(uint16_t timeout) {
 
 PubSubClient::State PubSubClient::state() const {
   return this->connectionState;
+}
+
+uint16_t PubSubClient::getRefusedPingCount() const {
+  return this->refusedPings;
 }
 
 uint16_t PubSubClient::getBufferSize() const {

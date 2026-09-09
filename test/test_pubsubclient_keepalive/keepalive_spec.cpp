@@ -282,6 +282,51 @@ bool test_keepalive_waits_before_asking_the_client_again() {
   END_IT
 }
 
+bool test_keepalive_counts_the_pings_the_client_refused() {
+  IT("counts one refusal per ping the client would not take, not one per attempt");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+  IS_EQUAL(client.getRefusedPingCount(), 0U);
+
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+
+  // One ping refused twice before it goes out is one ping the client would not take.
+  setFakeMillis(baseMs + (16U * tickMs));
+  shimClient.failNextWrites(2U);
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (17U * tickMs));
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (18U * tickMs));
+  shimClient.expect(pingreq, 2U);
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getRefusedPingCount(), 1U);
+
+  // The next interval's ping is refused too: a second ping, so a second count.
+  setFakeMillis(baseMs + (34U * tickMs));
+  shimClient.failNextWrites(1U);
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (35U * tickMs));
+  shimClient.expect(pingreq, 2U);
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getRefusedPingCount(), 2U);
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
   IT("reports a timeout when the client refuses the ping for a whole keep-alive interval");
 
@@ -317,6 +362,7 @@ int main() {
   test_keepalive_disconnects_hung();
   test_keepalive_retries_a_refused_ping();
   test_keepalive_waits_before_asking_the_client_again();
+  test_keepalive_counts_the_pings_the_client_refused();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
 
   FINISH

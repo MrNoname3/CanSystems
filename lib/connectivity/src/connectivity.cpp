@@ -342,7 +342,8 @@ void Connectivity::publishDisconnectDiag() {
   if(!disconnectDiag.takeReport(millis(), report)) { return; }      // Nothing recorded (first connect after boot).
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
   const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
-                                             report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount);
+                                             report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount,
+                                             mqttClient.getRefusedPingCount());
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
     const bool diagResult = publishRetained(MqttTopics::getDiagSubtopic(), diagPayload);

@@ -320,6 +320,12 @@ public:
   /// @return The connection state as a State enum value.
   [[nodiscard]] State state() const;
 
+  /// @brief How many keep-alive pings the TCP client refused to take since this object was built.
+  /// @details A refusal is retried rather than dropped, so a non-zero count is not itself a fault:
+  /// it says the client does refuse writes on this link, which is what tells a keep-alive drop
+  /// caused here apart from one caused by the network. Saturates rather than wrapping.
+  [[nodiscard]] uint16_t getRefusedPingCount() const;
+
 private:
   /// @brief Reads a single byte from the TCP client, blocking until data is available or timeout.
   /// @param result Pointer to the byte buffer to read into.
@@ -408,6 +414,7 @@ private:
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
   uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
+  uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.
