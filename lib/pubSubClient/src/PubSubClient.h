@@ -110,6 +110,11 @@ public:
   /// @param client Reference to the TCP client.
   PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client);
 
+  /// @brief Constructs a PubSubClient with a server domain name and callback.
+  /// @param domain Null-terminated server domain name string.
+  /// @param port Server port number.
+  /// @param callback Callback invoked when a message is received.
+  /// @param client Reference to the TCP client.
   PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client);
 
   /// @brief Default destructor.
