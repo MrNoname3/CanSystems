@@ -93,9 +93,6 @@ public:
   };
   // clang-format on
 
-  /// @brief Constructs a default PubSubClient with no server or client configured.
-  PubSubClient() = default;
-
   /// @brief Constructs a PubSubClient with a TCP client.
   /// @param client Reference to the TCP client used for the connection.
   explicit PubSubClient(Client& client);
@@ -145,11 +142,6 @@ public:
   /// @param callback Function to call on message arrival.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
-
-  /// @brief Sets the TCP client used for the connection.
-  /// @param client Reference to the TCP client.
-  /// @return Reference to this instance for method chaining.
-  PubSubClient& setClient(Client& client);
 
   /// @brief Sets the MQTT keep-alive interval.
   /// @param keepAlive Keep-alive interval in seconds.
@@ -362,7 +354,7 @@ private:
   /// @param t Current timestamp from millis(), used to update lastOutActivity when it answers.
   void dispatchPacket(uint32_t t);
 
-  Client* tcpClient = nullptr;                    // Pointer to the TCP client used for the connection.
+  Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
   // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
   static constexpr uint8_t discardChunkSize = 64U;
