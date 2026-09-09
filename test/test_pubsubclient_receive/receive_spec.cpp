@@ -3,6 +3,7 @@
 #include "Buffer.h"
 #include "BDDTest.h"
 #include "trace.h"
+#include "Arduino.h"
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
@@ -230,8 +231,8 @@ bool test_drop_invalid_remaining_length_message() {
   END_IT
 }
 
-bool test_truncated_message_drops_the_connection() {
-  IT("a message that stops halfway drops the connection instead of leaving the stream out of step");
+bool test_a_message_still_arriving_is_waited_for() {
+  IT("a message that has not all arrived is continued next pass rather than given up on");
   reset_callback();
 
   ShimClient shimClient;
@@ -240,23 +241,61 @@ bool test_truncated_message_drops_the_connection() {
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
+  setFakeMillis(1000U);
   PubSubClient client(server, 1883U, callback, shimClient);
-  (void)client.setSocketTimeout(1U);                      // keep the read timeout out of the suite's runtime
-  bool rc = client.connect("client_test1");
-  IS_TRUE(rc);
+  IS_TRUE(client.connect("client_test1"));
 
-  // A PUBLISH header announcing 14 more bytes, with only 8 of them delivered. Whatever the
-  // broker sends next would otherwise be read as the missing tail and then as a packet header.
+  // The same PUBLISH split the way a segment boundary splits one: a header announcing 14 more
+  // bytes and 8 of them, then the remaining 6.
+  const uint8_t head[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U };
+  shimClient.respond(head, 10U);
+  IS_TRUE(client.loop());
+  IS_FALSE(callback_called);       // Not yet - but the connection is untouched.
+  IS_TRUE(client.connected());
+
+  const uint8_t tail[] = { 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(tail, 6U);
+  IS_TRUE(client.loop());
+
+  IS_TRUE(callback_called);
+  IS_TRUE(strcmp(lastTopic, "topic") == 0);
+  IS_TRUE(memcmp(lastPayload, "payload", 7U) == 0);
+  IS_EQUAL(lastLength, 7U);
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_a_message_that_never_finishes_drops_the_connection() {
+  IT("a message whose rest never arrives drops the connection once the socket timeout is up");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(1000U);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setSocketTimeout(1U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // A PUBLISH header announcing 14 more bytes, with only 8 of them delivered and no more coming.
+  // Whatever the broker sent next would be read as the missing tail and then as a packet header.
   const uint8_t truncated[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U };
   shimClient.respond(truncated, 10U);
 
-  rc = client.loop();
+  IS_TRUE(client.loop());          // Still waiting for the rest.
+  setFakeMillis(1000U + 1500U);    // Past the one-second socket timeout.
+  const bool rc = client.loop();
 
   IS_FALSE(rc);
   IS_FALSE(callback_called);
   IS_FALSE(client.connected());
   IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
 
+  clearFakeMillis();
   END_IT
 }
 
@@ -451,7 +490,8 @@ int main() {
   test_receive_stream();
   test_receive_max_sized_message();
   test_drop_invalid_remaining_length_message();
-  test_truncated_message_drops_the_connection();
+  test_a_message_still_arriving_is_waited_for();
+  test_a_message_that_never_finishes_drops_the_connection();
   test_receive_oversized_message();
   test_an_oversized_message_leaves_the_next_one_readable();
   test_resize_buffer();
