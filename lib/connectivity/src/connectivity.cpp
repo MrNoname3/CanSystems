@@ -224,7 +224,7 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
   return true;
 }
 
-bool Connectivity::connectToMqttServer() { // NOLINT(readability-convert-member-functions-to-static)
+bool Connectivity::connectToMqttServer() {
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   BootProgress::set(BootStage::BrokerConnect);
   const bool mqttConResult = mqttClient.connect(
@@ -328,7 +328,7 @@ bool Connectivity::run() {
   return true;
 }
 
-void Connectivity::recordDisconnect(uint32_t actualTime) { // NOLINT(readability-convert-member-functions-to-static)
+void Connectivity::recordDisconnect(uint32_t actualTime) {
   char dropTimeStr[dateTimeStrBufSize] = { '\0' };
   if(!Time::getIsoUtcString(dropTimeStr, sizeof(dropTimeStr))) {
     dropTimeStr[0] = '\0';
@@ -445,11 +445,11 @@ void Connectivity::sendRoutingNack(const char* subTopic) {
   (void)sendMqttMessage(subTopic, responseBuffer);
 }
 
-bool Connectivity::registerCallback(MqttBase* mqttBasePtr) { // NOLINT(readability-convert-member-functions-to-static)
+bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
   return handlerList.append(mqttBasePtr);
 }
 
-const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {  // NOLINT(readability-convert-member-functions-to-static)
+const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {
   switch(status) {
     case PubSubClient::State::CONNECTION_TIMEOUT: {
       return mqttConnectionTimeoutStr;

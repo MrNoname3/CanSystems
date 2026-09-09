@@ -13,7 +13,7 @@ Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t s
   pinMode(sensorPin, INPUT);
 }
 
-bool Radiation::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
+bool Radiation::publishDiscovery() {
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
       PSTR("Radiation"), PSTR("{{ value_json.tick }}"), PSTR("CPM"),
@@ -37,7 +37,7 @@ Radiation::TubeType Radiation::loadTubeType() {
   }
 }
 
-bool Radiation::init() { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
+bool Radiation::init() { // NOLINT(readability-make-member-function-const)
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
@@ -53,7 +53,7 @@ void Radiation::end() { // NOLINT(readability-make-member-function-const)
   measureDone = false;
 }
 
-bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static)
+bool Radiation::run() {
   if(measureDone) {
     measureDone = false;
     char dataOut[dataOutBufSize] = { '\0' };
@@ -75,11 +75,11 @@ bool Radiation::run() { // NOLINT(readability-convert-member-functions-to-static
   return true;
 }
 
-void Radiation::counter() { // NOLINT(readability-convert-member-functions-to-static)
+void Radiation::counter() {
   cpm++;
 }
 
-void Radiation::measure() { // NOLINT(readability-convert-member-functions-to-static)
+void Radiation::measure() {
   // The pin ISR can preempt this Ticker callback; without masking, a pulse landing between the
   // snapshot and the clear would be wiped. A pulse during the masked window stays latched in the
   // interrupt controller and is counted right after, in the next measurement period.

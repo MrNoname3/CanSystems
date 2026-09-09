@@ -41,7 +41,6 @@ public:
   [[nodiscard]] size_t size() const { return buf_.size(); }
   [[nodiscard]] size_t available() const { return (pos_ < buf_.size()) ? (buf_.size() - pos_) : 0U; }
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) mutates pos_; mirrors fs::File
   int read() {                                       // single byte, -1 at EOF (ArduinoJson default reader)
     if(pos_ >= buf_.size()) { return -1; }
     return static_cast<unsigned char>(buf_[pos_++]);
@@ -60,7 +59,6 @@ public:
 
   static inline bool sReadShouldFail = false;        // test hook: make read() report a short read
 
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static) mutates pos_; mirrors fs::File
   bool seek(size_t position, SeekMode mode = SeekSet) {
     size_t target = position;
     if(mode == SeekCur) {
@@ -105,7 +103,7 @@ public:
   [[nodiscard]] bool begin() const { return beginResult_; }
 
   // Hands out a mutable alias to files_, so it cannot be const/static despite clang-tidy's hints.
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
+  // NOLINTNEXTLINE(readability-make-member-function-const)
   [[nodiscard]] File open(const char* path, const char* mode) {
     if((mode != nullptr) && (mode[0] == 'w')) {
       if(failWriteOpen_) { return {}; }          // injected open-for-write failure
@@ -118,7 +116,7 @@ public:
   }
 
   // Mutates files_; clang-tidy's const/static hints here are false positives.
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
+  // NOLINTNEXTLINE(readability-make-member-function-const)
   bool rename(const char* from, const char* to) {
     if(failRename_) { return false; }            // injected rename failure
     const auto it = files_.find(from);
@@ -133,7 +131,7 @@ public:
   [[nodiscard]] bool exists(const char* path) const { return files_.count(path) > 0U; }
 
   // Mutates files_; clang-tidy's const/static hints here are false positives.
-  // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-make-member-function-const)
+  // NOLINTNEXTLINE(readability-make-member-function-const)
   bool remove(const char* path) {
     return files_.erase(path) > 0U;
   }
@@ -155,8 +153,8 @@ public:
   void setBeginResult(bool result) { beginResult_ = result; }
   void setCapacity(size_t capacity) { capacity_ = capacity; }
   void setFailWriteOpen(bool fail) { failWriteOpen_ = fail; }
-  void setFailWrite(bool fail) { File::sWriteShouldFail = fail; }      // NOLINT(readability-convert-member-functions-to-static)
-  void setFailRead(bool fail) { File::sReadShouldFail = fail; }        // NOLINT(readability-convert-member-functions-to-static)
+  void setFailWrite(bool fail) { File::sWriteShouldFail = fail; }
+  void setFailRead(bool fail) { File::sReadShouldFail = fail; }
   void setFailRename(bool fail) { failRename_ = fail; }
   void reset() {
     files_.clear();

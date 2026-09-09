@@ -39,7 +39,7 @@ bool SI7021::getHumidityPercent(uint16_t& humidity) {
   return true;
 }
 
-bool SI7021::writeReg(const uint8_t* reg, uint8_t regLen) { // NOLINT(readability-convert-member-functions-to-static)
+bool SI7021::writeReg(const uint8_t* reg, uint8_t regLen) {
   if(reg == nullptr || regLen == 0U) { return false; }
   wire.beginTransmission(address);
   for(uint8_t i = 0U; i < regLen; ++i) {
@@ -48,7 +48,7 @@ bool SI7021::writeReg(const uint8_t* reg, uint8_t regLen) { // NOLINT(readabilit
   return (wire.endTransmission() == 0U);
 }
 
-bool SI7021::readReg(uint8_t* reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter, readability-convert-member-functions-to-static)
+bool SI7021::readReg(uint8_t* reg, uint8_t regLen) { // NOLINT(readability-non-const-parameter)
   if(reg == nullptr || regLen == 0U) { return false; }
   // Every byte has to arrive: read() answers -1 once the buffer runs dry, which would reach the
   // conversion as 0xFF and come out as a plausible-looking reading instead of an error.

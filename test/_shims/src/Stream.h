@@ -31,9 +31,9 @@ public:
   // Generic no-op print/println accepting any Arduino overload, mirroring HardwareSerial's
   // stubs. Real Streams inherit these from Print; consumers only need them to compile.
   template<typename... Args>
-  size_t print(Args... /*args*/) { return 0U; }      // NOLINT(readability-convert-member-functions-to-static)
+  size_t print(Args... /*args*/) { return 0U; }
   template<typename... Args>
-  size_t println(Args... /*args*/) { return 0U; }    // NOLINT(readability-convert-member-functions-to-static)
+  size_t println(Args... /*args*/) { return 0U; }
 
   [[nodiscard]] bool error() const;
   void expect(const uint8_t* buf, size_t size);

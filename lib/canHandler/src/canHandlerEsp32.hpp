@@ -100,7 +100,7 @@ private:
   /// @brief Puts one frame on the bus.
   /// @param frameOut Frame taken from the transmit queue.
   /// @return `true` when the controller accepted and sent it.
-  [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const; // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool transmitFrame(const CanFrame& frameOut) const;
 
   /// @brief Logs the frames lost in either direction since the previous pass.
   void reportDroppedFrames();

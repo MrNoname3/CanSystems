@@ -282,7 +282,7 @@ public:
 
   /// @brief Finishes a streaming publish started with beginPublish().
   /// @return Always `true`.
-  [[nodiscard]] bool endPublish();  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool endPublish();
 
   /// @brief Writes a single payload byte (only valid between beginPublish() and endPublish()).
   /// @param data Byte to write.
@@ -314,7 +314,7 @@ public:
   /// @brief Checks whether the client is currently connected to the broker.
   ///        Calls tcpClient->flush() and tcpClient->stop() if a dropped connection is detected.
   /// @return `true` if connected; otherwise `false`.
-  [[nodiscard]] bool connected();  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool connected();
 
   /// @brief Returns the current MQTT connection state.
   /// @return The connection state as a State enum value.
@@ -330,20 +330,20 @@ private:
   /// @brief Reads a single byte from the TCP client, blocking until data is available or timeout.
   /// @param result Pointer to the byte buffer to read into.
   /// @return `true` if a byte was read; `false` on timeout.
-  bool readByte(uint8_t* result);  // NOLINT(readability-convert-member-functions-to-static)
+  bool readByte(uint8_t* result);
 
   /// @brief Reads a single byte into result[*index] and increments index.
   /// @param result Pointer to the buffer.
   /// @param index Pointer to the current write index; incremented on success.
   /// @return `true` if a byte was read; `false` on timeout.
-  bool readByte(uint8_t* result, uint16_t* index);  // NOLINT(readability-convert-member-functions-to-static)
+  bool readByte(uint8_t* result, uint16_t* index);
 
   /// @brief Reads a run of bytes, taking as many at a time as the socket will give.
   /// @details The deadline is per read that made progress, which is what a byte at a time gets.
   /// @param result Where to put them; `nullptr` takes them off the socket and throws them away.
   /// @param length How many to read.
   /// @return `true` when the whole run arrived; `false` on timeout.
-  bool readBytes(uint8_t* result, uint32_t length);  // NOLINT(readability-convert-member-functions-to-static)
+  bool readBytes(uint8_t* result, uint32_t length);
 
   /// @brief Reads one complete MQTT packet into the internal buffer.
   /// @param lengthLength Output: set to the number of bytes in the variable-length field.
@@ -362,7 +362,7 @@ private:
   /// @param buf Buffer containing the payload, with MQTT_MAX_HEADER_SIZE bytes reserved at the start.
   /// @param length Payload length in bytes.
   /// @return `true` if all bytes were sent; otherwise `false`.
-  bool write(uint8_t header, uint8_t* buf, uint16_t length);  // NOLINT(readability-convert-member-functions-to-static)
+  bool write(uint8_t header, uint8_t* buf, uint16_t length);
 
   /// @brief Checks whether a string fits in the remaining buffer space.
   ///        Calls tcpClient->stop() if the string does not fit.

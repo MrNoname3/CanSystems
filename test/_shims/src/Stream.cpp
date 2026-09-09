@@ -32,15 +32,15 @@ size_t Stream::write(uint8_t b) {
   return 1;
 }
 
-int Stream::available() {        // NOLINT(readability-convert-member-functions-to-static) mirrors Stream
+int Stream::available() {
   return 0;
 }
 
-int Stream::read() {             // NOLINT(readability-convert-member-functions-to-static) mirrors Stream
+int Stream::read() {
   return -1;
 }
 
-int Stream::peek() {             // NOLINT(readability-convert-member-functions-to-static) mirrors Stream
+int Stream::peek() {
   return -1;
 }
 

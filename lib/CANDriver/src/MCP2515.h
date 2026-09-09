@@ -48,7 +48,7 @@ public:
 
   /// @brief Waits until no transmit buffer holds a queued frame any more.
   /// @return `false` on timeout, after aborting the frames that were still stuck.
-  [[nodiscard]] bool flushTx() const; // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool flushTx() const;
 
   /// @brief Switches to listen-only mode: frames are received but never acknowledged.
   /// @return 1 on success, 0 when the mode did not take.
@@ -95,7 +95,7 @@ public:
 
   /// @brief Prints every controller register, for debugging.
   /// @param out Stream the dump is written to.
-  void dumpRegisters(Stream& out); // NOLINT(readability-convert-member-functions-to-static)
+  void dumpRegisters(Stream& out);
 
 private:
   static constexpr uint32_t defaultClockFrequency = 16'000'000U;
@@ -109,14 +109,14 @@ private:
   /// @return Buffer index, or `txBufferCount` when no buffer could be freed.
   [[nodiscard]] uint8_t takeTxBuffer();
 
-  void reset() const; // NOLINT(readability-convert-member-functions-to-static)
+  void reset() const;
   void handleInterrupt();
 
   [[nodiscard]] uint8_t readRegister(uint8_t address) const;
-  void readBurst(uint8_t address, uint8_t* data, uint8_t length) const; // NOLINT(readability-convert-member-functions-to-static)
+  void readBurst(uint8_t address, uint8_t* data, uint8_t length) const;
   void modifyRegister(uint8_t address, uint8_t mask, uint8_t value) const;
   void writeRegister(uint8_t address, uint8_t value) const;
-  void writeBurst(uint8_t address, const uint8_t* data, uint8_t length) const; // NOLINT(readability-convert-member-functions-to-static)
+  void writeBurst(uint8_t address, const uint8_t* data, uint8_t length) const;
 
   static void onInterrupt();
 

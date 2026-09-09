@@ -39,7 +39,7 @@ public:
 
   /// @brief Initializes the RF handler. No additional setup is required in this implementation.
   /// @return Always returns `true`.
-  bool init() override { return true; } // NOLINT(readability-convert-member-functions-to-static)
+  bool init() override { return true; }
 
   /// @brief Executes the RF handling logic, including receiving and sending RF data.
   /// @return `true` if the operation was successful; otherwise, `false`.

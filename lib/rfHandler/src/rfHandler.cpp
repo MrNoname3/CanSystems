@@ -2,7 +2,7 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "common.hpp"                                               /// Common definitions and functions.
 
-bool RfHandler::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
+bool RfHandler::publishDiscovery() {
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::sensor(
       PSTR("RF Received"), PSTR("{{ value_json.RfReceived.Data }}"),
@@ -68,7 +68,7 @@ void RfHandler::transmitCommand(const RfData& command) {
   }
 }
 
-void RfHandler::messageArrivedCallback(JsonVariant payloadJson) { // NOLINT(readability-convert-member-functions-to-static)
+void RfHandler::messageArrivedCallback(JsonVariant payloadJson) {
   JsonVariant dataJsonVar = payloadJson[F("Data")];
   JsonVariant bitsJsonVar = payloadJson[F("Bits")];
   JsonVariant protocolJsonVar = payloadJson[F("Protocol")];

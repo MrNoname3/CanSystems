@@ -47,7 +47,7 @@ public:
 
   // These mirror the real MqttBase (instance methods that reach into Connectivity); the shim records
   // into static fields instead, so clang-tidy would make them static — kept non-static to match.
-  [[nodiscard]] bool sendMessage(const char* payload) {                     // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool sendMessage(const char* payload) {
     if(payload == nullptr) { return false; }
     lastMessage = payload;
     ++messageCount;
@@ -60,11 +60,11 @@ public:
     ++responseCount;
     return sendResult;
   }
-  [[nodiscard]] bool doPublishEntityDiscovery(const HADiscovery::EntityConfig& config) {  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool doPublishEntityDiscovery(const HADiscovery::EntityConfig& config) {
     (void)config;
     return true;
   }
-  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,              // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool doPublishSubDeviceEntityDiscovery(const char* subtopic,
                                                        const HADiscovery::EntityConfig& config,
                                                        const HADiscovery::SubDeviceConfig& subDevConfig) {
     (void)config;
@@ -72,19 +72,19 @@ public:
     subDeviceDiscoverySubtopics.emplace_back(subtopic);
     return true;
   }
-  [[nodiscard]] bool sendRetainedSubtopic(const char* subSubTopic, const char* payload) { // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool sendRetainedSubtopic(const char* subSubTopic, const char* payload) {
     retainedMessages.emplace_back(subSubTopic, payload);
     return sendResult;
   }
-  [[nodiscard]] bool sendSubtopicMessage(const char* subSubTopic, const char* payload) {  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] bool sendSubtopicMessage(const char* subSubTopic, const char* payload) {
     subtopicMessages.emplace_back(subSubTopic, payload);
     return sendResult;
   }
-  [[nodiscard]] const char* getSenderTopicStr() const { return senderTopicStr; }          // NOLINT(readability-convert-member-functions-to-static)
-  [[nodiscard]] const char* getClientNameStr() const { return clientNameStr; }            // NOLINT(readability-convert-member-functions-to-static)
-  void shutdownMqtt() { ++shutdownCount; }                                  // NOLINT(readability-convert-member-functions-to-static)
+  [[nodiscard]] const char* getSenderTopicStr() const { return senderTopicStr; }
+  [[nodiscard]] const char* getClientNameStr() const { return clientNameStr; }
+  void shutdownMqtt() { ++shutdownCount; }
   [[nodiscard]] LockGuard lockShared() { return connectivity.lockShared(); }
-  [[nodiscard]] bool sendReply(const char* payload) { // NOLINT(readability-convert-member-functions-to-static) mirrors the real reply path
+  [[nodiscard]] bool sendReply(const char* payload) {
     if(payload == nullptr) { return false; }
     lastReply = payload;
     ++replyCount;

@@ -22,9 +22,9 @@ template<typename TFeature, typename TMethod>
 class NeoPixelBus final {
 public:
   NeoPixelBus(uint16_t /*countPixels*/, uint8_t /*pin*/) {}
-  void Begin() { ++beginCount; }           // NOLINT(readability-convert-member-functions-to-static)
-  void Show() { ++showCount; }             // NOLINT(readability-convert-member-functions-to-static)
-  void ClearTo(RgbColor color) {           // NOLINT(readability-convert-member-functions-to-static)
+  void Begin() { ++beginCount; }
+  void Show() { ++showCount; }
+  void ClearTo(RgbColor color) {
     lastColor = color;
     ++clearToCount;
   }

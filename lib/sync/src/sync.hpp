@@ -19,12 +19,12 @@ public:
   }
 
   /// @brief Acquires the mutex, blocking until available (recursive: same task may re-enter).
-  void lock() {  // NOLINT(readability-convert-member-functions-to-static) instance owns the mutex handle
+  void lock() {
     if(handle != nullptr) { (void)xSemaphoreTakeRecursive(handle, portMAX_DELAY); }
   }
 
   /// @brief Releases one level of the recursive lock.
-  void unlock() {  // NOLINT(readability-convert-member-functions-to-static) instance owns the mutex handle
+  void unlock() {
     if(handle != nullptr) { (void)xSemaphoreGiveRecursive(handle); }
   }
 
@@ -61,7 +61,7 @@ public:
 
   /// @brief There is nothing to create here, so the lock is always usable.
   /// @return Always `true`.
-  [[nodiscard]] bool valid() const { return true; }  // NOLINT(readability-convert-member-functions-to-static) mirrors the ESP32 signature
+  [[nodiscard]] bool valid() const { return true; }
 
   RecursiveMutex(const RecursiveMutex&) = delete;                   // Define copy constructor.
   RecursiveMutex& operator=(const RecursiveMutex&) = delete;        // Define copy assignment operator.

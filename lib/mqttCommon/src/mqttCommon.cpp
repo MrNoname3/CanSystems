@@ -7,11 +7,11 @@ MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
   MqttBase(connectivity, subtopic),
   dataTransfer(fileValidCb, OtaRegistry::isFileInUse) {}
 
-bool MqttCommon::init() { // NOLINT(readability-convert-member-functions-to-static)
+bool MqttCommon::init() {
   return true;
 }
 
-bool MqttCommon::publishDiscovery() { // NOLINT(readability-convert-member-functions-to-static)
+bool MqttCommon::publishDiscovery() {
   using HA = Connectivity::HADiscovery;
   const HA::EntityConfig config = HA::EntityConfig::button(PSTR("Reboot"), cmdReboot, HA::DeviceClass::restart);
   return doPublishEntityDiscovery(config);
@@ -41,7 +41,7 @@ void MqttCommon::fileValidCb(bool isValid) {
   isFileValid = isValid;
 }
 
-bool MqttCommon::sendResult(bool result, uint32_t errCode) { // NOLINT(readability-convert-member-functions-to-static)
+bool MqttCommon::sendResult(bool result, uint32_t errCode) {
   const bool sendingResult = MqttBase::sendResponse((result ? MqttBase::Response::ACK : MqttBase::Response::NACK), 0U, errCode);
   if(!sendingResult) {
     Logger::get()->printf_P(PSTR("[COMMON] Failed to send response '%hu'\r\n"), static_cast<uint8_t>(result));
@@ -118,7 +118,7 @@ void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
   }
 }
 
-void MqttCommon::reboot() { // NOLINT(readability-convert-member-functions-to-static)
+void MqttCommon::reboot() {
   shutdownMqtt();
   ResetHandler::restartMCU();
 }

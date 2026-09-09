@@ -479,7 +479,7 @@ void DFPlayerMiniFast<Debug>::sendData() {
 }
 
 template<bool Debug>
-void DFPlayerMiniFast<Debug>::flush() { // NOLINT(readability-convert-member-functions-to-static)
+void DFPlayerMiniFast<Debug>::flush() {
   while(serial->available() != 0) {
     serial->read();
   }

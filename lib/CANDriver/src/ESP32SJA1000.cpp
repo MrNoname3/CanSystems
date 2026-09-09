@@ -274,7 +274,7 @@ void ESP32SJA1000::onReceive(void (*callback)(int)) {
   }
 }
 
-uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
   id &= 0x7FFU;
   const uint16_t amr = static_cast<uint16_t>(~(mask & 0x7FFU));
 
@@ -295,7 +295,7 @@ uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) { // NOLINT(readability
   return 1U;
 }
 
-uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) {
   id &= 0x1FFFFFFFU;
   const uint32_t amr = ~(mask & 0x1FFFFFFFU);
 
@@ -319,13 +319,13 @@ uint8_t ESP32SJA1000::filterExtended(uint32_t id, uint32_t mask) { // NOLINT(rea
   return 1U;
 }
 
-uint8_t ESP32SJA1000::observe() { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::observe() {
   modifyRegister(regMod, 0x17U, 0x01U); // reset
   modifyRegister(regMod, 0x17U, 0x02U); // observe
   return 1U;
 }
 
-uint8_t ESP32SJA1000::loopback() { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::loopback() {
   loopbackEnabled = true;
 
   modifyRegister(regMod, 0x17U, 0x01U); // reset
@@ -334,21 +334,21 @@ uint8_t ESP32SJA1000::loopback() { // NOLINT(readability-convert-member-function
   return 1U;
 }
 
-uint8_t ESP32SJA1000::sleep() { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::sleep() {
   modifyRegister(regMod, 0x1FU, 0x10U);
   return 1U;
 }
 
-uint8_t ESP32SJA1000::wakeup() { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t ESP32SJA1000::wakeup() {
   modifyRegister(regMod, 0x1FU, 0x00U);
   return 1U;
 }
 
-bool ESP32SJA1000::isBusOff() const { // NOLINT(readability-convert-member-functions-to-static,readability-make-member-function-const)
+bool ESP32SJA1000::isBusOff() const { // NOLINT(readability-make-member-function-const)
   return (readRegister(regSr) & srBusOff) != 0U;
 }
 
-void ESP32SJA1000::recoverFromBusOff() { // NOLINT(readability-convert-member-functions-to-static)
+void ESP32SJA1000::recoverFromBusOff() {
   modifyRegister(regMod, modResetMode, 0x00U);
 }
 
@@ -359,7 +359,7 @@ void ESP32SJA1000::setPins(uint8_t rx, uint8_t tx) {
 
 // The suppression is load-bearing: this is declared static in the header, and an out-of-line
 // definition may not repeat the keyword, which the check does not account for.
-void ESP32SJA1000::dumpRegisters(Stream& out) { // NOLINT(readability-convert-member-functions-to-static)
+void ESP32SJA1000::dumpRegisters(Stream& out) {
   for(uint8_t i = 0U; i < 32U; i++) {
     const uint8_t b = readRegister(i);
 
@@ -388,13 +388,13 @@ uint8_t ESP32SJA1000::readRegister(uint8_t address) {
   return static_cast<uint8_t>(*reg);
 }
 
-void ESP32SJA1000::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) { // NOLINT(readability-convert-member-functions-to-static)
+void ESP32SJA1000::modifyRegister(uint8_t address, uint8_t mask, uint8_t value) {
   volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uintptr_t>(address) * 4U); // NOLINT(performance-no-int-to-ptr) memory-mapped peripheral
   *reg = (*reg & ~static_cast<uint32_t>(mask)) | value;
   CAN_REG_ACCESS(address, true);
 }
 
-void ESP32SJA1000::writeRegister(uint8_t address, uint8_t value) { // NOLINT(readability-convert-member-functions-to-static)
+void ESP32SJA1000::writeRegister(uint8_t address, uint8_t value) {
   volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(regBase + static_cast<uintptr_t>(address) * 4U); // NOLINT(performance-no-int-to-ptr) memory-mapped peripheral
   *reg = value;
   CAN_REG_ACCESS(address, true);

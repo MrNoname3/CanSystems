@@ -8,5 +8,5 @@
 class SoftwareSerial : public Stream {
 public:
   SoftwareSerial(uint8_t /*rxPin*/, uint8_t /*txPin*/) {}
-  void begin(long /*baud*/) {}                       // NOLINT(readability-convert-member-functions-to-static)
+  void begin(long /*baud*/) {}
 };

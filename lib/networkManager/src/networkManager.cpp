@@ -216,7 +216,7 @@ bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
   return memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) != 0;
 }
 
-const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(readability-convert-member-functions-to-static)
+const char* NetworkManager::getIntStatusStr(wl_status_t status) {
   switch(status) {
     case WL_NO_SHIELD: {
       return wlNoShieldStr;
@@ -254,7 +254,7 @@ const char* NetworkManager::getIntStatusStr(wl_status_t status) { // NOLINT(read
 }
 
 #ifdef ESP32
-void NetworkManager::WiFiEvent(WiFiEvent_t event) { // NOLINT(readability-convert-member-functions-to-static)
+void NetworkManager::WiFiEvent(WiFiEvent_t event) {
   switch(event) {
     case ARDUINO_EVENT_ETH_START: {
     } break;

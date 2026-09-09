@@ -185,7 +185,7 @@ bool HADiscovery::publishSubDeviceEntity(const char* subtopic,
   return publishFn(publishCtx, discTopic, payloadBuffer, true);  // Published under Connectivity's mutex via the owner callback.
 }
 
-bool HADiscovery::publishConnectivity() { // NOLINT(readability-convert-member-functions-to-static)
+bool HADiscovery::publishConnectivity() {
   EntityConfig config = EntityConfig::binarySensor(
       connName, connValueTpl, connPayloadOn, connPayloadOff, DeviceClass::connectivity);
   config.skipAvailability = true;

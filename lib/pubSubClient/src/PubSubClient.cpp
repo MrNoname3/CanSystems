@@ -26,19 +26,19 @@ PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callb
   setCallback(callback);
   setClient(client);
 }
-bool PubSubClient::connect(const char* id) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::connect(const char* id) {
   return connect(id, nullptr, nullptr, nullptr, 0U, false, nullptr, true);
 }
 
-bool PubSubClient::connect(const char* id, const char* user, const char* pass) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::connect(const char* id, const char* user, const char* pass) {
   return connect(id, user, pass, nullptr, 0U, false, nullptr, true);
 }
 
-bool PubSubClient::connect(const char* id, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::connect(const char* id, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {
   return connect(id, nullptr, nullptr, willTopic, willQos, willRetain, willMessage, true);
 }
 
-bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage) {
   return connect(id, user, pass, willTopic, willQos, willRetain, willMessage, true);
 }
 
@@ -146,7 +146,7 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
 }
 
 // reads a byte into result
-bool PubSubClient::readByte(uint8_t* result) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::readByte(uint8_t* result) {
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   const uint32_t previousMillis = millis();
   while(tcpClient->available() == 0) {
@@ -160,7 +160,7 @@ bool PubSubClient::readByte(uint8_t* result) {  // NOLINT(readability-convert-me
 }
 
 // reads a byte into result[*index] and increments index
-bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {
   if(readByte(&result[*index])) {
     (*index)++;
     return true;
@@ -168,7 +168,7 @@ bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {  // NOLINT(reada
   return false;
 }
 
-bool PubSubClient::readBytes(uint8_t* result, uint32_t length) {  // NOLINT(readability-convert-member-functions-to-static,readability-non-const-parameter) filled by the socket read
+bool PubSubClient::readBytes(uint8_t* result, uint32_t length) {  // NOLINT(readability-non-const-parameter) filled by the socket read
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   uint32_t previousMillis = millis();
   uint32_t taken = 0U;
@@ -364,7 +364,7 @@ bool PubSubClient::keepAlivePing(uint32_t t) {
   return !pingUnsent || ((t - pingUnsentSince) <= keepAliveMs);
 }
 
-bool PubSubClient::loop() {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::loop() {
   if(connected()) {
     const uint32_t t = millis();
     const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
@@ -448,7 +448,7 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
   return (rc == expectedLength);
 }
 
-bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {
   if(connected()) {
     // Send the header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
@@ -480,7 +480,7 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
   return pos + 1U;  // Full header size is variable length bit plus the 1-byte fixed header
 }
 
-bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
   const uint8_t hlen = static_cast<uint8_t>(buildHeader(header, buf, length));
 
 #ifdef MQTT_MAX_TRANSFER_SIZE
@@ -567,7 +567,7 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
   return static_cast<uint16_t>(pos + len);
 }
 
-bool PubSubClient::connected() {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::connected() {
   if(tcpClient == nullptr) {
     return false;
   }
@@ -589,7 +589,7 @@ PubSubClient& PubSubClient::setServer(IPAddress ip, uint16_t port) {
   return *this;
 }
 
-PubSubClient& PubSubClient::setServer(const uint8_t* ip, uint16_t port) {  // NOLINT(readability-convert-member-functions-to-static)
+PubSubClient& PubSubClient::setServer(const uint8_t* ip, uint16_t port) {
   IPAddress addr(ip[0], ip[1], ip[2], ip[3]);
   return setServer(addr, port);
 }
@@ -637,7 +637,7 @@ uint16_t PubSubClient::getBufferSize() const {
   return this->bufferSize;
 }
 
-bool PubSubClient::endPublish() {  // NOLINT(readability-convert-member-functions-to-static)
+bool PubSubClient::endPublish() {
   return true;
 }
 

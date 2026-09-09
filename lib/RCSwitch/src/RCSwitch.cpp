@@ -126,7 +126,7 @@ RCSwitch::RCSwitch() {
 #endif
 }
 
-uint8_t RCSwitch::getNumProtos() { // NOLINT(readability-convert-member-functions-to-static)
+uint8_t RCSwitch::getNumProtos() {
   return numProto;
 }
 
@@ -140,7 +140,7 @@ void RCSwitch::setProtocol(Protocol protocol) {
 /**
  * Sets the protocol to send, from a list of predefined protocols
  */
-void RCSwitch::setProtocol(int32_t nProtocol) { // NOLINT(readability-convert-member-functions-to-static)
+void RCSwitch::setProtocol(int32_t nProtocol) {
   if(nProtocol < 1 || nProtocol > numProto) {
     nProtocol = 1;  // Out of range: fall back to the first protocol.
   }
@@ -302,27 +302,27 @@ void RCSwitch::disableReceive() {
   this->nReceiverInterrupt = -1;
 }
 
-bool RCSwitch::available() { // NOLINT(readability-convert-member-functions-to-static)
+bool RCSwitch::available() {
   return RCSwitch::nReceivedValue != 0;
 }
 
-void RCSwitch::resetAvailable() { // NOLINT(readability-convert-member-functions-to-static)
+void RCSwitch::resetAvailable() {
   RCSwitch::nReceivedValue = 0;
 }
 
-uint64_t RCSwitch::getReceivedValue() { // NOLINT(readability-convert-member-functions-to-static)
+uint64_t RCSwitch::getReceivedValue() {
   return RCSwitch::nReceivedValue;
 }
 
-uint32_t RCSwitch::getReceivedBitlength() { // NOLINT(readability-convert-member-functions-to-static)
+uint32_t RCSwitch::getReceivedBitlength() {
   return RCSwitch::nReceivedBitlength;
 }
 
-uint32_t RCSwitch::getReceivedDelay() { // NOLINT(readability-convert-member-functions-to-static)
+uint32_t RCSwitch::getReceivedDelay() {
   return RCSwitch::nReceivedDelay;
 }
 
-uint32_t RCSwitch::getReceivedProtocol() { // NOLINT(readability-convert-member-functions-to-static)
+uint32_t RCSwitch::getReceivedProtocol() {
   return RCSwitch::nReceivedProtocol;
 }
 
@@ -331,7 +331,7 @@ uint32_t RCSwitch::diff(int32_t A, int32_t B) {
   return abs(A - B);
 }
 
-bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) { // NOLINT(readability-convert-member-functions-to-static)
+bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
 #if defined(ESP8266) || defined(ESP32)
   const Protocol& pro = proto[p - 1];
 #else
@@ -429,7 +429,7 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) { // NOLIN
   return false;
 }
 
-void RCSwitch::handleInterrupt() { // NOLINT(readability-convert-member-functions-to-static, readability-function-cognitive-complexity)
+void RCSwitch::handleInterrupt() { // NOLINT(readability-function-cognitive-complexity)
 
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
