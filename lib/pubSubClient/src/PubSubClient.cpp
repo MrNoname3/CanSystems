@@ -4,7 +4,6 @@
 PubSubClient::PubSubClient(Client& client) {
   setClient(client);
 }
-
 PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) {
   setServer(addr, port);
   setClient(client);
@@ -427,20 +426,6 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
   return (rc == expectedLength);
 }
 
-bool PubSubClient::beginPublish(const char* topic, uint16_t plength, bool retained) {
-  if(connected()) {
-    // Send the header and variable length field
-    uint16_t length = MQTT_MAX_HEADER_SIZE;
-    length = writeString(topic, this->buffer, length);
-    const uint8_t header = static_cast<uint8_t>(MQTTPUBLISH | (retained ? 1U : 0U));
-    const size_t hlen = buildHeader(header, this->buffer, plength + length - MQTT_MAX_HEADER_SIZE);
-    const uint16_t rc = tcpClient->write(this->buffer + (MQTT_MAX_HEADER_SIZE - hlen), length - (MQTT_MAX_HEADER_SIZE - hlen));
-    lastOutActivity = millis();
-    return (rc == (length - (MQTT_MAX_HEADER_SIZE - hlen)));
-  }
-  return false;
-}
-
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
   uint8_t lenBuf[4];
   size_t pos = 0U;
@@ -605,24 +590,6 @@ PubSubClient::State PubSubClient::state() const {
 
 uint16_t PubSubClient::getRefusedPingCount() const {
   return this->refusedPings;
-}
-
-uint16_t PubSubClient::getBufferSize() const {
-  return this->bufferSize;
-}
-
-bool PubSubClient::endPublish() {
-  return true;
-}
-
-size_t PubSubClient::write(uint8_t data) {
-  lastOutActivity = millis();
-  return tcpClient->write(data);
-}
-
-size_t PubSubClient::write(const uint8_t* buffer, size_t size) {
-  lastOutActivity = millis();
-  return tcpClient->write(buffer, size);
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {

@@ -34,9 +34,9 @@
 
 /// @brief Lightweight MQTT client for embedded Arduino-compatible systems.
 ///
-/// Supports MQTT 3.1 and 3.1.1, QoS 0 and 1, retain flags, Last Will, and
-/// streaming large payloads via beginPublish() / write() / endPublish().
-class PubSubClient final : public Print {
+/// Supports MQTT 3.1 and 3.1.1, retain flags and Last Will. Publishing is QoS 0; an inbound
+/// QoS 1 PUBLISH is acknowledged, and a subscription may ask for QoS 0 or 1.
+class PubSubClient final {
 private:
   // clang-format off
   enum PacketType : uint8_t {
@@ -166,10 +166,6 @@ public:
   /// @return `true` if the size is valid and was applied; otherwise `false`.
   [[nodiscard]] bool setBufferSize(uint16_t size);
 
-  /// @brief Returns the current internal packet buffer size.
-  /// @return Buffer size in bytes.
-  [[nodiscard]] uint16_t getBufferSize() const;
-
   /// @brief Connects to the MQTT broker with the given client ID.
   /// @param id Null-terminated MQTT client identifier.
   /// @return `true` if the connection was established; otherwise `false`.
@@ -246,35 +242,6 @@ public:
   /// @param retained Whether the broker should retain the message.
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
-
-  /// @brief Begins a streaming publish for payloads larger than the internal buffer.
-  ///
-  /// Use this API when the payload is too large to fit in the internal buffer at once:
-  /// @code
-  ///   beginPublish(topic, totalLength, retained);
-  ///   write(data, dataLen);  // one or more calls
-  ///   endPublish();
-  /// @endcode
-  /// @param topic Null-terminated MQTT topic.
-  /// @param plength Total payload length in bytes.
-  /// @param retained Whether the broker should retain the message.
-  /// @return `true` if the MQTT header was sent successfully; otherwise `false`.
-  [[nodiscard]] bool beginPublish(const char* topic, uint16_t plength, bool retained);
-
-  /// @brief Finishes a streaming publish started with beginPublish().
-  /// @return Always `true`.
-  [[nodiscard]] bool endPublish();
-
-  /// @brief Writes a single payload byte (only valid between beginPublish() and endPublish()).
-  /// @param data Byte to write.
-  /// @return Number of bytes written.
-  size_t write(uint8_t data) override;
-
-  /// @brief Writes a block of payload bytes (only valid between beginPublish() and endPublish()).
-  /// @param buffer Pointer to the data buffer.
-  /// @param size Number of bytes to write.
-  /// @return Number of bytes written.
-  size_t write(const uint8_t* buffer, size_t size) override;
 
   /// @brief Subscribes to a topic.
   /// @param topic Null-terminated MQTT topic filter.
