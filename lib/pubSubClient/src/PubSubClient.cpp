@@ -115,17 +115,21 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
           return false;
         }
       }
-      uint8_t llen = 0U;
-      const uint32_t len = readPacket(&llen);
+      const RxResult connAck = readPacketBlocking();
+      const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
+      const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
+      // The reader has to start clean for the session: whatever it kept about the CONNACK would
+      // otherwise be finished a second time on the first loop(), before any real packet is read.
+      resetReader();
 
-      if(len == 4U) {
-        if(buffer[3] == 0U) {
+      if(connAckSized) {
+        if(connAckCode == 0U) {
           lastInActivity = millis();
           pingOutstanding = false;
           connectionState = State::CONNECTED;
           return true;
         }
-        connectionState = static_cast<State>(buffer[3]);
+        connectionState = static_cast<State>(connAckCode);
       }
       tcpClient->stop();
     } else {
@@ -137,7 +141,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   return true;
 }
 
-bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
+bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
   const bool fits = (length + 2U + strnlen(str, this->bufferSize) <= this->bufferSize);
   if(!fits) {
     tcpClient->stop();
@@ -145,164 +149,145 @@ bool PubSubClient::checkStringLength(uint16_t length, const char* str) {
   return fits;
 }
 
-// reads a byte into result
-bool PubSubClient::readByte(uint8_t* result) {
-  const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
-  const uint32_t previousMillis = millis();
-  while(tcpClient->available() == 0) {
-    yield();
-    if(millis() - previousMillis >= timeoutMs) {
-      return false;
-    }
-  }
-  *result = tcpClient->read();
-  return true;
+void PubSubClient::resetReader() {
+  rxPhase = RxPhase::Idle;
+  rxLen = 0U;
+  rxLengthLength = 0U;
+  rxMultiplier = 1U;
+  rxRemaining = 0U;
+  rxPayloadDone = 0U;
+  rxSkip = 0U;
+  rxSkipKnown = false;
+  rxIsPublish = false;
+  rxOversized = false;
 }
 
-// reads a byte into result[*index] and increments index
-bool PubSubClient::readByte(uint8_t* result, uint16_t* index) {
-  if(readByte(&result[*index])) {
-    (*index)++;
-    return true;
-  }
-  return false;
-}
-
-bool PubSubClient::readBytes(uint8_t* result, uint32_t length) {  // NOLINT(readability-non-const-parameter) filled by the socket read
+PubSubClient::RxResult PubSubClient::readPacketBlocking() {
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
-  uint32_t previousMillis = millis();
-  uint32_t taken = 0U;
-  while(taken < length) {
-    uint8_t discard[discardChunkSize];
-    const uint32_t wanted = (result != nullptr) ? (length - taken)
-                                                : (((length - taken) < discardChunkSize) ? (length - taken) : discardChunkSize);
-    const int16_t got = tcpClient->read((result != nullptr) ? (result + taken) : discard, wanted);
-    if(got > 0) {
-      taken += static_cast<uint32_t>(got);
-      previousMillis = millis();
+  const uint32_t startMs = millis();
+  resetReader();
+  while(true) {
+    if(rxPhase == RxPhase::Payload) {
+      if(advancePayload() == RxResult::Complete) { return RxResult::Complete; }
+    } else if(advanceHeader() == RxResult::Malformed) {
+      return RxResult::Malformed;
     } else {
-      yield();
-      if(millis() - previousMillis >= timeoutMs) {
-        return false;
-      }
+      // Header still coming; the timeout below is what ends the wait.
     }
+    if((millis() - startMs) >= timeoutMs) { return RxResult::Incomplete; }
+    yield();
   }
-  return true;
 }
 
-uint32_t PubSubClient::abortIncompletePacket() {
-  connectionState = State::CONNECTION_TIMEOUT;
-  tcpClient->stop();
-  return 0U;
+PubSubClient::RxResult PubSubClient::advanceHeader() {
+  while(tcpClient->available() != 0) {
+    const uint8_t byteIn = static_cast<uint8_t>(tcpClient->read());
+    if(rxLen == 0U) {
+      this->buffer[0] = byteIn;
+      rxLen = 1U;
+      rxIsPublish = ((byteIn & 0xF0U) == MQTTPUBLISH);
+      continue;
+    }
+    this->buffer[rxLen] = byteIn;
+    rxLen++;
+    rxRemaining += (byteIn & 127U) * rxMultiplier;
+    rxMultiplier <<= 7U;  // multiplier *= 128
+    if((byteIn & 128U) == 0U) {
+      rxLengthLength = static_cast<uint8_t>(rxLen - 1U);
+      // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
+      // announces fewer has none to give: the payload length derived from it would wrap to nearly
+      // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
+      if(rxIsPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
+      // Marked here, acted on as the payload arrives: it is taken off the socket either way.
+      rxOversized = (this->stream == nullptr) && ((rxLen + rxRemaining) > this->bufferSize);
+      rxPhase = RxPhase::Payload;
+      return RxResult::Complete;
+    }
+    if(rxLen == 5U) { return RxResult::Malformed; }  // Invalid remaining-length encoding.
+  }
+  return RxResult::Incomplete;
 }
 
-uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {  // NOLINT(readability-function-cognitive-complexity)
-  uint16_t len = 0U;
-  if(!readByte(this->buffer, &len)) {
-    return abortIncompletePacket();
+PubSubClient::RxResult PubSubClient::advancePayload() {
+  while(rxPayloadDone < rxRemaining) {
+    const int16_t ready = tcpClient->available();
+    if(ready <= 0) { return RxResult::Incomplete; }
+    const uint32_t left = rxRemaining - rxPayloadDone;
+    const uint32_t offered = (static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left;
+    // A stream is fed byte by byte because only part of the payload belongs to it, and the first
+    // two bytes have to be in the buffer before rxSkip can say which part that is.
+    if((this->stream != nullptr) || !rxSkipKnown) {
+      takePayloadByte();
+    } else {
+      takePayloadBulk(offered);
+    }
+    noteTopicLength();
   }
-  const bool isPublish = (this->buffer[0] & 0xF0U) == MQTTPUBLISH;
-  uint32_t multiplier = 1U;
-  uint32_t length = 0U;
-  uint8_t digit = 0U;
-  uint16_t skip = 0U;
-
-  do {
-    if(len == 5U) {
-      // Invalid remaining length encoding - kill the connection
-      connectionState = State::DISCONNECTED;
-      tcpClient->stop();
-      return 0U;
-    }
-    if(!readByte(&digit)) {
-      return abortIncompletePacket();
-    }
-    this->buffer[len++] = digit;
-    length += (digit & 127U) * multiplier;
-    multiplier <<= 7U;  // multiplier *= 128
-  } while((digit & 128U) != 0U);
-  *lengthLength = static_cast<uint8_t>(len - 1U);
-
-  if(isPublish) {
-    // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
-    // announces fewer has none to give: the two reads below would take bytes belonging to the
-    // next packet, and the payload length derived from it would wrap to nearly 4 GB. Malformed
-    // the same way an invalid remaining length is, and dropped the same way.
-    if(length < 2U) {
-      connectionState = State::DISCONNECTED;
-      tcpClient->stop();
-      return 0U;
-    }
-    // Read in topic length to calculate bytes to skip over for Stream writing
-    if(!readByte(this->buffer, &len)) {
-      return abortIncompletePacket();
-    }
-    if(!readByte(this->buffer, &len)) {
-      return abortIncompletePacket();
-    }
-    skip = static_cast<uint16_t>((this->buffer[*lengthLength + 1U] << 8U) + this->buffer[*lengthLength + 2U]);
-    if((this->buffer[0] & MQTTQOS1) != 0U) {
-      // skip message id
-      skip += 2U;
-    }
-  }
-  const uint32_t start = isPublish ? 2U : 0U;
-  uint32_t idx = static_cast<uint32_t>(len);
-
-  if(this->stream != nullptr) {
-    for(uint32_t i = start; i < length; i++) {
-      uint8_t dataByte = 0U;
-      if(!readByte(&dataByte)) {
-        return abortIncompletePacket();
-      }
-      if(isPublish && idx - *lengthLength - 2U > skip) {
-        this->stream->write(dataByte);
-      }
-
-      if(len < this->bufferSize) {
-        this->buffer[len] = dataByte;
-        len++;
-      }
-      idx++;
-    }
-  } else {
-    const uint32_t payloadLength = length - start;
-    const uint32_t room = (len < this->bufferSize) ? static_cast<uint32_t>(this->bufferSize - len) : 0U;
-    const uint32_t kept = (room < payloadLength) ? room : payloadLength;
-    if(!readBytes(&this->buffer[len], kept)) {
-      return abortIncompletePacket();
-    }
-    len = static_cast<uint16_t>(len + kept);
-    // The rest is still taken off the socket: what is left there would be read as the next
-    // packet's header.
-    if(!readBytes(nullptr, payloadLength - kept)) {
-      return abortIncompletePacket();
-    }
-    idx += payloadLength;
-  }
-
-  if(this->stream == nullptr && idx > this->bufferSize) {
-    len = 0U;  // This will cause the packet to be ignored.
-  }
-  return len;
+  return RxResult::Complete;
 }
 
-bool PubSubClient::handlePacket(uint32_t t) {
-  uint8_t llen = 0U;
-  const uint16_t len = static_cast<uint16_t>(readPacket(&llen));
-  if(len > 0U) {
-    lastInActivity = t;
+void PubSubClient::takePayloadByte() {
+  const uint8_t byteIn = static_cast<uint8_t>(tcpClient->read());
+  if(rxIsPublish && (this->stream != nullptr) && rxSkipKnown && (rxPayloadDone >= (rxSkip + 2U))) {
+    this->stream->write(byteIn);
+  }
+  if(rxLen < this->bufferSize) {
+    this->buffer[rxLen] = byteIn;
+    rxLen++;
+  }
+  rxPayloadDone++;
+}
+
+void PubSubClient::takePayloadBulk(uint32_t take) {
+  const uint32_t room = (rxLen < this->bufferSize) ? static_cast<uint32_t>(this->bufferSize - rxLen) : 0U;
+  const uint32_t kept = (room < take) ? room : take;
+  uint32_t stored = 0U;
+  if(kept != 0U) {
+    // What the client hands over is what was taken: counting the request instead would walk the
+    // parse position past bytes still on the socket, and every packet after it would be misread.
+    const int16_t got = tcpClient->read(&this->buffer[rxLen], kept);
+    stored = (got > 0) ? static_cast<uint32_t>(got) : 0U;
+    rxLen = static_cast<uint16_t>(rxLen + stored);
+    rxPayloadDone += stored;
+  }
+  if(stored < kept) { return; }   // Short read: the rest is still coming, so nothing to discard yet.
+  // What will not fit is still taken off the socket: left there, it would be read as the next
+  // packet's header.
+  uint32_t dropped = 0U;
+  while(dropped < (take - kept)) {
+    uint8_t discard[discardChunkSize];
+    const uint32_t want = ((take - kept - dropped) < discardChunkSize) ? (take - kept - dropped) : discardChunkSize;
+    const int16_t got = tcpClient->read(discard, want);
+    if(got <= 0) { break; }
+    dropped += static_cast<uint32_t>(got);
+  }
+  rxPayloadDone += dropped;
+}
+
+void PubSubClient::noteTopicLength() {
+  // The two bytes the topic length is written in are the first of the payload; once they are in
+  // the buffer the stream knows where its own part starts.
+  if(!rxIsPublish || rxSkipKnown || (rxPayloadDone < 2U)) { return; }
+  rxSkip = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
+  if((this->buffer[0] & MQTTQOS1) != 0U) { rxSkip += 2U; }  // The message id sits between the topic and the payload.
+  rxSkipKnown = true;
+}
+
+void PubSubClient::dispatchPacket(uint32_t t) {
+  const uint16_t len = rxLen;
+  const uint8_t llen = rxLengthLength;
+  {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
       if(callback != nullptr) {
         const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
         // The topic length and the packet length are two independent numbers off the wire, and
         // every index below is built from the first one. A packet where they disagree is dropped
-        // rather than trusted: readPacket() consumed exactly the announced bytes, so the stream
+        // rather than trusted: the reader consumed exactly the announced bytes, so the stream
         // stays in step and only this message is lost.
         const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;
         if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
-          return true;
+          return;
         }
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
@@ -332,9 +317,45 @@ bool PubSubClient::handlePacket(uint32_t t) {
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
+  }
+}
+
+bool PubSubClient::pumpReader(uint32_t t) {
+  if((rxPhase == RxPhase::Idle) && (tcpClient->available() == 0)) { return true; }
+  if(rxPhase == RxPhase::Idle) {
+    rxStartedMs = t;
+    rxPhase = RxPhase::Header;
+  }
+  RxResult result = RxResult::Incomplete;
+  if(rxPhase == RxPhase::Header) {
+    result = advanceHeader();
+    if(result == RxResult::Malformed) {
+      connectionState = State::DISCONNECTED;
+      tcpClient->stop();
+      resetReader();
+      return false;
+    }
+  }
+  if(rxPhase == RxPhase::Payload) {
+    result = advancePayload();
+  }
+  if(result == RxResult::Complete) {
+    lastInActivity = t;
+    // An oversized packet was taken off the socket to keep the stream in step, and goes no further.
+    if(!rxOversized) { dispatchPacket(t); }
+    resetReader();
     return true;
   }
-  return connected();
+  // Half a packet is not an error yet - the rest may be one segment behind. It becomes one when it
+  // stays away for the whole socket timeout: a peer that stops mid-packet is as gone as one that
+  // stops answering, and the bytes already taken cannot be put back for a fresh start.
+  if((t - rxStartedMs) >= (static_cast<uint32_t>(this->socketTimeout) * 1000U)) {
+    connectionState = State::CONNECTION_TIMEOUT;
+    tcpClient->stop();
+    resetReader();
+    return false;
+  }
+  return true;
 }
 
 bool PubSubClient::keepAlivePing(uint32_t t) {
@@ -375,10 +396,7 @@ bool PubSubClient::loop() {
         return false;
       }
     }
-    if(tcpClient->available() != 0) {
-      return handlePacket(t);
-    }
-    return true;
+    return pumpReader(t);
   }
   return false;
 }

@@ -327,36 +327,6 @@ public:
   [[nodiscard]] uint16_t getRefusedPingCount() const;
 
 private:
-  /// @brief Reads a single byte from the TCP client, blocking until data is available or timeout.
-  /// @param result Pointer to the byte buffer to read into.
-  /// @return `true` if a byte was read; `false` on timeout.
-  bool readByte(uint8_t* result);
-
-  /// @brief Reads a single byte into result[*index] and increments index.
-  /// @param result Pointer to the buffer.
-  /// @param index Pointer to the current write index; incremented on success.
-  /// @return `true` if a byte was read; `false` on timeout.
-  bool readByte(uint8_t* result, uint16_t* index);
-
-  /// @brief Reads a run of bytes, taking as many at a time as the socket will give.
-  /// @details The deadline is per read that made progress, which is what a byte at a time gets.
-  /// @param result Where to put them; `nullptr` takes them off the socket and throws them away.
-  /// @param length How many to read.
-  /// @return `true` when the whole run arrived; `false` on timeout.
-  bool readBytes(uint8_t* result, uint32_t length);
-
-  /// @brief Reads one complete MQTT packet into the internal buffer.
-  /// @param lengthLength Output: set to the number of bytes in the variable-length field.
-  /// @return Total number of bytes in the packet; 0 on error or oversized packet.
-  /// @brief Drops the connection after a read that did not complete the packet.
-  /// @details A timed-out read leaves the rest of the packet in the socket. Carrying on would
-  /// read that remainder as the next packet's header, and nothing resynchronises the stream
-  /// again; a closed connection is recoverable, a misaligned one is not.
-  /// @return Always 0, so callers can `return abortIncompletePacket();`.
-  uint32_t abortIncompletePacket();
-
-  uint32_t readPacket(uint8_t* lengthLength);
-
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.
   /// @param header MQTT fixed-header byte.
   /// @param buf Buffer containing the payload, with MQTT_MAX_HEADER_SIZE bytes reserved at the start.
@@ -369,7 +339,7 @@ private:
   /// @param length Bytes already used in the buffer.
   /// @param str Null-terminated string to check.
   /// @return `true` if the string fits; otherwise `false`.
-  bool checkStringLength(uint16_t length, const char* str);
+  bool checkStringLength(uint16_t length, const char* str) const;
 
   /// @brief Writes a length-prefixed MQTT string into a byte buffer.
   /// @param string Null-terminated source string.
@@ -393,11 +363,62 @@ private:
   ///         it is still worth asking.
   [[nodiscard]] bool keepAlivePing(uint32_t t);
 
-  /// @brief Reads and dispatches one incoming MQTT packet.
-  /// @param t Current timestamp from millis(), used to update lastInActivity and lastOutActivity.
-  /// @return `true` if a packet was processed or the connection is still open;
-  ///         `false` if readPacket() detected a closed connection.
-  [[nodiscard]] bool handlePacket(uint32_t t);
+  /// @brief How far the reader has got through the packet it is assembling.
+  /// @details The reader keeps its place between `loop()` calls, so a packet that arrives in
+  /// pieces is continued rather than waited for: nothing below blocks on the socket.
+  enum class RxPhase : uint8_t {
+    Idle = 0U,     // No packet in progress.
+    Header = 1U,   // Collecting the fixed header byte and the remaining-length field.
+    Payload = 2U,  // Collecting the bytes the remaining-length field announced.
+  };
+
+  /// @brief What one pass over the socket made of the packet in progress.
+  enum class RxResult : uint8_t {
+    Incomplete = 0U,  // Ran out of bytes; come back next pass.
+    Complete = 1U,    // The whole packet is in.
+    Malformed = 2U,   // The stream cannot be trusted, and cannot be brought back into step.
+  };
+
+  /// @brief Takes whatever the socket has ready and dispatches a packet once it is whole.
+  /// @param t Current timestamp from millis(), recorded as inbound activity.
+  /// @return `false` when the connection was given up, matching `loop()`'s own result.
+  [[nodiscard]] bool pumpReader(uint32_t t);
+
+  /// @brief Collects the fixed header and the remaining-length field.
+  /// @return `Complete` once the length is known and the phase has moved on to the payload,
+  ///         `Incomplete` while bytes of it are still missing, `Malformed` for a length field
+  ///         that cannot be parsed or announces less than a PUBLISH needs.
+  RxResult advanceHeader();
+
+  /// @brief Collects the announced payload, buffering and streaming what belongs where.
+  /// @return `Complete` once every announced byte has been taken off the socket.
+  RxResult advancePayload();
+
+  /// @brief Takes one payload byte, offering it to the stream when it belongs to the stream's part.
+  void takePayloadByte();
+
+  /// @brief Takes several payload bytes at once, keeping what fits and discarding the rest.
+  /// @param take How many bytes to take; the caller has checked that many are ready.
+  void takePayloadBulk(uint32_t take);
+
+  /// @brief Reads `rxSkip` out of the payload's first two bytes, once they are in the buffer.
+  void noteTopicLength();
+
+  /// @brief Starts a packet over, whatever became of the last one.
+  void resetReader();
+
+  /// @brief Runs the reader until a whole packet is in or the socket timeout runs out.
+  /// @details Only the connect handshake uses this: until the CONNACK arrives there is nothing
+  /// else for the caller to get on with, so waiting here costs nothing the main loop would miss.
+  /// @return What became of the packet; the bytes are in `buffer`, `rxLen` of them.
+  RxResult readPacketBlocking();
+
+  /// @brief Dispatches a packet the reader has finished assembling.
+  /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
+  /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
+  /// PINGREQ is answered, a PINGRESP clears the outstanding ping.
+  /// @param t Current timestamp from millis(), used to update lastOutActivity when it answers.
+  void dispatchPacket(uint32_t t);
 
   Client* tcpClient = nullptr;                    // Pointer to the TCP client used for the connection.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
@@ -410,6 +431,17 @@ private:
   uint16_t nextMsgId = 0U;                        // Next MQTT message ID (1–65535; 0 is reserved).
   uint32_t lastOutActivity = 0U;                  // Timestamp (ms) of the last outgoing packet.
   uint32_t lastInActivity = 0U;                   // Timestamp (ms) of the last incoming packet.
+  RxPhase rxPhase = RxPhase::Idle;                // How far the packet being assembled has got.
+  uint16_t rxLen = 0U;                            // Bytes of the packet stored in `buffer`.
+  uint8_t rxLengthLength = 0U;                    // Bytes the remaining-length field took.
+  uint32_t rxMultiplier = 1U;                     // Place value of the next remaining-length digit.
+  uint32_t rxRemaining = 0U;                      // Bytes the remaining-length field announced.
+  uint32_t rxPayloadDone = 0U;                    // Announced bytes taken off the socket so far.
+  uint16_t rxSkip = 0U;                           // Payload bytes before the part a stream wants.
+  bool rxSkipKnown = false;                       // Whether `rxSkip` has been read out of the payload yet.
+  bool rxIsPublish = false;                       // Whether the packet in progress is a PUBLISH.
+  bool rxOversized = false;                       // Packet longer than the buffer: taken off the socket, then dropped.
+  uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
   uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
