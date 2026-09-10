@@ -33,9 +33,6 @@
 
 #include "RCSwitch.h"
 
-#include <algorithm>
-#include <limits>
-
 /* Protocol description format
  *
  * {
