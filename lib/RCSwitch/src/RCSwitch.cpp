@@ -465,7 +465,6 @@ void RCSwitch::handOverRecorded(uint32_t changeCount) {
 void RCSwitch::handleInterrupt() {
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
-  static byte repeatCount = 0;
 
   const long time = micros();
   const uint32_t duration = time - lastTime;
@@ -495,14 +494,7 @@ void RCSwitch::handleInterrupt() {
       // here that a sender will send the signal multiple times,
       // with roughly the same gap between them).
 
-      // Number of repeated packets.
-      repeatCount++;
-      // On the second repeat, hand the one received first over for decoding.
-      if(repeatCount == 1) {
-        handOverRecorded(changeCount);
-        // Clear the repeat counter.
-        repeatCount = 0;
-      }
+      handOverRecorded(changeCount);
     }
     // The length differs by more than +-200 from the one received earlier:
     // clear the counter and start receiving a new packet.
@@ -519,7 +511,6 @@ void RCSwitch::handleInterrupt() {
   // detect overflow
   if(changeCount >= rcSwitchMaxChanges) {
     changeCount = 0;
-    repeatCount = 0;
   }
 
   // Store the length of the pulse just received.
