@@ -80,7 +80,7 @@ public:
     return *this = static_cast<uint8_t>(flags | written);
   }
 
-  operator uint8_t() const { return flags; }   // NOLINT(google-explicit-constructor) mirrors the register read
+  operator uint8_t() const { return flags; }
 
   /// @brief The hardware raising a flag, which no write of ours can do.
   void raise(uint8_t bit) { flags = static_cast<uint8_t>(flags | bit); }

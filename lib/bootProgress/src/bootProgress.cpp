@@ -3,7 +3,7 @@
 #if defined(ESP8266) || defined(ESP32)
 #include <pgmspace.h>                                               /// PROGMEM stage names.
 #else
-#define PROGMEM                                                     // NOLINT(cppcoreguidelines-macro-usage) - the host build has no flash strings.
+#define PROGMEM
 #endif
 
 BootStage BootProgress::previousStage = BootStage::Unknown;

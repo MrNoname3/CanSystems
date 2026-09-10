@@ -80,7 +80,7 @@ public:
 
   /// @brief Cooperative measurement state machine; advances one step per call. Never busy-waits.
   /// @return `true`.
-  bool run() override {  // NOLINT(readability-function-cognitive-complexity) small, flat state machine
+  bool run() override {
     if(reader.count() == 0U) { return true; }
     switch(state) {
       case State::Idle: {

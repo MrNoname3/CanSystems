@@ -344,7 +344,7 @@ uint8_t ESP32SJA1000::wakeup() {
   return 1U;
 }
 
-bool ESP32SJA1000::isBusOff() const { // NOLINT(readability-make-member-function-const)
+bool ESP32SJA1000::isBusOff() const {
   return (readRegister(regSr) & srBusOff) != 0U;
 }
 

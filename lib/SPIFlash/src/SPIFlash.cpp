@@ -5,7 +5,7 @@ SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
   jedecID(jedecID) {}
 
-void SPIFlash::select() { // NOLINT(readability-make-member-function-const)
+void SPIFlash::select() {
 #ifndef SPI_HAS_TRANSACTION
   noInterrupts();
 #endif

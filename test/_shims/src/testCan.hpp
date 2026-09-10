@@ -25,7 +25,7 @@ public:
   TestCan& operator=(TestCan&&) = delete;
 
   // Lets a fixture stand in for the handler wherever one is expected.
-  operator CanHandler&() { return handler; }  // NOLINT(google-explicit-constructor)
+  operator CanHandler&() { return handler; }
 
   ESP32SJA1000 controller;
   CanHandler handler{ controller };

@@ -14,8 +14,8 @@ public:
   mutable uint16_t lastCommand = 0U;
   mutable uint8_t lastData[8] = {};
 
-  bool init() override { return true; } // NOLINT(readability-make-member-function-const)
-  bool run() override { return true; }  // NOLINT(readability-make-member-function-const)
+  bool init() override { return true; }
+  bool run() override { return true; }
 
   bool send(uint16_t command, const uint8_t (&data)[8]) const override {
     sendCount++;

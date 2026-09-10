@@ -123,10 +123,10 @@ private:
   // clang-format on
 
   /// @brief Asserts chip-select and saves SPI state.
-  void select(); // NOLINT(readability-make-member-function-const)
+  void select();
 
   /// @brief De-asserts chip-select and restores SPI state.
-  void unselect(); // NOLINT(readability-make-member-function-const)
+  void unselect();
 
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.

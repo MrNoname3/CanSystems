@@ -36,8 +36,8 @@ public:
   SpecDevice(CanHandler& canHandler, uint16_t clientCanId) :
     CanBase(canHandler, clientCanId) {}
 
-  bool init() override { return true; }  // NOLINT(readability-make-member-function-const)
-  bool run() override { return true; }   // NOLINT(readability-make-member-function-const)
+  bool init() override { return true; }
+  bool run() override { return true; }
 
   void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override { (void)canFrame; }
 };

@@ -37,7 +37,7 @@ Radiation::TubeType Radiation::loadTubeType() {
   }
 }
 
-bool Radiation::init() { // NOLINT(readability-make-member-function-const)
+bool Radiation::init() {
   attachInterrupt(digitalPinToInterrupt(sensorPin), counter, FALLING);
   measureTicker.attach_ms(measureTime, measure);
   cpm = 0U;
@@ -46,7 +46,7 @@ bool Radiation::init() { // NOLINT(readability-make-member-function-const)
   return true;
 }
 
-void Radiation::end() { // NOLINT(readability-make-member-function-const)
+void Radiation::end() {
   detachInterrupt(digitalPinToInterrupt(sensorPin));
   measureTicker.detach();
   cpm = 0U;

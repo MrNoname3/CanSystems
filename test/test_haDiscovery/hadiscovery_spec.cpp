@@ -60,7 +60,7 @@ public:
   }
   void flush() override {}
   void stop() override { _connected = false; }
-  uint8_t connected() override { return _connected ? 1U : 0U; }  // NOLINT(readability-make-member-function-const) overrides non-const Client::connected()
+  uint8_t connected() override { return _connected ? 1U : 0U; }
   operator bool() override { return true; }
 
   void loadConnack() {
@@ -141,7 +141,7 @@ struct Fixture {
   PubSubClient mqtt;
   HADiscovery had;
 
-  Fixture() :  // NOLINT(modernize-use-equals-default) non-trivial: connects the mock and primes the CONNACK
+  Fixture() :
     mqtt(IPAddress(kServerIp), 1883U, cap),
     had(fixturePublish, &mqtt, kClientName, kSenderTopic, kRecvTopic, kAvailTopic) {
     cap.loadConnack();

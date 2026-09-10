@@ -46,15 +46,15 @@ public:
     return true;
   }
 
-  bool writeByte(uint32_t addr, uint8_t byt) { // NOLINT(readability-make-member-function-const)
-    if(failWrite) { return false; }      // NOLINT(readability-simplify-boolean-expr) guard, not a boolean return: the write below still has to run
+  bool writeByte(uint32_t addr, uint8_t byt) {
+    if(failWrite) { return false; }
     programCommands++;
     program(addr, byt);
     return true;
   }
 
   bool writeBytes(uint32_t addr, const void* buf, uint16_t len) {
-    if(failWrite) { return false; }      // NOLINT(readability-simplify-boolean-expr)
+    if(failWrite) { return false; }
     // One command however long the run is, as the chip charges it: the program cycle is what
     // costs the time, and a page program runs one of them for the whole run.
     programCommands++;

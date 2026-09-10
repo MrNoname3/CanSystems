@@ -60,7 +60,6 @@ private:
     return (value << count) | (value >> (32U - count));
   }
 
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity) standard 64-step MD5 compression
   void transform() {
     static const uint32_t K[64] = {
       0xd76aa478U, 0xe8c7b756U, 0x242070dbU, 0xc1bdceeeU, 0xf57c0fafU, 0x4787c62aU, 0xa8304613U, 0xfd469501U,

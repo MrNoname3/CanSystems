@@ -59,8 +59,8 @@ public:
   TestDevice(CanHandler& canHandler, uint16_t clientCanId) :
     CanBase(canHandler, clientCanId) {}
 
-  bool init() override { return true; }  // NOLINT(readability-make-member-function-const)
-  bool run() override { return true; }   // NOLINT(readability-make-member-function-const)
+  bool init() override { return true; }
+  bool run() override { return true; }
 
   void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override {
     ++received;
@@ -83,8 +83,8 @@ public:
     CanBase(canHandler, clientCanId),
     askedAbout(askedAbout) {}
 
-  bool init() override { return true; }  // NOLINT(readability-make-member-function-const)
-  bool run() override { return true; }   // NOLINT(readability-make-member-function-const)
+  bool init() override { return true; }
+  bool run() override { return true; }
 
   void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override {
     (void)canFrame;

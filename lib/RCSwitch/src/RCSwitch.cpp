@@ -274,7 +274,7 @@ void RCSwitch::enableReceive(int32_t interrupt) {
   this->enableReceive();
 }
 
-void RCSwitch::enableReceive() { // NOLINT(readability-make-member-function-const)
+void RCSwitch::enableReceive() {
   if(this->nReceiverInterrupt != -1) {
     // Starting reception discards whatever the previous session left behind.
     RCSwitch::nReceivedValue = 0;
@@ -283,7 +283,7 @@ void RCSwitch::enableReceive() { // NOLINT(readability-make-member-function-cons
   }
 }
 
-void RCSwitch::resumeReceive(int32_t interrupt) { // NOLINT(readability-make-member-function-const)
+void RCSwitch::resumeReceive(int32_t interrupt) {
   this->nReceiverInterrupt = interrupt;
   if(this->nReceiverInterrupt != -1) {
     this->attachReceiveInterrupt();

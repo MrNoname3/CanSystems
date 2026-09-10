@@ -131,7 +131,6 @@ public:
   [[nodiscard]] bool exists(const char* path) const { return files_.count(path) > 0U; }
 
   // Mutates files_; clang-tidy's const/static hints here are false positives.
-  // NOLINTNEXTLINE(readability-make-member-function-const)
   bool remove(const char* path) {
     return files_.erase(path) > 0U;
   }
