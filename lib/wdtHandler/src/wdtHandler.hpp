@@ -31,7 +31,7 @@ public:
 
   /// @brief Constructs a `WdtHandler` object and enables the watchdog timer with the specified timeout.
   /// @param wdtTime The timeout interval for the watchdog timer, specified as a value from the `WDT` enumeration.
-  WdtHandler(WDT wdtTime) {
+  explicit WdtHandler(WDT wdtTime) {
     enableWatchdog(wdtTime);
   }
 

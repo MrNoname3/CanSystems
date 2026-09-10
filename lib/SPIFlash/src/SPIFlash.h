@@ -16,7 +16,7 @@ public:
   /// @param slaveSelectPin SPI chip-select pin.
   /// @param jedecID Expected JEDEC manufacturer/device ID; pass `0` to skip verification.
   ///                Example IDs: Atmel-Adesto AT25DF041A = 0x1F44, Winbond W25X40CL = 0xEF30.
-  SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID = 0U);
+  explicit SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID = 0U);
 
   /// @brief Initialises SPI, wakes the chip, and verifies the JEDEC ID if set.
   /// @return `true` if initialisation succeeded, `false` otherwise.
@@ -126,7 +126,7 @@ private:
   void select();
 
   /// @brief De-asserts chip-select and restores SPI state.
-  void unselect();
+  void unselect() const;
 
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.

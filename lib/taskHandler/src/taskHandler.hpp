@@ -45,7 +45,7 @@ private:
 public:
   /// @brief Constructor for TaskHandler.
   /// @param taskListRef Reference to an array of pointers to `Task` objects.
-  TaskHandler(Task* (&taskListRef)[taskNum]) :
+  explicit TaskHandler(Task* (&taskListRef)[taskNum]) :
     taskList(taskListRef) {}
 
   /// @brief Default destructor.

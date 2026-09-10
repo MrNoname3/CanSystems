@@ -173,6 +173,7 @@ private:
 #if not defined(RCSwitchDisableReceiving)
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
   inline static RECEIVE_ATTR bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
+  inline static RECEIVE_ATTR void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
   static inline uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
   int32_t nReceiverInterrupt;
 #endif

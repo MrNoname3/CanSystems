@@ -56,7 +56,7 @@ PumpControl pc(
     FLOW_INT,
     CURRENT_SENSOR,
     [](uint8_t errCode) -> void {
-      canHandler.send(IrrigationCmd::IRRIGATION_ERROR, { 0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode });
+      (void)canHandler.send(IrrigationCmd::IRRIGATION_ERROR, { 0U, 0U, 0U, 0U, 0U, 0U, 0U, errCode });
     });
 Multiplexer analogMultiplexer(MOISTURE_SENSOR, ANALOG_EN, ANALOG_CHS);
 MoistureReader<MOISTURE_CH_NUM> moistureReader(
@@ -65,7 +65,7 @@ MoistureReader<MOISTURE_CH_NUM> moistureReader(
     MOISTURE_CH,
     Time::hrToMs(8U),
     [](const uint8_t (&data)[8]) -> void {
-      canHandler.send(IrrigationCmd::MOISTURE_DATA, data);
+      (void)canHandler.send(IrrigationCmd::MOISTURE_DATA, data);
     });
 Performance performance(2U, maxRoundTimeCallback);
 
@@ -115,19 +115,19 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(IrrigationCmd::ADD_IRRIGATION): {
       pc.createIrrigation(data[0], data[1], data[2]);
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(IrrigationCmd::SKIP_IRRIGATION): {
       pc.skipActualIrrigation();
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(IrrigationCmd::STOP_IRRIGATION): {
       pc.skipAllIrrigations();
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(IrrigationCmd::MOISTURE_DATA): {
       moistureReader.triggerImmediateMeasurement();
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
   }
 }
@@ -160,5 +160,5 @@ void maxRoundTimeCallback(uint32_t maxRoundTime) {
     static_cast<uint8_t>((maxRoundTime >> 24U) & 0xFFU),
     0U, 0U, 0U, 0U
   };
-  canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
+  (void)canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
 }

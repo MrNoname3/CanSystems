@@ -19,9 +19,7 @@ static const uint8_t kUid[8] = { 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U
 static void seedCanIds(uint16_t master, uint16_t local) {
   struct __attribute__((packed)) StoredIds {
     uint16_t crc;
-    // cppcheck-suppress unusedStructMember ; read back through EEPROM.put's byte copy
     uint16_t master;
-    // cppcheck-suppress unusedStructMember ; read back through EEPROM.put's byte copy
     uint16_t local;
   };
   StoredIds stored{ 0U, master, local };

@@ -12,7 +12,7 @@ bool PushButtonHandler::run() {
   const bool eventValid = event > 0U;
   if(eventValid) {
     const uint8_t canData[8] = { event, 0U, 0U, 0U, 0U, 0U, 0U, 0U };
-    canHandler.send(CanCmd::BUTTON_EVENT, canData);
+    (void)canHandler.send(CanCmd::BUTTON_EVENT, canData);
     if((btnCallback != nullptr) && (event < static_cast<uint8_t>(BtnEvent::LAST_ELEMENT))) {
       btnCallback(static_cast<BtnEvent>(event));
     }

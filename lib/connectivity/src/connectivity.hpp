@@ -176,6 +176,43 @@ private:
   /// @return `true` if every step succeeded; otherwise, `false`.
   [[nodiscard]] bool initOnce();
 
+  /// @brief Mounts the file system and reports its usage.
+  /// @return `true` if the file system came up; otherwise, `false`.
+  [[nodiscard]] bool initFileSystem();
+
+  /// @brief Waits out the backoff rung a previous failed run left in RTC memory.
+  void waitOutBackoff();
+
+  /// @brief Brings up the network interface.
+  /// @return `true` if the interface connected; otherwise, `false`.
+  [[nodiscard]] bool startNetwork();
+
+  /// @brief Sets the clock over NTP, which x.509 validation needs.
+  /// @return `true` if the time was synchronised; otherwise, `false`.
+  [[nodiscard]] bool syncClock();
+
+  /// @brief Reads the broker credentials from the config file.
+  /// @return `true` if every credential field was read; otherwise, `false`.
+  [[nodiscard]] bool loadCredentials();
+
+  /// @brief Builds the client name and the sender, receiver and availability topics from the MAC.
+  /// @return `true` if every name fit its buffer; otherwise, `false`.
+  [[nodiscard]] bool buildMqttTopics();
+
+  /// @brief Loads the CA certificate into the TLS client.
+  /// @return `true` if the certificate was accepted; otherwise, `false`.
+  [[nodiscard]] bool loadServerCertificate();
+
+  /// @brief Points the MQTT client at the broker and installs the receive callback.
+  void setupMqttClient();
+
+  /// @brief Applies the "haDiscovery" config key to the discovery publisher.
+  void applyHaDiscoveryToggle();
+
+  /// @brief Publishes the retained device info topic.
+  /// @return `true` if the payload fit its buffer; otherwise, `false`.
+  [[nodiscard]] bool publishStartupInfo();
+
   /// @brief Establishes a connection to the MQTT broker.
   /// @return `true` if the connection was successfully established; otherwise, `false`.
   bool connectToMqttServer();

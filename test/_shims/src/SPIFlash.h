@@ -19,7 +19,7 @@ static constexpr uint32_t SPIFLASH_DEFAULT_CAPACITY = 65536U;
 
 class SPIFlash {
 public:
-  SPIFlash(uint8_t /*slaveSelectPin*/, uint16_t id = 0U, uint32_t capacity = SPIFLASH_DEFAULT_CAPACITY) :
+  explicit SPIFlash(uint8_t /*slaveSelectPin*/, uint16_t id = 0U, uint32_t capacity = SPIFLASH_DEFAULT_CAPACITY) :
     jedecId(id),
     flashCapacity(capacity) {}
 

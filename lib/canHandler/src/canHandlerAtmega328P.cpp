@@ -109,40 +109,40 @@ void CanHandlerAtmega328P::handleRxFrame() {
   }
   switch(static_cast<uint16_t>(canFrame.cmd)) {
     case static_cast<uint16_t>(CanCmd::PING): {
-      CanHandlerBase::send(CanCmd::PING);
+      (void)CanHandlerBase::send(CanCmd::PING);
     } break;
     case static_cast<uint16_t>(CanCmd::RESTART): {
       ResetHandler::restartMCU(ResetHandler::RestartCause::CommandedOverCan);
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
-      sendFwVersion();
+      (void)sendFwVersion();
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_START): {
       const OtaCanFrame::StartFrame startFrame = OtaCanFrame::unpackStart(canFrame.data);
       Logger::get()->print(F("OTA start: "));
       const bool otaStartResult = ota.start(startFrame.storageNumber, startFrame.fwSize, startFrame.fwCrc);
       Logger::get()->println(Str::getStateStr(otaStartResult));
-      if(!otaStartResult) { CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
+      if(!otaStartResult) { (void)CanHandlerBase::send(CanCmd::OTA_START, Response::NACK); }
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_SEND): {
       const OtaCanFrame::SendFrame sendFrame = OtaCanFrame::unpackSend(canFrame.data);
       const bool otaStoreResult = ota.storeNextData(sendFrame.sequence, sendFrame.data);
       if(!otaStoreResult) { Logger::get()->println(F("OTA storing failed!")); }
-      CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
+      (void)CanHandlerBase::send(CanCmd::OTA_SEND, otaStoreResult ? Response::ACK : Response::NACK);
     } break;
     case static_cast<uint16_t>(CanCmd::OTA_END): {
     } break;
     case static_cast<uint16_t>(CanCmd::SET_CAN_ID): {
       const CanIdAssign::Request request = CanIdAssign::unpack(canFrame.data);
       if(!CanIdAssign::isAcceptable(request, getLocalCanId(), getMasterCanId(), static_cast<uint16_t>(canFrame.from))) {
-        CanHandlerBase::send(CanCmd::SET_CAN_ID, Response::NACK);
+        (void)CanHandlerBase::send(CanCmd::SET_CAN_ID, Response::NACK);
         break;
       }
       // Stored, not set: the answer below still goes out from the address the request reached.
       const bool saved = storeCanIds(getMasterCanId(), request.newLocal);
       Logger::get()->print(F("New CAN id: "));
       Logger::get()->println(Str::getStateStr(saved));
-      CanHandlerBase::send(CanCmd::SET_CAN_ID, saved ? Response::ACK : Response::NACK);
+      (void)CanHandlerBase::send(CanCmd::SET_CAN_ID, saved ? Response::ACK : Response::NACK);
       (void)CAN.flushTx();                                          // The answer is queued; the flush puts it on the bus.
       if(saved) { ResetHandler::restartMCU(ResetHandler::RestartCause::CanIdChanged); }
     } break;
@@ -170,21 +170,21 @@ bool CanHandlerAtmega328P::run() {
   // wide enough that two of them landing on the same derived address still interleave.
   if(!addressed && Time::hasElapsed(actualTime, announceTimer, announceTime)) {
     announceTimer = actualTime;
-    CanHandlerBase::send(CanCmd::ANNOUNCE, uid);
+    (void)CanHandlerBase::send(CanCmd::ANNOUNCE, uid);
   }
   const OTA::OtaState otaState = ota.run();
   const OtaCanResponse::Decision otaDecision = OtaCanResponse::decide(lastOtaState, otaState, ota.isOwnFw());
   switch(otaDecision.action) {
     case OtaCanResponse::Action::ACK_START: {
-      CanHandlerBase::send(CanCmd::OTA_START, Response::ACK);
+      (void)CanHandlerBase::send(CanCmd::OTA_START, Response::ACK);
     } break;
     case OtaCanResponse::Action::ACK_END: {
-      CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
+      (void)CanHandlerBase::send(CanCmd::OTA_END, Response::ACK);
       Logger::get()->print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
       Logger::get()->println(Str::getOkStr());
     } break;
     case OtaCanResponse::Action::NACK_END: {
-      CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
+      (void)CanHandlerBase::send(CanCmd::OTA_END, Response::NACK);
       Logger::get()->print(reinterpret_cast<const __FlashStringHelper*>(storingStr));
       Logger::get()->println(Str::getErrStr());
     } break;

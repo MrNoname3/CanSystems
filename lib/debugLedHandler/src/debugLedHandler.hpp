@@ -16,7 +16,7 @@ public:
   /// @brief Constructor to initialize the debug LED.
   /// @param debugLedPin The GPIO pin connected to the LED.
   /// @param ledOnState The logic level to turn the LED on (`1` for active-high, `0` for active-low).
-  DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState = 1U);
+  explicit DebugLedHandler(uint8_t debugLedPin, uint8_t ledOnState = 1U);
 
   /// @brief Destructor for the debug LED handler.
   ~DebugLedHandler() = default;

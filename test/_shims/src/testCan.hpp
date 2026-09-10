@@ -55,7 +55,6 @@ inline void pumpCanBus() {
   pumpCanBus();
   size_t count = 0U;
   for(const Esp32CanModel::SentFrame& sent : esp32Can.transmitted()) {
-    // cppcheck-suppress useStlAlgorithm
     if(canFrameCommand(sent) == cmd) { ++count; }
   }
   return count;

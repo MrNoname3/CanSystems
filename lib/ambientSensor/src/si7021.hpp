@@ -18,7 +18,7 @@ public:
   /// @param timeoutUs Timeout in microseconds for I2C communication.
   /// @param address The I2C address of the SI7021 device (default: `0x40`).
   /// @param wire The `TwoWire` instance representing the I2C bus (default: `Wire`).
-  SI7021(uint32_t timeoutUs, uint8_t address = 0x40, TwoWire& wire = Wire);
+  explicit SI7021(uint32_t timeoutUs, uint8_t address = 0x40, TwoWire& wire = Wire);
 
   /// @brief Destructor of the SI7021 object.
   ~SI7021() = default;

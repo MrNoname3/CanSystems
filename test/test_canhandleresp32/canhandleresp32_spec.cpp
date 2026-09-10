@@ -43,7 +43,7 @@ class TestIdHolder final : public CanHandlerBase {
 public:
   bool init() override { return true; }
   bool run() override { return true; }
-  bool send(uint16_t command, const uint8_t (&data)[8]) const override { // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] bool send(uint16_t command, const uint8_t (&data)[8]) const override {
     (void)command;
     (void)data;
     return true;

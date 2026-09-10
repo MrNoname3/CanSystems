@@ -137,12 +137,12 @@ public:
   /// @param command 9-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  virtual bool send(uint16_t command, const uint8_t (&data)[8]) const = 0; // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] virtual bool send(uint16_t command, const uint8_t (&data)[8]) const = 0;
 
   /// @brief Sends a CAN frame with a specified command.
   /// @param command 9-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  inline bool send(uint16_t command) const { // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] inline bool send(uint16_t command) const {
     const uint8_t data[8] = { 0U };
     return send(command, data);
   }
@@ -153,7 +153,7 @@ public:
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  inline bool send(Cmd command, const uint8_t (&data)[8]) const {
+  [[nodiscard]] inline bool send(Cmd command, const uint8_t (&data)[8]) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command), data);
   }
@@ -163,7 +163,7 @@ public:
   /// @param command Command to send.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  inline bool send(Cmd command) const {
+  [[nodiscard]] inline bool send(Cmd command) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command));
   }
@@ -174,7 +174,7 @@ public:
   /// @param response Enum value of `Response`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  inline bool send(Cmd command, Response response) const {
+  [[nodiscard]] inline bool send(Cmd command, Response response) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
     return send(static_cast<uint16_t>(command), data);
