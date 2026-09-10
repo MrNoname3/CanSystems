@@ -19,7 +19,7 @@ void SPIFlash::select() {
   digitalWrite(slaveSelectPin, LOW);
 }
 
-void SPIFlash::unselect() { // NOLINT(readability-make-member-function-const)
+void SPIFlash::unselect() const {
   digitalWrite(slaveSelectPin, HIGH);
   // Restore SPI settings to what they were before talking to the FLASH chip.
 #ifdef SPI_HAS_TRANSACTION

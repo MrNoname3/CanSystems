@@ -126,7 +126,7 @@ private:
   void select();
 
   /// @brief De-asserts chip-select and restores SPI state.
-  void unselect();
+  void unselect() const;
 
   /// @brief Sends a command byte; issues WREN automatically for write/erase commands.
   /// @param cmd Command byte.
