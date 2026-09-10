@@ -46,124 +46,17 @@ void NetworkManager::buildHostname() {
   snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x", envName, mac[3], mac[4], mac[5]);
 }
 
-NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { // NOLINT(readability-function-cognitive-complexity)
+NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   BootProgress::set(BootStage::NetworkStart);
-  static constexpr uint32_t connectTimeoutMs = Time::secToMs(30U);
   Logger::get()->printf_P(PSTR("[NETWORK] Network interface: "));
+  NetworkErrorType interfaceResult = 0U;
   switch(networkInterface) {
-    case Interface::WIFI: {
-      Logger::get()->printf_P(PSTR("[Wi-Fi]\r\n"));
-      WiFi.disconnect(true);                           // Wipe cached BSSID/FT state from SDK flash before each connect attempt.
-      WiFi.macAddress(mac);
-      buildHostname();
-      const bool wifiInit = WiFi.mode(WIFI_STA);
-      Logger::get()->printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
-      if(!wifiInit) {
-        networkErrState.setError(NetworkError::WIFI_INIT_FAILED);
-        return networkErrState.getRawErrorState();
-      }
-      WiFi.setAutoReconnect(true);
-      WiFi.persistent(false);                           // Credentials stored in LittleFS; prevent redundant flash writes.
-      char ssid[ConfigHandler::getMaxWifiSsidSize()] = { '\0' };
-      char password[ConfigHandler::getMaxWifiPasswordSize()] = { '\0' };
-      const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
-      const bool wifiConfigOk = (wifiConfigResult == 0U);
-      Logger::get()->printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
-      if(!wifiConfigOk) {
-        Logger::get()->printf_P(Str::getErrCodeFmt(), wifiConfigResult);
-        networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
-        return networkErrState.getRawErrorState();
-      }
+    case Interface::WIFI: interfaceResult = connectWifi(resetWdt); break;
 #ifdef ESP8266
-      WiFi.hostname(hostnameBuffer);
+    case Interface::ENC28J60: interfaceResult = connectEnc28j60(resetWdt); break;
 #elif defined ESP32
-      WiFi.setHostname(hostnameBuffer);
-#endif
-      WiFi.begin(ssid, password);
-      Logger::get()->printf_P(logConnecting);
-      BootProgress::set(BootStage::AddressWait);
-      const uint32_t wifiConnectStartMs = millis();
-      while(WiFi.status() != WL_CONNECTED) {
-        if(Time::hasElapsed(millis(), wifiConnectStartMs, connectTimeoutMs)) {
-          networkErrState.setError(NetworkError::WIFI_CONNECT_TIMEOUT);
-          return networkErrState.getRawErrorState();
-        }
-        if(resetWdt != nullptr) { resetWdt(); }
-        yield();
-      }
-      Logger::get()->printf_P(logIp, WiFi.localIP().toString().c_str());
-      Logger::get()->printf_P(logGw, WiFi.gatewayIP().toString().c_str());
-      Logger::get()->printf_P(logSnm, WiFi.subnetMask().toString().c_str());
-    } break;
-#ifdef ESP8266
-    case Interface::ENC28J60: {
-      Logger::get()->printf_P(PSTR("[ENC28J60]\r\n"));
-      if(!ethernetEnc28j60.has_value()) {
-        networkErrState.setError(NetworkError::ENC28J60_NO_DRIVER);
-        return networkErrState.getRawErrorState();
-      }
-      WiFi.macAddress(mac);
-      buildHostname();
-      WiFi.mode(WIFI_OFF);
-      ethernetEnc28j60.value().setDefault();         // default route set through this interface
-      const bool ethInit = ethernetEnc28j60.value().begin(mac);
-      Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
-      if(!ethInit) {
-        networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
-        return networkErrState.getRawErrorState();
-      }
-      // Set hostname directly on all lwIP netifs without calling dhcp_renew():
-      // begin() creates the ENC28J60 netif but leaves hostname null; calling
-      // hostname() here would trigger dhcp_renew() on the freshly-started DHCP
-      // state machine (INIT state) and corrupt it, causing a WDT reset.
-      for(netif* intf = netif_list; intf != nullptr; intf = intf->next) {
-        intf->hostname = hostnameBuffer;
-      }
-      Logger::get()->printf_P(logConnecting);
-      BootProgress::set(BootStage::AddressWait);
-      const uint32_t enc28ConnectStartMs = millis();
-      while(!ethernetEnc28j60.value().connected()) {
-        if(Time::hasElapsed(millis(), enc28ConnectStartMs, connectTimeoutMs)) {
-          networkErrState.setError(NetworkError::ENC28J60_CONNECT_TIMEOUT);
-          return networkErrState.getRawErrorState();
-        }
-        if(resetWdt != nullptr) { resetWdt(); }
-        yield();
-      }
-      Logger::get()->printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
-      Logger::get()->printf_P(logGw, ethernetEnc28j60.value().gatewayIP().toString().c_str());
-      Logger::get()->printf_P(logSnm, ethernetEnc28j60.value().subnetMask().toString().c_str());
-    } break;
-#elif defined ESP32
-    case Interface::LAN8720: {
-      Logger::get()->printf_P(PSTR("[LAN8720]\r\n"));
-      WiFi.mode(WIFI_OFF);
-      WiFi.onEvent(NetworkManager::WiFiEvent);
-      const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
-      Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
-      if(!ethInit) {
-        networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
-        return networkErrState.getRawErrorState();
-      }
-      ETH.macAddress(mac);
-      buildHostname();
-      ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
-      Logger::get()->printf_P(logConnecting);
-      BootProgress::set(BootStage::AddressWait);
-      const uint32_t lan8720ConnectStartMs = millis();
-      while(!ethConnected) {
-        if(Time::hasElapsed(millis(), lan8720ConnectStartMs, connectTimeoutMs)) {
-          networkErrState.setError(NetworkError::LAN8720_CONNECT_TIMEOUT);
-          return networkErrState.getRawErrorState();
-        }
-        if(resetWdt != nullptr) { resetWdt(); }
-        yield();
-      }
-      Logger::get()->printf_P(logIp, ETH.localIP().toString().c_str());
-      Logger::get()->printf_P(logGw, ETH.gatewayIP().toString().c_str());
-      Logger::get()->printf_P(logSnm, ETH.subnetMask().toString().c_str());
-    } break;
+    case Interface::LAN8720: interfaceResult = connectLan8720(resetWdt); break;
 #endif
     default: {
       Logger::get()->printf_P(PSTR("[INVALID]\r\n"));
@@ -171,6 +64,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
       return networkErrState.getRawErrorState();
     }
   }
+  if(interfaceResult != 0U) { return interfaceResult; }
   Logger::get()->printf_P(PSTR("  MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   const bool macValid = (memcmp(mac, "\0\0\0\0\0\0", sizeof(mac)) != 0);
   if(!macValid) {
@@ -182,6 +76,129 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) { /
   interfaceStatus = WL_CONNECTED;
   return networkErrState.getRawErrorState();
 }
+
+NetworkManager::NetworkErrorType NetworkManager::connectWifi(void (*resetWdt)()) {
+  ErrorState<NetworkError, NetworkErrorType> networkErrState;
+  Logger::get()->printf_P(PSTR("[Wi-Fi]\r\n"));
+  WiFi.disconnect(true);                           // Wipe cached BSSID/FT state from SDK flash before each connect attempt.
+  WiFi.macAddress(mac);
+  buildHostname();
+  const bool wifiInit = WiFi.mode(WIFI_STA);
+  Logger::get()->printf_P(PSTR("[NETWORK] Initialising Wi-Fi: %s\r\n"), Str::getStateStr(wifiInit));
+  if(!wifiInit) {
+    networkErrState.setError(NetworkError::WIFI_INIT_FAILED);
+    return networkErrState.getRawErrorState();
+  }
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);                           // Credentials stored in LittleFS; prevent redundant flash writes.
+  char ssid[ConfigHandler::getMaxWifiSsidSize()] = { '\0' };
+  char password[ConfigHandler::getMaxWifiPasswordSize()] = { '\0' };
+  const uint8_t wifiConfigResult = ConfigHandler::getWifiConfig(ssid, password);
+  const bool wifiConfigOk = (wifiConfigResult == 0U);
+  Logger::get()->printf_P(PSTR("[NETWORK] Wifi config: %s\r\n"), Str::getStateStr(wifiConfigOk));
+  if(!wifiConfigOk) {
+    Logger::get()->printf_P(Str::getErrCodeFmt(), wifiConfigResult);
+    networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
+    return networkErrState.getRawErrorState();
+  }
+#ifdef ESP8266
+  WiFi.hostname(hostnameBuffer);
+#elif defined ESP32
+  WiFi.setHostname(hostnameBuffer);
+#endif
+  WiFi.begin(ssid, password);
+  Logger::get()->printf_P(logConnecting);
+  BootProgress::set(BootStage::AddressWait);
+  const uint32_t wifiConnectStartMs = millis();
+  while(WiFi.status() != WL_CONNECTED) {
+    if(Time::hasElapsed(millis(), wifiConnectStartMs, connectTimeoutMs)) {
+      networkErrState.setError(NetworkError::WIFI_CONNECT_TIMEOUT);
+      return networkErrState.getRawErrorState();
+    }
+    if(resetWdt != nullptr) { resetWdt(); }
+    yield();
+  }
+  Logger::get()->printf_P(logIp, WiFi.localIP().toString().c_str());
+  Logger::get()->printf_P(logGw, WiFi.gatewayIP().toString().c_str());
+  Logger::get()->printf_P(logSnm, WiFi.subnetMask().toString().c_str());
+  return networkErrState.getRawErrorState();
+}
+
+#ifdef ESP8266
+NetworkManager::NetworkErrorType NetworkManager::connectEnc28j60(void (*resetWdt)()) {
+  ErrorState<NetworkError, NetworkErrorType> networkErrState;
+  Logger::get()->printf_P(PSTR("[ENC28J60]\r\n"));
+  if(!ethernetEnc28j60.has_value()) {
+    networkErrState.setError(NetworkError::ENC28J60_NO_DRIVER);
+    return networkErrState.getRawErrorState();
+  }
+  WiFi.macAddress(mac);
+  buildHostname();
+  WiFi.mode(WIFI_OFF);
+  ethernetEnc28j60.value().setDefault();         // default route set through this interface
+  const bool ethInit = ethernetEnc28j60.value().begin(mac);
+  Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
+  if(!ethInit) {
+    networkErrState.setError(NetworkError::ENC28J60_INIT_FAILED);
+    return networkErrState.getRawErrorState();
+  }
+  // Set hostname directly on all lwIP netifs without calling dhcp_renew():
+  // begin() creates the ENC28J60 netif but leaves hostname null; calling
+  // hostname() here would trigger dhcp_renew() on the freshly-started DHCP
+  // state machine (INIT state) and corrupt it, causing a WDT reset.
+  for(netif* intf = netif_list; intf != nullptr; intf = intf->next) {
+    intf->hostname = hostnameBuffer;
+  }
+  Logger::get()->printf_P(logConnecting);
+  BootProgress::set(BootStage::AddressWait);
+  const uint32_t enc28ConnectStartMs = millis();
+  while(!ethernetEnc28j60.value().connected()) {
+    if(Time::hasElapsed(millis(), enc28ConnectStartMs, connectTimeoutMs)) {
+      networkErrState.setError(NetworkError::ENC28J60_CONNECT_TIMEOUT);
+      return networkErrState.getRawErrorState();
+    }
+    if(resetWdt != nullptr) { resetWdt(); }
+    yield();
+  }
+  Logger::get()->printf_P(logIp, ethernetEnc28j60.value().localIP().toString().c_str());
+  Logger::get()->printf_P(logGw, ethernetEnc28j60.value().gatewayIP().toString().c_str());
+  Logger::get()->printf_P(logSnm, ethernetEnc28j60.value().subnetMask().toString().c_str());
+  return networkErrState.getRawErrorState();
+}
+#endif
+
+#ifdef ESP32
+NetworkManager::NetworkErrorType NetworkManager::connectLan8720(void (*resetWdt)()) {
+  ErrorState<NetworkError, NetworkErrorType> networkErrState;
+  Logger::get()->printf_P(PSTR("[LAN8720]\r\n"));
+  WiFi.mode(WIFI_OFF);
+  WiFi.onEvent(NetworkManager::WiFiEvent);
+  const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
+  Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
+  if(!ethInit) {
+    networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
+    return networkErrState.getRawErrorState();
+  }
+  ETH.macAddress(mac);
+  buildHostname();
+  ETH.setHostname(hostnameBuffer);  // before while loop: set before DHCP REQUEST is sent
+  Logger::get()->printf_P(logConnecting);
+  BootProgress::set(BootStage::AddressWait);
+  const uint32_t lan8720ConnectStartMs = millis();
+  while(!ethConnected) {
+    if(Time::hasElapsed(millis(), lan8720ConnectStartMs, connectTimeoutMs)) {
+      networkErrState.setError(NetworkError::LAN8720_CONNECT_TIMEOUT);
+      return networkErrState.getRawErrorState();
+    }
+    if(resetWdt != nullptr) { resetWdt(); }
+    yield();
+  }
+  Logger::get()->printf_P(logIp, ETH.localIP().toString().c_str());
+  Logger::get()->printf_P(logGw, ETH.gatewayIP().toString().c_str());
+  Logger::get()->printf_P(logSnm, ETH.subnetMask().toString().c_str());
+  return networkErrState.getRawErrorState();
+}
+#endif
 
 bool NetworkManager::isNetworkAvailable() {
   yield();                                             // Keeps the network stack alive and processes pending events.

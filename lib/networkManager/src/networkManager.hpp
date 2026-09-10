@@ -16,6 +16,7 @@ class NetworkManager final {
 private:
   using NetworkErrorType = uint16_t;                                // Underlying type for network error states.
   static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
+  static constexpr uint32_t connectTimeoutMs = Time::secToMs(30U);  // Budget for one interface to come up.
   static constexpr uint8_t invalidPin = 0xFF;                       // Invalid pin value.
   static constexpr char hostnamePrefix[] = "project_";              // PIO env prefix stripped from the hostname.
   static constexpr uint8_t macSuffixBytes = 3U;                     // Number of MAC bytes (from the end) appended to the hostname.
@@ -76,6 +77,24 @@ public:
   /// @param resetWdt Optional watchdog reset callback, called inside the connection wait loop.
   /// @return A bitfield representing network error states.
   [[nodiscard]] NetworkErrorType connect(void (*resetWdt)() = nullptr);
+
+  /// @brief Brings up the Wi-Fi station interface.
+  /// @param resetWdt Callback that feeds the watchdog while the link comes up.
+  /// @return Raw error state; 0 when the interface connected.
+  [[nodiscard]] NetworkErrorType connectWifi(void (*resetWdt)());
+#ifdef ESP8266
+
+  /// @brief Brings up the ENC28J60 Ethernet interface.
+  /// @param resetWdt Callback that feeds the watchdog while the link comes up.
+  /// @return Raw error state; 0 when the interface connected.
+  [[nodiscard]] NetworkErrorType connectEnc28j60(void (*resetWdt)());
+#elif defined ESP32
+
+  /// @brief Brings up the LAN8720 Ethernet interface.
+  /// @param resetWdt Callback that feeds the watchdog while the link comes up.
+  /// @return Raw error state; 0 when the interface connected.
+  [[nodiscard]] NetworkErrorType connectLan8720(void (*resetWdt)());
+#endif
 
   /// @brief Checks if the network connection is available.
   /// @return True if the network is connected, false otherwise.
