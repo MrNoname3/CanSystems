@@ -101,12 +101,9 @@ enum {
 
 #if not defined(RCSwitchDisableReceiving)
 volatile uint64_t RCSwitch::nReceivedValue = 0;
-volatile uint64_t RCSwitch::nReceiveProtocolMask;
 volatile uint32_t RCSwitch::nReceivedBitlength = 0;
 volatile uint32_t RCSwitch::nReceivedDelay = 0;
 volatile uint32_t RCSwitch::nReceivedProtocol = 0;
-int32_t RCSwitch::nReceiveTolerance = 60;
-uint32_t RCSwitch::nSeparationLimit = rcSwitchSeparationLimit;
 uint32_t RCSwitch::timings[rcSwitchMaxChanges];
 uint32_t RCSwitch::buftimings[4];
 uint32_t RCSwitch::pendingTimings[rcSwitchMaxChanges];
@@ -119,9 +116,7 @@ RCSwitch::RCSwitch() {
   this->setProtocol(1);
 #if not defined(RCSwitchDisableReceiving)
   this->nReceiverInterrupt = -1;
-  RCSwitch::nReceiveTolerance = 60;
   RCSwitch::nReceivedValue = 0;
-  RCSwitch::nReceiveProtocolMask = (1ULL << numProto) - 1ULL;  // pow(2,numProto)-1;
 #endif
 }
 
@@ -437,17 +432,12 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   return false;
 }
 
-// Offers the recorded timings to every enabled protocol, stopping at the first that decodes them.
+// Offers the recorded timings to every known protocol, stopping at the first that decodes them.
 void RCSwitch::decodeRecorded(uint32_t changeCount) {
-  uint64_t thismask = 1;
   for(uint32_t i = 1; i <= numProto; i++) {
-    if((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
-      if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
-        // receive succeeded for protocol i
-        break;
-      }
+    if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
+      break;
     }
-    thismask <<= 1;
   }
 }
 
@@ -474,11 +464,11 @@ void RCSwitch::handleInterrupt() {
   RCSwitch::buftimings[1] = RCSwitch::buftimings[0];
   RCSwitch::buftimings[0] = duration;
 
-  if(duration > RCSwitch::nSeparationLimit ||
+  if(duration > rcSwitchSeparationLimit ||
      (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
       diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U &&
       changeCount > 25U)) {
-    // A pulse longer than nSeparationLimit arrived.
+    // A pulse longer than rcSwitchSeparationLimit arrived.
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
     if(diff(static_cast<int32_t>(duration), static_cast<int32_t>(RCSwitch::timings[0])) < 400U ||

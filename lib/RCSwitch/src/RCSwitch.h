@@ -186,13 +186,12 @@ private:
   Protocol protocol;
 
 #if not defined(RCSwitchDisableReceiving)
-  static int32_t nReceiveTolerance;
+  // How far a pulse may deviate from the protocol's nominal length, in percent.
+  static constexpr uint32_t nReceiveTolerance = 60U;
   volatile static uint64_t nReceivedValue;
-  volatile static uint64_t nReceiveProtocolMask;
   volatile static uint32_t nReceivedBitlength;
   volatile static uint32_t nReceivedDelay;
   volatile static uint32_t nReceivedProtocol;
-  static uint32_t nSeparationLimit;
   /*
    * timings[0] contains sync timing, followed by a number of bits
    */
