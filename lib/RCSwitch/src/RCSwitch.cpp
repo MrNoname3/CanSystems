@@ -100,10 +100,10 @@ enum {
 };
 
 #if not defined(RCSwitchDisableReceiving)
-volatile uint64_t RCSwitch::nReceivedValue = 0;
-volatile uint32_t RCSwitch::nReceivedBitlength = 0;
-volatile uint32_t RCSwitch::nReceivedDelay = 0;
-volatile uint32_t RCSwitch::nReceivedProtocol = 0;
+uint64_t RCSwitch::nReceivedValue = 0;
+uint32_t RCSwitch::nReceivedBitlength = 0;
+uint32_t RCSwitch::nReceivedDelay = 0;
+uint32_t RCSwitch::nReceivedProtocol = 0;
 uint32_t RCSwitch::timings[rcSwitchMaxChanges];
 uint32_t RCSwitch::buftimings[4];
 uint32_t RCSwitch::pendingTimings[rcSwitchMaxChanges];
