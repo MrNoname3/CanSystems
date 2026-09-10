@@ -45,139 +45,159 @@ bool Connectivity::init() {
   return initialised;
 }
 
-bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complexity)
+bool Connectivity::initOnce() {
   // cppcheck-suppress knownConditionTrueFalse ; only ESP32 has a semaphore that can fail to exist
   if(!mqttMutex.valid()) {
     Logger::get()->printf_P(PSTR("[MQTT] Mutex is not initialized properly!\r\n"));
     return false;
   }
-  { // Initialise the file system.
-    BootProgress::set(BootStage::FileSystem);
-    delay(10U);
-    uint32_t totalBytes = 0U;
-    uint32_t usedBytes = 0U;
-    uint32_t freeBytes = 0U;
-    const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
-    Logger::get()->printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
-    if(!initFS) { return false; }
-    Logger::get()->printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
-  }
-  { // Backoff: a restart must not turn into a reconnect storm. The rung is read back from RTC
-    // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
-    // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
-    BootProgress::set(BootStage::BackoffWait);
-    uint8_t storedStep = 0U;
-    const bool hadRecord = RtcStore::read(RtcStore::Slot::BackoffStep, storedStep);
-    if(hadRecord) { backoff.restore(storedStep); }
-    if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
-    // Stored before the attempt rather than after it: a connect that hangs takes the watchdog with
-    // it, so nothing below this line is guaranteed to run. Recording the rung first is what keeps
-    // a device that dies mid-attempt from starting over at the shortest wait on every boot.
-    RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
-    if(hadRecord) {
-      Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
-      const uint32_t startMs = millis();
-      while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
-        delay(1000U);
-        resetWatchdogTimer();
-        Logger::get()->printf_P(PSTR("."));
-      }
-      Logger::get()->printf_P(PSTR("\r\n[MQTT] Backoff elapsed, reconnecting\r\n"));
+  if(!initFileSystem()) { return false; }
+  waitOutBackoff();
+  if(!startNetwork()) { return false; }
+  if(!syncClock()) { return false; }
+  if(!loadCredentials()) { return false; }
+  if(!buildMqttTopics()) { return false; }
+  if(!loadServerCertificate()) { return false; }
+  setupMqttClient();
+  applyHaDiscoveryToggle();
+  resetWatchdogTimer();
+  if(!connectToMqttServer()) { return false; }
+  if(!publishStartupInfo()) { return false; }
+  return true;
+}
+
+bool Connectivity::initFileSystem() {
+  BootProgress::set(BootStage::FileSystem);
+  delay(10U);
+  uint32_t totalBytes = 0U;
+  uint32_t usedBytes = 0U;
+  uint32_t freeBytes = 0U;
+  const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
+  Logger::get()->printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
+  if(!initFS) { return false; }
+  Logger::get()->printf_P(PSTR("  Total bytes: %u\r\n  Used bytes: %u\r\n  Free bytes: %u\r\n"), totalBytes, usedBytes, freeBytes);
+  return true;
+}
+
+void Connectivity::waitOutBackoff() {
+  // Backoff: a restart must not turn into a reconnect storm. The rung is read back from RTC
+  // memory, so a device that keeps failing keeps waiting longer; a power cycle starts over.
+  // A watchdog reset is a failure in its own right, so it costs a rung before the wait is measured.
+  BootProgress::set(BootStage::BackoffWait);
+  uint8_t storedStep = 0U;
+  const bool hadRecord = RtcStore::read(RtcStore::Slot::BackoffStep, storedStep);
+  if(hadRecord) { backoff.restore(storedStep); }
+  if(ResetHandler::isWdtReset()) { backoff.onFailure(); }
+  // Stored before the attempt rather than after it: a connect that hangs takes the watchdog with
+  // it, so nothing below this line is guaranteed to run. Recording the rung first is what keeps
+  // a device that dies mid-attempt from starting over at the shortest wait on every boot.
+  RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
+  if(hadRecord) {
+    Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
+    const uint32_t startMs = millis();
+    while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
+      delay(1000U);
+      resetWatchdogTimer();
+      Logger::get()->printf_P(PSTR("."));
     }
+    Logger::get()->printf_P(PSTR("\r\n[MQTT] Backoff elapsed, reconnecting\r\n"));
   }
-  { // Start network interface.
-    const uint16_t connResult = networkManager.connect(resetWdt);
-    const bool connResultOk = (connResult == 0U);
-    Logger::get()->printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
-    if(!connResultOk) {
-      Logger::get()->printf_P(Str::getErrCodeFmt(), connResult);
-      return false;
-    }
+}
+
+bool Connectivity::startNetwork() {
+  const uint16_t connResult = networkManager.connect(resetWdt);
+  const bool connResultOk = (connResult == 0U);
+  Logger::get()->printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
+  if(!connResultOk) { Logger::get()->printf_P(Str::getErrCodeFmt(), connResult); }
+  return connResultOk;
+}
+
+bool Connectivity::syncClock() {
+  // Set time via NTP, as required for x.509 validation.
+  BootProgress::set(BootStage::ClockSync);
+  const bool ntpSynced = syncNtpTime();
+  Logger::get()->printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
+  if(!ntpSynced) { return false; }
+  char dateTimeStr[dateTimeStrBufSize] = { '\0' };
+  const bool dateTimeValid = Time::getIsoUtcString(dateTimeStr, sizeof(dateTimeStr));
+  if(dateTimeValid) {
+    Logger::get()->printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
+  } else {
+    Logger::get()->printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
+    return false;
   }
-  { // Set time via NTP, as required for x.509 validation.
-    BootProgress::set(BootStage::ClockSync);
-    const bool ntpSynced = syncNtpTime();
-    Logger::get()->printf_P(PSTR("[NTP] Synchronisation: %s\r\n"), Str::getStateStr(ntpSynced));
-    if(!ntpSynced) { return false; }
-    char dateTimeStr[dateTimeStrBufSize] = { '\0' };
-    const bool dateTimeValid = Time::getIsoUtcString(dateTimeStr, sizeof(dateTimeStr));
-    if(dateTimeValid) {
-      Logger::get()->printf_P(PSTR("[NTP] UTC ISO time: %s\r\n"), dateTimeStr);
-    } else {
-      Logger::get()->printf_P(PSTR("[NTP] Retrieving local time failed!\r\n"));
-      return false;
-    }
+  return true;
+}
+
+bool Connectivity::loadCredentials() {
+  BootProgress::set(BootStage::Credentials);
+  const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
+  const bool credResultOk = (credResult == 0U);
+  Logger::get()->printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
+  if(!credResultOk) { Logger::get()->printf_P(Str::getErrCodeFmt(), credResult); }
+  return credResultOk;
+}
+
+bool Connectivity::buildMqttTopics() {
+  uint8_t mac[6] = { 0U };
+  if(!networkManager.getMacAddress(mac)) { return false; }
+  const char* pioEnv = Build::getPioEnv();
+  if(pioEnv == nullptr) { return false; }
+  const char* underscore = strchr(pioEnv, '_');
+  if(underscore == nullptr || *(underscore + 1) == '\0') {
+    Logger::get()->printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
+    return false;
   }
-  { // Get MQTT server credentials.
-    BootProgress::set(BootStage::Credentials);
-    const uint16_t credResult = ConfigHandler::getServerCredentials(mqttCredentials.userName, mqttCredentials.password, mqttCredentials.serverName, mqttCredentials.serverPort);
-    const bool credResultOk = (credResult == 0U);
-    Logger::get()->printf_P(PSTR("[MQTT] Server credentials: %s\r\n"), Str::getStateStr(credResultOk));
-    if(!credResultOk) {
-      Logger::get()->printf_P(Str::getErrCodeFmt(), credResult);
-      return false;
-    }
-  }
-  { // Setup MQTT topics.
-    uint8_t mac[6] = { 0U };
-    if(!networkManager.getMacAddress(mac)) { return false; }
-    const char* pioEnv = Build::getPioEnv();
-    if(pioEnv == nullptr) { return false; }
-    const char* underscore = strchr(pioEnv, '_');
-    if(underscore == nullptr || *(underscore + 1) == '\0') {
-      Logger::get()->printf_P(PSTR("[MQTT] Device ID is invalid!\r\n"));
-      return false;
-    }
-    const char* deviceId = underscore + 1;
-    char macHex[MqttTopics::getMacHexLen() + 1U] = { '\0' };
-    const int32_t macHexSize = snprintf_P(macHex, sizeof(macHex), PSTR("%02x%02x%02x%02x%02x%02x"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    const bool macHexValid = (macHexSize == static_cast<int32_t>(MqttTopics::getMacHexLen()));
-    Logger::get()->printf_P(PSTR("[MQTT] MAC hex: %s\r\n"), Str::getStateStr(macHexValid));
-    if(!macHexValid) { return false; }
-    haDiscovery.buildDeviceName(mac, deviceId);
-    const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), MqttTopics::getMqttClientName(), deviceId, macHex);
-    const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), MqttTopics::getMqttOutTopic(), macHex);
-    const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), MqttTopics::getMqttInTopic(), macHex);
-    const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
-    const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
-    const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
-    const int32_t availTopicSize = snprintf_P(mqttCredentials.availabilityTopic, sizeof(mqttCredentials.availabilityTopic), MqttTopics::getMqttAvailTopic(), mqttCredentials.senderTopic);
-    const bool availTopicValid = (availTopicSize >= 0 && availTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.availabilityTopic)));
-    Logger::get()->printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
-    Logger::get()->printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
-    Logger::get()->printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid ? mqttCredentials.receiverTopic : Str::getErrStr());
-    Logger::get()->printf_P(PSTR("[MQTT] Availability topic: %s\r\n"), availTopicValid ? mqttCredentials.availabilityTopic : Str::getErrStr());
-    if(!clientNameValid || !senderTopicValid || !receiverTopicValid || !availTopicValid) { return false; }
-  }
-  { // Open certificate.
-    BootProgress::set(BootStage::Certificate);
-    const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
+  const char* deviceId = underscore + 1;
+  char macHex[MqttTopics::getMacHexLen() + 1U] = { '\0' };
+  const int32_t macHexSize = snprintf_P(macHex, sizeof(macHex), PSTR("%02x%02x%02x%02x%02x%02x"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  const bool macHexValid = (macHexSize == static_cast<int32_t>(MqttTopics::getMacHexLen()));
+  Logger::get()->printf_P(PSTR("[MQTT] MAC hex: %s\r\n"), Str::getStateStr(macHexValid));
+  if(!macHexValid) { return false; }
+  haDiscovery.buildDeviceName(mac, deviceId);
+  const int32_t clientNameSize = snprintf_P(mqttCredentials.clientName, sizeof(mqttCredentials.clientName), MqttTopics::getMqttClientName(), deviceId, macHex);
+  const int32_t senderTopicSize = snprintf_P(mqttCredentials.senderTopic, sizeof(mqttCredentials.senderTopic), MqttTopics::getMqttOutTopic(), macHex);
+  const int32_t receiverTopicSize = snprintf_P(mqttCredentials.receiverTopic, sizeof(mqttCredentials.receiverTopic), MqttTopics::getMqttInTopic(), macHex);
+  const bool clientNameValid = (clientNameSize >= 0 && clientNameSize < static_cast<int32_t>(sizeof(mqttCredentials.clientName)));
+  const bool senderTopicValid = (senderTopicSize >= 0 && senderTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.senderTopic)));
+  const bool receiverTopicValid = (receiverTopicSize >= 0 && receiverTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.receiverTopic)));
+  const int32_t availTopicSize = snprintf_P(mqttCredentials.availabilityTopic, sizeof(mqttCredentials.availabilityTopic), MqttTopics::getMqttAvailTopic(), mqttCredentials.senderTopic);
+  const bool availTopicValid = (availTopicSize >= 0 && availTopicSize < static_cast<int32_t>(sizeof(mqttCredentials.availabilityTopic)));
+  Logger::get()->printf_P(PSTR("[MQTT] Client name: %s\r\n"), clientNameValid ? mqttCredentials.clientName : Str::getErrStr());
+  Logger::get()->printf_P(PSTR("[MQTT] Sender topic: %s\r\n"), senderTopicValid ? mqttCredentials.senderTopic : Str::getErrStr());
+  Logger::get()->printf_P(PSTR("[MQTT] Receiver topic: %s\r\n"), receiverTopicValid ? mqttCredentials.receiverTopic : Str::getErrStr());
+  Logger::get()->printf_P(PSTR("[MQTT] Availability topic: %s\r\n"), availTopicValid ? mqttCredentials.availabilityTopic : Str::getErrStr());
+  return clientNameValid && senderTopicValid && receiverTopicValid && availTopicValid;
+}
+
+bool Connectivity::loadServerCertificate() {
+  BootProgress::set(BootStage::Certificate);
+  const uint8_t certResult = ConfigHandler::getServerCert([this](Stream& certFile, size_t certFileSize) -> bool {
 #ifdef ESP8266
-      serverCert.emplace(certFile, certFileSize);
-      if(serverCert.has_value()) {
-        tcpClient.setTrustAnchors(&serverCert.value());
-        Logger::get()->printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
-        // No setTimeout() here: WiFiClientSecure does not forward it, and BearSSL pins its own
-        // 15 s connect budget - longer than the ~8.4 s hardware watchdog - whatever we ask for.
-      }
-      return serverCert.has_value();
-#elif defined ESP32
-      tcpClient.setTimeout(5U);  // Seconds here, and it does bound the socket connect; the handshake has its own budget.
-      const bool loaded = tcpClient.loadCACert(certFile, certFileSize);
-      if(loaded) {
-        Logger::get()->printf_P(PSTR("[TCP] CA cert loaded: %u bytes\r\n"), certFileSize);
-      }
-      return loaded;
-#endif
-    });
-    const bool certResultOk = (certResult == 0U);
-    Logger::get()->printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
-    if(!certResultOk) {
-      Logger::get()->printf_P(Str::getErrCodeFmt(), certResult);
-      return false;
+    serverCert.emplace(certFile, certFileSize);
+    if(serverCert.has_value()) {
+      tcpClient.setTrustAnchors(&serverCert.value());
+      Logger::get()->printf_P(PSTR("[TCP] Trust anchor count: %u\r\n"), serverCert.value().getCount());
+      // No setTimeout() here: WiFiClientSecure does not forward it, and BearSSL pins its own
+      // 15 s connect budget - longer than the ~8.4 s hardware watchdog - whatever we ask for.
     }
-  }
-  // Setup MQTT client.
+    return serverCert.has_value();
+#elif defined ESP32
+    tcpClient.setTimeout(5U);  // Seconds here, and it does bound the socket connect; the handshake has its own budget.
+    const bool loaded = tcpClient.loadCACert(certFile, certFileSize);
+    if(loaded) {
+      Logger::get()->printf_P(PSTR("[TCP] CA cert loaded: %u bytes\r\n"), certFileSize);
+    }
+    return loaded;
+#endif
+  });
+  const bool certResultOk = (certResult == 0U);
+  Logger::get()->printf_P(PSTR("[TCP] Server certificate setup: %s\r\n"), Str::getStateStr(certResultOk));
+  if(!certResultOk) { Logger::get()->printf_P(Str::getErrCodeFmt(), certResult); }
+  return certResultOk;
+}
+
+void Connectivity::setupMqttClient() {
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
@@ -197,30 +217,31 @@ bool Connectivity::initOnce() { // NOLINT(readability-function-cognitive-complex
   for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     Logger::get()->printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
   }
-  { // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
-    // publish* calls retract any previously-created entities (empty retained payload) instead of
-    // creating them. Set "haDiscovery": true to publish the discovery config.
-    bool haEnabled = false;
-    (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
-    haDiscovery.setDiscoveryEnabled(haEnabled);
-    // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
-    Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
-  }
-  resetWatchdogTimer();
-  if(!connectToMqttServer()) { return false; }
-  { // Publish retained device info once at startup.
-    LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
-    char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
-    const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
-    char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
-    const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
-                                               static_cast<uint8_t>(BootProgress::getPrevious()));
-    const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
-    const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
-    if(!infoTopicValid || !infoPayloadValid) { return false; }
-    const bool infoResult = mqttClient.publish(infoTopic, infoPayload, true);
-    Logger::get()->printf_P(PSTR("[MQTT] Device info: %s\r\n"), Str::getStateStr(infoResult));
-  }
+}
+
+void Connectivity::applyHaDiscoveryToggle() {
+  // HA discovery toggle (server.json "haDiscovery"). Default false: when the key is absent the
+  // publish* calls retract any previously-created entities (empty retained payload) instead of
+  // creating them. Set "haDiscovery": true to publish the discovery config.
+  bool haEnabled = false;
+  (void)ConfigHandler::getJsonValue<bool>(FileName::getMqttServerCredentialsLocation(), PSTR("haDiscovery"), haEnabled);
+  haDiscovery.setDiscoveryEnabled(haEnabled);
+  // State, not a result: print enabled/disabled rather than [OK]/[ERR] (disabled is not an error).
+  Logger::get()->printf_P(PSTR("[HA] Discovery: %s\r\n"), haEnabled ? PSTR("enabled") : PSTR("disabled"));
+}
+
+bool Connectivity::publishStartupInfo() {
+  LockGuard guard(mqttMutex);                                     // Exclusive PubSubClient access.
+  char infoTopic[MqttTopics::getInfoTopicBufSize()] = { '\0' };
+  const int32_t infoTopicSize = snprintf_P(infoTopic, sizeof(infoTopic), MqttTopics::getMqttInfoTopic(), mqttCredentials.senderTopic);
+  char infoPayload[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
+  const int32_t infoPayloadSize = snprintf_P(infoPayload, sizeof(infoPayload), MqttTopics::getMqttInfoPayload(), Build::getFwVersion(), Build::getGitHash(), Build::getGitDirty(), ResetHandler::getResetReason(),
+                                             static_cast<uint8_t>(BootProgress::getPrevious()));
+  const bool infoTopicValid = (infoTopicSize >= 0 && infoTopicSize < static_cast<int32_t>(sizeof(infoTopic)));
+  const bool infoPayloadValid = (infoPayloadSize >= 0 && infoPayloadSize < static_cast<int32_t>(sizeof(infoPayload)));
+  if(!infoTopicValid || !infoPayloadValid) { return false; }
+  const bool infoResult = mqttClient.publish(infoTopic, infoPayload, true);
+  Logger::get()->printf_P(PSTR("[MQTT] Device info: %s\r\n"), Str::getStateStr(infoResult));
   return true;
 }
 
