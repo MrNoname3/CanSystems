@@ -63,7 +63,7 @@ bool AmbientSensor::run() {
         0U,
         0U
       };
-      canHandler.send(AlertCmd::READ_HUM_TEMP_LDR, payload);
+      (void)canHandler.send(AlertCmd::READ_HUM_TEMP_LDR, payload);
       lastSentTemperature = temperature;
       lastSentHumidity = humidity;
       lastSentLight = lightValue;
@@ -71,7 +71,7 @@ bool AmbientSensor::run() {
       event = Event::IDLE;
     } break;
     case Event::SENSOR_ERROR: {
-      canHandler.send(AlertCmd::HUM_TEMP_SENSOR_ERROR);
+      (void)canHandler.send(AlertCmd::HUM_TEMP_SENSOR_ERROR);
       event = Event::IDLE;
     } break;
   }

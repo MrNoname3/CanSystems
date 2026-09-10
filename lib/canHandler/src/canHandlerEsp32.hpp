@@ -47,13 +47,13 @@ public:
   /// @brief Sends a CAN frame.
   /// @param frameOut The CAN frame to send.
   /// @return `true` if the frame was successfully sent, `false` otherwise.
-  bool send(const CanFrame& frameOut) const; // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] bool send(const CanFrame& frameOut) const;
 
   /// @brief Sends a CAN frame with a specified command and data payload.
   /// @param command 9-bit command value.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] bool send(uint16_t command, const uint8_t (&data)[8]) const override;
 
   /// @brief Registers the receiver for frames from a sender no registered device answers to.
   /// @details A node with no address of its own is exactly that: it announces from an address it

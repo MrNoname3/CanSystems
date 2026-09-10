@@ -95,12 +95,12 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
   switch(command) {
     case static_cast<uint16_t>(CanCmd::RGB_LED): {
       rgbLed.setColor(data[0], data[1], data[2], true);
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(AlertCmd::PLAY_MP3): {
       const uint16_t songNum = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8U) | data[0]);
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
-      canHandler.send(command);
+      (void)canHandler.send(command);
     } break;
   }
 }
@@ -129,5 +129,5 @@ void maxRoundTimeCallback(uint32_t maxRoundTime) {
     static_cast<uint8_t>((maxRoundTime >> 24U) & 0xFFU),
     0U, 0U, 0U, 0U
   };
-  canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
+  (void)canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
 }

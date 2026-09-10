@@ -44,7 +44,7 @@ public:
   /// @param command 9-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  bool send(uint16_t command, const uint8_t (&data)[8]) const override; // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] bool send(uint16_t command, const uint8_t (&data)[8]) const override;
 
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
@@ -70,7 +70,7 @@ private:
 
   /// @brief Sends the firmware version over CAN.
   /// @return `true` if successful, `false` otherwise.
-  bool sendFwVersion() const; // NOLINT(modernize-use-nodiscard)
+  [[nodiscard]] bool sendFwVersion() const;
 
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
   static constexpr uint32_t announceTime = Time::secToMs(5U);                // Gap between two announcements while waiting for an address.
