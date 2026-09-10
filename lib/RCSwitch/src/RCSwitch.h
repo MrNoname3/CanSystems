@@ -178,7 +178,7 @@ private:
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
   inline static bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
   static void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3"), noinline));
-  static inline RECEIVE_ATTR uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
+  static inline RECEIVE_ATTR uint32_t diff(uint32_t a, uint32_t b) __attribute__((optimize("-O3")));
   int32_t nReceiverInterrupt;
 #endif
   int32_t nTransmitterPin;

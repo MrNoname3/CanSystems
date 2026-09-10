@@ -329,9 +329,10 @@ uint32_t RCSwitch::getReceivedProtocol() {
   return RCSwitch::nReceivedProtocol;
 }
 
-/* helper function for the receiveProtocol method */
-uint32_t RCSwitch::diff(int32_t A, int32_t B) {
-  return abs(A - B);
+// Distance between two durations. A duration is a micros() difference and can exceed what an
+// int32_t holds, so the subtraction is done unsigned, where wrapping is defined.
+uint32_t RCSwitch::diff(uint32_t a, uint32_t b) {
+  return static_cast<uint32_t>(abs(static_cast<int32_t>(a - b)));
 }
 
 bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
@@ -408,11 +409,11 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
 
   for(uint32_t i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 2) {
     code <<= 1;
-    if(diff(static_cast<int32_t>(RCSwitch::pendingTimings[i]), static_cast<int32_t>(delay * pro.zero.high)) < delayTolerance &&
-       diff(static_cast<int32_t>(RCSwitch::pendingTimings[i + 1]), static_cast<int32_t>(delay * pro.zero.low)) < delayTolerance) {
+    if(diff(RCSwitch::pendingTimings[i], delay * pro.zero.high) < delayTolerance &&
+       diff(RCSwitch::pendingTimings[i + 1], delay * pro.zero.low) < delayTolerance) {
       // zero
-    } else if(diff(static_cast<int32_t>(RCSwitch::pendingTimings[i]), static_cast<int32_t>(delay * pro.one.high)) < delayTolerance &&
-              diff(static_cast<int32_t>(RCSwitch::pendingTimings[i + 1]), static_cast<int32_t>(delay * pro.one.low)) < delayTolerance) {
+    } else if(diff(RCSwitch::pendingTimings[i], delay * pro.one.high) < delayTolerance &&
+              diff(RCSwitch::pendingTimings[i + 1], delay * pro.one.low) < delayTolerance) {
       // one
       code |= 1;
     } else {
@@ -465,16 +466,16 @@ void RCSwitch::handleInterrupt() {
   RCSwitch::buftimings[0] = duration;
 
   if(duration > rcSwitchSeparationLimit ||
-     (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
-      diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U &&
+     (diff(RCSwitch::buftimings[3], RCSwitch::buftimings[2]) < 50U &&
+      diff(RCSwitch::buftimings[2], RCSwitch::buftimings[1]) < 50U &&
       changeCount > 25U)) {
     // A pulse longer than rcSwitchSeparationLimit arrived.
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
-    if(diff(static_cast<int32_t>(duration), static_cast<int32_t>(RCSwitch::timings[0])) < 400U ||
-       (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::timings[1])) < 50U &&
-        diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::timings[2])) < 50U &&
-        diff(static_cast<int32_t>(RCSwitch::buftimings[1]), static_cast<int32_t>(RCSwitch::timings[3])) < 50U &&
+    if(diff(duration, RCSwitch::timings[0]) < 400U ||
+       (diff(RCSwitch::buftimings[3], RCSwitch::timings[1]) < 50U &&
+        diff(RCSwitch::buftimings[2], RCSwitch::timings[2]) < 50U &&
+        diff(RCSwitch::buftimings[1], RCSwitch::timings[3]) < 50U &&
         changeCount > 25U)) {
       // If its length differs from the first pulse received earlier by less than
       // +-200 (200 originally), this is a repeat of the same packet and is ignored.
@@ -489,8 +490,8 @@ void RCSwitch::handleInterrupt() {
     // The length differs by more than +-200 from the one received earlier:
     // clear the counter and start receiving a new packet.
     changeCount = 0;
-    if(diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
-       diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U) {
+    if(diff(RCSwitch::buftimings[3], RCSwitch::buftimings[2]) < 50U &&
+       diff(RCSwitch::buftimings[2], RCSwitch::buftimings[1]) < 50U) {
       RCSwitch::timings[1] = RCSwitch::buftimings[3];
       RCSwitch::timings[2] = RCSwitch::buftimings[2];
       RCSwitch::timings[3] = RCSwitch::buftimings[1];
