@@ -63,7 +63,7 @@ public:
   /// @brief Constructs a NetworkManager instance.
   /// @param interface Initial network interface to configure.
   /// @param ethernetShieldCsPin Chip Select pin for ENC28J60 (optional).
-  NetworkManager(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
+  explicit NetworkManager(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
 
   /// @brief Default destructor.
   ~NetworkManager() = default;

@@ -49,7 +49,7 @@ public:
 
   /// @brief Constructs the OTA handler with the specified SPI Flash reference.
   /// @param flash Reference to the SPI Flash object for firmware storage.
-  OTA(SPIFlash& flash);
+  explicit OTA(SPIFlash& flash);
 
   /// @brief Default destructor.
   ~OTA() = default;
