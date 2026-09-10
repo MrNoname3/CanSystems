@@ -96,7 +96,10 @@ public:
   /// @brief Stops reception by detaching the interrupt.
   void disableReceive();
 
-  /// @brief Reports whether a decoded frame is waiting to be collected.
+  /// @brief Decodes the frame the interrupt handler recorded, if there is one, and reports
+  /// whether a decoded frame is waiting to be collected.
+  /// @note Call it often enough to keep up: a frame arriving while one is still waiting here is
+  /// dropped.
   [[nodiscard]] bool available();
 
   /// @brief Discards the frame currently held, so the next one can be received.
@@ -171,10 +174,11 @@ private:
   void attachReceiveInterrupt() const;
 
 #if not defined(RCSwitchDisableReceiving)
+  inline static RECEIVE_ATTR void handOverRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
-  inline static RECEIVE_ATTR bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
-  inline static RECEIVE_ATTR void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
-  static inline uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
+  inline static bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
+  static void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3"), noinline));
+  static inline RECEIVE_ATTR uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
   int32_t nReceiverInterrupt;
 #endif
   int32_t nTransmitterPin;
@@ -195,5 +199,9 @@ private:
   static uint32_t timings[rcSwitchMaxChanges];
   // Durations of the last four packets; [0] is the most recent.
   static uint32_t buftimings[4];
+  // The frame handed from the interrupt handler to available() for decoding. A non-zero count
+  // means the buffer is the reader's; zero means the handler may fill it again.
+  static uint32_t pendingTimings[rcSwitchMaxChanges];
+  volatile static uint32_t pendingChangeCount;
 #endif
 };

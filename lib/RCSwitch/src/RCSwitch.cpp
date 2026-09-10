@@ -109,6 +109,8 @@ int32_t RCSwitch::nReceiveTolerance = 60;
 uint32_t RCSwitch::nSeparationLimit = rcSwitchSeparationLimit;
 uint32_t RCSwitch::timings[rcSwitchMaxChanges];
 uint32_t RCSwitch::buftimings[4];
+uint32_t RCSwitch::pendingTimings[rcSwitchMaxChanges];
+volatile uint32_t RCSwitch::pendingChangeCount = 0;
 #endif
 
 RCSwitch::RCSwitch() {
@@ -276,6 +278,7 @@ void RCSwitch::enableReceive() {
     // Starting reception discards whatever the previous session left behind.
     RCSwitch::nReceivedValue = 0;
     RCSwitch::nReceivedBitlength = 0;
+    RCSwitch::pendingChangeCount = 0;
     this->attachReceiveInterrupt();
   }
 }
@@ -300,6 +303,14 @@ void RCSwitch::disableReceive() {
 }
 
 bool RCSwitch::available() {
+  // Decoding runs here, not in the interrupt handler: it walks up to 128 recorded durations. A
+  // non-zero count says the handler has finished a frame and the buffer is ours to read.
+  const uint32_t changeCount = RCSwitch::pendingChangeCount;
+  if(changeCount != 0U) {
+    RCSwitch::decodeRecorded(changeCount);
+    // Released last: until this store the handler leaves pendingTimings alone.
+    RCSwitch::pendingChangeCount = 0U;
+  }
   return RCSwitch::nReceivedValue != 0;
 }
 
@@ -356,9 +367,9 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   // or the preamble pulse divided by the number of Te it contains.
   uint32_t sdelay = 0;
   if(syncLengthInPulses > 0) {
-    sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
+    sdelay = RCSwitch::pendingTimings[FirstTiming] / syncLengthInPulses;
   } else if(pro.PreambleFactor > 0) {
-    sdelay = RCSwitch::timings[FirstTiming - 2] / pro.PreambleFactor;
+    sdelay = RCSwitch::pendingTimings[FirstTiming - 2] / pro.PreambleFactor;
   }
   const uint32_t delay = sdelay;
   if(delay == 0) {
@@ -402,11 +413,11 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
 
   for(uint32_t i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 2) {
     code <<= 1;
-    if(diff(static_cast<int32_t>(RCSwitch::timings[i]), static_cast<int32_t>(delay * pro.zero.high)) < delayTolerance &&
-       diff(static_cast<int32_t>(RCSwitch::timings[i + 1]), static_cast<int32_t>(delay * pro.zero.low)) < delayTolerance) {
+    if(diff(static_cast<int32_t>(RCSwitch::pendingTimings[i]), static_cast<int32_t>(delay * pro.zero.high)) < delayTolerance &&
+       diff(static_cast<int32_t>(RCSwitch::pendingTimings[i + 1]), static_cast<int32_t>(delay * pro.zero.low)) < delayTolerance) {
       // zero
-    } else if(diff(static_cast<int32_t>(RCSwitch::timings[i]), static_cast<int32_t>(delay * pro.one.high)) < delayTolerance &&
-              diff(static_cast<int32_t>(RCSwitch::timings[i + 1]), static_cast<int32_t>(delay * pro.one.low)) < delayTolerance) {
+    } else if(diff(static_cast<int32_t>(RCSwitch::pendingTimings[i]), static_cast<int32_t>(delay * pro.one.high)) < delayTolerance &&
+              diff(static_cast<int32_t>(RCSwitch::pendingTimings[i + 1]), static_cast<int32_t>(delay * pro.one.low)) < delayTolerance) {
       // one
       code |= 1;
     } else {
@@ -438,6 +449,17 @@ void RCSwitch::decodeRecorded(uint32_t changeCount) {
     }
     thismask <<= 1;
   }
+}
+
+// Copies the recorded frame to where available() decodes it. A frame still waiting there wins:
+// the arriving one is dropped, and a sender repeats its frames anyway.
+void RCSwitch::handOverRecorded(uint32_t changeCount) {
+  if(RCSwitch::pendingChangeCount != 0U || changeCount == 0U) { return; }
+  for(uint32_t i = 0; i < changeCount; i++) {
+    RCSwitch::pendingTimings[i] = RCSwitch::timings[i];
+  }
+  // Written last: this is what tells the reader the buffer is complete.
+  RCSwitch::pendingChangeCount = changeCount;
 }
 
 void RCSwitch::handleInterrupt() {
@@ -475,9 +497,9 @@ void RCSwitch::handleInterrupt() {
 
       // Number of repeated packets.
       repeatCount++;
-      // On the second repeat, start decoding the one received first.
+      // On the second repeat, hand the one received first over for decoding.
       if(repeatCount == 1) {
-        decodeRecorded(changeCount);
+        handOverRecorded(changeCount);
         // Clear the repeat counter.
         repeatCount = 0;
       }
