@@ -272,6 +272,25 @@ public:
   [[nodiscard]] uint16_t getRefusedPingCount() const;
 
 private:
+  /// @brief Fills the packet buffer with a CONNECT packet.
+  /// @details Stops the client and returns 0 when a string would not fit the buffer.
+  /// @param id Client id.
+  /// @param user Username, or `nullptr` for none.
+  /// @param pass Password, or `nullptr` for none.
+  /// @param willTopic Last Will topic, or `nullptr` for none.
+  /// @param willQos Last Will QoS.
+  /// @param willRetain Whether the broker retains the Last Will message.
+  /// @param willMessage Last Will payload, or `nullptr` for an empty one.
+  /// @param cleanSession Whether the broker discards any previous session.
+  /// @return Total buffer length reached, or 0 when a string did not fit.
+  [[nodiscard]] uint16_t buildConnectPacket(const char* id, const char* user, const char* pass, const char* willTopic,
+                                            uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession);
+
+  /// @brief Waits for the CONNACK and records what it said.
+  /// @details Tears the connection down on a timeout, a malformed answer or a refusal.
+  /// @return `true` when the broker accepted the connection; otherwise, `false`.
+  [[nodiscard]] bool awaitConnAck();
+
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.
   /// @param header MQTT fixed-header byte.
   /// @param buf Buffer containing the payload, with MQTT_MAX_HEADER_SIZE bytes reserved at the start.

@@ -35,103 +35,110 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   return connect(id, user, pass, willTopic, willQos, willRetain, willMessage, true);
 }
 
-bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {  // NOLINT(readability-function-cognitive-complexity)
-  if(!connected()) {
-    const bool result = (tcpClient.connected() != 0) ||
-                        static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
-                                                            : tcpClient.connect(this->ip, this->port));
-
-    if(result) {
-      nextMsgId = 1U;
-      // Leave room in the buffer for header and variable length field
-      uint16_t length = MQTT_MAX_HEADER_SIZE;
-
-#if MQTT_VERSION == MQTT_VERSION_3_1
-      const uint8_t d[9] = { 0x00U, 0x06U, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION };
-#elif MQTT_VERSION == MQTT_VERSION_3_1_1
-      const uint8_t d[7] = { 0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION };
-#endif
-      memcpy(this->buffer + length, d, sizeof(d));
-      length = static_cast<uint16_t>(length + sizeof(d));
-
-      uint8_t v = (willTopic != nullptr)
-                      ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
-                      : 0x00U;
-      v |= cleanSession ? 0x02U : 0x00U;
-      v |= (user != nullptr) ? 0x80U : 0x00U;
-      v |= (user != nullptr && pass != nullptr) ? 0x40U : 0x00U;
-      this->buffer[length++] = v;
-
-      this->buffer[length++] = static_cast<uint8_t>(this->keepAlive >> 8U);
-      this->buffer[length++] = static_cast<uint8_t>(this->keepAlive & 0xFFU);
-
-      if(!checkStringLength(length, id)) {
-        return false;
-      }
-      length = writeString(id, this->buffer, length);
-      if(willTopic != nullptr) {
-        const char* const willMsg = (willMessage != nullptr) ? willMessage : "";
-        if(!checkStringLength(length, willTopic)) {
-          return false;
-        }
-        length = writeString(willTopic, this->buffer, length);
-        if(!checkStringLength(length, willMsg)) {
-          return false;
-        }
-        length = writeString(willMsg, this->buffer, length);
-      }
-
-      if(user != nullptr) {
-        if(!checkStringLength(length, user)) {
-          return false;
-        }
-        length = writeString(user, this->buffer, length);
-        if(pass != nullptr) {
-          if(!checkStringLength(length, pass)) {
-            return false;
-          }
-          length = writeString(pass, this->buffer, length);
-        }
-      }
-
-      write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE);
-
-      lastInActivity = lastOutActivity = millis();
-
-      const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
-      while(tcpClient.available() == 0) {
-        yield();
-        const uint32_t t = millis();
-        if(t - lastInActivity >= socketTimeoutMs) {
-          connectionState = State::CONNECTION_TIMEOUT;
-          tcpClient.stop();
-          return false;
-        }
-      }
-      const RxResult connAck = readPacketBlocking();
-      const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
-      const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
-      // The reader has to start clean for the session: whatever it kept about the CONNACK would
-      // otherwise be finished a second time on the first loop(), before any real packet is read.
-      resetReader();
-
-      if(connAckSized) {
-        if(connAckCode == 0U) {
-          lastInActivity = millis();
-          pingOutstanding = false;
-          connectionState = State::CONNECTED;
-          return true;
-        }
-        connectionState = static_cast<State>(connAckCode);
-      }
-      tcpClient.stop();
-    } else {
-      connectionState = State::CONNECT_FAILED;
-      tcpClient.stop();
-    }
+bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
+  if(connected()) { return true; }
+  const bool result = (tcpClient.connected() != 0) ||
+                      static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
+                                                          : tcpClient.connect(this->ip, this->port));
+  if(!result) {
+    connectionState = State::CONNECT_FAILED;
+    tcpClient.stop();
     return false;
   }
-  return true;
+  nextMsgId = 1U;
+  const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
+  // Zero means a string did not fit; checkStringLength() has already stopped the client.
+  if(length == 0U) { return false; }
+  write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE);
+  lastInActivity = lastOutActivity = millis();
+  return awaitConnAck();
+}
+
+uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, const char* pass, const char* willTopic,
+                                          uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
+  // Leave room in the buffer for header and variable length field
+  uint16_t length = MQTT_MAX_HEADER_SIZE;
+
+#if MQTT_VERSION == MQTT_VERSION_3_1
+  const uint8_t d[9] = { 0x00U, 0x06U, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION };
+#elif MQTT_VERSION == MQTT_VERSION_3_1_1
+  const uint8_t d[7] = { 0x00U, 0x04U, 'M', 'Q', 'T', 'T', MQTT_VERSION };
+#endif
+  memcpy(this->buffer + length, d, sizeof(d));
+  length = static_cast<uint16_t>(length + sizeof(d));
+
+  uint8_t v = (willTopic != nullptr)
+                  ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
+                  : 0x00U;
+  v |= cleanSession ? 0x02U : 0x00U;
+  v |= (user != nullptr) ? 0x80U : 0x00U;
+  v |= (user != nullptr && pass != nullptr) ? 0x40U : 0x00U;
+  this->buffer[length++] = v;
+
+  this->buffer[length++] = static_cast<uint8_t>(this->keepAlive >> 8U);
+  this->buffer[length++] = static_cast<uint8_t>(this->keepAlive & 0xFFU);
+
+  if(!checkStringLength(length, id)) {
+    return 0U;
+  }
+  length = writeString(id, this->buffer, length);
+  if(willTopic != nullptr) {
+    const char* const willMsg = (willMessage != nullptr) ? willMessage : "";
+    if(!checkStringLength(length, willTopic)) {
+      return 0U;
+    }
+    length = writeString(willTopic, this->buffer, length);
+    if(!checkStringLength(length, willMsg)) {
+      return 0U;
+    }
+    length = writeString(willMsg, this->buffer, length);
+  }
+
+  if(user != nullptr) {
+    if(!checkStringLength(length, user)) {
+      return 0U;
+    }
+    length = writeString(user, this->buffer, length);
+    if(pass != nullptr) {
+      if(!checkStringLength(length, pass)) {
+        return 0U;
+      }
+      length = writeString(pass, this->buffer, length);
+    }
+  }
+
+  return length;
+}
+
+bool PubSubClient::awaitConnAck() {
+  const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
+  while(tcpClient.available() == 0) {
+    yield();
+    const uint32_t t = millis();
+    if(t - lastInActivity >= socketTimeoutMs) {
+      connectionState = State::CONNECTION_TIMEOUT;
+      tcpClient.stop();
+      return false;
+    }
+  }
+  const RxResult connAck = readPacketBlocking();
+  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
+  const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
+  // The reader has to start clean for the session: whatever it kept about the CONNACK would
+  // otherwise be finished a second time on the first loop(), before any real packet is read.
+  resetReader();
+
+  if(connAckSized) {
+    if(connAckCode == 0U) {
+      lastInActivity = millis();
+      pingOutstanding = false;
+      connectionState = State::CONNECTED;
+      return true;
+    }
+    connectionState = static_cast<State>(connAckCode);
+  }
+  tcpClient.stop();
+  return false;
 }
 
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
