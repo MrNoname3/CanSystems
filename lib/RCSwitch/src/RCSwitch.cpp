@@ -457,15 +457,13 @@ void RCSwitch::handleInterrupt() {
   RCSwitch::buftimings[0] = duration;
 
   if(duration > RCSwitch::nSeparationLimit ||
-     changeCount == 156U ||
      (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
       diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U &&
       changeCount > 25U)) {
-    // A pulse longer than nSeparationLimit (4300) arrived.
+    // A pulse longer than nSeparationLimit arrived.
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
     if(diff(static_cast<int32_t>(duration), static_cast<int32_t>(RCSwitch::timings[0])) < 400U ||
-       changeCount == 156U ||
        (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::timings[1])) < 50U &&
         diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::timings[2])) < 50U &&
         diff(static_cast<int32_t>(RCSwitch::buftimings[1]), static_cast<int32_t>(RCSwitch::timings[3])) < 50U &&
