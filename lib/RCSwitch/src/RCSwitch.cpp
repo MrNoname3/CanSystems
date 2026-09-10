@@ -429,8 +429,21 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   return false;
 }
 
-void RCSwitch::handleInterrupt() { // NOLINT(readability-function-cognitive-complexity)
+// Offers the recorded timings to every enabled protocol, stopping at the first that decodes them.
+void RCSwitch::decodeRecorded(uint32_t changeCount) {
+  uint64_t thismask = 1;
+  for(uint32_t i = 1; i <= numProto; i++) {
+    if((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
+      if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
+        // receive succeeded for protocol i
+        break;
+      }
+    }
+    thismask <<= 1;
+  }
+}
 
+void RCSwitch::handleInterrupt() {
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
   static byte repeatCount = 0;
@@ -469,16 +482,7 @@ void RCSwitch::handleInterrupt() { // NOLINT(readability-function-cognitive-comp
       repeatCount++;
       // On the second repeat, start decoding the one received first.
       if(repeatCount == 1) {
-        uint64_t thismask = 1;
-        for(uint32_t i = 1; i <= numProto; i++) {
-          if((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
-            if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
-              // receive succeeded for protocol i
-              break;
-            }
-          }
-          thismask <<= 1;
-        }
+        decodeRecorded(changeCount);
         // Clear the repeat counter.
         repeatCount = 0;
       }
