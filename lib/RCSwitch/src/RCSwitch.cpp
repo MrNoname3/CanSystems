@@ -33,9 +33,6 @@
 
 #include "RCSwitch.h"
 
-#include <algorithm>
-#include <limits>
-
 /* Protocol description format
  *
  * {
@@ -103,15 +100,14 @@ enum {
 };
 
 #if not defined(RCSwitchDisableReceiving)
-volatile uint64_t RCSwitch::nReceivedValue = 0;
-volatile uint64_t RCSwitch::nReceiveProtocolMask;
-volatile uint32_t RCSwitch::nReceivedBitlength = 0;
-volatile uint32_t RCSwitch::nReceivedDelay = 0;
-volatile uint32_t RCSwitch::nReceivedProtocol = 0;
-int32_t RCSwitch::nReceiveTolerance = 60;
-uint32_t RCSwitch::nSeparationLimit = rcSwitchSeparationLimit;
+uint64_t RCSwitch::nReceivedValue = 0;
+uint32_t RCSwitch::nReceivedBitlength = 0;
+uint32_t RCSwitch::nReceivedDelay = 0;
+uint32_t RCSwitch::nReceivedProtocol = 0;
 uint32_t RCSwitch::timings[rcSwitchMaxChanges];
 uint32_t RCSwitch::buftimings[4];
+uint32_t RCSwitch::pendingTimings[rcSwitchMaxChanges];
+volatile uint32_t RCSwitch::pendingChangeCount = 0;
 #endif
 
 RCSwitch::RCSwitch() {
@@ -120,9 +116,7 @@ RCSwitch::RCSwitch() {
   this->setProtocol(1);
 #if not defined(RCSwitchDisableReceiving)
   this->nReceiverInterrupt = -1;
-  RCSwitch::nReceiveTolerance = 60;
   RCSwitch::nReceivedValue = 0;
-  RCSwitch::nReceiveProtocolMask = (1ULL << numProto) - 1ULL;  // pow(2,numProto)-1;
 #endif
 }
 
@@ -279,6 +273,7 @@ void RCSwitch::enableReceive() {
     // Starting reception discards whatever the previous session left behind.
     RCSwitch::nReceivedValue = 0;
     RCSwitch::nReceivedBitlength = 0;
+    RCSwitch::pendingChangeCount = 0;
     this->attachReceiveInterrupt();
   }
 }
@@ -303,6 +298,14 @@ void RCSwitch::disableReceive() {
 }
 
 bool RCSwitch::available() {
+  // Decoding runs here, not in the interrupt handler: it walks up to 128 recorded durations. A
+  // non-zero count says the handler has finished a frame and the buffer is ours to read.
+  const uint32_t changeCount = RCSwitch::pendingChangeCount;
+  if(changeCount != 0U) {
+    RCSwitch::decodeRecorded(changeCount);
+    // Released last: until this store the handler leaves pendingTimings alone.
+    RCSwitch::pendingChangeCount = 0U;
+  }
   return RCSwitch::nReceivedValue != 0;
 }
 
@@ -326,9 +329,10 @@ uint32_t RCSwitch::getReceivedProtocol() {
   return RCSwitch::nReceivedProtocol;
 }
 
-/* helper function for the receiveProtocol method */
-uint32_t RCSwitch::diff(int32_t A, int32_t B) {
-  return abs(A - B);
+// Distance between two durations. A duration is a micros() difference and can exceed what an
+// int32_t holds, so the subtraction is done unsigned, where wrapping is defined.
+uint32_t RCSwitch::diff(uint32_t a, uint32_t b) {
+  return static_cast<uint32_t>(abs(static_cast<int32_t>(a - b)));
 }
 
 bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
@@ -359,9 +363,9 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   // or the preamble pulse divided by the number of Te it contains.
   uint32_t sdelay = 0;
   if(syncLengthInPulses > 0) {
-    sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
+    sdelay = RCSwitch::pendingTimings[FirstTiming] / syncLengthInPulses;
   } else if(pro.PreambleFactor > 0) {
-    sdelay = RCSwitch::timings[FirstTiming - 2] / pro.PreambleFactor;
+    sdelay = RCSwitch::pendingTimings[FirstTiming - 2] / pro.PreambleFactor;
   }
   const uint32_t delay = sdelay;
   if(delay == 0) {
@@ -405,11 +409,11 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
 
   for(uint32_t i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 2) {
     code <<= 1;
-    if(diff(static_cast<int32_t>(RCSwitch::timings[i]), static_cast<int32_t>(delay * pro.zero.high)) < delayTolerance &&
-       diff(static_cast<int32_t>(RCSwitch::timings[i + 1]), static_cast<int32_t>(delay * pro.zero.low)) < delayTolerance) {
+    if(diff(RCSwitch::pendingTimings[i], delay * pro.zero.high) < delayTolerance &&
+       diff(RCSwitch::pendingTimings[i + 1], delay * pro.zero.low) < delayTolerance) {
       // zero
-    } else if(diff(static_cast<int32_t>(RCSwitch::timings[i]), static_cast<int32_t>(delay * pro.one.high)) < delayTolerance &&
-              diff(static_cast<int32_t>(RCSwitch::timings[i + 1]), static_cast<int32_t>(delay * pro.one.low)) < delayTolerance) {
+    } else if(diff(RCSwitch::pendingTimings[i], delay * pro.one.high) < delayTolerance &&
+              diff(RCSwitch::pendingTimings[i + 1], delay * pro.one.low) < delayTolerance) {
       // one
       code |= 1;
     } else {
@@ -429,24 +433,29 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   return false;
 }
 
-// Offers the recorded timings to every enabled protocol, stopping at the first that decodes them.
+// Offers the recorded timings to every known protocol, stopping at the first that decodes them.
 void RCSwitch::decodeRecorded(uint32_t changeCount) {
-  uint64_t thismask = 1;
   for(uint32_t i = 1; i <= numProto; i++) {
-    if((RCSwitch::nReceiveProtocolMask & thismask) != 0ULL) {
-      if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
-        // receive succeeded for protocol i
-        break;
-      }
+    if(receiveProtocol(static_cast<int32_t>(i), changeCount)) {
+      break;
     }
-    thismask <<= 1;
   }
+}
+
+// Copies the recorded frame to where available() decodes it. A frame still waiting there wins:
+// the arriving one is dropped, and a sender repeats its frames anyway.
+void RCSwitch::handOverRecorded(uint32_t changeCount) {
+  if(RCSwitch::pendingChangeCount != 0U || changeCount == 0U) { return; }
+  for(uint32_t i = 0; i < changeCount; i++) {
+    RCSwitch::pendingTimings[i] = RCSwitch::timings[i];
+  }
+  // Written last: this is what tells the reader the buffer is complete.
+  RCSwitch::pendingChangeCount = changeCount;
 }
 
 void RCSwitch::handleInterrupt() {
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
-  static byte repeatCount = 0;
 
   const long time = micros();
   const uint32_t duration = time - lastTime;
@@ -456,19 +465,17 @@ void RCSwitch::handleInterrupt() {
   RCSwitch::buftimings[1] = RCSwitch::buftimings[0];
   RCSwitch::buftimings[0] = duration;
 
-  if(duration > RCSwitch::nSeparationLimit ||
-     changeCount == 156U ||
-     (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
-      diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U &&
+  if(duration > rcSwitchSeparationLimit ||
+     (diff(RCSwitch::buftimings[3], RCSwitch::buftimings[2]) < 50U &&
+      diff(RCSwitch::buftimings[2], RCSwitch::buftimings[1]) < 50U &&
       changeCount > 25U)) {
-    // A pulse longer than nSeparationLimit (4300) arrived.
+    // A pulse longer than rcSwitchSeparationLimit arrived.
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
-    if(diff(static_cast<int32_t>(duration), static_cast<int32_t>(RCSwitch::timings[0])) < 400U ||
-       changeCount == 156U ||
-       (diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::timings[1])) < 50U &&
-        diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::timings[2])) < 50U &&
-        diff(static_cast<int32_t>(RCSwitch::buftimings[1]), static_cast<int32_t>(RCSwitch::timings[3])) < 50U &&
+    if(diff(duration, RCSwitch::timings[0]) < 400U ||
+       (diff(RCSwitch::buftimings[3], RCSwitch::timings[1]) < 50U &&
+        diff(RCSwitch::buftimings[2], RCSwitch::timings[2]) < 50U &&
+        diff(RCSwitch::buftimings[1], RCSwitch::timings[3]) < 50U &&
         changeCount > 25U)) {
       // If its length differs from the first pulse received earlier by less than
       // +-200 (200 originally), this is a repeat of the same packet and is ignored.
@@ -478,20 +485,13 @@ void RCSwitch::handleInterrupt() {
       // here that a sender will send the signal multiple times,
       // with roughly the same gap between them).
 
-      // Number of repeated packets.
-      repeatCount++;
-      // On the second repeat, start decoding the one received first.
-      if(repeatCount == 1) {
-        decodeRecorded(changeCount);
-        // Clear the repeat counter.
-        repeatCount = 0;
-      }
+      handOverRecorded(changeCount);
     }
     // The length differs by more than +-200 from the one received earlier:
     // clear the counter and start receiving a new packet.
     changeCount = 0;
-    if(diff(static_cast<int32_t>(RCSwitch::buftimings[3]), static_cast<int32_t>(RCSwitch::buftimings[2])) < 50U &&
-       diff(static_cast<int32_t>(RCSwitch::buftimings[2]), static_cast<int32_t>(RCSwitch::buftimings[1])) < 50U) {
+    if(diff(RCSwitch::buftimings[3], RCSwitch::buftimings[2]) < 50U &&
+       diff(RCSwitch::buftimings[2], RCSwitch::buftimings[1]) < 50U) {
       RCSwitch::timings[1] = RCSwitch::buftimings[3];
       RCSwitch::timings[2] = RCSwitch::buftimings[2];
       RCSwitch::timings[3] = RCSwitch::buftimings[1];
@@ -502,7 +502,6 @@ void RCSwitch::handleInterrupt() {
   // detect overflow
   if(changeCount >= rcSwitchMaxChanges) {
     changeCount = 0;
-    repeatCount = 0;
   }
 
   // Store the length of the pulse just received.

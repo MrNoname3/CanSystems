@@ -36,13 +36,10 @@
 // interrupt handler and related code must be in RAM on ESP8266,
 // according to issue #46.
 #define RECEIVE_ATTR IRAM_ATTR
-#define VAR_ISR_ATTR
 #elif defined(ESP32)
 #define RECEIVE_ATTR IRAM_ATTR
-#define VAR_ISR_ATTR DRAM_ATTR
 #else
 #define RECEIVE_ATTR
-#define VAR_ISR_ATTR
 #endif
 
 // At least for the ATTiny X4/X5, receiving has to be disabled due to
@@ -96,7 +93,10 @@ public:
   /// @brief Stops reception by detaching the interrupt.
   void disableReceive();
 
-  /// @brief Reports whether a decoded frame is waiting to be collected.
+  /// @brief Decodes the frame the interrupt handler recorded, if there is one, and reports
+  /// whether a decoded frame is waiting to be collected.
+  /// @note Call it often enough to keep up: a frame arriving while one is still waiting here is
+  /// dropped.
   [[nodiscard]] bool available();
 
   /// @brief Discards the frame currently held, so the next one can be received.
@@ -171,10 +171,11 @@ private:
   void attachReceiveInterrupt() const;
 
 #if not defined(RCSwitchDisableReceiving)
+  inline static RECEIVE_ATTR void handOverRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
-  inline static RECEIVE_ATTR bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
-  inline static RECEIVE_ATTR void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
-  static inline uint32_t diff(int32_t A, int32_t B) __attribute__((optimize("-O3")));
+  inline static bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
+  static void decodeRecorded(uint32_t changeCount) __attribute__((optimize("-O3"), noinline));
+  static inline RECEIVE_ATTR uint32_t diff(uint32_t a, uint32_t b) __attribute__((optimize("-O3")));
   int32_t nReceiverInterrupt;
 #endif
   int32_t nTransmitterPin;
@@ -182,18 +183,23 @@ private:
   Protocol protocol;
 
 #if not defined(RCSwitchDisableReceiving)
-  static int32_t nReceiveTolerance;
-  volatile static uint64_t nReceivedValue;
-  volatile static uint64_t nReceiveProtocolMask;
-  volatile static uint32_t nReceivedBitlength;
-  volatile static uint32_t nReceivedDelay;
-  volatile static uint32_t nReceivedProtocol;
-  static uint32_t nSeparationLimit;
+  // How far a pulse may deviate from the protocol's nominal length, in percent.
+  static constexpr uint32_t nReceiveTolerance = 60U;
+  // The interrupt handler shares only pendingTimings and pendingChangeCount, so none of these
+  // needs to be volatile.
+  static uint64_t nReceivedValue;
+  static uint32_t nReceivedBitlength;
+  static uint32_t nReceivedDelay;
+  static uint32_t nReceivedProtocol;
   /*
    * timings[0] contains sync timing, followed by a number of bits
    */
   static uint32_t timings[rcSwitchMaxChanges];
   // Durations of the last four packets; [0] is the most recent.
   static uint32_t buftimings[4];
+  // The frame handed from the interrupt handler to available() for decoding. A non-zero count
+  // means the buffer is the reader's; zero means the handler may fill it again.
+  static uint32_t pendingTimings[rcSwitchMaxChanges];
+  volatile static uint32_t pendingChangeCount;
 #endif
 };
