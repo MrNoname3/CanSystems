@@ -106,7 +106,7 @@ private:
   void reportDroppedFrames();
 
   static ESP32SJA1000* isrController;                                     // Controller the receive ISR reads frames from.
-  static IRAM_ATTR QueueHandle_t canRxQueue;                              // Queue for received CAN frames.
+  static QueueHandle_t canRxQueue;                                        // Queue for received CAN frames.
   // Written only by rxInterrupt(), read only by reportDroppedFrames(). Free-running: the
   // reader keeps its own mark, so the interrupt never competes with a reset.
   static volatile uint32_t rxQueueFullFrames;                             // Receive queue had no room for the frame.
