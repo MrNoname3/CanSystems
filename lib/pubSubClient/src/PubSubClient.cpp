@@ -449,6 +449,12 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
   }
 
   const uint16_t tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
+  // The header and the topic go through the buffer; only the payload is streamed from flash, so
+  // that is all the room needed here. Its length still has to fit the remaining-length field the
+  // loop below builds, which is counted in a 16-bit number.
+  if((this->bufferSize < MQTT_MAX_HEADER_SIZE + 2U + tlen) || (plength > (UINT16_MAX - 2U - tlen))) {
+    return false;
+  }
 
   const uint8_t header = static_cast<uint8_t>(MQTTPUBLISH | (retained ? 1U : 0U));
   uint16_t pos = 0U;

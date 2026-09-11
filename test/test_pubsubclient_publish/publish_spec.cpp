@@ -3,6 +3,7 @@
 #include "Buffer.h"
 #include "BDDTest.h"
 #include "trace.h"
+#include <string.h>
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
@@ -211,6 +212,38 @@ bool test_publish_refused_keeps_the_session() {
   END_IT
 }
 
+bool test_publish_P_too_long() {
+  IT("publishes from PROGMEM only what the buffer can frame");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.setBufferSize(128U));
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  const uint8_t payload[] = { 0x41U };
+  // Only the header and the topic are built in the buffer, so 121 characters still fit it.
+  static char topic[128];
+  memset(topic, 'a', 121U);
+  topic[121] = '\0';
+  rc = client.publish_P(topic, payload, 1U, false);
+  IS_TRUE(rc);
+
+  // One more, and the topic would be written past the end of the buffer. Nothing is expected from
+  // here on, so a write of any kind is an error the shim records.
+  shimClient.expect(nullptr, 0U);
+  memset(topic, 'a', 122U);
+  topic[122] = '\0';
+  rc = client.publish_P(topic, payload, 1U, false);
+  IS_FALSE(rc);
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Publish");
   test_publish();
@@ -220,6 +253,7 @@ int main() {
   test_publish_not_connected();
   test_publish_too_long();
   test_publish_P();
+  test_publish_P_too_long();
   test_publish_half_written_ends_the_session();
   test_publish_refused_keeps_the_session();
 
