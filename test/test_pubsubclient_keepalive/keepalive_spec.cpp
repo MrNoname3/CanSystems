@@ -353,6 +353,45 @@ bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
   END_IT
 }
 
+bool test_keepalive_starts_the_refusal_deadline_over_on_reconnect() {
+  IT("a reconnected session gets its own grace for a ping the client will not take");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The session ends with a ping the client would not take still waiting to go out.
+  setFakeMillis(baseMs + (16U * tickMs));
+  shimClient.failNextWrites(1U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getRefusedPingCount(), 1U);
+
+  shimClient.setConnected(false);
+  IS_FALSE(client.loop());
+
+  // A minute later the link is back and a fresh CONNACK opens a session of its own.
+  setFakeMillis(baseMs + (76U * tickMs));
+  shimClient.setConnected(true);
+  shimClient.setAllowConnect(true);
+  shimClient.respond(connack, 4U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Its first refused ping is the first of this session: worth retrying, and worth counting.
+  setFakeMillis(baseMs + (92U * tickMs));
+  shimClient.failNextWrites(1U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getRefusedPingCount(), 2U);
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -364,6 +403,7 @@ int main() {
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
+  test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
 
   FINISH
 }

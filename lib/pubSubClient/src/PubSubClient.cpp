@@ -139,6 +139,10 @@ bool PubSubClient::awaitConnAck() {
     if(connAckCode == 0U) {
       lastInActivity = millis();
       pingOutstanding = false;
+      // A ping the last session's client would not take belongs to that session. Left standing,
+      // its deadline is already past, so the first ping this one cannot hand over ends the
+      // connection on the spot instead of being retried.
+      pingUnsent = false;
       connectionState = State::CONNECTED;
       return true;
     }
