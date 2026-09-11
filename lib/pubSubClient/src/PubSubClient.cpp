@@ -511,32 +511,30 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
 
 bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
   const uint8_t hlen = static_cast<uint8_t>(buildHeader(header, buf, length));
-
-#ifdef MQTT_MAX_TRANSFER_SIZE
-  uint8_t* writeBuf = buf + (MQTT_MAX_HEADER_SIZE - hlen);
-  uint16_t bytesRemaining = length + hlen;  // Match the length type
-  bool result = true;
-  while((bytesRemaining > 0U) && result) {
-    const uint8_t bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
-    const uint16_t rc = tcpClient.write(writeBuf, bytesToWrite);
-    result = (rc == bytesToWrite);
-    bytesRemaining -= rc;
-    writeBuf += rc;
-  }
-  return result;
-#else
   const uint16_t expected = static_cast<uint16_t>(length + hlen);
-  const uint16_t rc = static_cast<uint16_t>(tcpClient.write(buf + (MQTT_MAX_HEADER_SIZE - hlen), expected));
+  uint8_t* const packet = buf + (MQTT_MAX_HEADER_SIZE - hlen);
+#ifdef MQTT_MAX_TRANSFER_SIZE
+  // A link that cannot take a whole packet in one call is told apart by this being set for it.
+  const uint16_t chunkSize = static_cast<uint16_t>(MQTT_MAX_TRANSFER_SIZE);
+#else
+  const uint16_t chunkSize = expected;
+#endif
+  uint16_t sent = 0U;
+  bool taken = true;
+  while((sent < expected) && taken) {
+    const uint16_t piece = ((expected - sent) < chunkSize) ? static_cast<uint16_t>(expected - sent) : chunkSize;
+    const uint16_t rc = static_cast<uint16_t>(tcpClient.write(packet + sent, piece));
+    sent = static_cast<uint16_t>(sent + rc);
+    taken = (rc == piece);
+  }
   lastOutActivity = millis();
-  if((rc != 0U) && (rc != expected)) {
-    // Part of a packet cannot be finished later or taken back, and whatever is written next would
-    // be read as the rest of it. A link that takes nothing has cost the session nothing; one that
-    // stopped halfway has left the broker parsing a frame that never ends.
+  if((sent != 0U) && (sent != expected)) {
+    // Half a packet cannot be finished later or taken back, and whatever goes out next is read as
+    // the rest of it; the broker is left parsing a frame that never ends.
     connectionState = State::CONNECTION_LOST;
     tcpClient.stop();
   }
-  return (rc == expected);
-#endif
+  return (sent == expected);
 }
 
 bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
