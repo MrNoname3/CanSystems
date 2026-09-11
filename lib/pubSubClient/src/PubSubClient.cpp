@@ -529,7 +529,9 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
     sent = static_cast<uint16_t>(sent + rc);
     taken = (rc == piece);
   }
-  lastOutActivity = millis();
+  // A link that took nothing has sent nothing: counting the attempt as outgoing traffic would put
+  // the keep-alive ping off by another interval, and the broker gives up before that is over.
+  if(sent != 0U) { lastOutActivity = millis(); }
   if((sent != 0U) && (sent != expected)) {
     // Half a packet cannot be finished later or taken back, and whatever goes out next is read as
     // the rest of it; the broker is left parsing a frame that never ends.

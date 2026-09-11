@@ -392,6 +392,43 @@ bool test_keepalive_starts_the_refusal_deadline_over_on_reconnect() {
   END_IT
 }
 
+bool test_keepalive_a_refused_publish_is_not_traffic() {
+  IT("a publish the link would not take does not put the ping off");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Something arrives, so only the outgoing side of the keep-alive is left to drive the ping.
+  const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  setFakeMillis(baseMs + (9U * tickMs));
+  shimClient.respond(publish, 16U);
+  IS_TRUE(client.loop());
+
+  setFakeMillis(baseMs + (11U * tickMs));
+  shimClient.failNextWrites(1U);
+  IS_FALSE(client.publish("topic", "payload"));
+
+  // A keep-alive interval after the last packet that did go out, the ping is due.
+  setFakeMillis(baseMs + (16U * tickMs));
+  const uint16_t beforePing = shimClient.received();
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(beforePing + 2U));
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -404,6 +441,7 @@ int main() {
   test_keepalive_counts_the_pings_the_client_refused();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
+  test_keepalive_a_refused_publish_is_not_traffic();
 
   FINISH
 }
