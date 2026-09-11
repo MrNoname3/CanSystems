@@ -164,11 +164,11 @@ bool test_connect_accepts_username_blank_password() {
 
   const uint8_t connect[] = { 0x10U, 0x20U, 0x0U, 0x4U, 0x4dU, 0x51U, 0x54U, 0x54U, 0x4U, 0xc2U, 0x0U, 0xfU, 0x0U, 0xcU, 0x63U, 0x6cU, 0x69U, 0x65U, 0x6eU, 0x74U, 0x5fU, 0x74U, 0x65U, 0x73U, 0x74U, 0x31U, 0x0U, 0x4U, 0x75U, 0x73U, 0x65U, 0x72U, 0x0U, 0x0U };
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
-  shimClient.expect(connect, 0x26U);
+  shimClient.expect(connect, 0x22U);
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  bool rc = client.connect("client_test1", "user", "pass");
+  bool rc = client.connect("client_test1", "user", "");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -353,6 +353,7 @@ int main() {
   test_connect_properly_formatted_hostname();
 
   test_connect_accepts_username_no_password();
+  test_connect_accepts_username_blank_password();
   test_connect_ignores_password_no_username();
   test_connect_with_will();
   test_connect_with_will_username_password();
