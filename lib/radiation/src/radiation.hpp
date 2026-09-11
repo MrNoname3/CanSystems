@@ -81,8 +81,8 @@ private:
   /// @brief Interrupt Service Routine (ISR) for counting radiation pulses.
   static IRAM_ATTR void counter();
 
-  /// @brief ISR for measuring CPM and preparing data for transmission.
-  static IRAM_ATTR void measure();
+  /// @brief Ticker callback taking the pulse count of the period just ended.
+  static void measure();
 
   static volatile uint32_t cpm;                 // Counter for radiation pulses detected during the current measurement period.
   static volatile bool measureDone;             // Flag indicating whether a measurement period has completed.

@@ -37,7 +37,7 @@ public:
   static void ledToggle();
 #elif defined(ESP8266) || defined(ESP32)
   /// @brief Toggles the LED state on ESP platforms.
-  static IRAM_ATTR void ledToggle();
+  static void ledToggle();
 
   /// @brief Starts blinking the LED at a fixed interval.
   /// @param tickIntervalMs The interval between LED toggles, in milliseconds.
