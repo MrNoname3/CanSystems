@@ -137,7 +137,7 @@ pio run                                  # build all environments
 pio run -e project_esp8266_thermo -t upload      # serial flash one target
 pio test -e native_test                  # native test suite
 pio check                                # cppcheck on all environments
-pio check -e check_avr -e check_esp8266 -e check_esp32   # clang-tidy
+python scripts/analysis_check.py         # clang-tidy on the check_* environments
 ```
 
 A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmware flash**

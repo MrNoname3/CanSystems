@@ -17,8 +17,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
 - Native tests: `… pio test -e native_test` (under a minute)
 - Static analysis: `… pio check` (cppcheck) and
-  `… pio check -e check_avr -e check_esp8266 -e check_esp32` (clang-tidy; checks live in
-  `.clang-tidy`). Split because they need opposite `check_skip_packages` settings.
+  `python scripts/analysis_check.py` (clang-tidy; checks live in `.clang-tidy`). Split because
+  they need opposite `check_skip_packages` settings; the guard also fails a clang-tidy that
+  analysed nothing, which `pio check` reports as a pass.
 - **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
@@ -27,6 +28,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   whole gate before a merge whatever the changes were, and say which guard ran.
 - Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
   there is none - matches the pins; `--sync` installs them),
+  `scripts/analysis_check.py` (clang-tidy over the check_* environments; `test/` is cppcheck's
+  alone, there being no clang headers for the native platform to borrow),
   `scripts/format_check.py` (clang-format + final newline),
   `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
