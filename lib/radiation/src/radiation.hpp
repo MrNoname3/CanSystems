@@ -1,4 +1,6 @@
 #pragma once
+// ESP-only (Ticker + the MQTT stack). Guarded so AVR builds and the static analysis skip it.
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
 
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include <Arduino.h>                                                /// Arduino libraries header.
@@ -90,3 +92,5 @@ private:
   const uint8_t sensorPin;                      // GPIO pin connected to the radiation sensor.
   TubeType tubeType = TubeType::Unknown;        // Tube type read from config at init; determines sievert/radian calculation.
 };
+
+#endif  // defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)

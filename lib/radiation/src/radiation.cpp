@@ -1,4 +1,5 @@
 #include "radiation.hpp"
+#if defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
 #include "configHandler.hpp"                                        /// Read tube type from /config/tube.json.
 #include <cmath>                                                    /// lroundf for correct float-to-integer rounding.
 
@@ -88,3 +89,5 @@ void Radiation::measure() {
   interrupts();
   measureDone = true;
 }
+
+#endif  // defined(ESP8266) || defined(ESP32) || defined(NATIVE_TEST)
