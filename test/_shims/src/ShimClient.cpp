@@ -230,6 +230,32 @@ void ShimClient::expectConnect(const char* host, uint16_t port) {
 Mcp2515Model mcp2515;
 SPIClass SPI;
 
+namespace {
+  SpiFlashModel* spiFlash = nullptr;                  // Flash on the bus, or nullptr when none is.
+  uint8_t spiFlashSelectPin = 0U;                     // Its chip-select pin.
+
+  /// @brief Whether the flash is the device the line currently points at.
+  bool spiFlashSelected() {
+    return (spiFlash != nullptr) && (getDigitalWriteValue(spiFlashSelectPin) == LOW);
+  }
+} // namespace
+
+void attachSpiFlash(SpiFlashModel* model, uint8_t chipSelectPin) {
+  spiFlash = model;
+  spiFlashSelectPin = chipSelectPin;
+}
+
+void SPIClass::beginTransaction(SPISettings /*settings*/) {
+  // Both models are told: the flash raises its chip select only after this call, so which device
+  // the transaction belongs to is not known yet.
+  mcp2515.beginMessage();
+  if(spiFlash != nullptr) { spiFlash->beginMessage(); }
+}
+
+uint8_t SPIClass::transfer(uint8_t out) {
+  return spiFlashSelected() ? spiFlash->transfer(out) : mcp2515.transfer(out);
+}
+
 // --- ESP32 CAN peripheral stand-in (esp32CanModel.h, esp_intr_alloc.h) ---
 Esp32CanModel esp32Can;
 Esp32IntrRegistration esp32Intr;
