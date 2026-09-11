@@ -50,7 +50,13 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
   // Zero means a string did not fit; checkStringLength() has already stopped the client.
   if(length == 0U) { return false; }
-  write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE);
+  if(!write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE)) {
+    // The link took less than the whole packet, so no CONNACK is coming: waiting for one anyway
+    // would hold the caller for the socket timeout and then name it as the reason.
+    connectionState = State::CONNECTION_LOST;
+    tcpClient.stop();
+    return false;
+  }
   lastInActivity = lastOutActivity = millis();
   return awaitConnAck();
 }
