@@ -536,7 +536,8 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
   const uint16_t len = static_cast<uint16_t>(strlen(string));
   buf[pos++] = static_cast<uint8_t>(len >> 8U);
   buf[pos++] = static_cast<uint8_t>(len & 0xFFU);
-  memcpy(buf + pos, string, len);
+  // No terminator: an MQTT string carries the two length bytes written above instead.
+  memcpy(buf + pos, string, len);   // NOLINT(bugprone-not-null-terminated-result)
   return static_cast<uint16_t>(pos + len);
 }
 
