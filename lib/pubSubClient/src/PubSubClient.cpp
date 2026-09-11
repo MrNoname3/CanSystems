@@ -147,6 +147,10 @@ bool PubSubClient::awaitConnAck() {
       return true;
     }
     connectionState = static_cast<State>(connAckCode);
+  } else {
+    // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
+    // ended the last session as the reason this one never started.
+    connectionState = State::CONNECTION_TIMEOUT;
   }
   tcpClient.stop();
   return false;

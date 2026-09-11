@@ -321,11 +321,29 @@ bool test_connect_fails_when_the_packet_is_not_taken() {
   END_IT
 }
 
+bool test_connect_answer_that_is_not_a_connack() {
+  IT("reports a timeout when the connect answer is not a CONNACK");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  // A packet the broker finished sending, but not one that can say whether the connect was taken.
+  const uint8_t truncated[] = { 0x20U, 0x01U, 0x00U };
+  shimClient.respond(truncated, 3U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
   test_connect_fails_no_network();
   test_connect_fails_on_no_response();
+  test_connect_answer_that_is_not_a_connack();
   test_connect_fails_when_the_packet_is_not_taken();
 
   test_connect_properly_formatted();

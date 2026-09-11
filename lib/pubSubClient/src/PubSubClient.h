@@ -83,7 +83,7 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
-    CONNECTION_TIMEOUT      = -4,  // Server did not respond within socketTimeout.
+    CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
     CONNECT_FAILED          = -2,  // TCP connection to broker failed.
     DISCONNECTED            = -1,  // Client is not connected.
