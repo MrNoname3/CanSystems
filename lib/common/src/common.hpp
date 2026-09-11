@@ -456,9 +456,9 @@ public:
   /// @return RAII proxy forwarding to HardwareSerial via `operator->` (holds the logger lock on ESP32).
   static inline LockedSerial get() noexcept {
 #if defined(ESP32)
-    return LockedSerial(*serial, mutex);
+    return { *serial, mutex };
 #else
-    return LockedSerial(*serial);
+    return LockedSerial(*serial);   // the single-argument constructor is explicit
 #endif
   }
 
