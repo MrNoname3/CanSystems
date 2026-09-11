@@ -207,7 +207,7 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
 
 PubSubClient::RxResult PubSubClient::advancePayload() {
   while(rxPayloadDone < rxRemaining) {
-    const int16_t ready = tcpClient.available();
+    const int ready = tcpClient.available();
     if(ready <= 0) { return RxResult::Incomplete; }
     const uint32_t left = rxRemaining - rxPayloadDone;
     takePayloadBulk((static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left);
@@ -222,7 +222,7 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
   if(kept != 0U) {
     // What the client hands over is what was taken: counting the request instead would walk the
     // parse position past bytes still on the socket, and every packet after it would be misread.
-    const int16_t got = tcpClient.read(&this->buffer[rxLen], kept);
+    const int got = tcpClient.read(&this->buffer[rxLen], kept);
     stored = (got > 0) ? static_cast<uint32_t>(got) : 0U;
     rxLen = static_cast<uint16_t>(rxLen + stored);
     rxPayloadDone += stored;
@@ -234,7 +234,7 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
   while(dropped < (take - kept)) {
     uint8_t discard[discardChunkSize];
     const uint32_t want = ((take - kept - dropped) < discardChunkSize) ? (take - kept - dropped) : discardChunkSize;
-    const int16_t got = tcpClient.read(discard, want);
+    const int got = tcpClient.read(discard, want);
     if(got <= 0) { break; }
     dropped += static_cast<uint32_t>(got);
   }
