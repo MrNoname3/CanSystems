@@ -97,6 +97,8 @@ ShimClient::ShimClient() {
   this->expectAnything = true;
   this->_received = 0;
   this->_writesToFail = 0;
+  this->_truncateNextWriteTo = 0;
+  this->_truncateNextWrite = false;
   this->_expectedPort = 0;
   this->_expectedHost = nullptr;
 }
@@ -160,6 +162,11 @@ void ShimClient::failNextWrites(uint16_t count) {
   this->_writesToFail = count;
 }
 
+void ShimClient::truncateNextWrite(uint16_t bytes) {
+  this->_truncateNextWriteTo = bytes;
+  this->_truncateNextWrite = true;
+}
+
 void ShimClient::checkExpected(uint8_t actual) {
   if(this->expectAnything) {
     return;
@@ -180,6 +187,12 @@ size_t ShimClient::write(const uint8_t* buf, size_t size) {
     this->_writesToFail--;
     return 0U;
   }
+  size_t taken = size;
+  if(this->_truncateNextWrite) {
+    this->_truncateNextWrite = false;
+    taken = (static_cast<size_t>(this->_truncateNextWriteTo) < size) ? static_cast<size_t>(this->_truncateNextWriteTo) : size;
+  }
+  size = taken;
   this->_received += size;
   TRACE("[" << std::dec << static_cast<unsigned int>(size) << "] ");
   for(size_t i = 0; i < size; i++) {

@@ -210,6 +210,27 @@ bool test_subscribe_unanswered() {
   END_IT
 }
 
+bool test_subscribe_half_written_ends_the_session() {
+  IT("a subscribe the link took only part of ends the session");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // No SUBACK is queued: the wait must never be reached, the half-written packet having ended it.
+  shimClient.truncateNextWrite(4U);
+  rc = client.subscribe("topic", 1U);
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -219,6 +240,7 @@ int main() {
   test_subscribe_too_long();
   test_subscribe_refused_by_the_broker();
   test_subscribe_unanswered();
+  test_subscribe_half_written_ends_the_session();
   test_unsubscribe();
   test_unsubscribe_not_connected();
   FINISH

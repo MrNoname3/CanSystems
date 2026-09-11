@@ -512,9 +512,17 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
   }
   return result;
 #else
-  const uint16_t rc = tcpClient.write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
+  const uint16_t expected = static_cast<uint16_t>(length + hlen);
+  const uint16_t rc = static_cast<uint16_t>(tcpClient.write(buf + (MQTT_MAX_HEADER_SIZE - hlen), expected));
   lastOutActivity = millis();
-  return (rc == hlen + length);
+  if((rc != 0U) && (rc != expected)) {
+    // Part of a packet cannot be finished later or taken back, and whatever is written next would
+    // be read as the rest of it. A link that takes nothing has cost the session nothing; one that
+    // stopped halfway has left the broker parsing a frame that never ends.
+    connectionState = State::CONNECTION_LOST;
+    tcpClient.stop();
+  }
+  return (rc == expected);
 #endif
 }
 
