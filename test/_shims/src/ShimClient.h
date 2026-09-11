@@ -31,10 +31,10 @@ public:
   bool connect(const char* host, uint16_t port) override;
   size_t write(uint8_t) override;
   size_t write(const uint8_t* buf, size_t size) override;
-  int16_t available() override;
-  int16_t read() override;
-  int16_t read(uint8_t* buf, size_t size) override;
-  int16_t peek() override;
+  int available() override;
+  int read() override;
+  int read(uint8_t* buf, size_t size) override;
+  int peek() override;
   void flush() override;
   void stop() override;
   uint8_t connected() override;

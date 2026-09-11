@@ -5,14 +5,18 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   1. deps_check.py              (the .venv matches requirements-dev.txt; ANY drift fails)
   2. pio run                    (build every default environment)
   3. pio test -e native_test    (native unit-test suite)
-  4. pio check --fail-on-defect (cppcheck + clang-tidy; ANY defect fails)
-  5. format_check.py            (clang-format + final-newline check; ANY violation fails)
-  6. lint_check.py              (ruff check over the Python; ANY finding fails)
-  7. typecheck_check.py         (pyright strict over the Python; ANY error fails)
-  8. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+  4. pio check --fail-on-defect (cppcheck over every environment; ANY defect fails)
+  5. analysis_check.py          (clang-tidy over the check_* environments; ANY defect fails)
+  6. format_check.py            (clang-format + final-newline check; ANY violation fails)
+  7. lint_check.py              (ruff check over the Python; ANY finding fails)
+  8. typecheck_check.py         (pyright strict over the Python; ANY error fails)
+  9. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+
+The analysers are separate steps because they need opposite check_skip_packages settings; the
+check_* environments in platformio.ini say why.
 
 Every guard is required: a missing tool fails the gate rather than skipping its step, so a
-green run means all eight actually ran. The dependency step comes first because the guards
+green run means all nine actually ran. The dependency step comes first because the guards
 after it run out of the .venv: a drifted one reports on versions the project does not pin.
 `--sync` installs the pinned set instead of only reporting the drift.
 
@@ -116,10 +120,11 @@ def main() -> int:
         Step("deps", deps_cmd),
         Step("build", [pio, "run"]),
         Step("test",  [pio, "test", "-e", "native_test"]),
-        Step("check", [pio, "check", "--skip-packages",
+        Step("check", [pio, "check",
                        "--fail-on-defect", "low",
                        "--fail-on-defect", "medium",
                        "--fail-on-defect", "high"]),
+        Step("tidy", [sys.executable, str(PROJECT_DIR / "scripts" / "analysis_check.py")]),
         Step("format", [sys.executable, str(PROJECT_DIR / "scripts" / "format_check.py")]),
         Step("lint", [sys.executable, str(PROJECT_DIR / "scripts" / "lint_check.py")]),
         Step("typecheck", [sys.executable, str(PROJECT_DIR / "scripts" / "typecheck_check.py")]),

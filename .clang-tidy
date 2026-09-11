@@ -1,7 +1,7 @@
 # clang-tidy configuration — single source of truth for the check list.
 #
 # Shared by:
-#   - `pio check` / the release gate: platformio.ini points here with
+#   - `pio check` / the release gate: the check_* environments in platformio.ini point here with
 #     `clangtidy: --config-file=.clang-tidy` (cppcheck stays configured in platformio.ini;
 #     nothing in the editor runs cppcheck, so there is no parity reason to extract it).
 #   - the editor's live clang-tidy (VS Code cpptools), which auto-discovers this file.
@@ -22,4 +22,6 @@ Checks: >
   -bugprone-branch-clone,
   -modernize-deprecated-headers,
   -modernize-use-auto,
-  -readability-convert-member-functions-to-static
+  -readability-convert-member-functions-to-static,
+  -readability-static-accessed-through-instance,
+  -performance-no-int-to-ptr

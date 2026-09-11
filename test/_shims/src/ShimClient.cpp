@@ -48,7 +48,7 @@ uint16_t analogRead(uint8_t /*pin*/) { return analogReadValue; }
 void analogWrite(uint8_t pin, int val) { pinValues[pin] = static_cast<uint8_t>(val); }
 void attachInterrupt(uint8_t pin, void (*fn)(), uint8_t /*mode*/) { isrTable[pin] = fn; }
 void detachInterrupt(uint8_t pin) { isrTable[pin] = nullptr; }
-uint8_t digitalPinToInterrupt(uint8_t pin) { return pin; }
+int16_t digitalPinToInterrupt(uint8_t pin) { return pin; }
 void cli() {}
 void sei() {}
 void noInterrupts() {}
@@ -161,22 +161,22 @@ size_t ShimClient::write(const uint8_t* buf, size_t size) {
         << std::dec);
   return size;
 }
-int16_t ShimClient::available() {
-  return static_cast<int16_t>(this->responseBuffer->available());
+int ShimClient::available() {
+  return static_cast<int>(this->responseBuffer->available());
 }
-int16_t ShimClient::read() {
-  return static_cast<int16_t>(this->responseBuffer->next());
+int ShimClient::read() {
+  return static_cast<int>(this->responseBuffer->next());
 }
-int16_t ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
+int ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
   // Only what it actually holds, as a socket does: a caller asking for more has to come back.
   size_t taken = 0U;
   while((taken < size) && this->responseBuffer->available()) {
     buf[taken] = static_cast<uint8_t>(this->read());
     taken++;
   }
-  return static_cast<int16_t>(taken);
+  return static_cast<int>(taken);
 }
-int16_t ShimClient::peek() {
+int ShimClient::peek() {
   return 0;
 }
 void ShimClient::flush() {}

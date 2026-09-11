@@ -1,10 +1,11 @@
 #include "PubSubClient.h"
 #include "Arduino.h"
+#include <utility>   // std::move for the callback the setters take by value
 
 PubSubClient::PubSubClient(Client& client) :
   tcpClient(client) {
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) :
+PubSubClient::PubSubClient(const IPAddress& addr, uint16_t port, Client& client) :
   tcpClient(client) {
   setServer(addr, port);
 }
@@ -12,12 +13,12 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) :
 PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client) :
   tcpClient(client) {
   setServer(ip, port);
-  setCallback(callback);
+  setCallback(std::move(callback));
 }
 PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) :
   tcpClient(client) {
   setServer(domain, port);
-  setCallback(callback);
+  setCallback(std::move(callback));
 }
 bool PubSubClient::connect(const char* id) {
   return connect(id, nullptr, nullptr, nullptr, 0U, false, nullptr, true);
@@ -207,7 +208,7 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
 
 PubSubClient::RxResult PubSubClient::advancePayload() {
   while(rxPayloadDone < rxRemaining) {
-    const int16_t ready = tcpClient.available();
+    const int ready = tcpClient.available();
     if(ready <= 0) { return RxResult::Incomplete; }
     const uint32_t left = rxRemaining - rxPayloadDone;
     takePayloadBulk((static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left);
@@ -222,7 +223,7 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
   if(kept != 0U) {
     // What the client hands over is what was taken: counting the request instead would walk the
     // parse position past bytes still on the socket, and every packet after it would be misread.
-    const int16_t got = tcpClient.read(&this->buffer[rxLen], kept);
+    const int got = tcpClient.read(&this->buffer[rxLen], kept);
     stored = (got > 0) ? static_cast<uint32_t>(got) : 0U;
     rxLen = static_cast<uint16_t>(rxLen + stored);
     rxPayloadDone += stored;
@@ -234,7 +235,7 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
   while(dropped < (take - kept)) {
     uint8_t discard[discardChunkSize];
     const uint32_t want = ((take - kept - dropped) < discardChunkSize) ? (take - kept - dropped) : discardChunkSize;
-    const int16_t got = tcpClient.read(discard, want);
+    const int got = tcpClient.read(discard, want);
     if(got <= 0) { break; }
     dropped += static_cast<uint32_t>(got);
   }
@@ -535,7 +536,8 @@ uint16_t PubSubClient::writeString(const char* string, uint8_t* buf, uint16_t po
   const uint16_t len = static_cast<uint16_t>(strlen(string));
   buf[pos++] = static_cast<uint8_t>(len >> 8U);
   buf[pos++] = static_cast<uint8_t>(len & 0xFFU);
-  memcpy(buf + pos, string, len);
+  // No terminator: an MQTT string carries the two length bytes written above instead.
+  memcpy(buf + pos, string, len);   // NOLINT(bugprone-not-null-terminated-result)
   return static_cast<uint16_t>(pos + len);
 }
 
@@ -551,7 +553,7 @@ bool PubSubClient::connected() {
   return this->connectionState == State::CONNECTED;
 }
 
-PubSubClient& PubSubClient::setServer(IPAddress ip, uint16_t port) {
+PubSubClient& PubSubClient::setServer(const IPAddress& ip, uint16_t port) {
   this->ip = ip;
   this->port = port;
   this->domain = nullptr;
@@ -570,7 +572,7 @@ PubSubClient& PubSubClient::setServer(const char* domain, uint16_t port) {
 }
 
 PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
-  this->callback = callback;
+  this->callback = std::move(callback);
   return *this;
 }
 

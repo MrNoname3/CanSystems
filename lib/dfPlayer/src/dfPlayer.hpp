@@ -85,12 +85,16 @@ public:
 private:
   /// @brief Attaches an interrupt to the specified pin.
   void attachInt() const {
+    // digitalPinToInterrupt() answers NOT_AN_INTERRUPT for a pin that has no interrupt, and
+    // shifting by that is undefined. Nothing is armed for such a pin.
+    const int16_t interrupt = digitalPinToInterrupt(intPin);
+    if(interrupt < 0) { return; }
     // Clear the flag the line may have left standing while nothing was attached, so the first
     // pass does not read the previous track's end as this one's. Written, not bit-set: a one
     // clears the flag it names, so a read-modify-write would write back - and clear - every other
     // flag it happened to read as well.
-    EIFR = static_cast<uint8_t>(1U << digitalPinToInterrupt(intPin));
-    attachInterrupt(digitalPinToInterrupt(intPin), irqHandler, RISING);
+    EIFR = static_cast<uint8_t>(1U << interrupt);
+    attachInterrupt(static_cast<uint8_t>(interrupt), irqHandler, RISING);
   }
 
   /// @brief Detaches the interrupt from the specified pin.

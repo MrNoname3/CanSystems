@@ -4,7 +4,6 @@
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
   canMqttGateway(canMqttGateway),
-  receivedFile(),
   frameNumber(0U),
   storageNumber(0U),
   fileSize(0U),

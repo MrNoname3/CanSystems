@@ -31,7 +31,6 @@ DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid), bool (*fileInU
   isFwTransfer(false),
   transferState(TransferState::IDLE),
   transferTimeoutTimer(0U),
-  receivedFile(),
   md5() {}
 
 DataTransfer::~DataTransfer() {

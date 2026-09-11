@@ -136,7 +136,8 @@ skipped rather than queued, and the image's checksum is computed once for the wh
 pio run                                  # build all environments
 pio run -e project_esp8266_thermo -t upload      # serial flash one target
 pio test -e native_test                  # native test suite
-pio check                                # cppcheck + clang-tidy on all environments
+pio check                                # cppcheck on all environments
+python scripts/analysis_check.py         # clang-tidy on the check_* environments
 ```
 
 A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmware flash**
@@ -193,12 +194,14 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 
 ### Release gate
 
-`scripts/release_check.py` chains eight steps fail-fast: check that the pinned tooling is the
+`scripts/release_check.py` chains nine steps fail-fast: check that the pinned tooling is the
 tooling installed (`deps_check.py` — in the project `.venv`, or in the interpreter it runs under
 when there is none), build all environments, run the native test suite, static
 analysis (`pio check` — where a **single defect of any severity** via
 `--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
-SUCCESS even with findings), then the Python guards — clang-format + final-newline
+SUCCESS even with findings) in two steps — cppcheck over every environment, then clang-tidy over
+the `check_*` ones, which are the same builds with the framework include paths clang-tidy needs
+to parse anything — then the Python guards — clang-format + final-newline
 (`format_check.py`), ruff lint (`lint_check.py`), pyright strict (`typecheck_check.py`), and
 pytest (`pytest_check.py`). Every guard is **required**: a missing tool fails the gate rather
 than skipping, so set up the dev venv (above) before running it. The dependency check comes

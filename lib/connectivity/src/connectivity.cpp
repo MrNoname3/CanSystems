@@ -10,7 +10,6 @@
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
-  tcpClient(),
   mqttClient(tcpClient),
   networkState(true),
   mqttState(PubSubClient::State::CONNECTED),
@@ -20,9 +19,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   resetWdt(resetWdtFunc),
   reconnectTimer(0U),
   onlineSinceTimer(0U),
-#ifdef ESP8266
-  serverCert{},
-#endif
   haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
     return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
   },
@@ -399,7 +395,7 @@ bool Connectivity::syncNtpTime() {
 #if defined(ESP32)
   while(sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) {
 #else
-  constexpr time_t minValidTime = 8L * 3600L * 2L;
+  constexpr time_t minValidTime = time_t{ 8 } * 3600 * 2;
   while(time(nullptr) < minValidTime) {
 #endif
     if(Time::hasElapsed(millis(), startMs, timeoutMs)) { return false; }

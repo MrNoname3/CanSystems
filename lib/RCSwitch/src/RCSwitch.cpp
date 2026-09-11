@@ -353,7 +353,7 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
     BeginData = (pro.invertedSignal) ? (2) : (1);
     // Header pulse count correction for more than one
     if(pro.HeaderFactor > 1) {
-      BeginData += (pro.HeaderFactor - 1) * 2;
+      BeginData += (static_cast<uint32_t>(pro.HeaderFactor) - 1U) * 2U;
     }
   }
   // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
@@ -457,7 +457,9 @@ void RCSwitch::handleInterrupt() {
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
 
-  const long time = micros();
+  // Unsigned, like diff(): micros() passes what a signed 32-bit value holds after about 36
+  // minutes, and the subtraction below only stays defined while both sides are unsigned.
+  const uint32_t time = micros();
   const uint32_t duration = time - lastTime;
 
   RCSwitch::buftimings[3] = RCSwitch::buftimings[2];
