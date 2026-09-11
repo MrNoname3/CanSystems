@@ -109,6 +109,9 @@ bool test_subscribe_too_long() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x0U };
+  shimClient.respond(suback, 5U);
+
   // max length should be allowed
   //                            0        1         2         3         4         5         6         7         8         9         0         1         2
   rc = client.subscribe("12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789");
@@ -162,6 +165,51 @@ bool test_unsubscribe_not_connected() {
   END_IT
 }
 
+bool test_subscribe_refused_by_the_broker() {
+  IT("reports a subscription the broker would not grant");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // 0x80 is what a broker answers for a filter its access rules do not allow.
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x80U };
+  shimClient.respond(suback, 5U);
+
+  rc = client.subscribe("topic", 1U);
+  IS_FALSE(rc);
+  // Only the filter was refused: the session itself is still up for the caller to decide about.
+  IS_TRUE(client.connected());
+
+  END_IT
+}
+
+bool test_subscribe_unanswered() {
+  IT("reports a subscription the broker never answers");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // The wait runs on the real clock, as the CONNACK's does; a second of it is enough to show.
+  client.setSocketTimeout(1U);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  rc = client.subscribe("topic", 1U);
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -169,6 +217,8 @@ int main() {
   test_subscribe_not_connected();
   test_subscribe_invalid_qos();
   test_subscribe_too_long();
+  test_subscribe_refused_by_the_broker();
+  test_subscribe_unanswered();
   test_unsubscribe();
   test_unsubscribe_not_connected();
   FINISH

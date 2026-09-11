@@ -152,6 +152,39 @@ bool PubSubClient::awaitConnAck() {
   return false;
 }
 
+bool PubSubClient::awaitSubAck(uint16_t packetId) {
+  const uint32_t startMs = millis();
+  const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
+  bool granted = false;
+  bool waiting = true;
+  while(waiting) {
+    const RxResult result = readPacketBlocking();
+    if(result != RxResult::Complete) {
+      connectionState = State::CONNECTION_TIMEOUT;
+      tcpClient.stop();
+      waiting = false;
+    } else if(isSubAckFor(packetId)) {
+      // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
+      granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
+      waiting = false;
+    } else {
+      // The broker got a word in first; it is this session's traffic and is answered as such.
+      dispatchPacket(millis());
+      waiting = ((millis() - startMs) < timeoutMs);
+    }
+  }
+  resetReader();
+  return granted;
+}
+
+bool PubSubClient::isSubAckFor(uint16_t packetId) const {
+  if(((this->buffer[0] & 0xF0U) != MQTTSUBACK) || (rxLen < (rxLengthLength + 4U))) {
+    return false;
+  }
+  const uint16_t acked = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
+  return acked == packetId;
+}
+
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
   const bool fits = (length + 2U + strnlen(str, this->bufferSize) <= this->bufferSize);
   if(!fits) {
@@ -502,11 +535,15 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
       nextMsgId = 1U;
     }
+    const uint16_t packetId = nextMsgId;
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
     this->buffer[length++] = qos;
-    return write(MQTTSUBSCRIBE | MQTTQOS1, this->buffer, length - MQTT_MAX_HEADER_SIZE);
+    if(!write(MQTTSUBSCRIBE | MQTTQOS1, this->buffer, length - MQTT_MAX_HEADER_SIZE)) {
+      return false;
+    }
+    return awaitSubAck(packetId);
   }
   return false;
 }

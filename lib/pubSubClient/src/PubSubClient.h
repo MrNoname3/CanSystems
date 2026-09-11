@@ -71,6 +71,7 @@ private:
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
   static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
+  static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
 
 #if defined(ESP8266) || defined(ESP32)
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
@@ -242,10 +243,13 @@ public:
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
 
-  /// @brief Subscribes to a topic.
+  /// @brief Subscribes to a topic and waits for the broker's answer.
+  /// @details Blocks for up to the socket timeout, as the connect handshake does: a subscription
+  /// the broker refuses leaves the client connected but deaf, which is worth knowing here rather
+  /// than from the silence that follows.
   /// @param topic Null-terminated MQTT topic filter.
   /// @param qos QoS level (0 or 1; default: 0).
-  /// @return `true` if the SUBSCRIBE packet was sent; otherwise `false`.
+  /// @return `true` if the broker granted the subscription; otherwise `false`.
   [[nodiscard]] bool subscribe(const char* topic, uint8_t qos = 0U);
 
   /// @brief Unsubscribes from a topic.
@@ -292,6 +296,18 @@ private:
   /// @details Tears the connection down on a timeout, a malformed answer or a refusal.
   /// @return `true` when the broker accepted the connection; otherwise, `false`.
   [[nodiscard]] bool awaitConnAck();
+
+  /// @brief Waits for the SUBACK answering the packet id given, dispatching whatever precedes it.
+  /// @details Drops the connection when nothing parseable arrives before the socket timeout: the
+  /// bytes already taken off the socket cannot be put back for the session to carry on.
+  /// @param packetId Packet id the SUBSCRIBE went out with.
+  /// @return `true` when the broker granted the filter; `false` when it refused it or said nothing.
+  [[nodiscard]] bool awaitSubAck(uint16_t packetId);
+
+  /// @brief Whether the packet in `buffer` is the SUBACK for the packet id given.
+  /// @param packetId Packet id the SUBSCRIBE went out with.
+  /// @return `true` when it is that SUBACK; otherwise, `false`.
+  [[nodiscard]] bool isSubAckFor(uint16_t packetId) const;
 
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.
   /// @param header MQTT fixed-header byte.
