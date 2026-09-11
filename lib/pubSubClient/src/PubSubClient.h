@@ -101,7 +101,7 @@ public:
   /// @param addr Server IP address.
   /// @param port Server port number.
   /// @param client Reference to the TCP client.
-  PubSubClient(IPAddress addr, uint16_t port, Client& client);
+  PubSubClient(const IPAddress& addr, uint16_t port, Client& client);
 
   /// @brief Constructs a PubSubClient with a server IP byte array and callback.
   /// @param ip Pointer to a 4-byte array holding the server IP address.
@@ -129,7 +129,7 @@ public:
   /// @param ip Server IP address.
   /// @param port Server port number.
   /// @return Reference to this instance for method chaining.
-  PubSubClient& setServer(IPAddress ip, uint16_t port);
+  PubSubClient& setServer(const IPAddress& ip, uint16_t port);
 
   /// @brief Sets the MQTT server by IP byte array.
   /// @param ip Pointer to a 4-byte array holding the server IP address.

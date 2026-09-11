@@ -1,10 +1,11 @@
 #include "PubSubClient.h"
 #include "Arduino.h"
+#include <utility>   // std::move for the callback the setters take by value
 
 PubSubClient::PubSubClient(Client& client) :
   tcpClient(client) {
 }
-PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) :
+PubSubClient::PubSubClient(const IPAddress& addr, uint16_t port, Client& client) :
   tcpClient(client) {
   setServer(addr, port);
 }
@@ -12,12 +13,12 @@ PubSubClient::PubSubClient(IPAddress addr, uint16_t port, Client& client) :
 PubSubClient::PubSubClient(const uint8_t* ip, uint16_t port, MqttCallback callback, Client& client) :
   tcpClient(client) {
   setServer(ip, port);
-  setCallback(callback);
+  setCallback(std::move(callback));
 }
 PubSubClient::PubSubClient(const char* domain, uint16_t port, MqttCallback callback, Client& client) :
   tcpClient(client) {
   setServer(domain, port);
-  setCallback(callback);
+  setCallback(std::move(callback));
 }
 bool PubSubClient::connect(const char* id) {
   return connect(id, nullptr, nullptr, nullptr, 0U, false, nullptr, true);
@@ -551,7 +552,7 @@ bool PubSubClient::connected() {
   return this->connectionState == State::CONNECTED;
 }
 
-PubSubClient& PubSubClient::setServer(IPAddress ip, uint16_t port) {
+PubSubClient& PubSubClient::setServer(const IPAddress& ip, uint16_t port) {
   this->ip = ip;
   this->port = port;
   this->domain = nullptr;
@@ -570,7 +571,7 @@ PubSubClient& PubSubClient::setServer(const char* domain, uint16_t port) {
 }
 
 PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
-  this->callback = callback;
+  this->callback = std::move(callback);
   return *this;
 }
 
