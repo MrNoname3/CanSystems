@@ -48,7 +48,7 @@ uint16_t analogRead(uint8_t pin);
 void analogWrite(uint8_t pin, int val);
 void attachInterrupt(uint8_t pin, void (*fn)(), uint8_t mode);
 void detachInterrupt(uint8_t pin);
-uint8_t digitalPinToInterrupt(uint8_t pin);
+int16_t digitalPinToInterrupt(uint8_t pin);   // signed: the AVR macro answers NOT_AN_INTERRUPT (-1)
 void cli();
 void sei();
 void noInterrupts();

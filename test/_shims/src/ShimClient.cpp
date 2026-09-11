@@ -48,7 +48,7 @@ uint16_t analogRead(uint8_t /*pin*/) { return analogReadValue; }
 void analogWrite(uint8_t pin, int val) { pinValues[pin] = static_cast<uint8_t>(val); }
 void attachInterrupt(uint8_t pin, void (*fn)(), uint8_t /*mode*/) { isrTable[pin] = fn; }
 void detachInterrupt(uint8_t pin) { isrTable[pin] = nullptr; }
-uint8_t digitalPinToInterrupt(uint8_t pin) { return pin; }
+int16_t digitalPinToInterrupt(uint8_t pin) { return pin; }
 void cli() {}
 void sei() {}
 void noInterrupts() {}
