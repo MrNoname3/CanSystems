@@ -216,6 +216,10 @@ public:
     return sendCanResponse(static_cast<uint16_t>(command), response);
   }
 
+  /// @brief How many devices were built with a client id the handler would not take.
+  /// @details Such a device receives nothing: no frame is ever dispatched to it.
+  [[nodiscard]] static uint8_t getUnregisteredCount() { return unregisteredDevices; }
+
   /// @brief Returns the next device in the intrusive linked list managed by CanHandlerEsp32.
   [[nodiscard]] CanBase* getNext() const { return nextDevice; }
 
@@ -234,8 +238,10 @@ protected:
   CanBase(CanHandler& canHandler, uint16_t clientCanId) :
     canHandler(canHandler),
     clientCanId(clientCanId) {
-    if(isClientCanIdValid(this->clientCanId)) {
-      this->canHandler.registerCallback(this);
+    // Counted rather than logged: devices are globals, built before the serial port is open.
+    // The handler prints the count with the device list once there is somewhere to print to.
+    if(!isClientCanIdValid(this->clientCanId) || !this->canHandler.registerCallback(this)) {
+      unregisteredDevices++;
     }
   }
 
@@ -243,6 +249,8 @@ protected:
   ~CanBase() override = default;
 
 private:
+  static uint8_t unregisteredDevices;                     // Devices whose construction did not reach the list.
+
   CanHandler& canHandler;                                 // Reference to the CAN handler instance.
   const uint16_t clientCanId;                             // Client CAN ID for this device.
   CanBase* nextDevice = nullptr;                          // Intrusive linked list pointer, managed by CanHandlerEsp32.

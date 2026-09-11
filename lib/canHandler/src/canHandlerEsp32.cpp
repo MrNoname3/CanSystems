@@ -7,6 +7,8 @@ volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
 
 ESP32SJA1000* CanHandlerEsp32::isrController = nullptr;
 
+uint8_t CanBase::unregisteredDevices = 0U;
+
 CanHandlerEsp32::CanHandlerEsp32(ESP32SJA1000& controller) :
   controller(controller),
   canTxQueue(xQueueCreate(canTxQueueSize, sizeof(CanFrame))),
@@ -73,6 +75,10 @@ bool CanHandlerEsp32::init(uint32_t canBaud) {
     Logger::get()->printf_P(PSTR("  %hhu. %hu%s\r\n"), deviceIndex++, clientCanId,
                             reserved ? PSTR(" <- reserved id!") : PSTR(""));
     if(reserved) { deviceIdsFree = false; }
+  }
+  const uint8_t unregistered = CanBase::getUnregisteredCount();
+  if(unregistered > 0U) {
+    Logger::get()->printf_P(PSTR("  %hhu device(s) never registered; nothing is dispatched to them!\r\n"), unregistered);
   }
   xSemaphoreGiveRecursive(canDevicesListMutex);
   return deviceIdsFree;

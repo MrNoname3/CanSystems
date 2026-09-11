@@ -296,6 +296,10 @@ public:
   /// @return `true` if the task ran successfully; otherwise, `false`.
   [[nodiscard]] bool run() override = 0;
 
+  /// @brief How many handlers were built with a subtopic the connectivity would not take.
+  /// @details Such a handler receives nothing: no message is ever routed to it.
+  [[nodiscard]] static uint8_t getUnregisteredCount() { return unregisteredHandlers; }
+
   /// @brief Checks whether a given subtopic is valid.
   /// A subtopic is considered valid if it is non-null and its length is within the allowed range.
   /// @param subTopic Pointer to the subtopic string.
@@ -446,16 +450,21 @@ protected:
   /// @param subTopic Pointer to the subtopic string to be associated with the instance.
   MqttBase(Connectivity& connectivity, const char* subTopic) :
     connectivity(connectivity) {
-    if(isSubtopicValid(subTopic)) {
-      strlcpy(subtopic, subTopic, subtopicSize);
-      this->connectivity.registerCallback(this);
+    // Counted rather than logged: handlers are globals, built before the serial port is open.
+    // Connectivity prints the count with the handler list once there is somewhere to print to.
+    if(!isSubtopicValid(subTopic) || !this->connectivity.registerCallback(this)) {
+      unregisteredHandlers++;
+      return;
     }
+    strlcpy(subtopic, subTopic, subtopicSize);
   }
 
   /// @brief Virtual destructor of the object.
   ~MqttBase() override = default;
 
 private:
+  static uint8_t unregisteredHandlers;  // Handlers whose construction did not reach the list.
+
   Connectivity& connectivity;       // Reference to the connectivity object used for MQTT communication.
   char subtopic[subtopicSize]{};    // Buffer storing the subtopic associated with the MQTT base instance.
   MqttBase* nextHandler = nullptr;  // Intrusive linked list pointer, managed by Connectivity.
