@@ -29,7 +29,9 @@ public:
     resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits)) {}
 
   /// @brief Scans the bus and caches sensor addresses.
-  /// @return `true` if at least one sensor was found.
+  /// @details A sensor that does not answer with its ROM address is not counted: every later call
+  /// addresses a sensor by the address cached here.
+  /// @return `true` if at least one sensor answered.
   bool begin() {
     sensors.begin();
     sensors.setResolution(resolutionBits);
@@ -39,13 +41,20 @@ public:
     if(found > MaxSensors) {
       Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, static_cast<uint8_t>(MaxSensors));
     }
+    uint8_t stored = 0U;
     for(uint8_t i = 0U; i < sensorCount; ++i) {
-      sensors.getAddress(addresses[i], i);
+      // A probe whose ROM does not come back is left out: its all-zero address would get an
+      // entity and a state topic of its own that no reading ever reaches.
+      if(sensors.getAddress(addresses[stored], i)) { stored++; }
+    }
+    if(stored != sensorCount) {
+      Logger::get()->printf_P(PSTR("[DS18B20] %hhu of %hhu sensors answered with a ROM address!\r\n"), stored, sensorCount);
+      sensorCount = stored;
     }
     return sensorCount > 0U;
   }
 
-  /// @brief Number of sensors discovered on the bus (capped at MaxSensors).
+  /// @brief Number of sensors whose address was cached at begin() (capped at MaxSensors).
   [[nodiscard]] uint8_t count() const { return sensorCount; }
 
   /// @brief Starts a temperature conversion on all sensors (non-blocking).
@@ -85,7 +94,7 @@ private:
   OneWire oneWire;                                                  // 1-Wire bus instance.
   DallasTemperature sensors;                                        // DS18B20 driver bound to the bus.
   uint8_t resolutionBits;                                           // Conversion resolution (9..12).
-  uint8_t sensorCount = 0U;                                         // Number of sensors discovered on the bus.
+  uint8_t sensorCount = 0U;                                         // Number of sensors whose ROM address is cached.
   DeviceAddress addresses[MaxSensors] = {};                         // Cached 8-byte ROM addresses.
 };
 

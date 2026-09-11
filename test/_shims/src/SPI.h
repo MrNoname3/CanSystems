@@ -3,15 +3,18 @@
 //
 // The MCP2515 driver only ever reaches the chip through four SPI commands (READ, WRITE,
 // BIT MODIFY, RESET), so a 128-byte register file plus that command decoding is enough to
-// exercise it natively. SPIFlash - the other SPI device in this project - has its own fake
-// (SPIFlash.h) and never reaches this file, so the model can stay MCP2515-specific.
+// exercise it natively. Most suites replace SPIFlash - the other SPI device in this project -
+// with its own fake (SPIFlash.h); a suite driving the real one attaches a SpiFlashModel here
+// instead, and the byte stream then goes wherever the chip-select line points.
 //
-// Transaction boundaries come from beginTransaction()/endTransaction(), which the driver
-// brackets every register access with; the chip-select line is therefore not modelled.
+// Transaction boundaries come from beginTransaction()/endTransaction(), which both drivers
+// bracket every access with. The MCP2515 has the bus to itself unless a flash is attached, so
+// its chip-select line is not modelled.
 
 #include <stdint.h>
 #include <string.h>
 #include "Arduino.h"
+#include "spiFlashModel.h"
 
 enum : uint8_t {
   MSBFIRST = 1U,
@@ -153,19 +156,23 @@ private:
 
 extern Mcp2515Model mcp2515;
 
-/// @brief Minimal SPIClass forwarding the byte stream to the MCP2515 model.
+/// @brief Minimal SPIClass forwarding the byte stream to whichever model is selected.
 class SPIClass final {
 public:
   void begin() {}
   void end() {}
-  void beginTransaction(SPISettings /*settings*/) { mcp2515.beginMessage(); }
+  void beginTransaction(SPISettings /*settings*/);
   void endTransaction() {}
-  uint8_t transfer(uint8_t out) { return mcp2515.transfer(out); }
+  uint8_t transfer(uint8_t out);
   void usingInterrupt(uint8_t /*interruptNumber*/) {}
   void notUsingInterrupt(uint8_t /*interruptNumber*/) {}
 };
 
 extern SPIClass SPI;
+
+/// @brief Puts a flash model on the bus behind the given chip-select pin, or takes it off
+/// (nullptr). While that pin is LOW the byte stream is the flash's; otherwise the MCP2515's.
+void attachSpiFlash(SpiFlashModel* model, uint8_t chipSelectPin);
 
 // Feature flags, tested with #ifdef only - valueless, as the Arduino headers declare them.
 #define SPI_HAS_TRANSACTION

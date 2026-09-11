@@ -8,6 +8,8 @@
 #include <esp_sntp.h>
 #endif
 
+uint8_t MqttBase::unregisteredHandlers = 0U;
+
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
   mqttClient(tcpClient),
@@ -212,6 +214,10 @@ void Connectivity::setupMqttClient() {
   uint8_t handlerIndex = 0U;
   for(MqttBase* h = handlerList.first(); h != nullptr; h = h->getNext()) {
     Logger::get()->printf_P(PSTR("  %hhu. %s\r\n"), handlerIndex++, h->getSubtopic());
+  }
+  const uint8_t unregistered = MqttBase::getUnregisteredCount();
+  if(unregistered > 0U) {
+    Logger::get()->printf_P(PSTR("  %hhu handler(s) never registered; nothing is routed to them!\r\n"), unregistered);
   }
 }
 

@@ -60,7 +60,9 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
 
 - Device → server: `iot/dtos/<mac>/<subtopic>`; server → device: `iot/stod/<mac>/<subtopic>`.
 - Every node publishes a retained `availability` topic (LWT) and a retained `info` topic
-  (fw version = git commit count, git hash, dirty flag, reset reason).
+  (fw version = git commit count, git hash, dirty flag, reset reason, and `boot`: how far the
+  previous run's startup got as a `BootStage` ordinal — `0` when nothing was recorded, `12` once
+  the main loop had the device).
 - The info topic's `rr` is the SDK's own enum on the ESP nodes. On the CAN nodes it is the
   bitmask `ResetHandler::getResetReason()` builds — MCUSR in bits 0-3, a deliberate-restart flag
   in bit 4, and why in bits 5-7. Read it back as three fields rather than looking a value up:
@@ -73,11 +75,27 @@ The `nanoatmega328_bootloader_*` environments only burn the urboot bootloader an
 - After every reconnect the node publishes a retained `diag` topic: the cause of the last
   disconnect (MQTT status or `NETWORK_LOST`), its UTC timestamp, the offline duration in
   seconds (measured from client-side detection, i.e. up to ~2x keepalive after the actual
-  drop) and a since-boot reconnect counter. Kept in RAM only: an outage that ends in the
-  offline-watchdog MCU reset is reported by the `info` topic's reset reason instead.
+  drop), a since-boot reconnect counter, and `pingRetry`, the keep-alive pings the TCP client
+  refused to take since boot — those are retried rather than dropped, so the count is what tells
+  a keep-alive loss caused here apart from one the network caused. Kept in RAM only: an outage
+  that ends in the offline-watchdog MCU reset is reported by the `info` topic's reset reason
+  instead.
 - CAN sub-devices get their own sub-tree: `iot/dtos/<mac>/alert1/{availability,info,ota,button}`.
   An alert node takes `{"Colors":[r,g,b]}` on its `iot/stod` topic to set the LEDs, and
   `{"Sound":n,"Volume":v}` to play a track - with `Colors` if it should light up while playing.
+- The gateway hands out CAN addresses on its own `can` subtopic. A node with nothing in EEPROM
+  answers on an address it derives from its unique id (`0x300 | (crc16(uid) & 0xFF)`) and
+  announces itself there every 5 seconds; the gateway keeps what it hears for 30 seconds. Both
+  answers go to the subtopic the question arrived on:
+
+  ```
+  {"list":true}                            -> {"waiting":[{"uid":"a1b2c3d4e5f60708","at":789}]}
+  {"assign":{"uid":"a1b2c3d4e5f60708","id":26}}   -> {"type":1,"cmd":9,"err":0}   (ACK)
+  ```
+
+  `assign` refuses an `id` of 0, the master's, one a driver already answers on, or one from the
+  provisional block; the node itself refuses a request that did not come from the master or that
+  names an address it no longer holds. On success it stores the pair and restarts.
 - Home Assistant MQTT discovery is opt-in via `"haDiscovery": true` in `server.json`;
   when disabled, the nodes actively retract their previously published entities.
 
@@ -225,6 +243,8 @@ Exit code is 0 only on a fully clean run (~5 minutes).
 
 - **Cross-project reflash:** a running firmware only accepts an OTA image that names its own
   environment, so converting a board to another project needs a one-time serial flash.
-- **CAN IDs** are stored in EEPROM (CRC-protected). To provision a new node, build once with
-  `NEW_CAN_ADDRESS` defined in `platformio.ini` (master ID is `MASTER_CAN_ADDRESS=10`), then
-  remove it again.
+- **CAN IDs** are stored in EEPROM (CRC-protected). A node with none announces itself and is
+  given one over the gateway's `can` subtopic (see "MQTT scheme"). Building once with
+  `NEW_CAN_ADDRESS` defined in `platformio.ini` (master ID is `MASTER_CAN_ADDRESS=10`) and then
+  removing it again writes the pair directly — that is the route for a node that already has an
+  address, since only a node still waiting for one is on the commissioning list.

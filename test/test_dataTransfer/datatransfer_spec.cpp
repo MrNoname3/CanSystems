@@ -641,6 +641,26 @@ bool test_fw_set_md5_failure() {
   END_IT
 }
 
+bool test_failed_firmware_begin_leaves_no_firmware_transfer_behind() {
+  IT("a firmware transfer that cannot begin does not stay marked as one");
+  resetEnv();
+  Update.setBeginResult(false);
+  DataTransfer dt(onCheckOk);
+  IS_FALSE(dt.begin(16U, kMd5, fwName()));
+  IS_FALSE(dt.isFirmwareTransfer());
+  END_IT
+}
+
+bool test_failed_firmware_md5_leaves_no_firmware_transfer_behind() {
+  IT("a firmware transfer whose MD5 cannot be set does not stay marked as one");
+  resetEnv();
+  Update.setSetMd5Result(false);
+  DataTransfer dt(onCheckOk);
+  IS_FALSE(dt.begin(16U, kMd5, fwName()));
+  IS_FALSE(dt.isFirmwareTransfer());
+  END_IT
+}
+
 // ---- MD5 shim self-check ----
 
 bool test_md5_builder_matches_known_vectors() {
@@ -704,5 +724,7 @@ int main() {
   test_temp_write_failure_ends_the_transfer();
   test_rename_failure();
   test_fw_set_md5_failure();
+  test_failed_firmware_begin_leaves_no_firmware_transfer_behind();
+  test_failed_firmware_md5_leaves_no_firmware_transfer_behind();
   FINISH
 }

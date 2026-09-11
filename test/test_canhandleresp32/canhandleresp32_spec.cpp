@@ -205,6 +205,20 @@ bool test_a_device_on_the_handlers_own_id_is_not_registered() {
   END_IT
 }
 
+bool test_a_device_the_handler_would_not_take_is_counted() {
+  IT("a device the handler would not take is counted rather than passed over in silence");
+  resetEnv();
+  ESP32SJA1000 controller;
+  CanHandler handler(controller);
+  IS_TRUE(handler.init());
+  const uint8_t before = CanBase::getUnregisteredCount();
+  TestDevice refused(handler, kLocalId);
+  deliverFrame(handler, kLocalId, static_cast<uint16_t>(CanCmd::PING), 1U);
+  IS_EQUAL(refused.received, 0U);
+  IS_EQUAL(CanBase::getUnregisteredCount(), static_cast<uint8_t>(before + 1U));
+  END_IT
+}
+
 bool test_a_device_built_before_init_on_a_reserved_id_stops_init() {
   IT("init() refuses to come up when a registered device holds the handler's own id");
   resetEnv();
@@ -425,6 +439,7 @@ int main() {
   test_each_device_only_sees_its_own_sender();
   test_a_frame_with_no_payload_is_not_dispatched();
   test_a_device_on_the_handlers_own_id_is_not_registered();
+  test_a_device_the_handler_would_not_take_is_counted();
   test_a_device_built_before_init_on_a_reserved_id_stops_init();
   test_a_device_built_before_init_on_the_master_id_stops_init();
   test_devices_on_free_ids_let_init_through();

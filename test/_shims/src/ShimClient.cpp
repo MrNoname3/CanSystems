@@ -4,12 +4,18 @@
 #include <Arduino.h>
 #include <ctime>
 #include <string.h>
+#include <vector>
 #include "SPI.h"
 #include "esp32CanModel.h"
 #include "esp_intr_alloc.h"
 
 static uint32_t fakeMillisValue = 0U;
 static bool fakeMillisActive = false;
+static uint32_t fakeMicrosValue = 0U;
+static bool fakeMicrosActive = false;
+static std::vector<Pulse> pulseLog;                  // Edges of the recorded pin, in order.
+static uint8_t pulsePin = 0U;                        // Pin being recorded.
+static bool pulseRecording = false;
 static uint8_t pinModes[256] = {};
 static uint8_t pinValues[256] = {};
 static uint16_t analogReadValue = 0U;
@@ -22,6 +28,20 @@ void setFakeMillis(uint32_t t) {
   fakeMillisActive = true;
 }
 void clearFakeMillis() { fakeMillisActive = false; }
+void setFakeMicros(uint32_t t) {
+  fakeMicrosValue = t;
+  fakeMicrosActive = true;
+}
+void clearFakeMicros() { fakeMicrosActive = false; }
+
+void recordPulsesOn(uint8_t pin) {
+  pulseLog.clear();
+  pulsePin = pin;
+  pulseRecording = true;
+}
+void stopRecordingPulses() { pulseRecording = false; }
+const Pulse* recordedPulses() { return pulseLog.data(); }
+uint32_t recordedPulseCount() { return static_cast<uint32_t>(pulseLog.size()); }
 void setAnalogReadValue(uint16_t v) { analogReadValue = v; }
 uint8_t getDigitalWriteValue(uint8_t pin) { return pinValues[pin]; }
 uint8_t getPinMode(uint8_t pin) { return pinModes[pin]; }
@@ -34,6 +54,8 @@ void resetGpioState() {
   memset(isrTable, 0, sizeof(isrTable));
   analogReadValue = 0U;
   EIFR.clearAll();
+  pulseLog.clear();
+  pulseRecording = false;
 }
 
 extern "C" {
@@ -41,8 +63,19 @@ uint32_t millis(void) {
   if(fakeMillisActive) { return fakeMillisValue; }
   return static_cast<uint32_t>(time(nullptr)) * 1000U;
 }
+uint32_t micros(void) {
+  if(fakeMicrosActive) { return fakeMicrosValue; }
+  return millis() * 1000U;
+}
+// The wait itself is skipped; what it was worth is added to the pulse the pin is holding.
+void delayMicroseconds(uint32_t us) {
+  if(pulseRecording && !pulseLog.empty()) { pulseLog.back().microseconds += us; }
+}
 void pinMode(uint8_t pin, uint8_t mode) { pinModes[pin] = mode; }
-void digitalWrite(uint8_t pin, uint8_t val) { pinValues[pin] = val; }
+void digitalWrite(uint8_t pin, uint8_t val) {
+  pinValues[pin] = val;
+  if(pulseRecording && (pin == pulsePin)) { pulseLog.push_back(Pulse{ val, 0U }); }
+}
 int digitalRead(uint8_t pin) { return pinValues[pin]; }
 uint16_t analogRead(uint8_t /*pin*/) { return analogReadValue; }
 void analogWrite(uint8_t pin, int val) { pinValues[pin] = static_cast<uint8_t>(val); }
@@ -229,6 +262,32 @@ void ShimClient::expectConnect(const char* host, uint16_t port) {
 // --- SPI stand-in (SPI.h) ---
 Mcp2515Model mcp2515;
 SPIClass SPI;
+
+namespace {
+  SpiFlashModel* spiFlash = nullptr;                  // Flash on the bus, or nullptr when none is.
+  uint8_t spiFlashSelectPin = 0U;                     // Its chip-select pin.
+
+  /// @brief Whether the flash is the device the line currently points at.
+  bool spiFlashSelected() {
+    return (spiFlash != nullptr) && (getDigitalWriteValue(spiFlashSelectPin) == LOW);
+  }
+} // namespace
+
+void attachSpiFlash(SpiFlashModel* model, uint8_t chipSelectPin) {
+  spiFlash = model;
+  spiFlashSelectPin = chipSelectPin;
+}
+
+void SPIClass::beginTransaction(SPISettings /*settings*/) {
+  // Both models are told: the flash raises its chip select only after this call, so which device
+  // the transaction belongs to is not known yet.
+  mcp2515.beginMessage();
+  if(spiFlash != nullptr) { spiFlash->beginMessage(); }
+}
+
+uint8_t SPIClass::transfer(uint8_t out) {
+  return spiFlashSelected() ? spiFlash->transfer(out) : mcp2515.transfer(out);
+}
 
 // --- ESP32 CAN peripheral stand-in (esp32CanModel.h, esp_intr_alloc.h) ---
 Esp32CanModel esp32Can;

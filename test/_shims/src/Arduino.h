@@ -21,7 +21,8 @@ enum : uint8_t {
   OUTPUT = 1U,
   INPUT_PULLUP = 2U,
   FALLING = 3U,
-  RISING = 4U
+  RISING = 4U,
+  CHANGE = 5U
 };
 
 enum : uint8_t {
@@ -40,6 +41,9 @@ extern "C" {
 extern void setup(void);
 extern void loop(void);
 uint32_t millis(void);
+uint32_t micros(void);
+// Nothing is stalled: the pulse recorder below is what a test reads the durations back from.
+void delayMicroseconds(uint32_t us);
 
 void pinMode(uint8_t pin, uint8_t mode);
 void digitalWrite(uint8_t pin, uint8_t val);
@@ -57,11 +61,29 @@ void interrupts();
 
 void setFakeMillis(uint32_t t);
 void clearFakeMillis();
+void setFakeMicros(uint32_t t);
+void clearFakeMicros();
 void setAnalogReadValue(uint16_t val);
 uint8_t getDigitalWriteValue(uint8_t pin);
 uint8_t getPinMode(uint8_t pin);
 void triggerInterrupt(uint8_t pin);    // Fires the handler stored by attachInterrupt(), if any.
 void resetGpioState();
+
+/// @brief One level the pin was driven to, and how long it was held there.
+struct Pulse {
+  uint8_t level = 0U;                      // LOW or HIGH.
+  uint32_t microseconds = 0U;              // Sum of the waits before the next edge.
+};
+
+/// @brief Starts recording the pin's edges and the waits between them, discarding any earlier
+/// recording. digitalWrite() opens a pulse; every delayMicroseconds() adds to the open one.
+void recordPulsesOn(uint8_t pin);
+/// @brief Stops recording, leaving what was recorded readable.
+void stopRecordingPulses();
+/// @brief What the recorded pin was driven to, in order.
+const Pulse* recordedPulses();
+/// @brief How many pulses that is.
+uint32_t recordedPulseCount();
 
 /// @brief Stand-in for an AVR interrupt flag register: a bit is cleared by writing a one to it.
 /// @details Plain storage would make `EIFR = bit` and `EIFR |= bit` behave alike, which on the
@@ -94,23 +116,19 @@ private:
 
 extern FlagRegister EIFR;                  // AVR external interrupt flag register stand-in (dfPlayer).
 
-#ifndef PROGMEM
-#define PROGMEM
-#endif
+// The AVR core's Arduino.h pulls pgmspace.h in, so a library using its macros without saying so
+// compiles there; mirror that here rather than making such a library include it for the host.
+#include "pgmspace.h"
 #ifndef F
 #define F(x) (x)
 #endif
 #ifndef FPSTR
 #define FPSTR(x) (x)
 #endif
-#ifndef pgm_read_byte_near
-#define pgm_read_byte_near(x) *(x)
-#endif
 // Waiting has no meaning on the host: tests drive time through setFakeMillis() instead, so
 // these do nothing rather than actually stalling the suite.
 // clang-format off
 #define yield(x) {}
-#define delayMicroseconds(x) {}
 #define delay(x) {}
 // clang-format on
 

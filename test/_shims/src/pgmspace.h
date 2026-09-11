@@ -1,5 +1,6 @@
 #pragma once
 #include <stdio.h>
+#include <string.h>
 #ifndef PROGMEM
 #define PROGMEM
 #endif
@@ -24,4 +25,7 @@
 #endif
 #ifndef strncpy_P
 #define strncpy_P strncpy
+#endif
+#ifndef memcpy_P
+#define memcpy_P memcpy
 #endif

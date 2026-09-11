@@ -308,11 +308,25 @@ bool test_connect_custom_keepalive() {
   END_IT
 }
 
+bool test_connect_fails_when_the_packet_is_not_taken() {
+  IT("fails to connect when the client does not take the whole connect packet");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+  shimClient.failNextWrites(1U);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECTION_LOST);
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
   test_connect_fails_no_network();
   test_connect_fails_on_no_response();
+  test_connect_fails_when_the_packet_is_not_taken();
 
   test_connect_properly_formatted();
   test_connect_non_clean_session();
