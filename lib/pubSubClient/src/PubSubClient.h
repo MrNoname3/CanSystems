@@ -405,6 +405,8 @@ private:
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
   // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
   static constexpr uint8_t discardChunkSize = 64U;
+  // Scratch for a run of a PROGMEM payload on its way from flash to the link.
+  static constexpr uint8_t progmemChunkSize = 32U;
 
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
   uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds.

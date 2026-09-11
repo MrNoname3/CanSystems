@@ -490,15 +490,30 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
 
   pos = writeString(topic, this->buffer, pos);
 
-  uint16_t rc = static_cast<uint16_t>(tcpClient.write(this->buffer, pos));
-  for(uint16_t i = 0U; i < plength; i++) {
-    rc += static_cast<uint16_t>(tcpClient.write(pgm_read_byte_near(payload + i)));
+  uint16_t sent = static_cast<uint16_t>(tcpClient.write(this->buffer, pos));
+  bool taken = (sent == pos);
+  uint16_t done = 0U;
+  while(taken && (done < plength)) {
+    // Copied out of flash a run at a time: the payload is not in the packet buffer, and handing
+    // the link one byte per call costs a write down the whole TLS stack for each of them.
+    uint8_t chunk[progmemChunkSize];
+    const uint16_t piece = ((plength - done) < progmemChunkSize) ? static_cast<uint16_t>(plength - done) : progmemChunkSize;
+    memcpy_P(chunk, payload + done, piece);
+    const uint16_t rc = static_cast<uint16_t>(tcpClient.write(chunk, piece));
+    done = static_cast<uint16_t>(done + rc);
+    sent = static_cast<uint16_t>(sent + rc);
+    taken = (rc == piece);
   }
 
-  lastOutActivity = millis();
+  if(sent != 0U) { lastOutActivity = millis(); }
 
   const uint16_t expectedLength = static_cast<uint16_t>(1U + llen + 2U + tlen + plength);
-  return (rc == expectedLength);
+  if((sent != 0U) && (sent != expectedLength)) {
+    // Half a packet cannot be finished or taken back, exactly as for one built in the buffer.
+    connectionState = State::CONNECTION_LOST;
+    tcpClient.stop();
+  }
+  return (sent == expectedLength);
 }
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {

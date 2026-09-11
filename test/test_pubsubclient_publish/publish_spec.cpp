@@ -268,6 +268,27 @@ bool test_publish_without_a_topic() {
   END_IT
 }
 
+bool test_publish_P_half_written_ends_the_session() {
+  IT("a PROGMEM publish the link took only part of ends the session");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  const uint8_t payload[] = { 0x41U, 0x42U, 0x43U };
+  shimClient.truncateNextWrite(3U);
+  rc = client.publish_P("topic", payload, 3U, false);
+  IS_FALSE(rc);
+  IS_FALSE(client.connected());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+
+  END_IT
+}
+
 int main() {
   SUITE("Publish");
   test_publish();
@@ -279,6 +300,7 @@ int main() {
   test_publish_P();
   test_publish_P_too_long();
   test_publish_without_a_topic();
+  test_publish_P_half_written_ends_the_session();
   test_publish_half_written_ends_the_session();
   test_publish_refused_keeps_the_session();
 
