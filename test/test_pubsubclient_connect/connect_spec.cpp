@@ -164,11 +164,11 @@ bool test_connect_accepts_username_blank_password() {
 
   const uint8_t connect[] = { 0x10U, 0x20U, 0x0U, 0x4U, 0x4dU, 0x51U, 0x54U, 0x54U, 0x4U, 0xc2U, 0x0U, 0xfU, 0x0U, 0xcU, 0x63U, 0x6cU, 0x69U, 0x65U, 0x6eU, 0x74U, 0x5fU, 0x74U, 0x65U, 0x73U, 0x74U, 0x31U, 0x0U, 0x4U, 0x75U, 0x73U, 0x65U, 0x72U, 0x0U, 0x0U };
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
-  shimClient.expect(connect, 0x26U);
+  shimClient.expect(connect, 0x22U);
   shimClient.respond(connack, 4U);
 
   PubSubClient client(server, 1883U, callback, shimClient);
-  bool rc = client.connect("client_test1", "user", "pass");
+  bool rc = client.connect("client_test1", "user", "");
   IS_TRUE(rc);
   IS_FALSE(shimClient.error());
 
@@ -321,22 +321,80 @@ bool test_connect_fails_when_the_packet_is_not_taken() {
   END_IT
 }
 
+bool test_connect_answer_that_is_not_a_connack() {
+  IT("reports a timeout when the connect answer is not a CONNACK");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  // A packet the broker finished sending, but not one that can say whether the connect was taken.
+  const uint8_t truncated[] = { 0x20U, 0x01U, 0x00U };
+  shimClient.respond(truncated, 3U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
+  END_IT
+}
+
+bool test_connect_refuses_a_will_qos_it_cannot_send() {
+  IT("refuses a will qos that does not fit the two bits kept for it");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // 3 is not a level the standard has, and the bits it needs belong to the flags next to it.
+  bool rc = client.connect("client_test1", "willTopic", 3U, false, "willMessage");
+  IS_FALSE(rc);
+  // Refused on the arguments alone: the broker is never asked.
+  IS_EQUAL(shimClient.received(), 0U);
+
+  END_IT
+}
+
+bool test_connect_refused_with_an_undefined_code() {
+  IT("reports a refusal the standard gives no name to");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  // 6 and up are reserved: a broker using one has still refused, and saying so beats carrying the
+  // number itself in a state that has no such value.
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x06U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECT_REFUSED);
+
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
   test_connect_fails_no_network();
   test_connect_fails_on_no_response();
+  test_connect_answer_that_is_not_a_connack();
   test_connect_fails_when_the_packet_is_not_taken();
 
   test_connect_properly_formatted();
   test_connect_non_clean_session();
   test_connect_accepts_username_password();
   test_connect_fails_on_bad_rc();
+  test_connect_refused_with_an_undefined_code();
   test_connect_properly_formatted_hostname();
 
   test_connect_accepts_username_no_password();
+  test_connect_accepts_username_blank_password();
   test_connect_ignores_password_no_username();
   test_connect_with_will();
+  test_connect_refuses_a_will_qos_it_cannot_send();
   test_connect_with_will_username_password();
   test_connect_disconnect_connect();
 

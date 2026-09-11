@@ -15,6 +15,8 @@ private:
   bool _error;
   uint16_t _received;
   uint16_t _writesToFail;
+  uint16_t _truncateNextWriteTo;
+  bool _truncateNextWrite;
 
   /// @brief Matches one written byte against what the test said to expect.
   void checkExpected(uint8_t actual);
@@ -57,4 +59,9 @@ public:
   /// it returns 0 rather than failing outright. A refused write consumes nothing, so the bytes
   /// the caller retries are still matched against `expect()`.
   void failNextWrites(uint16_t count);
+
+  /// @brief Makes the next write take only the first `bytes` bytes of what it is handed.
+  /// @details Models a link that stops mid-packet: unlike a refusal, the bytes it did take are
+  /// gone from the caller's side and sit in the stream the broker is parsing.
+  void truncateNextWrite(uint16_t bytes);
 };

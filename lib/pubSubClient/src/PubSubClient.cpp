@@ -37,6 +37,9 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 }
 
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
+  // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
+  // sit beside them: a level too wide for those two bits is shifted straight onto them.
+  if((willTopic != nullptr) && (willQos > 2U)) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
                       static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
@@ -139,13 +142,56 @@ bool PubSubClient::awaitConnAck() {
     if(connAckCode == 0U) {
       lastInActivity = millis();
       pingOutstanding = false;
+      // A ping the last session's client would not take belongs to that session. Left standing,
+      // its deadline is already past, so the first ping this one cannot hand over ends the
+      // connection on the spot instead of being retried.
+      pingUnsent = false;
       connectionState = State::CONNECTED;
       return true;
     }
-    connectionState = static_cast<State>(connAckCode);
+    // The standard names return codes 1 to 5; a broker answering anything else has refused all
+    // the same, and the answer is reported as the refusal it is rather than as a state code.
+    connectionState = (connAckCode <= highestNamedConnAckCode) ? static_cast<State>(connAckCode) : State::CONNECT_REFUSED;
+  } else {
+    // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
+    // ended the last session as the reason this one never started.
+    connectionState = State::CONNECTION_TIMEOUT;
   }
   tcpClient.stop();
   return false;
+}
+
+bool PubSubClient::awaitSubAck(uint16_t packetId) {
+  const uint32_t startMs = millis();
+  const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
+  bool granted = false;
+  bool waiting = true;
+  while(waiting) {
+    const RxResult result = readPacketBlocking();
+    if(result != RxResult::Complete) {
+      connectionState = State::CONNECTION_TIMEOUT;
+      tcpClient.stop();
+      waiting = false;
+    } else if(isSubAckFor(packetId)) {
+      // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
+      granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
+      waiting = false;
+    } else {
+      // The broker got a word in first; it is this session's traffic and is answered as such.
+      dispatchPacket(millis());
+      waiting = ((millis() - startMs) < timeoutMs);
+    }
+  }
+  resetReader();
+  return granted;
+}
+
+bool PubSubClient::isSubAckFor(uint16_t packetId) const {
+  if(((this->buffer[0] & 0xF0U) != MQTTSUBACK) || (rxLen < (rxLengthLength + 4U))) {
+    return false;
+  }
+  const uint16_t acked = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
+  return acked == packetId;
 }
 
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
@@ -269,6 +315,8 @@ void PubSubClient::dispatchPacket(uint32_t t) {
         char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
         // msgId only present for QOS>0
         if((this->buffer[0] & 0x06U) == MQTTQOS1) {
+          // Taken before the callback runs, as the acknowledgement below is built after it: a
+          // callback that publishes writes its own packet over the one being read here.
           const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
           uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
           callback(topic, payload, len - llen - 3U - tl - 2U);
@@ -381,6 +429,9 @@ bool PubSubClient::publish(const char* topic, const char* payload, bool retained
 }
 
 bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
+  if(topic == nullptr) {
+    return false;
+  }
   if(connected()) {
     if(this->bufferSize < MQTT_MAX_HEADER_SIZE + 2U + strnlen(topic, this->bufferSize) + plength) {
       // Too long
@@ -407,11 +458,20 @@ bool PubSubClient::publish_P(const char* topic, const char* payload, bool retain
 }
 
 bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
+  if(topic == nullptr) {
+    return false;
+  }
   if(!connected()) {
     return false;
   }
 
   const uint16_t tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
+  // The header and the topic go through the buffer; only the payload is streamed from flash, so
+  // that is all the room needed here. Its length still has to fit the remaining-length field the
+  // loop below builds, which is counted in a 16-bit number.
+  if((this->bufferSize < MQTT_MAX_HEADER_SIZE + 2U + tlen) || (plength > (UINT16_MAX - 2U - tlen))) {
+    return false;
+  }
 
   const uint8_t header = static_cast<uint8_t>(MQTTPUBLISH | (retained ? 1U : 0U));
   uint16_t pos = 0U;
@@ -430,15 +490,30 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
 
   pos = writeString(topic, this->buffer, pos);
 
-  uint16_t rc = static_cast<uint16_t>(tcpClient.write(this->buffer, pos));
-  for(uint16_t i = 0U; i < plength; i++) {
-    rc += static_cast<uint16_t>(tcpClient.write(pgm_read_byte_near(payload + i)));
+  uint16_t sent = static_cast<uint16_t>(tcpClient.write(this->buffer, pos));
+  bool taken = (sent == pos);
+  uint16_t done = 0U;
+  while(taken && (done < plength)) {
+    // Copied out of flash a run at a time: the payload is not in the packet buffer, and handing
+    // the link one byte per call costs a write down the whole TLS stack for each of them.
+    uint8_t chunk[progmemChunkSize];
+    const uint16_t piece = ((plength - done) < progmemChunkSize) ? static_cast<uint16_t>(plength - done) : progmemChunkSize;
+    memcpy_P(chunk, payload + done, piece);
+    const uint16_t rc = static_cast<uint16_t>(tcpClient.write(chunk, piece));
+    done = static_cast<uint16_t>(done + rc);
+    sent = static_cast<uint16_t>(sent + rc);
+    taken = (rc == piece);
   }
 
-  lastOutActivity = millis();
+  if(sent != 0U) { lastOutActivity = millis(); }
 
   const uint16_t expectedLength = static_cast<uint16_t>(1U + llen + 2U + tlen + plength);
-  return (rc == expectedLength);
+  if((sent != 0U) && (sent != expectedLength)) {
+    // Half a packet cannot be finished or taken back, exactly as for one built in the buffer.
+    connectionState = State::CONNECTION_LOST;
+    tcpClient.stop();
+  }
+  return (sent == expectedLength);
 }
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
@@ -461,24 +536,32 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) 
 
 bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
   const uint8_t hlen = static_cast<uint8_t>(buildHeader(header, buf, length));
-
+  const uint16_t expected = static_cast<uint16_t>(length + hlen);
+  uint8_t* const packet = buf + (MQTT_MAX_HEADER_SIZE - hlen);
 #ifdef MQTT_MAX_TRANSFER_SIZE
-  uint8_t* writeBuf = buf + (MQTT_MAX_HEADER_SIZE - hlen);
-  uint16_t bytesRemaining = length + hlen;  // Match the length type
-  bool result = true;
-  while((bytesRemaining > 0U) && result) {
-    const uint8_t bytesToWrite = (bytesRemaining > MQTT_MAX_TRANSFER_SIZE) ? MQTT_MAX_TRANSFER_SIZE : bytesRemaining;
-    const uint16_t rc = tcpClient.write(writeBuf, bytesToWrite);
-    result = (rc == bytesToWrite);
-    bytesRemaining -= rc;
-    writeBuf += rc;
-  }
-  return result;
+  // A link that cannot take a whole packet in one call is told apart by this being set for it.
+  const uint16_t chunkSize = static_cast<uint16_t>(MQTT_MAX_TRANSFER_SIZE);
 #else
-  const uint16_t rc = tcpClient.write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
-  lastOutActivity = millis();
-  return (rc == hlen + length);
+  const uint16_t chunkSize = expected;
 #endif
+  uint16_t sent = 0U;
+  bool taken = true;
+  while((sent < expected) && taken) {
+    const uint16_t piece = ((expected - sent) < chunkSize) ? static_cast<uint16_t>(expected - sent) : chunkSize;
+    const uint16_t rc = static_cast<uint16_t>(tcpClient.write(packet + sent, piece));
+    sent = static_cast<uint16_t>(sent + rc);
+    taken = (rc == piece);
+  }
+  // A link that took nothing has sent nothing: counting the attempt as outgoing traffic would put
+  // the keep-alive ping off by another interval, and the broker gives up before that is over.
+  if(sent != 0U) { lastOutActivity = millis(); }
+  if((sent != 0U) && (sent != expected)) {
+    // Half a packet cannot be finished later or taken back, and whatever goes out next is read as
+    // the rest of it; the broker is left parsing a frame that never ends.
+    connectionState = State::CONNECTION_LOST;
+    tcpClient.stop();
+  }
+  return (sent == expected);
 }
 
 bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
@@ -488,7 +571,9 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if(qos > 1U) {
     return false;
   }
-  if(this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
+  // Five bytes of header, two of packet id, two of filter length, the filter, and the qos byte
+  // that follows it - which is the one the buffer has to have room for beyond the filter itself.
+  if(this->bufferSize < 10U + strnlen(topic, this->bufferSize)) {
     // Too long
     return false;
   }
@@ -498,11 +583,15 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
       nextMsgId = 1U;
     }
+    const uint16_t packetId = nextMsgId;
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId >> 8U);
     this->buffer[length++] = static_cast<uint8_t>(nextMsgId & 0xFFU);
     length = writeString(topic, this->buffer, length);
     this->buffer[length++] = qos;
-    return write(MQTTSUBSCRIBE | MQTTQOS1, this->buffer, length - MQTT_MAX_HEADER_SIZE);
+    if(!write(MQTTSUBSCRIBE | MQTTQOS1, this->buffer, length - MQTT_MAX_HEADER_SIZE)) {
+      return false;
+    }
+    return awaitSubAck(packetId);
   }
   return false;
 }

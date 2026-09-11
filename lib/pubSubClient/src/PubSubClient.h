@@ -71,6 +71,8 @@ private:
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
   static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
+  static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
+  static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
 
 #if defined(ESP8266) || defined(ESP32)
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
@@ -82,7 +84,8 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
-    CONNECTION_TIMEOUT      = -4,  // Server did not respond within socketTimeout.
+    CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
+    CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
     CONNECT_FAILED          = -2,  // TCP connection to broker failed.
     DISCONNECTED            = -1,  // Client is not connected.
@@ -146,6 +149,9 @@ public:
   PubSubClient& setServer(const char* domain, uint16_t port);
 
   /// @brief Sets the callback invoked when an MQTT message is received.
+  /// @details Runs inside loop(), with the message still in the packet buffer. Publishing from it
+  /// is allowed: everything the acknowledgement of that message needs has been read out before it
+  /// is called, so the buffer is the callback's to overwrite. Calling loop() from it is not.
   /// @param callback Function to call on message arrival.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
@@ -180,7 +186,7 @@ public:
   /// @brief Connects to the MQTT broker with a Last Will message.
   /// @param id Null-terminated MQTT client identifier.
   /// @param willTopic Null-terminated Last Will topic.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @return `true` if the connection was established; otherwise `false`.
@@ -191,7 +197,7 @@ public:
   /// @param user Null-terminated username; may be `nullptr`.
   /// @param pass Null-terminated password; may be `nullptr`.
   /// @param willTopic Null-terminated Last Will topic.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @return `true` if the connection was established; otherwise `false`.
@@ -202,7 +208,7 @@ public:
   /// @param user Null-terminated username; may be `nullptr`.
   /// @param pass Null-terminated password; may be `nullptr`.
   /// @param willTopic Null-terminated Last Will topic; may be `nullptr` to disable.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @param cleanSession Whether to request a clean session from the broker.
@@ -213,14 +219,14 @@ public:
   void disconnect();
 
   /// @brief Publishes a string payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Null-terminated payload string; may be `nullptr` for an empty payload.
   /// @param retained Whether the broker should retain the message (default: `false`).
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish(const char* topic, const char* payload, bool retained = false);
 
   /// @brief Publishes a binary payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Pointer to the payload buffer.
   /// @param plength Payload length in bytes.
   /// @param retained Whether the broker should retain the message (default: `false`).
@@ -228,24 +234,27 @@ public:
   [[nodiscard]] bool publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained = false);
 
   /// @brief Publishes a PROGMEM string payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Null-terminated PROGMEM string; may be `nullptr` for an empty payload.
   /// @param retained Whether the broker should retain the message.
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const char* payload, bool retained);
 
   /// @brief Publishes a binary PROGMEM payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Pointer to PROGMEM payload buffer.
   /// @param plength Payload length in bytes.
   /// @param retained Whether the broker should retain the message.
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained);
 
-  /// @brief Subscribes to a topic.
+  /// @brief Subscribes to a topic and waits for the broker's answer.
+  /// @details Blocks for up to the socket timeout, as the connect handshake does: a subscription
+  /// the broker refuses leaves the client connected but deaf, which is worth knowing here rather
+  /// than from the silence that follows.
   /// @param topic Null-terminated MQTT topic filter.
   /// @param qos QoS level (0 or 1; default: 0).
-  /// @return `true` if the SUBSCRIBE packet was sent; otherwise `false`.
+  /// @return `true` if the broker granted the subscription; otherwise `false`.
   [[nodiscard]] bool subscribe(const char* topic, uint8_t qos = 0U);
 
   /// @brief Unsubscribes from a topic.
@@ -292,6 +301,18 @@ private:
   /// @details Tears the connection down on a timeout, a malformed answer or a refusal.
   /// @return `true` when the broker accepted the connection; otherwise, `false`.
   [[nodiscard]] bool awaitConnAck();
+
+  /// @brief Waits for the SUBACK answering the packet id given, dispatching whatever precedes it.
+  /// @details Drops the connection when nothing parseable arrives before the socket timeout: the
+  /// bytes already taken off the socket cannot be put back for the session to carry on.
+  /// @param packetId Packet id the SUBSCRIBE went out with.
+  /// @return `true` when the broker granted the filter; `false` when it refused it or said nothing.
+  [[nodiscard]] bool awaitSubAck(uint16_t packetId);
+
+  /// @brief Whether the packet in `buffer` is the SUBACK for the packet id given.
+  /// @param packetId Packet id the SUBSCRIBE went out with.
+  /// @return `true` when it is that SUBACK; otherwise, `false`.
+  [[nodiscard]] bool isSubAckFor(uint16_t packetId) const;
 
   /// @brief Sends a framed MQTT packet by prepending the fixed and variable-length header.
   /// @param header MQTT fixed-header byte.
@@ -384,6 +405,8 @@ private:
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
   // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
   static constexpr uint8_t discardChunkSize = 64U;
+  // Scratch for a run of a PROGMEM payload on its way from flash to the link.
+  static constexpr uint8_t progmemChunkSize = 32U;
 
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
   uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds.
