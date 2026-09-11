@@ -3,6 +3,9 @@
 #include <Arduino.h>    /// Arduino core functions and types.
 #include "IPAddress.h"  /// IP address representation.
 #include "Client.h"     /// Abstract TCP client interface.
+#if defined(ESP8266) || defined(ESP32)
+#include <functional>   /// std::function for the message callback.
+#endif
 
 #define MQTT_VERSION_3_1 3    // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.
 #define MQTT_VERSION_3_1_1 4  // NOLINT(modernize-macro-to-enum) — MQTT protocol version 3.1.1.
@@ -70,7 +73,6 @@ private:
   static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
 
 #if defined(ESP8266) || defined(ESP32)
-#include <functional>                                               /// std::function for the message callback.
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
 #else
   using MqttCallback = void (*)(char*, uint8_t*, uint32_t);  // Callback type for received MQTT messages.
