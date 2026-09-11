@@ -356,6 +356,25 @@ bool test_connect_refuses_a_will_qos_it_cannot_send() {
   END_IT
 }
 
+bool test_connect_refused_with_an_undefined_code() {
+  IT("reports a refusal the standard gives no name to");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  // 6 and up are reserved: a broker using one has still refused, and saying so beats carrying the
+  // number itself in a state that has no such value.
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x06U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::CONNECT_REFUSED);
+
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
@@ -368,6 +387,7 @@ int main() {
   test_connect_non_clean_session();
   test_connect_accepts_username_password();
   test_connect_fails_on_bad_rc();
+  test_connect_refused_with_an_undefined_code();
   test_connect_properly_formatted_hostname();
 
   test_connect_accepts_username_no_password();

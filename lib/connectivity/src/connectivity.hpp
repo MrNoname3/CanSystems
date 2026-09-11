@@ -52,6 +52,7 @@ private:
   static constexpr const char PROGMEM mqttConnectUnavailableStr[]     = "MQTT_CONNECT_UNAVAILABLE";       // MQTT server unavailable string.
   static constexpr const char PROGMEM mqttConnectBadCredentialsStr[]  = "MQTT_CONNECT_BAD_CREDENTIALS";   // MQTT bad credentials string.
   static constexpr const char PROGMEM mqttConnectUnauthorizedStr[]    = "MQTT_CONNECT_UNAUTHORIZED";      // MQTT unauthorized string.
+  static constexpr const char PROGMEM mqttConnectRefusedStr[]         = "MQTT_CONNECT_REFUSED";           // MQTT refused with an undefined code string.
   static constexpr const char PROGMEM mqttUnknownStatusStr[]          = "MQTT_UNKNOWN_STATUS";            // MQTT unknown status string.
   // clang-format on
 public:

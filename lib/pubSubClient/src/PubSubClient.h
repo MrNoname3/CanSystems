@@ -72,6 +72,7 @@ private:
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
   static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
+  static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
 
 #if defined(ESP8266) || defined(ESP32)
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
@@ -83,6 +84,7 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
+    CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
     CONNECT_FAILED          = -2,  // TCP connection to broker failed.

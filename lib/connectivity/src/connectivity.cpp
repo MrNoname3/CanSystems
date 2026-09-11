@@ -504,6 +504,9 @@ const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {
     case PubSubClient::State::CONNECT_UNAUTHORIZED: {
       return mqttConnectUnauthorizedStr;
     }
+    case PubSubClient::State::CONNECT_REFUSED: {
+      return mqttConnectRefusedStr;
+    }
     default: {
       return mqttUnknownStatusStr;
     }

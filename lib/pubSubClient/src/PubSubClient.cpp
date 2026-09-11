@@ -149,7 +149,9 @@ bool PubSubClient::awaitConnAck() {
       connectionState = State::CONNECTED;
       return true;
     }
-    connectionState = static_cast<State>(connAckCode);
+    // The standard names return codes 1 to 5; a broker answering anything else has refused all
+    // the same, and the answer is reported as the refusal it is rather than as a state code.
+    connectionState = (connAckCode <= highestNamedConnAckCode) ? static_cast<State>(connAckCode) : State::CONNECT_REFUSED;
   } else {
     // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
     // ended the last session as the reason this one never started.
