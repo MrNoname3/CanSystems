@@ -315,6 +315,8 @@ void PubSubClient::dispatchPacket(uint32_t t) {
         char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
         // msgId only present for QOS>0
         if((this->buffer[0] & 0x06U) == MQTTQOS1) {
+          // Taken before the callback runs, as the acknowledgement below is built after it: a
+          // callback that publishes writes its own packet over the one being read here.
           const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
           uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
           callback(topic, payload, len - llen - 3U - tl - 2U);

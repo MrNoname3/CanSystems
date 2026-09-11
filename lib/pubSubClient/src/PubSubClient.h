@@ -149,6 +149,9 @@ public:
   PubSubClient& setServer(const char* domain, uint16_t port);
 
   /// @brief Sets the callback invoked when an MQTT message is received.
+  /// @details Runs inside loop(), with the message still in the packet buffer. Publishing from it
+  /// is allowed: everything the acknowledgement of that message needs has been read out before it
+  /// is called, so the buffer is the callback's to overwrite. Calling loop() from it is not.
   /// @param callback Function to call on message arrival.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
