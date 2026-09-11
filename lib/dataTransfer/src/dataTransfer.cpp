@@ -94,14 +94,18 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
   if(isFwTransfer) {
     const bool updateBeginResult = Update.begin(fileSizeLocal);
     Logger::get()->printf_P(PSTR("[FT] Firmware update begin -> %s\r\n"), Str::getStateStr(updateBeginResult));
+    // Neither early return below reaches CLEANUP, which is where the flag is otherwise cleared:
+    // left standing, it makes the next transfer throw away an image that is not there.
     if(!updateBeginResult) {
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_BEGIN_FAILED);
+      isFwTransfer = false;
       return false;
     }
     if(!Update.setMD5(fileMd5Local)) {
       Logger::get()->printf_P(PSTR("[FT] Failed to set MD5 for firmware update!\r\n"));
       dataTransferErrState.setError(DataTransferError::FW_UPGRADE_SET_MD5_FAILED);
-      abortFirmwareUpdate();                                        // This path does not reach CLEANUP.
+      abortFirmwareUpdate();
+      isFwTransfer = false;
       return false;
     }
   } else {
