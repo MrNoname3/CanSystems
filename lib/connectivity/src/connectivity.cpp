@@ -395,7 +395,7 @@ bool Connectivity::syncNtpTime() {
 #if defined(ESP32)
   while(sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) {
 #else
-  constexpr time_t minValidTime = 8L * 3600L * 2L;
+  constexpr time_t minValidTime = time_t{ 8 } * 3600 * 2;
   while(time(nullptr) < minValidTime) {
 #endif
     if(Time::hasElapsed(millis(), startMs, timeoutMs)) { return false; }

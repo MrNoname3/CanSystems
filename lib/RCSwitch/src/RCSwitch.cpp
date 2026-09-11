@@ -353,7 +353,7 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
     BeginData = (pro.invertedSignal) ? (2) : (1);
     // Header pulse count correction for more than one
     if(pro.HeaderFactor > 1) {
-      BeginData += (pro.HeaderFactor - 1) * 2;
+      BeginData += (static_cast<uint32_t>(pro.HeaderFactor) - 1U) * 2U;
     }
   }
   // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]

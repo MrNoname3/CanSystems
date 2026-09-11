@@ -23,7 +23,7 @@ private:
   static constexpr uint8_t hostnameLen =
       static_cast<uint8_t>(Build::getPioEnvLength() - (static_cast<uint8_t>(sizeof(hostnamePrefix)) - 1U)  // subtract prefix chars (sizeof includes null, so -1)
                            + 1U                             // underscore separator
-                           + macSuffixBytes * 2U            // 2 hex digits per MAC byte
+                           + macSuffixBytes * 2UL           // 2 hex digits per MAC byte
                            + 1U);                           // null terminator
 #ifdef ESP32
   static constexpr uint8_t ethPhyAddress = 1U;                      // SMI/MDIO address of the Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
