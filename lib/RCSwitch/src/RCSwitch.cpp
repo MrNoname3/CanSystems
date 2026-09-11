@@ -457,7 +457,9 @@ void RCSwitch::handleInterrupt() {
   static uint32_t changeCount = 0;
   static uint32_t lastTime = 0;
 
-  const long time = micros();
+  // Unsigned, like diff(): micros() passes what a signed 32-bit value holds after about 36
+  // minutes, and the subtraction below only stays defined while both sides are unsigned.
+  const uint32_t time = micros();
   const uint32_t duration = time - lastTime;
 
   RCSwitch::buftimings[3] = RCSwitch::buftimings[2];
