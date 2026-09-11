@@ -3,6 +3,7 @@
 #include "Buffer.h"
 #include "BDDTest.h"
 #include "trace.h"
+#include <string.h>
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
@@ -114,11 +115,15 @@ bool test_subscribe_too_long() {
 
   // max length should be allowed
   //                            0        1         2         3         4         5         6         7         8         9         0         1         2
-  rc = client.subscribe("12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789");
+  rc = client.subscribe("1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678");
   IS_TRUE(rc);
 
   //                            0        1         2         3         4         5         6         7         8         9         0         1         2
-  rc = client.subscribe("123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890");
+  // A filter the buffer cannot hold is refused before anything is written, which is what tells it
+  // apart from one that went out and was never acknowledged: with nothing expected from here on,
+  // a write of any kind is an error the shim records.
+  shimClient.expect(nullptr, 0U);
+  rc = client.subscribe("12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789");
   IS_FALSE(rc);
 
   IS_FALSE(shimClient.error());
@@ -231,6 +236,32 @@ bool test_subscribe_half_written_ends_the_session() {
   END_IT
 }
 
+bool test_subscribe_filling_the_whole_buffer() {
+  IT("a filter that leaves no room for the qos byte is refused");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // Nine bytes short of the buffer is the length the packet fits in up to its last byte, and the
+  // qos byte then goes one past the end of it.
+  static char topic[1024];
+  memset(topic, 'a', 1015U);
+  topic[1015] = '\0';
+
+  shimClient.expect(nullptr, 0U);
+  rc = client.subscribe(topic, 1U);
+  IS_FALSE(rc);
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -238,6 +269,7 @@ int main() {
   test_subscribe_not_connected();
   test_subscribe_invalid_qos();
   test_subscribe_too_long();
+  test_subscribe_filling_the_whole_buffer();
   test_subscribe_refused_by_the_broker();
   test_subscribe_unanswered();
   test_subscribe_half_written_ends_the_session();

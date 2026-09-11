@@ -533,7 +533,9 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
   if(qos > 1U) {
     return false;
   }
-  if(this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
+  // Five bytes of header, two of packet id, two of filter length, the filter, and the qos byte
+  // that follows it - which is the one the buffer has to have room for beyond the filter itself.
+  if(this->bufferSize < 10U + strnlen(topic, this->bufferSize)) {
     // Too long
     return false;
   }
