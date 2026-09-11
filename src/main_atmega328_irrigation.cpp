@@ -31,6 +31,8 @@ static constexpr uint8_t MOISTURE_SENSOR            = A6;           // Analog pi
 static constexpr uint8_t CURRENT_SENSOR             = A7;           // Analog pin for current sensor.
 static constexpr uint8_t MOISTURE_CH[8] = {0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U}; // Moisture sensor channel numbers.
 static constexpr uint8_t MOISTURE_CH_NUM = arraySize(MOISTURE_CH);  // Number of moisture sensors.
+static constexpr uint8_t LIMIT_SW_BASE              = 4U;           // Expander pin of channel 0's limit switch; one per channel upwards.
+static constexpr uint8_t LIMIT_SW_NUM               = 4U;           // Number of limit switches, one per irrigation channel.
 // clang-format on
 
 //--- Functions ---//
@@ -98,6 +100,15 @@ void setup() {
     Logger::get()->println(initResult, BIN);
     ResetHandler::restartMCU(ResetHandler::RestartCause::InitFailed);
   }
+
+  // Limit switches sit on the expander's upper nibble, which selectChannel() leaves alone. A
+  // switch pulls its pin down when the channel is full; an open one - and an unwired pin - reads
+  // high through the expander's pull-up, so a channel without a switch is never stopped by one.
+  for(uint8_t i = 0U; i < LIMIT_SW_NUM; i++) { (void)pcf.setAsInput(static_cast<uint8_t>(LIMIT_SW_BASE + i)); }
+  pc.addLimitSwitch(0U, []() -> bool { return pcf.digitalRead(LIMIT_SW_BASE + 0U) == 0U; });
+  pc.addLimitSwitch(1U, []() -> bool { return pcf.digitalRead(LIMIT_SW_BASE + 1U) == 0U; });
+  pc.addLimitSwitch(2U, []() -> bool { return pcf.digitalRead(LIMIT_SW_BASE + 2U) == 0U; });
+  pc.addLimitSwitch(3U, []() -> bool { return pcf.digitalRead(LIMIT_SW_BASE + 3U) == 0U; });
 
   pc.addSafetyIrrigation(20U, 0U, 1U, false, false, 125U, 0U);
   pc.addSafetyIrrigation(Time::hrToMin(25U), 1U, 2U, false, false, 80U, 0U);
