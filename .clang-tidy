@@ -23,4 +23,5 @@ Checks: >
   -modernize-deprecated-headers,
   -modernize-use-auto,
   -readability-convert-member-functions-to-static,
-  -readability-static-accessed-through-instance
+  -readability-static-accessed-through-instance,
+  -performance-no-int-to-ptr
