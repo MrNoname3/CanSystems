@@ -41,22 +41,22 @@ public:
     for(size_t i = 0U; i < size; ++i) { write(buf[i]); }
     return size;
   }
-  int16_t available() override {
-    return static_cast<int16_t>(respLen - respPos);
+  int available() override {
+    return static_cast<int>(respLen - respPos);
   }
-  int16_t read() override {
-    return (respPos < respLen) ? static_cast<int16_t>(respData[respPos++]) : -1;
+  int read() override {
+    return (respPos < respLen) ? static_cast<int>(respData[respPos++]) : -1;
   }
-  int16_t read(uint8_t* buf, size_t size) override { // NOLINT(readability-non-const-parameter)
+  int read(uint8_t* buf, size_t size) override { // NOLINT(readability-non-const-parameter)
     for(size_t i = 0U; i < size; ++i) {
-      const int16_t c = read();
-      if(c < 0) { return static_cast<int16_t>(i); }
+      const int c = read();
+      if(c < 0) { return static_cast<int>(i); }
       buf[i] = static_cast<uint8_t>(c);
     }
-    return static_cast<int16_t>(size);
+    return static_cast<int>(size);
   }
-  int16_t peek() override {
-    return (respPos < respLen) ? static_cast<int16_t>(respData[respPos]) : -1;
+  int peek() override {
+    return (respPos < respLen) ? static_cast<int>(respData[respPos]) : -1;
   }
   void flush() override {}
   void stop() override { _connected = false; }

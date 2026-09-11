@@ -161,22 +161,22 @@ size_t ShimClient::write(const uint8_t* buf, size_t size) {
         << std::dec);
   return size;
 }
-int16_t ShimClient::available() {
-  return static_cast<int16_t>(this->responseBuffer->available());
+int ShimClient::available() {
+  return static_cast<int>(this->responseBuffer->available());
 }
-int16_t ShimClient::read() {
-  return static_cast<int16_t>(this->responseBuffer->next());
+int ShimClient::read() {
+  return static_cast<int>(this->responseBuffer->next());
 }
-int16_t ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
+int ShimClient::read(uint8_t* buf, size_t size) { // NOLINT(readability-non-const-parameter)
   // Only what it actually holds, as a socket does: a caller asking for more has to come back.
   size_t taken = 0U;
   while((taken < size) && this->responseBuffer->available()) {
     buf[taken] = static_cast<uint8_t>(this->read());
     taken++;
   }
-  return static_cast<int16_t>(taken);
+  return static_cast<int>(taken);
 }
-int16_t ShimClient::peek() {
+int ShimClient::peek() {
   return 0;
 }
 void ShimClient::flush() {}
