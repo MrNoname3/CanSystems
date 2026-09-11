@@ -8,7 +8,6 @@ volatile uint32_t Radiation::cpmToSend = 0U;
 
 Radiation::Radiation(Connectivity& connectivity, const char* subtopic, uint8_t sensorPin) :
   MqttBase(connectivity, subtopic),
-  measureTicker(),
   sensorPin(sensorPin) {
   pinMode(sensorPin, INPUT);
 }

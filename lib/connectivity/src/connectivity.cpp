@@ -10,7 +10,6 @@
 
 Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkManager(networkManager),
-  tcpClient(),
   mqttClient(tcpClient),
   networkState(true),
   mqttState(PubSubClient::State::CONNECTED),
@@ -20,9 +19,6 @@ Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(
   resetWdt(resetWdtFunc),
   reconnectTimer(0U),
   onlineSinceTimer(0U),
-#ifdef ESP8266
-  serverCert{},
-#endif
   haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
     return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
   },

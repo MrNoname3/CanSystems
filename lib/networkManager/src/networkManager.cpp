@@ -18,9 +18,6 @@ volatile bool NetworkManager::ethConnected = false;
 #endif
 
 NetworkManager::NetworkManager(Interface interface, uint8_t ethernetShieldCsPin) :
-#ifdef ESP8266
-  ethernetEnc28j60{},
-#endif
   networkInterface(Interface::UNKNOWN),
   interfaceStatus(WL_DISCONNECTED),
   mac{ 0U } {

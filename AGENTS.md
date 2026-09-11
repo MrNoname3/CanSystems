@@ -16,8 +16,10 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
 - Native tests: `… pio test -e native_test` (under a minute)
-- Static analysis: `… pio check` (cppcheck + clang-tidy; checks live in `.clang-tidy`)
-- **Release gate** (build + test + check + format + lint + typecheck + pytest, fail-fast):
+- Static analysis: `… pio check` (cppcheck) and
+  `… pio check -e check_avr -e check_esp8266 -e check_esp32` (clang-tidy; checks live in
+  `.clang-tidy`). Split because they need opposite `check_skip_packages` settings.
+- **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
   `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
