@@ -216,14 +216,14 @@ public:
   void disconnect();
 
   /// @brief Publishes a string payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Null-terminated payload string; may be `nullptr` for an empty payload.
   /// @param retained Whether the broker should retain the message (default: `false`).
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish(const char* topic, const char* payload, bool retained = false);
 
   /// @brief Publishes a binary payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Pointer to the payload buffer.
   /// @param plength Payload length in bytes.
   /// @param retained Whether the broker should retain the message (default: `false`).
@@ -231,14 +231,14 @@ public:
   [[nodiscard]] bool publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained = false);
 
   /// @brief Publishes a PROGMEM string payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Null-terminated PROGMEM string; may be `nullptr` for an empty payload.
   /// @param retained Whether the broker should retain the message.
   /// @return `true` if the message was sent successfully; otherwise `false`.
   [[nodiscard]] bool publish_P(const char* topic, const char* payload, bool retained);
 
   /// @brief Publishes a binary PROGMEM payload to a topic.
-  /// @param topic Null-terminated MQTT topic.
+  /// @param topic Null-terminated MQTT topic; `nullptr` is refused.
   /// @param payload Pointer to PROGMEM payload buffer.
   /// @param plength Payload length in bytes.
   /// @param retained Whether the broker should retain the message.
