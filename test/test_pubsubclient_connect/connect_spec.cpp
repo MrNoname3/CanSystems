@@ -338,6 +338,24 @@ bool test_connect_answer_that_is_not_a_connack() {
   END_IT
 }
 
+bool test_connect_refuses_a_will_qos_it_cannot_send() {
+  IT("refuses a will qos that does not fit the two bits kept for it");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // 3 is not a level the standard has, and the bits it needs belong to the flags next to it.
+  bool rc = client.connect("client_test1", "willTopic", 3U, false, "willMessage");
+  IS_FALSE(rc);
+  // Refused on the arguments alone: the broker is never asked.
+  IS_EQUAL(shimClient.received(), 0U);
+
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
@@ -356,6 +374,7 @@ int main() {
   test_connect_accepts_username_blank_password();
   test_connect_ignores_password_no_username();
   test_connect_with_will();
+  test_connect_refuses_a_will_qos_it_cannot_send();
   test_connect_with_will_username_password();
   test_connect_disconnect_connect();
 

@@ -37,6 +37,9 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 }
 
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
+  // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
+  // sit beside them: a level too wide for those two bits is shifted straight onto them.
+  if((willTopic != nullptr) && (willQos > 2U)) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
                       static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)

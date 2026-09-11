@@ -181,7 +181,7 @@ public:
   /// @brief Connects to the MQTT broker with a Last Will message.
   /// @param id Null-terminated MQTT client identifier.
   /// @param willTopic Null-terminated Last Will topic.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @return `true` if the connection was established; otherwise `false`.
@@ -192,7 +192,7 @@ public:
   /// @param user Null-terminated username; may be `nullptr`.
   /// @param pass Null-terminated password; may be `nullptr`.
   /// @param willTopic Null-terminated Last Will topic.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @return `true` if the connection was established; otherwise `false`.
@@ -203,7 +203,7 @@ public:
   /// @param user Null-terminated username; may be `nullptr`.
   /// @param pass Null-terminated password; may be `nullptr`.
   /// @param willTopic Null-terminated Last Will topic; may be `nullptr` to disable.
-  /// @param willQos QoS level for the Last Will message (0 or 1).
+  /// @param willQos QoS level the broker publishes the Last Will at (0, 1 or 2); more is refused.
   /// @param willRetain Whether the broker should retain the Last Will message.
   /// @param willMessage Null-terminated Last Will payload; may be `nullptr`.
   /// @param cleanSession Whether to request a clean session from the broker.
