@@ -406,6 +406,33 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
   END_IT
 }
 
+bool test_a_truncated_ping_answer_ends_the_session() {
+  IT("ends the session when only part of a ping answer went out");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The broker asks, and the link takes one byte of the two-byte answer and stops.
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.respond(pingreq, 2U);
+  shimClient.truncateNextWrite(1U);
+  (void)client.loop();
+
+  IS_FALSE(client.connected());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -419,6 +446,7 @@ int main() {
   test_receive_qos1();
   test_topic_length_past_the_packet_is_dropped();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
+  test_a_truncated_ping_answer_ends_the_session();
 
   FINISH
 }

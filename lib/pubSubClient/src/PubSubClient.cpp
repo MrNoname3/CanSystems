@@ -178,7 +178,7 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
-      dispatchPacket(millis());
+      dispatchPacket();
       waiting = ((millis() - startMs) < timeoutMs);
     }
   }
@@ -294,7 +294,7 @@ void PubSubClient::takePayloadBulk(uint32_t take) {
   rxPayloadDone += dropped;
 }
 
-void PubSubClient::dispatchPacket(uint32_t t) {
+void PubSubClient::dispatchPacket() {
   const uint16_t len = rxLen;
   const uint8_t llen = rxLengthLength;
   {
@@ -321,22 +321,21 @@ void PubSubClient::dispatchPacket(uint32_t t) {
           uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
           callback(topic, payload, len - llen - 3U - tl - 2U);
 
-          this->buffer[0] = MQTTPUBACK;
-          this->buffer[1] = 2U;
-          this->buffer[2] = static_cast<uint8_t>(msgId >> 8U);
-          this->buffer[3] = static_cast<uint8_t>(msgId & 0xFFU);
-          tcpClient.write(this->buffer, 4U);
-          lastOutActivity = t;
-
+          // Sent the way every other packet is: a link that took none of it has not acknowledged
+          // anything, and counting the attempt as outgoing traffic would put the keep-alive ping
+          // off by a whole interval the broker does not wait through.
+          this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
+          this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
+          (void)write(MQTTPUBACK, this->buffer, 2U);
         } else {
           uint8_t* const payload = this->buffer + llen + 3U + tl;
           callback(topic, payload, len - llen - 3U - tl);
         }
       }
     } else if(type == MQTTPINGREQ) {
-      this->buffer[0] = MQTTPINGRESP;
-      this->buffer[1] = 0U;
-      tcpClient.write(this->buffer, 2U);
+      // Through the same path as the acknowledgement above: half an answer is read as the start of
+      // whatever goes out next, and the broker is left parsing a frame that never ends.
+      (void)write(MQTTPINGRESP, this->buffer, 0U);
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
@@ -365,7 +364,7 @@ bool PubSubClient::pumpReader(uint32_t t) {
   if(result == RxResult::Complete) {
     lastInActivity = t;
     // An oversized packet was taken off the socket to keep the stream in step, and goes no further.
-    if(!rxOversized) { dispatchPacket(t); }
+    if(!rxOversized) { dispatchPacket(); }
     resetReader();
     return true;
   }
