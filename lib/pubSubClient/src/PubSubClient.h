@@ -398,8 +398,7 @@ private:
   /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
   /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
   /// PINGREQ is answered, a PINGRESP clears the outstanding ping.
-  /// @param t Current timestamp from millis(), used to update lastOutActivity when it answers.
-  void dispatchPacket(uint32_t t);
+  void dispatchPacket();
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.

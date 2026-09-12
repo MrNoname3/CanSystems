@@ -429,6 +429,43 @@ bool test_keepalive_a_refused_publish_is_not_traffic() {
   END_IT
 }
 
+bool test_keepalive_a_refused_puback_is_not_traffic() {
+  IT("an acknowledgement the link would not take does not put the ping off");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // A qos1 message arrives and the link refuses the acknowledgement it is answered with. Nothing
+  // went out, so the last packet the broker saw is still the connect.
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  setFakeMillis(baseMs + (9U * tickMs));
+  shimClient.respond(publish, 18U);
+  shimClient.failNextWrites(1U);
+  IS_TRUE(client.loop());
+
+  // A keep-alive interval after the connect, the ping is due: the broker has heard nothing since.
+  setFakeMillis(baseMs + (16U * tickMs));
+  const uint16_t beforePing = shimClient.received();
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(beforePing + 2U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -442,6 +479,7 @@ int main() {
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
+  test_keepalive_a_refused_puback_is_not_traffic();
 
   FINISH
 }
