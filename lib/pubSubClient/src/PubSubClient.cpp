@@ -333,9 +333,9 @@ void PubSubClient::dispatchPacket() {
         }
       }
     } else if(type == MQTTPINGREQ) {
-      this->buffer[0] = MQTTPINGRESP;
-      this->buffer[1] = 0U;
-      tcpClient.write(this->buffer, 2U);
+      // Through the same path as the acknowledgement above: half an answer is read as the start of
+      // whatever goes out next, and the broker is left parsing a frame that never ends.
+      (void)write(MQTTPINGRESP, this->buffer, 0U);
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
