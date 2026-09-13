@@ -369,11 +369,10 @@ private:
   /// @return Total header size (fixed byte + variable-length field bytes).
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
 
-  /// @brief Hands the due keep-alive ping to the TCP client, retrying a refusal at intervals.
+  /// @brief Hands the due keep-alive ping to the TCP client, whether for the first time or again.
+  /// @details Says nothing about giving up: one deadline covers the whole run, and `loop()` holds it.
   /// @param t Current timestamp from millis().
-  /// @return `false` once the ping has gone unsent for a whole keep-alive interval; `true` while
-  ///         it is still worth asking.
-  [[nodiscard]] bool keepAlivePing(uint32_t t);
+  void keepAlivePing(uint32_t t);
 
   /// @brief How far the reader has got through the packet it is assembling.
   /// @details The reader keeps its place between `loop()` calls, so a packet that arrives in
@@ -425,10 +424,11 @@ private:
   /// PINGRESP clears the outstanding ping, and a PINGREQ - which only a client sends - is dropped.
   void dispatchPacket();
 
-  /// @brief How long a ping may go unanswered before the session is ended here.
-  /// @details Seven fifths of a keep-alive interval, less the ping interval: a broker stops
-  /// waiting at three halves of one, so the session ends on this side and with a reason. The ping
-  /// interval is held at or below the keep-alive, so the subtraction never runs below zero.
+  /// @brief How long a ping run may last, counted from the moment the ping fell due.
+  /// @details Seven fifths of a keep-alive interval, less the ping interval: the run starts one
+  /// ping interval after the last traffic, so it ends seven fifths of a keep-alive after it, and a
+  /// broker stops waiting at three halves - the session ends on this side and with a reason. The
+  /// ping interval is held at or below the keep-alive, so the subtraction never runs below zero.
   [[nodiscard]] uint32_t pingAnswerBudgetMs() const;
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
@@ -455,9 +455,9 @@ private:
   uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
-  uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
+  bool pingReasked = false;                       // `true` once the ping of this run has been asked for a second time.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
-  uint32_t pingSentSince = 0U;                    // Timestamp (ms) of the first PINGREQ of the run the broker has not answered.
+  uint32_t pingDueSince = 0U;                     // Timestamp (ms) at which the ping of the current run fell due.
   uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
   uint16_t unansweredPings = 0U;                  // Keep-alive pings that had to be asked again; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.

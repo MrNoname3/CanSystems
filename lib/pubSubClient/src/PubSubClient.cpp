@@ -146,6 +146,7 @@ bool PubSubClient::awaitConnAck() {
       // its deadline is already past, so the first ping this one cannot hand over ends the
       // connection on the spot instead of being retried.
       pingUnsent = false;
+      pingReasked = false;
       connectionState = State::CONNECTED;
       return true;
     }
@@ -379,33 +380,22 @@ bool PubSubClient::pumpReader(uint32_t t) {
   return true;
 }
 
-bool PubSubClient::keepAlivePing(uint32_t t) {
+void PubSubClient::keepAlivePing(uint32_t t) {
   // A client that would not take the ping has not pinged: counting it as sent would leave the
-  // broker in silence for the rest of the interval and end the connection over a ping it never
-  // saw. The timers stay put so a later pass asks again - a second apart, because loop() runs at
-  // the caller's pass rate and one that just refused will not take it a millisecond later.
-  const bool firstAttempt = !pingUnsent;
-  if(firstAttempt || ((t - lastPingAttempt) >= pingRetryIntervalMs)) {
-    lastPingAttempt = t;
-    this->buffer[0] = MQTTPINGREQ;
-    this->buffer[1] = 0U;
-    if(tcpClient.write(this->buffer, 2U) == 2U) {
-      lastOutActivity = lastInActivity = t;
-      // Only the first of a run is stamped: the budget belongs to the ping that went unanswered.
-      if(!pingOutstanding) { pingSentSince = t; }
-      pingOutstanding = true;
-      pingUnsent = false;
-    } else if(firstAttempt) {
-      pingUnsent = true;
-      pingUnsentSince = t;
-      if(refusedPings < UINT16_MAX) { refusedPings++; }
-    } else {
-      // A later refusal of the same ping; the deadline below is what ends it.
-    }
+  // broker in silence for the rest of the interval and end the connection over a ping it never saw.
+  lastPingAttempt = t;
+  this->buffer[0] = MQTTPINGREQ;
+  this->buffer[1] = 0U;
+  if(tcpClient.write(this->buffer, 2U) == 2U) {
+    lastOutActivity = lastInActivity = t;
+    pingOutstanding = true;
+    pingUnsent = false;
+  } else if(!pingUnsent) {
+    pingUnsent = true;
+    if(refusedPings < UINT16_MAX) { refusedPings++; }
+  } else {
+    // A later refusal of the same ping; the run's deadline in loop() is what ends it.
   }
-  // A client that never takes it is as dead as a broker that never answers, and has the same
-  // time to come round in.
-  return !pingUnsent || ((t - pingUnsentSince) <= pingAnswerBudgetMs());
 }
 
 uint32_t PubSubClient::pingAnswerBudgetMs() const {
@@ -419,22 +409,30 @@ bool PubSubClient::loop() {
     const uint32_t t = millis();
     const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
     bool alive = true;
-    if(pingOutstanding) {
-      // The missing PINGRESP is the only sign of a lost ping, a lost answer or a broker that has
-      // gone, so it is asked again rather than taken as the end of the session.
-      if((t - pingSentSince) >= pingAnswerBudgetMs()) {
+    if(pingOutstanding || pingUnsent) {
+      // One deadline covers the whole run, counted from when the ping fell due rather than from
+      // whichever attempt is outstanding: a ping first refused and then taken would otherwise get
+      // a second budget of its own, and the two together outlast what the broker waits through.
+      // Bytes still waiting to be read may carry the answer, so a ping that has gone out is not
+      // asked again until they have been. A ping the link would not take is a different matter:
+      // what arrives says nothing about whether the link will take it now.
+      const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
+      if((t - pingDueSince) >= pingAnswerBudgetMs()) {
         alive = false;
-      } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && (tcpClient.available() == 0)) {
-        // Not while bytes are still waiting to be read: the answer may be among them.
-        // The first ask of a run is what the count is of, the attempts after it being the same
-        // ping again.
-        if((lastPingAttempt == pingSentSince) && (unansweredPings < UINT16_MAX)) { unansweredPings++; }
-        alive = keepAlivePing(t);
+      } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
+        if(pingOutstanding && !pingReasked) {
+          // Counted for the ping that went missing, not for each ask after it.
+          pingReasked = true;
+          if(unansweredPings < UINT16_MAX) { unansweredPings++; }
+        }
+        keepAlivePing(t);
       } else {
         // Still inside the time the last ask has to be answered in.
       }
     } else if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
-      alive = keepAlivePing(t);
+      pingDueSince = t;
+      pingReasked = false;
+      keepAlivePing(t);
     } else {
       // Neither side has been quiet long enough for a ping to be due.
     }

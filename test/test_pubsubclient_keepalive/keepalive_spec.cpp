@@ -634,6 +634,44 @@ bool test_keepalive_counts_the_answers_that_went_missing() {
   END_IT
 }
 
+bool test_keepalive_one_deadline_covers_a_ping_refused_then_taken() {
+  IT("gives up inside the broker's patience when the ping is refused before it is taken");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setKeepAlive(15U);
+  (void)client.setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The broker stops waiting three halves of a keep-alive after the CONNECT, the last thing it
+  // heard. Refusals must not buy the session time past that: they share the one deadline the run
+  // has from the moment the ping fell due.
+  const uint32_t brokerGivesUpAt = baseMs + 22500U;
+  shimClient.failNextWrites(5U);
+
+  uint32_t gaveUpAt = 0U;
+  for(uint32_t t = baseMs + 100U; (t < brokerGivesUpAt) && (gaveUpAt == 0U); t += 100U) {
+    setFakeMillis(t);
+    if(!client.loop()) { gaveUpAt = t; }
+  }
+
+  IS_TRUE(gaveUpAt != 0U);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+  // The ping falls due one ping interval after the last traffic and the run lasts seven fifths of
+  // a keep-alive from there, whichever attempt is outstanding when the time runs out.
+  IS_EQUAL(gaveUpAt, baseMs + 21100U);
+  IS_TRUE(client.getRefusedPingCount() == 1U);
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -652,6 +690,7 @@ int main() {
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
   test_keepalive_a_refused_puback_is_not_traffic();
+  test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
 
   FINISH
 }
