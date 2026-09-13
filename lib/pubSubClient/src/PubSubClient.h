@@ -81,6 +81,7 @@ private:
   static constexpr uint8_t brokerPatienceNumerator = 7U;                                        // A session ends here at 7/5 of a keep-alive interval;
   static constexpr uint8_t brokerPatienceDenominator = 5U;                                      // a broker stops waiting at 3/2 of one.
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
+  static constexpr uint8_t subscribeMaxGrantedQos = 0x02U;                                      // Largest SUBACK return code that names a granted qos; every code between this and the failure one is reserved.
   static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
 
 #if defined(ESP8266) || defined(ESP32)

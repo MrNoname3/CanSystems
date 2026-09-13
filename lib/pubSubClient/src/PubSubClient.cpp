@@ -186,7 +186,16 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       waiting = false;
     } else if(isSubAckFor(packetId)) {
       // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
-      granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
+      const uint8_t returnCode = this->buffer[rxLengthLength + 3U];
+      if((returnCode > subscribeMaxGrantedQos) && (returnCode != subscribeFailureCode)) {
+        // "SUBACK return codes other than 0x00, 0x01, 0x02 and 0x80 are reserved and MUST NOT be
+        // used" [MQTT-3.9.3-2]. Read as a grant, one of those would leave the client listening at
+        // a level the broker never named.
+        connectionState = State::PROTOCOL_ERROR;
+        tcpClient.stop();
+      } else {
+        granted = (returnCode != subscribeFailureCode);
+      }
       waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
