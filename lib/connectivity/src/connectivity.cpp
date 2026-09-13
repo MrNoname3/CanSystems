@@ -197,6 +197,7 @@ bool Connectivity::loadServerCertificate() {
 
 void Connectivity::setupMqttClient() {
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
+  mqttClient.setPingInterval(mqttPingInterval);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = MqttTopics::getSubtopicOf(topic);
@@ -366,7 +367,7 @@ void Connectivity::publishDisconnectDiag() {
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
   const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
                                              report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount,
-                                             mqttClient.getRefusedPingCount());
+                                             mqttClient.getRefusedPingCount(), mqttClient.getUnansweredPingCount());
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
     const bool diagResult = publishRetained(MqttTopics::getDiagSubtopic(), diagPayload);

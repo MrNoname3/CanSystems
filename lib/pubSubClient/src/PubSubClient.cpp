@@ -49,7 +49,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     tcpClient.stop();
     return false;
   }
-  nextMsgId = 1U;
+  nextMsgId = 0U;   // Stepped before use, so the first id of the session is 1.
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
   // Zero means a string did not fit; checkStringLength() has already stopped the client.
   if(length == 0U) { return false; }
@@ -333,9 +333,8 @@ void PubSubClient::dispatchPacket() {
         }
       }
     } else if(type == MQTTPINGREQ) {
-      // Through the same path as the acknowledgement above: half an answer is read as the start of
-      // whatever goes out next, and the broker is left parsing a frame that never ends.
-      (void)write(MQTTPINGRESP, this->buffer, 0U);
+      // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
+      // protocol error. One arriving here goes no further.
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
@@ -381,7 +380,6 @@ bool PubSubClient::pumpReader(uint32_t t) {
 }
 
 bool PubSubClient::keepAlivePing(uint32_t t) {
-  const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
   // A client that would not take the ping has not pinged: counting it as sent would leave the
   // broker in silence for the rest of the interval and end the connection over a ping it never
   // saw. The timers stay put so a later pass asks again - a second apart, because loop() runs at
@@ -393,6 +391,8 @@ bool PubSubClient::keepAlivePing(uint32_t t) {
     this->buffer[1] = 0U;
     if(tcpClient.write(this->buffer, 2U) == 2U) {
       lastOutActivity = lastInActivity = t;
+      // Only the first of a run is stamped: the budget belongs to the ping that went unanswered.
+      if(!pingOutstanding) { pingSentSince = t; }
       pingOutstanding = true;
       pingUnsent = false;
     } else if(firstAttempt) {
@@ -403,20 +403,45 @@ bool PubSubClient::keepAlivePing(uint32_t t) {
       // A later refusal of the same ping; the deadline below is what ends it.
     }
   }
-  // A client that never takes it is as dead as a broker that never answers.
-  return !pingUnsent || ((t - pingUnsentSince) <= keepAliveMs);
+  // A client that never takes it is as dead as a broker that never answers, and has the same
+  // time to come round in.
+  return !pingUnsent || ((t - pingUnsentSince) <= pingAnswerBudgetMs());
+}
+
+uint32_t PubSubClient::pingAnswerBudgetMs() const {
+  const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
+  const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
+  return ((keepAliveMs * brokerPatienceNumerator) / brokerPatienceDenominator) - pingIntervalMs;
 }
 
 bool PubSubClient::loop() {
   if(connected()) {
     const uint32_t t = millis();
-    const uint32_t keepAliveMs = static_cast<uint32_t>(this->keepAlive) * 1000U;
-    if((t - lastInActivity > keepAliveMs) || (t - lastOutActivity > keepAliveMs)) {
-      if(pingOutstanding || !keepAlivePing(t)) {
-        this->connectionState = State::CONNECTION_TIMEOUT;
-        tcpClient.stop();
-        return false;
+    const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
+    bool alive = true;
+    if(pingOutstanding) {
+      // The missing PINGRESP is the only sign of a lost ping, a lost answer or a broker that has
+      // gone, so it is asked again rather than taken as the end of the session.
+      if((t - pingSentSince) >= pingAnswerBudgetMs()) {
+        alive = false;
+      } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && (tcpClient.available() == 0)) {
+        // Not while bytes are still waiting to be read: the answer may be among them.
+        // The first ask of a run is what the count is of, the attempts after it being the same
+        // ping again.
+        if((lastPingAttempt == pingSentSince) && (unansweredPings < UINT16_MAX)) { unansweredPings++; }
+        alive = keepAlivePing(t);
+      } else {
+        // Still inside the time the last ask has to be answered in.
       }
+    } else if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
+      alive = keepAlivePing(t);
+    } else {
+      // Neither side has been quiet long enough for a ping to be due.
+    }
+    if(!alive) {
+      this->connectionState = State::CONNECTION_TIMEOUT;
+      tcpClient.stop();
+      return false;
     }
     return pumpReader(t);
   }
@@ -672,6 +697,15 @@ PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
 
 PubSubClient& PubSubClient::setKeepAlive(uint16_t keepAlive) {
   this->keepAlive = keepAlive;
+  // Whichever order the two are set in, the ping stays inside what the broker was told to wait for.
+  if(this->pingInterval > keepAlive) {
+    this->pingInterval = keepAlive;
+  }
+  return *this;
+}
+
+PubSubClient& PubSubClient::setPingInterval(uint16_t pingInterval) {
+  this->pingInterval = (pingInterval > this->keepAlive) ? this->keepAlive : pingInterval;
   return *this;
 }
 
@@ -686,6 +720,10 @@ PubSubClient::State PubSubClient::state() const {
 
 uint16_t PubSubClient::getRefusedPingCount() const {
   return this->refusedPings;
+}
+
+uint16_t PubSubClient::getUnansweredPingCount() const {
+  return this->unansweredPings;
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {
