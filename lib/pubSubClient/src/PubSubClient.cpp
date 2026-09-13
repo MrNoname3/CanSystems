@@ -483,41 +483,42 @@ uint32_t PubSubClient::pingAnswerBudgetMs() const {
   return ((keepAliveMs * brokerPatienceNumerator) / brokerPatienceDenominator) - pingIntervalMs;
 }
 
+bool PubSubClient::servicePing(uint32_t t) {
+  // A keep-alive of zero is the broker being told not to time this client out, so there is nothing
+  // to prove and no deadline to keep.
+  if(this->keepAlive == 0U) { return true; }
+  if(pingOutstanding || pingUnsent) {
+    // One deadline covers the whole run, counted from when the ping fell due rather than from
+    // whichever attempt is outstanding: a ping first refused and then taken would otherwise get a
+    // second budget of its own, and the two together outlast what the broker waits through.
+    if((t - pingDueSince) >= pingAnswerBudgetMs()) { return false; }
+    // Bytes still waiting to be read may carry the answer, so a ping that has gone out is not
+    // asked again until they have been. A ping the link would not take is a different matter:
+    // what arrives says nothing about whether the link will take it now.
+    const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
+    if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
+      if(pingOutstanding && !pingReasked) {
+        // Counted for the ping that went missing, not for each ask after it.
+        pingReasked = true;
+        if(unansweredPings < UINT16_MAX) { unansweredPings++; }
+      }
+      keepAlivePing(t);
+    }
+    return true;
+  }
+  const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
+  if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
+    pingDueSince = t;
+    pingReasked = false;
+    keepAlivePing(t);
+  }
+  return true;
+}
+
 bool PubSubClient::loop() {
   if(connected()) {
     const uint32_t t = millis();
-    const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
-    bool alive = true;
-    if((this->keepAlive != 0U) && (pingOutstanding || pingUnsent)) {
-      // One deadline covers the whole run, counted from when the ping fell due rather than from
-      // whichever attempt is outstanding: a ping first refused and then taken would otherwise get
-      // a second budget of its own, and the two together outlast what the broker waits through.
-      // Bytes still waiting to be read may carry the answer, so a ping that has gone out is not
-      // asked again until they have been. A ping the link would not take is a different matter:
-      // what arrives says nothing about whether the link will take it now.
-      const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
-      if((t - pingDueSince) >= pingAnswerBudgetMs()) {
-        alive = false;
-      } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
-        if(pingOutstanding && !pingReasked) {
-          // Counted for the ping that went missing, not for each ask after it.
-          pingReasked = true;
-          if(unansweredPings < UINT16_MAX) { unansweredPings++; }
-        }
-        keepAlivePing(t);
-      } else {
-        // Still inside the time the last ask has to be answered in.
-      }
-    } else if((this->keepAlive != 0U) && ((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs))) {
-      // A keep-alive of zero is the broker being told not to time this client out, so there is
-      // nothing to prove and no deadline to keep.
-      pingDueSince = t;
-      pingReasked = false;
-      keepAlivePing(t);
-    } else {
-      // Neither side has been quiet long enough for a ping to be due.
-    }
-    if(!alive) {
+    if(!servicePing(t)) {
       this->connectionState = State::CONNECTION_TIMEOUT;
       tcpClient.stop();
       return false;

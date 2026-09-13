@@ -372,6 +372,12 @@ private:
   /// @return Total header size (fixed byte + variable-length field bytes).
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
 
+  /// @brief Keeps the link proven: sends the ping that has fallen due, and asks again for one that
+  /// went unanswered or unsent.
+  /// @param t Current timestamp from millis().
+  /// @return `false` once the run has outlasted what the broker waits through, which ends the session.
+  [[nodiscard]] bool servicePing(uint32_t t);
+
   /// @brief Hands the due keep-alive ping to the TCP client, whether for the first time or again.
   /// @details Says nothing about giving up: one deadline covers the whole run, and `loop()` holds it.
   /// @param t Current timestamp from millis().
