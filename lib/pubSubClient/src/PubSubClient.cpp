@@ -366,7 +366,10 @@ bool PubSubClient::pumpReader(uint32_t t) {
     // An oversized packet was taken off the socket to keep the stream in step, and goes no further.
     if(!rxOversized) { dispatchPacket(); }
     resetReader();
-    return true;
+    // Answering the packet can end the session - an acknowledgement the link took only half of
+    // leaves nothing to carry on with - and the caller is owed the session it has, not the one it
+    // had a packet ago.
+    return this->connectionState == State::CONNECTED;
   }
   // Half a packet is not an error yet - the rest may be one segment behind. It becomes one when it
   // stays away for the whole socket timeout: a peer that stops mid-packet is as gone as one that

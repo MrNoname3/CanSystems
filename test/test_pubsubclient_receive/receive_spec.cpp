@@ -443,6 +443,31 @@ bool test_a_ping_request_from_the_broker_is_ignored() {
   END_IT
 }
 
+bool test_an_acknowledgement_the_link_half_took_ends_the_loop() {
+  IT("reports the session lost on the pass whose acknowledgement was half written");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
+  // Half a PUBACK cannot be finished or taken back, so the session goes down inside this pass.
+  shimClient.truncateNextWrite(2U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+  IS_FALSE(client.connected());
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -457,6 +482,7 @@ int main() {
   test_topic_length_past_the_packet_is_dropped();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
   test_a_ping_request_from_the_broker_is_ignored();
+  test_an_acknowledgement_the_link_half_took_ends_the_loop();
 
   FINISH
 }
