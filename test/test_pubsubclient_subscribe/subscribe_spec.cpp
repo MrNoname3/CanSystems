@@ -23,9 +23,9 @@ bool test_subscribe_no_qos() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x0U };
+  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x0U };
   shimClient.expect(subscribe, 12U);
-  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x0U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x1U, 0x0U };
   shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic");
@@ -48,9 +48,9 @@ bool test_subscribe_qos_1() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U };
+  const uint8_t subscribe[] = { 0x82U, 0xaU, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x1U };
   shimClient.expect(subscribe, 12U);
-  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x1U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x1U, 0x1U };
   shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic", 1U);
@@ -110,7 +110,7 @@ bool test_subscribe_too_long() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x0U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x1U, 0x0U };
   shimClient.respond(suback, 5U);
 
   // max length should be allowed
@@ -143,9 +143,9 @@ bool test_unsubscribe() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  const uint8_t unsubscribe[] = { 0xA2U, 0x9U, 0x0U, 0x2U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  const uint8_t unsubscribe[] = { 0xA2U, 0x9U, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
   shimClient.expect(unsubscribe, 11U);
-  const uint8_t unsuback[] = { 0xB0U, 0x2U, 0x0U, 0x2U };
+  const uint8_t unsuback[] = { 0xB0U, 0x2U, 0x0U, 0x1U };
   shimClient.respond(unsuback, 4U);
 
   rc = client.unsubscribe("topic");
@@ -183,7 +183,7 @@ bool test_subscribe_refused_by_the_broker() {
   IS_TRUE(rc);
 
   // 0x80 is what a broker answers for a filter its access rules do not allow.
-  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x2U, 0x80U };
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x1U, 0x80U };
   shimClient.respond(suback, 5U);
 
   rc = client.subscribe("topic", 1U);
@@ -262,6 +262,38 @@ bool test_subscribe_filling_the_whole_buffer() {
   END_IT
 }
 
+bool test_packet_ids_step_past_zero_to_one() {
+  IT("steps the packet id past zero to one, zero not being one a packet may carry");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Unsubscribe takes no answer, so it is the cheap way to spend the ids up to the last one.
+  bool allSent = true;
+  for(uint32_t i = 0U; i < 65534U; i++) {
+    allSent = client.unsubscribe("topic") && allSent;
+  }
+  IS_TRUE(allSent);
+
+  const uint8_t lastId[] = { 0xA2U, 0x9U, 0xFFU, 0xFFU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  shimClient.expect(lastId, 11U);
+  IS_TRUE(client.unsubscribe("topic"));
+
+  const uint8_t wrapped[] = { 0xA2U, 0x9U, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  shimClient.expect(wrapped, 11U);
+  IS_TRUE(client.unsubscribe("topic"));
+
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -275,5 +307,7 @@ int main() {
   test_subscribe_half_written_ends_the_session();
   test_unsubscribe();
   test_unsubscribe_not_connected();
+  test_packet_ids_step_past_zero_to_one();
+
   FINISH
 }

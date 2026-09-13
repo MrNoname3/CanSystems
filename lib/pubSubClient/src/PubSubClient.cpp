@@ -49,7 +49,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     tcpClient.stop();
     return false;
   }
-  nextMsgId = 1U;
+  nextMsgId = 0U;   // Stepped before use, so the first id of the session is 1.
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
   // Zero means a string did not fit; checkStringLength() has already stopped the client.
   if(length == 0U) { return false; }
