@@ -301,37 +301,37 @@ void PubSubClient::dispatchPacket() {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
+      const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+      // The topic length and the packet length are two independent numbers off the wire, and
+      // every index below is built from the first one. A packet where they disagree is dropped
+      // rather than trusted: the reader consumed exactly the announced bytes, so the stream
+      // stays in step and only this message is lost.
+      const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
+      if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
+        return;
+      }
+      // Taken before the callback runs, as the acknowledgement is built after it: a callback that
+      // publishes writes its own packet over the one being read here.
+      const uint16_t msgId = (msgIdLen != 0U)
+                                 ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
+                                 : 0U;
       if(callback != nullptr) {
-        const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-        // The topic length and the packet length are two independent numbers off the wire, and
-        // every index below is built from the first one. A packet where they disagree is dropped
-        // rather than trusted: the reader consumed exactly the announced bytes, so the stream
-        // stays in step and only this message is lost.
-        const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;
-        if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
-          return;
-        }
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
         char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
-        // msgId only present for QOS>0
-        if((this->buffer[0] & 0x06U) == MQTTQOS1) {
-          // Taken before the callback runs, as the acknowledgement below is built after it: a
-          // callback that publishes writes its own packet over the one being read here.
-          const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
-          uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
-          callback(topic, payload, len - llen - 3U - tl - 2U);
-
-          // Sent the way every other packet is: a link that took none of it has not acknowledged
-          // anything, and counting the attempt as outgoing traffic would put the keep-alive ping
-          // off by a whole interval the broker does not wait through.
-          this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
-          this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
-          (void)write(MQTTPUBACK, this->buffer, 2U);
-        } else {
-          uint8_t* const payload = this->buffer + llen + 3U + tl;
-          callback(topic, payload, len - llen - 3U - tl);
-        }
+        uint8_t* const payload = this->buffer + llen + 3U + tl + msgIdLen;
+        callback(topic, payload, len - llen - 3U - tl - msgIdLen);
+      }
+      if(msgIdLen != 0U) {
+        // Owed by the protocol rather than by the application: a message nothing was listening for
+        // has still been taken off the link, and an unanswered one holds a place in what the broker
+        // has in flight for the whole session.
+        // Sent the way every other packet is: a link that took none of it has not acknowledged
+        // anything, and counting the attempt as outgoing traffic would put the keep-alive ping
+        // off by a whole interval the broker does not wait through.
+        this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
+        this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
+        (void)write(MQTTPUBACK, this->buffer, 2U);
       }
     } else if(type == MQTTPINGREQ) {
       // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
