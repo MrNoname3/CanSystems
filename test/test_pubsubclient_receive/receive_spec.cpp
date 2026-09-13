@@ -99,7 +99,7 @@ bool test_receive_max_sized_message() {
 }
 
 bool test_receive_oversized_message() {
-  IT("drops an oversized message");
+  IT("ends the session on a message the buffer cannot hold");
   reset_callback();
 
   ShimClient shimClient;
@@ -122,10 +122,13 @@ bool test_receive_oversized_message() {
   memcpy(bigPublish, publish, 16U);
   shimClient.respond(bigPublish, length);
 
+  // An internal buffer full condition is a Transient Error, which [MQTT-4.8.0-2] answers by
+  // closing the connection: a message read in part and passed on would be worse than none.
   rc = client.loop();
 
-  IS_TRUE(rc);
-
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::PACKET_TOO_LARGE);
+  IS_FALSE(client.connected());
   IS_FALSE(callback_called);
 
   IS_FALSE(shimClient.error());
@@ -133,8 +136,8 @@ bool test_receive_oversized_message() {
   END_IT
 }
 
-bool test_an_oversized_message_leaves_the_next_one_readable() {
-  IT("an oversized message is drained whole, so the message behind it still parses");
+bool test_nothing_behind_an_oversized_message_is_read() {
+  IT("reads nothing behind an oversized message, the session having ended with it");
   reset_callback();
 
   ShimClient shimClient;
@@ -153,17 +156,15 @@ bool test_an_oversized_message_leaves_the_next_one_readable() {
   memset(bigPublish, 'A', length);
   memcpy(bigPublish, publish, 16U);
   shimClient.respond(bigPublish, length);
-  // Right behind it, a message that fits: it can only be read if every byte of the one before it
-  // was taken off the socket rather than left there to be read as this one's header.
+  // Right behind it, a message that fits. It stays unread: the connection the two arrived on is
+  // gone, and what is left in the stream goes with it.
   const uint8_t smallPublish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(smallPublish, 16U);
 
-  IS_TRUE(client.loop());          // the oversized one, dropped
+  IS_FALSE(client.loop());
   IS_FALSE(callback_called);
-  IS_TRUE(client.loop());          // the one behind it
-  IS_TRUE(callback_called);
-  IS_TRUE(strcmp(lastTopic, "topic") == 0);
-  IS_TRUE(memcmp(lastPayload, "payload", 7U) == 0);
+  IS_FALSE(client.loop());
+  IS_FALSE(callback_called);
 
   IS_FALSE(shimClient.error());
   END_IT
@@ -266,7 +267,7 @@ bool test_a_message_that_never_finishes_drops_the_connection() {
 }
 
 bool test_resize_buffer() {
-  IT("receives a message larger than the default maximum");
+  IT("receives a message larger than the default maximum once the buffer is grown");
   reset_callback();
 
   ShimClient shimClient;
@@ -287,18 +288,10 @@ bool test_resize_buffer() {
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);
-  // Send it twice
-  shimClient.respond(bigPublish, length);
-  shimClient.respond(bigPublish, length);
 
-  rc = client.loop();
-  IS_TRUE(rc);
-
-  // First message fails as it is too big
-  IS_FALSE(callback_called);
-
-  // Resize the buffer
+  // One byte past the buffer it was connected with, and exactly the size of the grown one.
   IS_TRUE(client.setBufferSize(length));
+  shimClient.respond(bigPublish, length);
 
   rc = client.loop();
   IS_TRUE(rc);
@@ -348,8 +341,8 @@ bool test_receive_qos1() {
   END_IT
 }
 
-bool test_topic_length_past_the_packet_is_dropped() {
-  IT("drops a message whose topic length runs past the bytes that arrived");
+bool test_topic_length_past_the_packet_ends_the_session() {
+  IT("ends the session on a message whose topic length runs past the bytes that arrived");
   reset_callback();
 
   ShimClient shimClient;
@@ -362,14 +355,17 @@ bool test_topic_length_past_the_packet_is_dropped() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  // Remaining length 4, but the topic-length field claims 0xFFFF. Both numbers come off the
-  // wire, and a broker is free to disagree with itself.
+  // Remaining length 4, but the topic-length field claims 0xFFFF. Both numbers come off the wire
+  // and are meant to describe the same packet; one that disagrees with itself is a protocol
+  // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
   const uint8_t publish[] = { 0x30U, 0x04U, 0xFFU, 0xFFU, 0x41U, 0x42U };
   shimClient.respond(publish, 6U);
 
   rc = client.loop();
 
-  IS_TRUE(rc);
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
   IS_FALSE(callback_called);
   IS_FALSE(shimClient.error());
 
@@ -401,7 +397,7 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
 
   IS_FALSE(rc);
   IS_FALSE(callback_called);
-  IS_TRUE(client.state() == PubSubClient::State::DISCONNECTED);
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
 
   END_IT
 }
@@ -443,6 +439,134 @@ bool test_a_ping_request_from_the_broker_is_ignored() {
   END_IT
 }
 
+bool test_an_acknowledgement_the_link_half_took_ends_the_loop() {
+  IT("reports the session lost on the pass whose acknowledgement was half written");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
+  // Half a PUBACK cannot be finished or taken back, so the session goes down inside this pass.
+  shimClient.truncateNextWrite(2U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+  IS_FALSE(client.connected());
+
+  END_IT
+}
+
+bool test_a_qos1_message_is_acknowledged_without_a_callback() {
+  IT("acknowledges a qos1 message even with nothing listening for it");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  // No callback: the acknowledgement is the protocol's, and an unanswered qos1 message holds a
+  // place in what the broker has in flight for the rest of the session.
+  PubSubClient client(server, 1883U, nullptr, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
+  const uint8_t puback[] = { 0x40U, 0x2U, 0x12U, 0x34U };
+  shimClient.expect(puback, 4U);
+
+  const uint16_t afterConnect = shimClient.received();
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
+bool test_a_publish_with_both_qos_bits_set_ends_the_session() {
+  IT("ends the session on a PUBLISH at the reserved QoS level");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // 0x36: PUBLISH with both QoS bits set, which [MQTT-3.3.1-4] forbids. Taken for a QoS 0 message
+  // the packet identifier would reach the callback as the first two bytes of the payload.
+  const uint8_t publish[] = { 0x36U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x12U, 0x34U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+
+  END_IT
+}
+
+bool test_a_packet_with_invalid_reserved_flags_ends_the_session() {
+  IT("ends the session on a packet whose reserved flags are not what its type allows");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // 0xD2 where a PINGRESP is 0xD0: the low nibble is reserved for every type but PUBLISH.
+  const uint8_t pingresp[] = { 0xD2U, 0x00U };
+  shimClient.respond(pingresp, 2U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+
+  END_IT
+}
+
+bool test_a_topic_carrying_a_null_character_ends_the_session() {
+  IT("ends the session on a topic carrying U+0000");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Topic "a\0b", payload "xy". Handed on as a C string the topic would read as "a", and the
+  // message would be routed by a name nobody published to.
+  const uint8_t publish[] = { 0x30U, 0x07U, 0x00U, 0x03U, 0x61U, 0x00U, 0x62U, 0x78U, 0x79U };
+  shimClient.respond(publish, 9U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -451,12 +575,17 @@ int main() {
   test_a_message_still_arriving_is_waited_for();
   test_a_message_that_never_finishes_drops_the_connection();
   test_receive_oversized_message();
-  test_an_oversized_message_leaves_the_next_one_readable();
+  test_nothing_behind_an_oversized_message_is_read();
   test_resize_buffer();
   test_receive_qos1();
-  test_topic_length_past_the_packet_is_dropped();
+  test_topic_length_past_the_packet_ends_the_session();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
   test_a_ping_request_from_the_broker_is_ignored();
+  test_an_acknowledgement_the_link_half_took_ends_the_loop();
+  test_a_qos1_message_is_acknowledged_without_a_callback();
+  test_a_publish_with_both_qos_bits_set_ends_the_session();
+  test_a_packet_with_invalid_reserved_flags_ends_the_session();
+  test_a_topic_carrying_a_null_character_ends_the_session();
 
   FINISH
 }

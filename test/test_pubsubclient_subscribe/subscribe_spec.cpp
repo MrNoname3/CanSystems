@@ -294,6 +294,99 @@ bool test_packet_ids_step_past_zero_to_one() {
   END_IT
 }
 
+bool test_subscribe_refuses_a_filter_the_standard_forbids() {
+  IT("refuses a filter that is empty or misplaces a wildcard");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The only bytes the link may see from here on are this one packet's, carrying packet id 1:
+  // anything a refused call leaked would land on the expectation first and be caught.
+  const uint8_t expected[] = { 0xA2U, 0x9U, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  shimClient.expect(expected, 11U);
+
+  // A filter is at least one character [MQTT-4.7.3-1]; '#' stands alone or follows a separator and
+  // is the last character [MQTT-4.7.1-2]; '+' occupies an entire level [MQTT-4.7.1-3].
+  IS_FALSE(client.subscribe("", 0U));
+  IS_FALSE(client.subscribe("sport/tennis#", 0U));
+  IS_FALSE(client.subscribe("sport/#/player", 0U));
+  IS_FALSE(client.subscribe("sport+", 0U));
+  IS_FALSE(client.unsubscribe(""));
+  IS_FALSE(client.unsubscribe("sport/tennis#"));
+
+  IS_TRUE(client.unsubscribe("topic"));
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
+bool test_subscribe_accepts_the_wildcards_the_standard_allows() {
+  IT("accepts a filter whose wildcards sit where they belong");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t suback[] = { 0x90U, 0x03U, 0x00U, 0x01U, 0x00U };
+  shimClient.respond(suback, 5U);
+  IS_TRUE(client.subscribe("sport/tennis/+", 0U));
+
+  const uint8_t suback2[] = { 0x90U, 0x03U, 0x00U, 0x02U, 0x00U };
+  shimClient.respond(suback2, 5U);
+  IS_TRUE(client.subscribe("#", 0U));
+
+  const uint8_t suback3[] = { 0x90U, 0x03U, 0x00U, 0x03U, 0x00U };
+  shimClient.respond(suback3, 5U);
+  IS_TRUE(client.subscribe("sport/+/player1/#", 0U));
+
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
+bool test_subscribe_carries_on_a_half_read_message() {
+  IT("finishes a message the reader was part way through and still finds its SUBACK");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The first 8 bytes of a 14-byte PUBLISH: the reader keeps its place and waits for the rest.
+  const uint8_t head[] = { 0x30U, 0x0CU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+
+  // The rest of it, and behind that the answer to the subscription below. Starting the reader over
+  // would take the six bytes left of the message for a packet header and lose the stream.
+  const uint8_t tail[] = { 0x63U, 0x68U, 0x65U, 0x6cU, 0x6cU, 0x6fU };
+  shimClient.respond(tail, 6U);
+  const uint8_t suback[] = { 0x90U, 0x03U, 0x00U, 0x01U, 0x00U };
+  shimClient.respond(suback, 5U);
+
+  IS_TRUE(client.subscribe("topic", 0U));
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -308,6 +401,9 @@ int main() {
   test_unsubscribe();
   test_unsubscribe_not_connected();
   test_packet_ids_step_past_zero_to_one();
+  test_subscribe_refuses_a_filter_the_standard_forbids();
+  test_subscribe_accepts_the_wildcards_the_standard_allows();
+  test_subscribe_carries_on_a_half_read_message();
 
   FINISH
 }

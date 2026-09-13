@@ -39,7 +39,10 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
   // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
   // sit beside them: a level too wide for those two bits is shifted straight onto them.
-  if((willTopic != nullptr) && (willQos > 2U)) { return false; }
+  if((willTopic != nullptr) && ((willQos > 2U) || !topicNameValid(willTopic))) { return false; }
+  // The client id is the one field every CONNECT carries [MQTT-3.1.3-3], and an empty one asks the
+  // broker to name this client, which it only does for a clean session [MQTT-3.1.3-7].
+  if((id == nullptr) || ((id[0] == '\0') && !cleanSession)) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
                       static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
@@ -50,6 +53,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     return false;
   }
   nextMsgId = 0U;   // Stepped before use, so the first id of the session is 1.
+  // Half a packet belongs to the session it was arriving on; this one starts the stream over.
+  resetReader();
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
   // Zero means a string did not fit; checkStringLength() has already stopped the client.
   if(length == 0U) { return false; }
@@ -133,6 +138,7 @@ bool PubSubClient::awaitConnAck() {
   }
   const RxResult connAck = readPacketBlocking();
   const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
+  const State connAckFailure = readFailureState(connAck);
   const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
@@ -146,6 +152,7 @@ bool PubSubClient::awaitConnAck() {
       // its deadline is already past, so the first ping this one cannot hand over ends the
       // connection on the spot instead of being retried.
       pingUnsent = false;
+      pingReasked = false;
       connectionState = State::CONNECTED;
       return true;
     }
@@ -155,7 +162,7 @@ bool PubSubClient::awaitConnAck() {
   } else {
     // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
     // ended the last session as the reason this one never started.
-    connectionState = State::CONNECTION_TIMEOUT;
+    connectionState = connAckFailure;
   }
   tcpClient.stop();
   return false;
@@ -169,7 +176,7 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
   while(waiting) {
     const RxResult result = readPacketBlocking();
     if(result != RxResult::Complete) {
-      connectionState = State::CONNECTION_TIMEOUT;
+      connectionState = readFailureState(result);
       tcpClient.stop();
       waiting = false;
     } else if(isSubAckFor(packetId)) {
@@ -178,8 +185,16 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
-      dispatchPacket();
-      waiting = ((millis() - startMs) < timeoutMs);
+      const uint16_t len = rxLen;
+      const uint8_t llen = rxLengthLength;
+      resetReader();
+      if(!dispatchPacket(len, llen)) {
+        connectionState = State::PROTOCOL_ERROR;
+        tcpClient.stop();
+        waiting = false;
+      } else {
+        waiting = ((millis() - startMs) < timeoutMs);
+      }
     }
   }
   resetReader();
@@ -209,19 +224,61 @@ void PubSubClient::resetReader() {
   rxMultiplier = 1U;
   rxRemaining = 0U;
   rxPayloadDone = 0U;
-  rxOversized = false;
+}
+
+bool PubSubClient::topicNameValid(const char* topic) const {
+  const size_t len = strnlen(topic, this->bufferSize);
+  if(len == 0U) { return false; }
+  return (memchr(topic, '+', len) == nullptr) && (memchr(topic, '#', len) == nullptr);
+}
+
+bool PubSubClient::topicFilterValid(const char* filter) const {
+  const size_t len = strnlen(filter, this->bufferSize);
+  if(len == 0U) { return false; }
+  for(size_t i = 0U; i < len; i++) {
+    // Both wildcards stand for a whole level, so each has to be bounded by separators or by the
+    // ends of the filter; the multi-level one has nothing after it at all.
+    const bool levelStarts = (i == 0U) || (filter[i - 1U] == '/');
+    const bool levelEnds = (i == (len - 1U)) || (filter[i + 1U] == '/');
+    if(filter[i] == '#') {
+      if(!levelStarts || (i != (len - 1U))) { return false; }
+    } else if(filter[i] == '+') {
+      if(!levelStarts || !levelEnds) { return false; }
+    } else {
+      // An ordinary character, which any level may hold.
+    }
+  }
+  return true;
+}
+
+bool PubSubClient::fixedHeaderFlagsValid(uint8_t header) {
+  const uint8_t type = header & 0xF0U;
+  const uint8_t flags = header & 0x0FU;
+  if((type == 0U) || (type == MQTTReserved)) { return false; }   // neither number names a packet
+  // A PUBLISH spends its low nibble on dup, qos and retain, all but the qos level the standard
+  // reserves and gives no delivery protocol for.
+  if(type == MQTTPUBLISH) { return (flags & 0x06U) != 0x06U; }
+  if((type == MQTTPUBREL) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE)) { return flags == 0x02U; }
+  return flags == 0U;
+}
+
+PubSubClient::State PubSubClient::readFailureState(RxResult result) {
+  if(result == RxResult::TooLarge) { return State::PACKET_TOO_LARGE; }
+  if(result == RxResult::Malformed) { return State::PROTOCOL_ERROR; }
+  return State::CONNECTION_TIMEOUT;
 }
 
 PubSubClient::RxResult PubSubClient::readPacketBlocking() {
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   const uint32_t startMs = millis();
-  resetReader();
+  // What the reader already has is carried on rather than dropped: the bytes it has taken cannot
+  // be put back, and the rest of that packet is in the stream ahead of whatever is waited for here.
   while(true) {
     if(rxPhase == RxPhase::Payload) {
       if(advancePayload() == RxResult::Complete) { return RxResult::Complete; }
-    } else if(advanceHeader() == RxResult::Malformed) {
-      return RxResult::Malformed;
     } else {
+      const RxResult header = advanceHeader();
+      if((header == RxResult::Malformed) || (header == RxResult::TooLarge)) { return header; }
       // Header still coming; the timeout below is what ends the wait.
     }
     if((millis() - startMs) >= timeoutMs) { return RxResult::Incomplete; }
@@ -233,6 +290,10 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
   while(tcpClient.available() != 0) {
     const uint8_t byteIn = static_cast<uint8_t>(tcpClient.read());
     if(rxLen == 0U) {
+      // "If invalid flags are received, the receiver MUST close the Network Connection"
+      // [MQTT-2.2.2-2], which covers the reserved QoS level [MQTT-3.3.1-4] as well: read as a QoS 0
+      // message it would hand the callback the packet identifier as the first two payload bytes.
+      if(!fixedHeaderFlagsValid(byteIn)) { return RxResult::Malformed; }
       this->buffer[0] = byteIn;
       rxLen = 1U;
       continue;
@@ -248,8 +309,9 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
       // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
       const bool isPublish = ((this->buffer[0] & 0xF0U) == MQTTPUBLISH);
       if(isPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
-      // Marked here, acted on as the payload arrives: it is taken off the socket either way.
-      rxOversized = (rxLen + rxRemaining) > this->bufferSize;
+      // A packet with nowhere to go is an internal buffer full condition, which [MQTT-4.8.0-2]
+      // answers by ending the connection rather than by reading bytes that cannot be kept.
+      if((rxLen + rxRemaining) > this->bufferSize) { return RxResult::TooLarge; }
       rxPhase = RxPhase::Payload;
       return RxResult::Complete;
     }
@@ -263,74 +325,53 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
     const int ready = tcpClient.available();
     if(ready <= 0) { return RxResult::Incomplete; }
     const uint32_t left = rxRemaining - rxPayloadDone;
-    takePayloadBulk((static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left);
+    const uint32_t take = (static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left;
+    // What the client hands over is what was taken: counting the request instead would walk the
+    // parse position past bytes still on the socket, and every packet after it would be misread.
+    const int got = tcpClient.read(&this->buffer[rxLen], take);
+    if(got <= 0) { return RxResult::Incomplete; }
+    rxLen = static_cast<uint16_t>(rxLen + static_cast<uint32_t>(got));
+    rxPayloadDone += static_cast<uint32_t>(got);
   }
   return RxResult::Complete;
 }
 
-void PubSubClient::takePayloadBulk(uint32_t take) {
-  const uint32_t room = (rxLen < this->bufferSize) ? static_cast<uint32_t>(this->bufferSize - rxLen) : 0U;
-  const uint32_t kept = (room < take) ? room : take;
-  uint32_t stored = 0U;
-  if(kept != 0U) {
-    // What the client hands over is what was taken: counting the request instead would walk the
-    // parse position past bytes still on the socket, and every packet after it would be misread.
-    const int got = tcpClient.read(&this->buffer[rxLen], kept);
-    stored = (got > 0) ? static_cast<uint32_t>(got) : 0U;
-    rxLen = static_cast<uint16_t>(rxLen + stored);
-    rxPayloadDone += stored;
-  }
-  if(stored < kept) { return; }   // Short read: the rest is still coming, so nothing to discard yet.
-  // What will not fit is still taken off the socket: left there, it would be read as the next
-  // packet's header.
-  uint32_t dropped = 0U;
-  while(dropped < (take - kept)) {
-    uint8_t discard[discardChunkSize];
-    const uint32_t want = ((take - kept - dropped) < discardChunkSize) ? (take - kept - dropped) : discardChunkSize;
-    const int got = tcpClient.read(discard, want);
-    if(got <= 0) { break; }
-    dropped += static_cast<uint32_t>(got);
-  }
-  rxPayloadDone += dropped;
-}
-
-void PubSubClient::dispatchPacket() {
-  const uint16_t len = rxLen;
-  const uint8_t llen = rxLengthLength;
+bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
+      const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+      // The topic length and the packet length are two independent numbers off the wire, and every
+      // index below is built from the first one. A packet where they disagree is a protocol
+      // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
+      const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
+      if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
+        return false;
+      }
+      // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
+      // callback as a C string, which would end at that byte and hide what the message was about.
+      if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
+        return false;
+      }
+      // Taken before the callback runs, as the acknowledgement is built after it: a callback that
+      // publishes writes its own packet over the one being read here.
+      const uint16_t msgId = (msgIdLen != 0U)
+                                 ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
+                                 : 0U;
       if(callback != nullptr) {
-        const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-        // The topic length and the packet length are two independent numbers off the wire, and
-        // every index below is built from the first one. A packet where they disagree is dropped
-        // rather than trusted: the reader consumed exactly the announced bytes, so the stream
-        // stays in step and only this message is lost.
-        const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;
-        if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
-          return;
-        }
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
         char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
-        // msgId only present for QOS>0
-        if((this->buffer[0] & 0x06U) == MQTTQOS1) {
-          // Taken before the callback runs, as the acknowledgement below is built after it: a
-          // callback that publishes writes its own packet over the one being read here.
-          const uint16_t msgId = static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U]);
-          uint8_t* const payload = this->buffer + llen + 3U + tl + 2U;
-          callback(topic, payload, len - llen - 3U - tl - 2U);
-
-          // Sent the way every other packet is: a link that took none of it has not acknowledged
-          // anything, and counting the attempt as outgoing traffic would put the keep-alive ping
-          // off by a whole interval the broker does not wait through.
-          this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
-          this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
-          (void)write(MQTTPUBACK, this->buffer, 2U);
-        } else {
-          uint8_t* const payload = this->buffer + llen + 3U + tl;
-          callback(topic, payload, len - llen - 3U - tl);
-        }
+        uint8_t* const payload = this->buffer + llen + 3U + tl + msgIdLen;
+        callback(topic, payload, len - llen - 3U - tl - msgIdLen);
+      }
+      if(msgIdLen != 0U) {
+        // Owed by the protocol rather than by the application, and sent the way every other packet
+        // is: a link that took none of it has acknowledged nothing, and counting the attempt as
+        // outgoing traffic would put the keep-alive ping off by an interval the broker does not wait.
+        this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
+        this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
+        (void)write(MQTTPUBACK, this->buffer, 2U);
       }
     } else if(type == MQTTPINGREQ) {
       // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
@@ -339,6 +380,27 @@ void PubSubClient::dispatchPacket() {
       pingOutstanding = false;
     }
   }
+  return true;
+}
+
+bool PubSubClient::settleReader() {
+  if(rxPhase == RxPhase::Idle) { return true; }
+  const RxResult result = readPacketBlocking();
+  if(result != RxResult::Complete) {
+    connectionState = readFailureState(result);
+    tcpClient.stop();
+    resetReader();
+    return false;
+  }
+  const uint16_t len = rxLen;
+  const uint8_t llen = rxLengthLength;
+  resetReader();
+  if(!dispatchPacket(len, llen)) {
+    connectionState = State::PROTOCOL_ERROR;
+    tcpClient.stop();
+    return false;
+  }
+  return true;
 }
 
 bool PubSubClient::pumpReader(uint32_t t) {
@@ -350,8 +412,8 @@ bool PubSubClient::pumpReader(uint32_t t) {
   RxResult result = RxResult::Incomplete;
   if(rxPhase == RxPhase::Header) {
     result = advanceHeader();
-    if(result == RxResult::Malformed) {
-      connectionState = State::DISCONNECTED;
+    if((result == RxResult::Malformed) || (result == RxResult::TooLarge)) {
+      connectionState = readFailureState(result);
       tcpClient.stop();
       resetReader();
       return false;
@@ -362,10 +424,20 @@ bool PubSubClient::pumpReader(uint32_t t) {
   }
   if(result == RxResult::Complete) {
     lastInActivity = t;
-    // An oversized packet was taken off the socket to keep the stream in step, and goes no further.
-    if(!rxOversized) { dispatchPacket(); }
+    const uint16_t len = rxLen;
+    const uint8_t llen = rxLengthLength;
+    // Started over before the packet is answered: the callback may publish, and an outgoing packet
+    // is built in this same buffer.
     resetReader();
-    return true;
+    if(!dispatchPacket(len, llen)) {
+      connectionState = State::PROTOCOL_ERROR;
+      tcpClient.stop();
+      return false;
+    }
+    // Answering the packet can end the session - an acknowledgement the link took only half of
+    // leaves nothing to carry on with - and the caller is owed the session it has, not the one it
+    // had a packet ago.
+    return this->connectionState == State::CONNECTED;
   }
   // Half a packet is not an error yet - the rest may be one segment behind. It becomes one when it
   // stays away for the whole socket timeout: a peer that stops mid-packet is as gone as one that
@@ -379,33 +451,23 @@ bool PubSubClient::pumpReader(uint32_t t) {
   return true;
 }
 
-bool PubSubClient::keepAlivePing(uint32_t t) {
+void PubSubClient::keepAlivePing(uint32_t t) {
   // A client that would not take the ping has not pinged: counting it as sent would leave the
-  // broker in silence for the rest of the interval and end the connection over a ping it never
-  // saw. The timers stay put so a later pass asks again - a second apart, because loop() runs at
-  // the caller's pass rate and one that just refused will not take it a millisecond later.
-  const bool firstAttempt = !pingUnsent;
-  if(firstAttempt || ((t - lastPingAttempt) >= pingRetryIntervalMs)) {
-    lastPingAttempt = t;
-    this->buffer[0] = MQTTPINGREQ;
-    this->buffer[1] = 0U;
-    if(tcpClient.write(this->buffer, 2U) == 2U) {
-      lastOutActivity = lastInActivity = t;
-      // Only the first of a run is stamped: the budget belongs to the ping that went unanswered.
-      if(!pingOutstanding) { pingSentSince = t; }
-      pingOutstanding = true;
-      pingUnsent = false;
-    } else if(firstAttempt) {
-      pingUnsent = true;
-      pingUnsentSince = t;
-      if(refusedPings < UINT16_MAX) { refusedPings++; }
-    } else {
-      // A later refusal of the same ping; the deadline below is what ends it.
-    }
+  // broker in silence for the rest of the interval and end the connection over a ping it never saw.
+  lastPingAttempt = t;
+  // Not in the packet buffer: the reader may be part way through a message there, and two bytes
+  // written over its header would have the rest of it delivered as something else entirely.
+  const uint8_t pingReq[2] = { MQTTPINGREQ, 0U };
+  if(tcpClient.write(pingReq, 2U) == 2U) {
+    lastOutActivity = lastInActivity = t;
+    pingOutstanding = true;
+    pingUnsent = false;
+  } else if(!pingUnsent) {
+    pingUnsent = true;
+    if(refusedPings < UINT16_MAX) { refusedPings++; }
+  } else {
+    // A later refusal of the same ping; the run's deadline in loop() is what ends it.
   }
-  // A client that never takes it is as dead as a broker that never answers, and has the same
-  // time to come round in.
-  return !pingUnsent || ((t - pingUnsentSince) <= pingAnswerBudgetMs());
 }
 
 uint32_t PubSubClient::pingAnswerBudgetMs() const {
@@ -414,31 +476,42 @@ uint32_t PubSubClient::pingAnswerBudgetMs() const {
   return ((keepAliveMs * brokerPatienceNumerator) / brokerPatienceDenominator) - pingIntervalMs;
 }
 
+bool PubSubClient::servicePing(uint32_t t) {
+  // A keep-alive of zero is the broker being told not to time this client out, so there is nothing
+  // to prove and no deadline to keep.
+  if(this->keepAlive == 0U) { return true; }
+  if(pingOutstanding || pingUnsent) {
+    // One deadline covers the whole run, counted from when the ping fell due rather than from
+    // whichever attempt is outstanding: a ping first refused and then taken would otherwise get a
+    // second budget of its own, and the two together outlast what the broker waits through.
+    if((t - pingDueSince) >= pingAnswerBudgetMs()) { return false; }
+    // Bytes still waiting to be read may carry the answer, so a ping that has gone out is not
+    // asked again until they have been. A ping the link would not take is a different matter:
+    // what arrives says nothing about whether the link will take it now.
+    const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
+    if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
+      if(pingOutstanding && !pingReasked) {
+        // Counted for the ping that went missing, not for each ask after it.
+        pingReasked = true;
+        if(unansweredPings < UINT16_MAX) { unansweredPings++; }
+      }
+      keepAlivePing(t);
+    }
+    return true;
+  }
+  const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
+  if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
+    pingDueSince = t;
+    pingReasked = false;
+    keepAlivePing(t);
+  }
+  return true;
+}
+
 bool PubSubClient::loop() {
   if(connected()) {
     const uint32_t t = millis();
-    const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
-    bool alive = true;
-    if(pingOutstanding) {
-      // The missing PINGRESP is the only sign of a lost ping, a lost answer or a broker that has
-      // gone, so it is asked again rather than taken as the end of the session.
-      if((t - pingSentSince) >= pingAnswerBudgetMs()) {
-        alive = false;
-      } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && (tcpClient.available() == 0)) {
-        // Not while bytes are still waiting to be read: the answer may be among them.
-        // The first ask of a run is what the count is of, the attempts after it being the same
-        // ping again.
-        if((lastPingAttempt == pingSentSince) && (unansweredPings < UINT16_MAX)) { unansweredPings++; }
-        alive = keepAlivePing(t);
-      } else {
-        // Still inside the time the last ask has to be answered in.
-      }
-    } else if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
-      alive = keepAlivePing(t);
-    } else {
-      // Neither side has been quiet long enough for a ping to be due.
-    }
-    if(!alive) {
+    if(!servicePing(t)) {
       this->connectionState = State::CONNECTION_TIMEOUT;
       tcpClient.stop();
       return false;
@@ -453,10 +526,11 @@ bool PubSubClient::publish(const char* topic, const char* payload, bool retained
 }
 
 bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicNameValid(topic)) {
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     if(this->bufferSize < MQTT_MAX_HEADER_SIZE + 2U + strnlen(topic, this->bufferSize) + plength) {
       // Too long
       return false;
@@ -482,12 +556,13 @@ bool PubSubClient::publish_P(const char* topic, const char* payload, bool retain
 }
 
 bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicNameValid(topic)) {
     return false;
   }
   if(!connected()) {
     return false;
   }
+  if(!settleReader()) { return false; }
 
   const uint16_t tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
   // The header and the topic go through the buffer; only the payload is streamed from flash, so
@@ -589,7 +664,7 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
 }
 
 bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicFilterValid(topic)) {
     return false;
   }
   if(qos > 1U) {
@@ -602,6 +677,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     // Leave room in the buffer for header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
@@ -621,7 +697,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
 }
 
 bool PubSubClient::unsubscribe(const char* topic) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicFilterValid(topic)) {
     return false;
   }
   if(this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
@@ -629,6 +705,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     uint16_t length = MQTT_MAX_HEADER_SIZE;
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
       nextMsgId = 1U;
@@ -642,9 +719,8 @@ bool PubSubClient::unsubscribe(const char* topic) {
 }
 
 void PubSubClient::disconnect() {
-  this->buffer[0] = MQTTDISCONNECT;
-  this->buffer[1] = 0U;
-  tcpClient.write(this->buffer, 2U);
+  const uint8_t disconnectPacket[2] = { MQTTDISCONNECT, 0U };
+  (void)tcpClient.write(disconnectPacket, 2U);
   connectionState = State::DISCONNECTED;
   tcpClient.flush();
   tcpClient.stop();

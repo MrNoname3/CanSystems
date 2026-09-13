@@ -93,6 +93,8 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
+    PROTOCOL_ERROR          = -7,  // A packet arrived that the standard forbids; the session was ended here.
+    PACKET_TOO_LARGE        = -6,  // A packet arrived that the buffer cannot hold; the session was ended here.
     CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
@@ -158,9 +160,9 @@ public:
   PubSubClient& setServer(const char* domain, uint16_t port);
 
   /// @brief Sets the callback invoked when an MQTT message is received.
-  /// @details Runs inside loop(), with the message still in the packet buffer. Publishing from it
-  /// is allowed: everything the acknowledgement of that message needs has been read out before it
-  /// is called, so the buffer is the callback's to overwrite. Calling loop() from it is not.
+  /// @details Runs with the message still in the packet buffer, from loop() or from whichever call
+  /// had to finish a part-read message. Publishing from it is allowed: the buffer is the callback's
+  /// to overwrite by then. Calling loop() from it is not.
   /// @param callback Function to call on message arrival.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
@@ -369,11 +371,16 @@ private:
   /// @return Total header size (fixed byte + variable-length field bytes).
   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
 
-  /// @brief Hands the due keep-alive ping to the TCP client, retrying a refusal at intervals.
+  /// @brief Keeps the link proven: sends the ping that has fallen due, and asks again for one that
+  /// went unanswered or unsent.
   /// @param t Current timestamp from millis().
-  /// @return `false` once the ping has gone unsent for a whole keep-alive interval; `true` while
-  ///         it is still worth asking.
-  [[nodiscard]] bool keepAlivePing(uint32_t t);
+  /// @return `false` once the run has outlasted what the broker waits through, which ends the session.
+  [[nodiscard]] bool servicePing(uint32_t t);
+
+  /// @brief Hands the due keep-alive ping to the TCP client, whether for the first time or again.
+  /// @details Says nothing about giving up: one deadline covers the whole run, and `loop()` holds it.
+  /// @param t Current timestamp from millis().
+  void keepAlivePing(uint32_t t);
 
   /// @brief How far the reader has got through the packet it is assembling.
   /// @details The reader keeps its place between `loop()` calls, so a packet that arrives in
@@ -389,6 +396,7 @@ private:
     Incomplete = 0U,  // Ran out of bytes; come back next pass.
     Complete = 1U,    // The whole packet is in.
     Malformed = 2U,   // The stream cannot be trusted, and cannot be brought back into step.
+    TooLarge = 3U,    // Announced more bytes than the buffer holds; nothing can be made of it.
   };
 
   /// @brief Takes whatever the socket has ready and dispatches a packet once it is whole.
@@ -399,19 +407,44 @@ private:
   /// @brief Collects the fixed header and the remaining-length field.
   /// @return `Complete` once the length is known and the phase has moved on to the payload,
   ///         `Incomplete` while bytes of it are still missing, `Malformed` for a length field
-  ///         that cannot be parsed or announces less than a PUBLISH needs.
+  ///         that cannot be parsed or announces less than a PUBLISH needs, `TooLarge` for one
+  ///         announcing more than the buffer holds.
   RxResult advanceHeader();
 
-  /// @brief Collects the announced payload, buffering and streaming what belongs where.
+  /// @brief Collects the announced payload into the buffer.
+  /// @details The header phase has already refused anything that would not fit, so every announced
+  /// byte has a place to go.
   /// @return `Complete` once every announced byte has been taken off the socket.
   RxResult advancePayload();
 
-  /// @brief Takes several payload bytes at once, keeping what fits and discarding the rest.
-  /// @param take How many bytes to take; the caller has checked that many are ready.
-  void takePayloadBulk(uint32_t take);
-
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
+
+  /// @brief Whether a string may be published to as a topic name.
+  /// @details At least one character [MQTT-4.7.3-1], and no wildcard, which belongs to filters
+  /// alone [MQTT-4.7.1-1].
+  /// @param topic Null-terminated topic name.
+  /// @return `true` when it may go out as a topic name.
+  [[nodiscard]] bool topicNameValid(const char* topic) const;
+
+  /// @brief Whether a string may be subscribed or unsubscribed with as a topic filter.
+  /// @details At least one character [MQTT-4.7.3-1]; '#' stands alone or follows a separator and
+  /// ends the filter [MQTT-4.7.1-2]; '+' fills a level of its own [MQTT-4.7.1-3].
+  /// @param filter Null-terminated topic filter.
+  /// @return `true` when it may go out as a topic filter.
+  [[nodiscard]] bool topicFilterValid(const char* filter) const;
+
+  /// @brief Whether a fixed-header byte carries the flags its packet type is allowed.
+  /// @details Table 2.2 gives each type its flags; the three that carry 0b0010 are the ones a
+  /// client sends, and a PUBLISH owns its low nibble apart from the reserved QoS level.
+  /// @param header The first byte of the packet.
+  /// @return `false` for a byte no conforming peer sends.
+  [[nodiscard]] static bool fixedHeaderFlagsValid(uint8_t header);
+
+  /// @brief The state a read that did not produce a packet leaves the session in.
+  /// @param result What the reader made of it.
+  /// @return The state to report, which names the reason rather than calling every failure a timeout.
+  [[nodiscard]] static State readFailureState(RxResult result);
 
   /// @brief Runs the reader until a whole packet is in or the socket timeout runs out.
   /// @details Only the connect handshake uses this: until the CONNACK arrives there is nothing
@@ -420,21 +453,31 @@ private:
   RxResult readPacketBlocking();
 
   /// @brief Dispatches a packet the reader has finished assembling.
-  /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
-  /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
-  /// PINGRESP clears the outstanding ping, and a PINGREQ - which only a client sends - is dropped.
-  void dispatchPacket();
+  /// @details Reads it out of `buffer` and answers it: a PUBLISH reaches the callback (and is
+  /// acknowledged at QoS 1), a PINGRESP clears the outstanding ping, and a PINGREQ - which only a
+  /// client sends - is dropped. The caller starts the reader over first, the callback sharing the buffer.
+  /// @param len Bytes of the packet in `buffer`.
+  /// @param llen Bytes its remaining-length field took.
+  /// @return `false` for a packet the standard says must not be accepted, which the caller answers
+  ///         by ending the session.
+  [[nodiscard]] bool dispatchPacket(uint16_t len, uint8_t llen);
 
-  /// @brief How long a ping may go unanswered before the session is ended here.
-  /// @details Seven fifths of a keep-alive interval, less the ping interval: a broker stops
-  /// waiting at three halves of one, so the session ends on this side and with a reason. The ping
-  /// interval is held at or below the keep-alive, so the subtraction never runs below zero.
+  /// @brief Finishes and answers a packet the reader is part way through, if there is one.
+  /// @details Every outgoing packet is built in the buffer the reader fills, so one written over a
+  /// part-read message would have the rest of it read onto the wrong bytes. Blocks for at most the
+  /// socket timeout, and only while a message is actually in progress.
+  /// @return `false` when the session was given up on rather than settled.
+  [[nodiscard]] bool settleReader();
+
+  /// @brief How long a ping run may last, counted from the moment the ping fell due.
+  /// @details Seven fifths of a keep-alive interval, less the ping interval: the run starts one
+  /// ping interval after the last traffic, and a broker stops waiting at three halves of one - so
+  /// the session ends on this side, and with a reason. The subtraction never runs below zero, the
+  /// ping interval being held at or below the keep-alive.
   [[nodiscard]] uint32_t pingAnswerBudgetMs() const;
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
-  // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
-  static constexpr uint8_t discardChunkSize = 64U;
   // Scratch for a run of a PROGMEM payload on its way from flash to the link.
   static constexpr uint8_t progmemChunkSize = 32U;
 
@@ -451,13 +494,12 @@ private:
   uint32_t rxMultiplier = 1U;                     // Place value of the next remaining-length digit.
   uint32_t rxRemaining = 0U;                      // Bytes the remaining-length field announced.
   uint32_t rxPayloadDone = 0U;                    // Announced bytes taken off the socket so far.
-  bool rxOversized = false;                       // Packet longer than the buffer: taken off the socket, then dropped.
   uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
-  uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
+  bool pingReasked = false;                       // `true` once the ping of this run has been asked for a second time.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
-  uint32_t pingSentSince = 0U;                    // Timestamp (ms) of the first PINGREQ of the run the broker has not answered.
+  uint32_t pingDueSince = 0U;                     // Timestamp (ms) at which the ping of the current run fell due.
   uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
   uint16_t unansweredPings = 0U;                  // Keep-alive pings that had to be asked again; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
