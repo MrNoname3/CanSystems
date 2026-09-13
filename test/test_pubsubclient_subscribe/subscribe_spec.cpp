@@ -294,6 +294,65 @@ bool test_packet_ids_step_past_zero_to_one() {
   END_IT
 }
 
+bool test_subscribe_refuses_a_filter_the_standard_forbids() {
+  IT("refuses a filter that is empty or misplaces a wildcard");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint16_t afterConnect = shimClient.received();
+
+  // A filter is at least one character [MQTT-4.7.3-1]; '#' stands alone or follows a separator and
+  // is the last character [MQTT-4.7.1-2]; '+' occupies an entire level [MQTT-4.7.1-3].
+  IS_FALSE(client.subscribe("", 0U));
+  IS_FALSE(client.subscribe("sport/tennis#", 0U));
+  IS_FALSE(client.subscribe("sport/#/player", 0U));
+  IS_FALSE(client.subscribe("sport+", 0U));
+  IS_FALSE(client.unsubscribe(""));
+  IS_FALSE(client.unsubscribe("sport/tennis#"));
+
+  IS_EQUAL(shimClient.received(), afterConnect);
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
+bool test_subscribe_accepts_the_wildcards_the_standard_allows() {
+  IT("accepts a filter whose wildcards sit where they belong");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t suback[] = { 0x90U, 0x03U, 0x00U, 0x01U, 0x00U };
+  shimClient.respond(suback, 5U);
+  IS_TRUE(client.subscribe("sport/tennis/+", 0U));
+
+  const uint8_t suback2[] = { 0x90U, 0x03U, 0x00U, 0x02U, 0x00U };
+  shimClient.respond(suback2, 5U);
+  IS_TRUE(client.subscribe("#", 0U));
+
+  const uint8_t suback3[] = { 0x90U, 0x03U, 0x00U, 0x03U, 0x00U };
+  shimClient.respond(suback3, 5U);
+  IS_TRUE(client.subscribe("sport/+/player1/#", 0U));
+
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -308,6 +367,8 @@ int main() {
   test_unsubscribe();
   test_unsubscribe_not_connected();
   test_packet_ids_step_past_zero_to_one();
+  test_subscribe_refuses_a_filter_the_standard_forbids();
+  test_subscribe_accepts_the_wildcards_the_standard_allows();
 
   FINISH
 }

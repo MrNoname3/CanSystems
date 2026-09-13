@@ -289,6 +289,34 @@ bool test_publish_P_half_written_ends_the_session() {
   END_IT
 }
 
+bool test_publish_refuses_a_topic_name_the_standard_forbids() {
+  IT("refuses to publish to an empty topic or one carrying a wildcard");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint16_t afterConnect = shimClient.received();
+
+  // "The wildcard characters can be used in Topic Filters, but MUST NOT be used within a Topic
+  // Name" [MQTT-4.7.1-1], and a topic name is at least one character long [MQTT-4.7.3-1].
+  IS_FALSE(client.publish("home/+/temp", "1"));
+  IS_FALSE(client.publish("home/#", "1"));
+  IS_FALSE(client.publish("", "1"));
+  IS_FALSE(client.publish_P("home/+/temp", "1", false));
+
+  IS_EQUAL(shimClient.received(), afterConnect);
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Publish");
   test_publish();
@@ -300,6 +328,7 @@ int main() {
   test_publish_P();
   test_publish_P_too_long();
   test_publish_without_a_topic();
+  test_publish_refuses_a_topic_name_the_standard_forbids();
   test_publish_P_half_written_ends_the_session();
   test_publish_half_written_ends_the_session();
   test_publish_refused_keeps_the_session();

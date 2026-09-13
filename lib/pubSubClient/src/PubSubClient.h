@@ -414,6 +414,20 @@ private:
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
 
+  /// @brief Whether a string may be published to as a topic name.
+  /// @details At least one character [MQTT-4.7.3-1], and no wildcard, which belongs to filters
+  /// alone [MQTT-4.7.1-1].
+  /// @param topic Null-terminated topic name.
+  /// @return `true` when it may go out as a topic name.
+  [[nodiscard]] bool topicNameValid(const char* topic) const;
+
+  /// @brief Whether a string may be subscribed or unsubscribed with as a topic filter.
+  /// @details At least one character [MQTT-4.7.3-1]; '#' stands alone or follows a separator and
+  /// ends the filter [MQTT-4.7.1-2]; '+' fills a level of its own [MQTT-4.7.1-3].
+  /// @param filter Null-terminated topic filter.
+  /// @return `true` when it may go out as a topic filter.
+  [[nodiscard]] bool topicFilterValid(const char* filter) const;
+
   /// @brief Whether a fixed-header byte carries the flags its packet type is allowed.
   /// @details Table 2.2 gives each type its flags; the three that carry 0b0010 are the ones a
   /// client sends, and a PUBLISH owns its low nibble apart from the reserved QoS level.

@@ -39,7 +39,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
 bool PubSubClient::connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, bool willRetain, const char* willMessage, bool cleanSession) {
   // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
   // sit beside them: a level too wide for those two bits is shifted straight onto them.
-  if((willTopic != nullptr) && (willQos > 2U)) { return false; }
+  if((willTopic != nullptr) && ((willQos > 2U) || !topicNameValid(willTopic))) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
                       static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
@@ -214,6 +214,31 @@ void PubSubClient::resetReader() {
   rxMultiplier = 1U;
   rxRemaining = 0U;
   rxPayloadDone = 0U;
+}
+
+bool PubSubClient::topicNameValid(const char* topic) const {
+  const size_t len = strnlen(topic, this->bufferSize);
+  if(len == 0U) { return false; }
+  return (memchr(topic, '+', len) == nullptr) && (memchr(topic, '#', len) == nullptr);
+}
+
+bool PubSubClient::topicFilterValid(const char* filter) const {
+  const size_t len = strnlen(filter, this->bufferSize);
+  if(len == 0U) { return false; }
+  for(size_t i = 0U; i < len; i++) {
+    // Both wildcards stand for a whole level, so each has to be bounded by separators or by the
+    // ends of the filter; the multi-level one has nothing after it at all.
+    const bool levelStarts = (i == 0U) || (filter[i - 1U] == '/');
+    const bool levelEnds = (i == (len - 1U)) || (filter[i + 1U] == '/');
+    if(filter[i] == '#') {
+      if(!levelStarts || (i != (len - 1U))) { return false; }
+    } else if(filter[i] == '+') {
+      if(!levelStarts || !levelEnds) { return false; }
+    } else {
+      // An ordinary character, which any level may hold.
+    }
+  }
+  return true;
 }
 
 bool PubSubClient::fixedHeaderFlagsValid(uint8_t header) {
@@ -473,7 +498,7 @@ bool PubSubClient::publish(const char* topic, const char* payload, bool retained
 }
 
 bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicNameValid(topic)) {
     return false;
   }
   if(connected()) {
@@ -502,7 +527,7 @@ bool PubSubClient::publish_P(const char* topic, const char* payload, bool retain
 }
 
 bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t plength, bool retained) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicNameValid(topic)) {
     return false;
   }
   if(!connected()) {
@@ -609,7 +634,7 @@ bool PubSubClient::write(uint8_t header, uint8_t* buf, uint16_t length) {
 }
 
 bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicFilterValid(topic)) {
     return false;
   }
   if(qos > 1U) {
@@ -641,7 +666,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
 }
 
 bool PubSubClient::unsubscribe(const char* topic) {
-  if(topic == nullptr) {
+  if((topic == nullptr) || !topicFilterValid(topic)) {
     return false;
   }
   if(this->bufferSize < 9U + strnlen(topic, this->bufferSize)) {
