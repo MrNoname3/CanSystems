@@ -414,6 +414,13 @@ private:
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
 
+  /// @brief Whether a fixed-header byte carries the flags its packet type is allowed.
+  /// @details Table 2.2 gives each type its flags; the three that carry 0b0010 are the ones a
+  /// client sends, and a PUBLISH owns its low nibble apart from the reserved QoS level.
+  /// @param header The first byte of the packet.
+  /// @return `false` for a byte no conforming peer sends.
+  [[nodiscard]] static bool fixedHeaderFlagsValid(uint8_t header);
+
   /// @brief The state a read that did not produce a packet leaves the session in.
   /// @param result What the reader made of it.
   /// @return The state to report, which names the reason rather than calling every failure a timeout.

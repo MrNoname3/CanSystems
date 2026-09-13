@@ -216,6 +216,17 @@ void PubSubClient::resetReader() {
   rxPayloadDone = 0U;
 }
 
+bool PubSubClient::fixedHeaderFlagsValid(uint8_t header) {
+  const uint8_t type = header & 0xF0U;
+  const uint8_t flags = header & 0x0FU;
+  if((type == 0U) || (type == MQTTReserved)) { return false; }   // neither number names a packet
+  // A PUBLISH spends its low nibble on dup, qos and retain, all but the qos level the standard
+  // reserves and gives no delivery protocol for.
+  if(type == MQTTPUBLISH) { return (flags & 0x06U) != 0x06U; }
+  if((type == MQTTPUBREL) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE)) { return flags == 0x02U; }
+  return flags == 0U;
+}
+
 PubSubClient::State PubSubClient::readFailureState(RxResult result) {
   if(result == RxResult::TooLarge) { return State::PACKET_TOO_LARGE; }
   if(result == RxResult::Malformed) { return State::PROTOCOL_ERROR; }
@@ -243,10 +254,10 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
   while(tcpClient.available() != 0) {
     const uint8_t byteIn = static_cast<uint8_t>(tcpClient.read());
     if(rxLen == 0U) {
-      // Both QoS bits set is the level the standard reserves and gives no delivery protocol for.
-      // [MQTT-3.3.1-4] answers one arriving by closing the connection; read as a QoS 0 message it
-      // would hand the callback the packet identifier as the first two bytes of the payload.
-      if(((byteIn & 0xF0U) == MQTTPUBLISH) && ((byteIn & 0x06U) == 0x06U)) { return RxResult::Malformed; }
+      // "If invalid flags are received, the receiver MUST close the Network Connection"
+      // [MQTT-2.2.2-2], which covers the reserved QoS level [MQTT-3.3.1-4] as well: read as a QoS 0
+      // message it would hand the callback the packet identifier as the first two payload bytes.
+      if(!fixedHeaderFlagsValid(byteIn)) { return RxResult::Malformed; }
       this->buffer[0] = byteIn;
       rxLen = 1U;
       continue;
