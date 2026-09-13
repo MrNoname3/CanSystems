@@ -39,6 +39,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   deps, and `requirements-ci.txt` the two CI-only ones (platformio, intelhex). All three are
   pinned exact.
 - urboot bootloader: `scripts/build_urboot.sh [771|800|801]` (podman/docker; see `bootloader/README.md`)
+- MQTT trace/fault proxy: `python scripts/mqtt_proxy.py [--drop client:PINGREQ:3] [--inject ...]` -
+  sits between a device and a **plaintext** broker, prints every packet both ways, and loses,
+  injects or cuts on command. `--help` carries the spec grammar.
 - Bench console: `python scripts/board_console.py --board esp|avr [--listen SECONDS]` - resets the
   attached board over the adapter's control lines and prints what it says next. The wiring has to
   be named: an ESP resets from RTS and is undisturbed by attaching, an ATmega resets from DTR,
