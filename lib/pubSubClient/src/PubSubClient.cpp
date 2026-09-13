@@ -426,6 +426,9 @@ bool PubSubClient::loop() {
         alive = false;
       } else if(((t - lastPingAttempt) >= pingRetryIntervalMs) && (tcpClient.available() == 0)) {
         // Not while bytes are still waiting to be read: the answer may be among them.
+        // The first ask of a run is what the count is of, the attempts after it being the same
+        // ping again.
+        if((lastPingAttempt == pingSentSince) && (unansweredPings < UINT16_MAX)) { unansweredPings++; }
         alive = keepAlivePing(t);
       } else {
         // Still inside the time the last ask has to be answered in.
@@ -717,6 +720,10 @@ PubSubClient::State PubSubClient::state() const {
 
 uint16_t PubSubClient::getRefusedPingCount() const {
   return this->refusedPings;
+}
+
+uint16_t PubSubClient::getUnansweredPingCount() const {
+  return this->unansweredPings;
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {
