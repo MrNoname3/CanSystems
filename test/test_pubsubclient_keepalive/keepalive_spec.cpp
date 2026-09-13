@@ -4,6 +4,7 @@
 #include "BDDTest.h"
 #include "trace.h"
 #include "Arduino.h"
+#include <cstring>
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
@@ -19,8 +20,13 @@ namespace {
   constexpr uint32_t stepMs = 250U;   // Finer step, for the tests that watch where inside an interval something lands.
 }  // namespace
 
-void callback([[maybe_unused]] char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
-  // handle message arrived
+bool message_arrived = false;
+char arrivedTopic[256] = { '\0' };
+
+void callback(char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
+  message_arrived = true;
+  strncpy(arrivedTopic, topic, sizeof(arrivedTopic) - 1U);
+  arrivedTopic[sizeof(arrivedTopic) - 1U] = '\0';
 }
 
 bool test_keepalive_pings_idle() {
@@ -705,6 +711,51 @@ bool test_keepalive_zero_leaves_the_session_alone() {
   END_IT
 }
 
+bool test_keepalive_ping_leaves_a_part_read_message_alone() {
+  IT("delivers a message the ping fell due in the middle of");
+  message_arrived = false;
+  arrivedTopic[0] = '\0';
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setKeepAlive(15U);
+  (void)client.setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Just under a ping interval after the connect, the first 8 bytes of a 14-byte PUBLISH to
+  // "topic" arrive. Nothing has completed since, so the link still reads as quiet.
+  setFakeMillis(baseMs + 4900U);
+  const uint8_t head[] = { 0x30U, 0x0CU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+  IS_FALSE(message_arrived);
+
+  // The ping falls due here, with the message still part-read. Two bytes written over its header
+  // would have the rest of it delivered as whatever those bytes now spell.
+  setFakeMillis(baseMs + 5100U);
+  IS_TRUE(client.loop());
+
+  setFakeMillis(baseMs + 5300U);
+  const uint8_t tail[] = { 0x63U, 0x68U, 0x65U, 0x6cU, 0x6cU, 0x6fU };
+  shimClient.respond(tail, 6U);
+  const uint8_t pingresp[] = { 0xD0U, 0x00U };
+  shimClient.respond(pingresp, 2U);
+  IS_TRUE(client.loop());
+
+  IS_TRUE(message_arrived);
+  IS_TRUE(strcmp(arrivedTopic, "topic") == 0);
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -725,6 +776,7 @@ int main() {
   test_keepalive_a_refused_puback_is_not_traffic();
   test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
   test_keepalive_zero_leaves_the_session_alone();
+  test_keepalive_ping_leaves_a_part_read_message_alone();
 
   FINISH
 }

@@ -463,9 +463,10 @@ void PubSubClient::keepAlivePing(uint32_t t) {
   // A client that would not take the ping has not pinged: counting it as sent would leave the
   // broker in silence for the rest of the interval and end the connection over a ping it never saw.
   lastPingAttempt = t;
-  this->buffer[0] = MQTTPINGREQ;
-  this->buffer[1] = 0U;
-  if(tcpClient.write(this->buffer, 2U) == 2U) {
+  // Not in the packet buffer: the reader may be part way through a message there, and two bytes
+  // written over its header would have the rest of it delivered as something else entirely.
+  const uint8_t pingReq[2] = { MQTTPINGREQ, 0U };
+  if(tcpClient.write(pingReq, 2U) == 2U) {
     lastOutActivity = lastInActivity = t;
     pingOutstanding = true;
     pingUnsent = false;
@@ -726,9 +727,8 @@ bool PubSubClient::unsubscribe(const char* topic) {
 }
 
 void PubSubClient::disconnect() {
-  this->buffer[0] = MQTTDISCONNECT;
-  this->buffer[1] = 0U;
-  tcpClient.write(this->buffer, 2U);
+  const uint8_t disconnectPacket[2] = { MQTTDISCONNECT, 0U };
+  (void)tcpClient.write(disconnectPacket, 2U);
   connectionState = State::DISCONNECTED;
   tcpClient.flush();
   tcpClient.stop();
