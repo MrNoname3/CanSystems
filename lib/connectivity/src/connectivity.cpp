@@ -197,6 +197,7 @@ bool Connectivity::loadServerCertificate() {
 
 void Connectivity::setupMqttClient() {
   mqttClient.setServer(mqttCredentials.serverName, mqttCredentials.serverPort);
+  mqttClient.setPingInterval(mqttPingInterval);
   mqttClient.setCallback([this](const char* topic, const uint8_t* payload, uint32_t length) -> void {
     if((topic == nullptr) || (payload == nullptr) || (length == 0U)) { return; }
     const char* subtopic = MqttTopics::getSubtopicOf(topic);

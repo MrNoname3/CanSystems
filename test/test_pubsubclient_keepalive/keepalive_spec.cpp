@@ -16,6 +16,7 @@ uint8_t server[] = { 172U, 16U, 0U, 2U };
 namespace {
   constexpr uint32_t baseMs = 1000U;  // Non-zero fake-clock start; the value itself is irrelevant.
   constexpr uint32_t tickMs = 1000U;  // Virtual time advanced per loop() iteration (was sleep(1)).
+  constexpr uint32_t stepMs = 250U;   // Finer step, for the tests that watch where inside an interval something lands.
 }  // namespace
 
 void callback([[maybe_unused]] char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
@@ -173,7 +174,7 @@ bool test_keepalive_no_pings_inbound_qos1() {
 }
 
 bool test_keepalive_disconnects_hung() {
-  IT("disconnects a hung connection");
+  IT("gives up on a hung connection before the broker stops waiting");
 
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
@@ -182,24 +183,72 @@ bool test_keepalive_disconnects_hung() {
   shimClient.respond(connack, 4U);
 
   setFakeMillis(baseMs);
-  uint32_t now = baseMs;
-
   PubSubClient client(server, 1883U, callback, shimClient);
-  bool rc = client.connect("client_test1");
-  IS_TRUE(rc);
+  // The shape this is meant to be run in: the broker is told to wait a keep-alive interval, and
+  // the ping falls due well inside it, so what is left is room to ask again.
+  client.setKeepAlive(15U).setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
 
-  const uint8_t pingreq[] = { 0xC0U, 0x0U };
-  shimClient.expect(pingreq, 2U);
-
-  for(uint8_t i = 0U; i < 32U; i++) {
-    now += tickMs;
+  // Nothing is ever answered. A broker stops waiting one and a half intervals after the last
+  // packet it saw - the connect, here - so the session has to end before that, and end here.
+  const uint32_t brokerGivesUpMs = baseMs + ((3U * 15U * tickMs) / 2U);
+  bool rc = true;
+  uint32_t now = baseMs;
+  while(rc && (now < brokerGivesUpMs)) {
+    now += stepMs;
     setFakeMillis(now);
     rc = client.loop();
   }
-  IS_FALSE(rc);
 
-  PubSubClient::State state = client.state();
-  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
+  IS_FALSE(rc);
+  IS_TRUE(now < brokerGivesUpMs);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+  // And it asked more than once on the way there.
+  IS_TRUE(shimClient.received() > static_cast<uint16_t>(afterConnect + 2U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_asks_again_for_a_missing_ping_answer() {
+  IT("asks again for a ping answer that never came, and keeps the session when it does");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setKeepAlive(15U).setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
+
+  // A ping interval after the connect the ping goes out, and nothing answers it.
+  setFakeMillis(baseMs + (6U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
+
+  // A second later, with nothing waiting to be read, it is asked again.
+  setFakeMillis(baseMs + (7U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
+
+  // This one is answered.
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (7U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+
+  // Past the point the broker would have stopped waiting on the ping that went missing, the
+  // session is still up.
+  setFakeMillis(baseMs + (23U * tickMs));
+  IS_TRUE(client.loop());
+  IS_TRUE(client.connected());
 
   IS_FALSE(shimClient.error());
 
@@ -328,7 +377,7 @@ bool test_keepalive_counts_the_pings_the_client_refused() {
 }
 
 bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
-  IT("reports a timeout when the client refuses the ping for a whole keep-alive interval");
+  IT("reports a timeout when the client refuses the ping for longer than it has");
 
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
@@ -345,7 +394,12 @@ bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
   shimClient.failNextWrites(100U);
   setFakeMillis(baseMs + (16U * tickMs));
   IS_TRUE(client.loop());
-  setFakeMillis(baseMs + (32U * tickMs));
+
+  // The time it has is the same the broker leaves for a ping to be answered in: two fifths of an
+  // interval here, the ping interval being the keep-alive by default.
+  setFakeMillis(baseMs + (21U * tickMs));
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (23U * tickMs));
   IS_FALSE(client.loop());
   IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
 
@@ -466,6 +520,73 @@ bool test_keepalive_a_refused_puback_is_not_traffic() {
   END_IT
 }
 
+bool test_keepalive_holds_the_ping_inside_the_keepalive() {
+  IT("holds a ping interval asked to go above the keep-alive down to it");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setKeepAlive(10U).setPingInterval(30U);
+  IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
+
+  // Two pings fall due inside twenty-two seconds at the keep-alive's ten, and none at all at the
+  // thirty seconds asked for.
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  setFakeMillis(baseMs + (11U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (11U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (22U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_brings_the_ping_down_with_the_keepalive() {
+  IT("brings a ping interval down with a keep-alive set under it afterwards");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // Room for a twenty-second ping when it is set, and none for it afterwards.
+  client.setKeepAlive(30U).setPingInterval(20U).setKeepAlive(10U);
+  IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
+
+  // Ten seconds is what the ping runs at now, not the twenty it was given: two fall due inside
+  // twenty-two seconds, where twenty would have left room for one.
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+  setFakeMillis(baseMs + (11U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (11U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (22U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -473,6 +594,9 @@ int main() {
   test_keepalive_pings_with_inbound_qos0();
   test_keepalive_no_pings_inbound_qos1();
   test_keepalive_disconnects_hung();
+  test_keepalive_asks_again_for_a_missing_ping_answer();
+  test_keepalive_holds_the_ping_inside_the_keepalive();
+  test_keepalive_brings_the_ping_down_with_the_keepalive();
   test_keepalive_retries_a_refused_ping();
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();

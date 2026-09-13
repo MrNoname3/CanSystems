@@ -39,6 +39,9 @@ private:
   static constexpr uint32_t deviceResetTime = Time::hrToMs(3U);     // Time before the device resets due to being offline.
   static constexpr uint32_t onlineSettleTime = Time::minToMs(5U);   // A connection must hold this long before the backoff ladder is cleared.
   static constexpr uint8_t dateTimeStrBufSize = 24U;                // Buffer size for ISO8601 date-time strings.
+  // Well under the keep-alive, so a ping that goes missing can be asked about again before the
+  // broker stops waiting.
+  static constexpr uint16_t mqttPingInterval = 5U;                  // Quiet seconds before the client proves the link with a ping.
   static constexpr const char* const ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };  // Hungarian NTP pool servers.
   static constexpr const char* tzEuropeBudapest = "CET-1CEST,M3.5.0/2,M10.5.0/3";  // POSIX TZ (CET/CEST, EU DST rules); system time stays UTC, only localtime() applies it.
   // clang-format off

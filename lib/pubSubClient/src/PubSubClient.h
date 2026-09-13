@@ -26,6 +26,12 @@
 #define MQTT_KEEPALIVE 15
 #endif
 
+// MQTT_PING_INTERVAL : Quiet seconds before a PINGREQ is due. Override with setPingInterval().
+//   Held at or below MQTT_KEEPALIVE; the gap between the two is room to ask a lost ping again.
+#ifndef MQTT_PING_INTERVAL
+#define MQTT_PING_INTERVAL MQTT_KEEPALIVE
+#endif
+
 // MQTT_SOCKET_TIMEOUT : Socket timeout interval in seconds. Override with setSocketTimeout().
 #ifndef MQTT_SOCKET_TIMEOUT
 #define MQTT_SOCKET_TIMEOUT 2
@@ -70,7 +76,10 @@ private:
   static constexpr uint16_t defaultBufferSize = static_cast<uint16_t>(MQTT_MAX_PACKET_SIZE);    // Default packet buffer size.
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
-  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
+  static constexpr uint16_t defaultPingInterval = static_cast<uint16_t>(MQTT_PING_INTERVAL);     // Default quiet time before a PINGREQ is due.
+  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over, and between two asks for a missing answer.
+  static constexpr uint8_t brokerPatienceNumerator = 7U;                                        // A session ends here at 7/5 of a keep-alive interval;
+  static constexpr uint8_t brokerPatienceDenominator = 5U;                                      // a broker stops waiting at 3/2 of one.
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
   static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
 
@@ -156,10 +165,19 @@ public:
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
 
-  /// @brief Sets the MQTT keep-alive interval.
+  /// @brief Sets the MQTT keep-alive interval - what the broker is told to wait for.
+  /// @details A ping interval above the new value is brought down with it.
   /// @param keepAlive Keep-alive interval in seconds.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setKeepAlive(uint16_t keepAlive);
+
+  /// @brief Sets how long a quiet link waits before proving itself with a PINGREQ.
+  /// @details Separate from the keep-alive: that is the broker's patience, this is how often the
+  /// client shows it is there. The gap between them is what a lost ping can be asked again in.
+  /// @param pingInterval Quiet time before a ping is due, in seconds; held at the keep-alive when
+  /// it is asked to go above it.
+  /// @return Reference to this instance for method chaining.
+  PubSubClient& setPingInterval(uint16_t pingInterval);
 
   /// @brief Sets the socket read timeout.
   /// @param timeout Socket timeout in seconds.
@@ -400,6 +418,12 @@ private:
   /// PINGREQ is answered, a PINGRESP clears the outstanding ping.
   void dispatchPacket();
 
+  /// @brief How long a ping may go unanswered before the session is ended here.
+  /// @details Seven fifths of a keep-alive interval, less the ping interval: a broker stops
+  /// waiting at three halves of one, so the session ends on this side and with a reason. The ping
+  /// interval is held at or below the keep-alive, so the subtraction never runs below zero.
+  [[nodiscard]] uint32_t pingAnswerBudgetMs() const;
+
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
   // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
@@ -408,7 +432,8 @@ private:
   static constexpr uint8_t progmemChunkSize = 32U;
 
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
-  uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds.
+  uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds; what the broker was told to wait for.
+  uint16_t pingInterval = defaultPingInterval;    // Quiet time before a PINGREQ is due, in seconds; never above keepAlive.
   uint16_t socketTimeout = defaultSocketTimeout;  // Socket read timeout in seconds.
   uint16_t nextMsgId = 0U;                        // Next MQTT message ID (1–65535; 0 is reserved).
   uint32_t lastOutActivity = 0U;                  // Timestamp (ms) of the last outgoing packet.
@@ -425,6 +450,7 @@ private:
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.
   uint32_t pingUnsentSince = 0U;                  // Timestamp (ms) of the first refusal of the pending PINGREQ.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
+  uint32_t pingSentSince = 0U;                    // Timestamp (ms) of the first PINGREQ of the run the broker has not answered.
   uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
