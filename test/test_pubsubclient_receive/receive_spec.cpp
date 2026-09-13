@@ -406,8 +406,8 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
   END_IT
 }
 
-bool test_a_truncated_ping_answer_ends_the_session() {
-  IT("ends the session when only part of a ping answer went out");
+bool test_a_ping_request_from_the_broker_is_ignored() {
+  IT("does not answer a ping request from the broker");
   reset_callback();
 
   ShimClient shimClient;
@@ -416,20 +416,30 @@ bool test_a_truncated_ping_answer_ends_the_session() {
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
+  setFakeMillis(1000U);
   PubSubClient client(server, 1883U, callback, shimClient);
   IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
 
-  // The broker asks, and the link takes one byte of the two-byte answer and stops.
+  // The next thing out of the client is its own ping, not an answer: a PINGRESP would fail the
+  // match here, on its first byte.
   const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+
+  // The broker asks, which is a thing brokers do not do and clients must not answer.
   shimClient.respond(pingreq, 2U);
-  shimClient.truncateNextWrite(1U);
-  (void)client.loop();
+  setFakeMillis(2000U);
+  IS_TRUE(client.loop());
 
-  IS_FALSE(client.connected());
-  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+  // Past a ping interval since the connect, and an answer would have put this one off past it.
+  setFakeMillis(18000U);
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
 
+  IS_TRUE(client.connected());
   IS_FALSE(shimClient.error());
 
+  clearFakeMillis();
   END_IT
 }
 
@@ -446,7 +456,7 @@ int main() {
   test_receive_qos1();
   test_topic_length_past_the_packet_is_dropped();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
-  test_a_truncated_ping_answer_ends_the_session();
+  test_a_ping_request_from_the_broker_is_ignored();
 
   FINISH
 }

@@ -415,7 +415,7 @@ private:
   /// @brief Dispatches a packet the reader has finished assembling.
   /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
   /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
-  /// PINGREQ is answered, a PINGRESP clears the outstanding ping.
+  /// PINGRESP clears the outstanding ping, and a PINGREQ - which only a client sends - is dropped.
   void dispatchPacket();
 
   /// @brief How long a ping may go unanswered before the session is ended here.

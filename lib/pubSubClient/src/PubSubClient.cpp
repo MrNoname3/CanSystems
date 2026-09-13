@@ -333,9 +333,8 @@ void PubSubClient::dispatchPacket() {
         }
       }
     } else if(type == MQTTPINGREQ) {
-      // Through the same path as the acknowledgement above: half an answer is read as the start of
-      // whatever goes out next, and the broker is left parsing a frame that never ends.
-      (void)write(MQTTPINGRESP, this->buffer, 0U);
+      // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
+      // protocol error. One arriving here goes no further.
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
