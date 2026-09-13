@@ -594,6 +594,41 @@ bool test_keepalive_brings_the_ping_down_with_the_keepalive() {
   END_IT
 }
 
+bool test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised() {
+  IT("gives a capped ping interval back when the keep-alive is raised over it again");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // Twenty seconds asked for, squeezed to five by the keep-alive, then room made for it again.
+  client.setKeepAlive(30U).setPingInterval(20U).setKeepAlive(5U).setKeepAlive(30U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The next bytes the link may see are this publish's. A ping interval left behind at five would
+  // have one falling due before the pass below, and it would land on the expectation first.
+  const uint8_t expected[] = { 0x30U, 0x8U, 0x0U, 0x4U, 0x67U, 0x6fU, 0x6fU, 0x64U, 0x31U, 0x32U };
+  shimClient.expect(expected, 10U);
+  setFakeMillis(baseMs + (11U * tickMs));
+  IS_TRUE(client.loop());
+  IS_TRUE(client.publish("good", "12"));
+
+  // And the twenty seconds it was given are what the ping waits out.
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  setFakeMillis(baseMs + (22U * tickMs));
+  IS_TRUE(client.loop());
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_keepalive_counts_the_answers_that_went_missing() {
   IT("counts one per ping whose answer went missing, not one per ask");
 
@@ -806,6 +841,7 @@ int main() {
   test_keepalive_retries_a_refused_ping();
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();
+  test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised();
   test_keepalive_counts_the_answers_that_went_missing();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();

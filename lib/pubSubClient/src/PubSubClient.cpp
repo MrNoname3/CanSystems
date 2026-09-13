@@ -805,13 +805,14 @@ PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
 PubSubClient& PubSubClient::setKeepAlive(uint16_t keepAlive) {
   this->keepAlive = keepAlive;
   // Whichever order the two are set in, the ping stays inside what the broker was told to wait for.
-  if(this->pingInterval > keepAlive) {
-    this->pingInterval = keepAlive;
-  }
+  // The cap is applied to what was asked for rather than to the capped value, so a keep-alive
+  // raised again gives the ping interval back instead of leaving it where a lower one pushed it.
+  this->pingInterval = (this->wantedPingInterval > keepAlive) ? keepAlive : this->wantedPingInterval;
   return *this;
 }
 
 PubSubClient& PubSubClient::setPingInterval(uint16_t pingInterval) {
+  this->wantedPingInterval = pingInterval;
   this->pingInterval = (pingInterval > this->keepAlive) ? this->keepAlive : pingInterval;
   return *this;
 }

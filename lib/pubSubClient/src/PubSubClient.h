@@ -169,7 +169,8 @@ public:
   PubSubClient& setCallback(MqttCallback callback);
 
   /// @brief Sets the MQTT keep-alive interval - what the broker is told to wait for.
-  /// @details A ping interval above the new value is brought down with it.
+  /// @details The ping interval is capped by the new value, and released back up to what it was
+  /// asked for when the cap allows it again.
   /// @param keepAlive Keep-alive interval in seconds.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setKeepAlive(uint16_t keepAlive);
@@ -485,6 +486,7 @@ private:
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
   uint16_t keepAlive = defaultKeepAlive;          // Keep-alive interval in seconds; what the broker was told to wait for.
   uint16_t pingInterval = defaultPingInterval;    // Quiet time before a PINGREQ is due, in seconds; never above keepAlive.
+  uint16_t wantedPingInterval = defaultPingInterval;  // What setPingInterval() was last asked for, before the keep-alive capped it.
   uint16_t socketTimeout = defaultSocketTimeout;  // Socket read timeout in seconds.
   uint16_t nextMsgId = 0U;                        // Next MQTT message ID (1–65535; 0 is reserved).
   uint32_t lastOutActivity = 0U;                  // Timestamp (ms) of the last outgoing packet.
