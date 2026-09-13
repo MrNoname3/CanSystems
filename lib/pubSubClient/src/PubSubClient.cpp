@@ -340,6 +340,13 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
+      // Nothing above QoS 1 is ever subscribed for, and a server delivers at the lower of the
+      // published level and the one it granted [MQTT-3.8.4-6]. A QoS 2 message is therefore one no
+      // conforming broker sends here, and answering it would take the whole two-step flow behind a
+      // PUBREC; read as anything less, its packet identifier lands on the front of the payload.
+      if((this->buffer[0] & 0x06U) == MQTTQOS2) {
+        return false;
+      }
       const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
       // The topic length and the packet length are two independent numbers off the wire, and every
       // index below is built from the first one. A packet where they disagree is a protocol
