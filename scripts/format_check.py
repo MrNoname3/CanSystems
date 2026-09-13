@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Format guard for the release gate. Two checks, both must pass:
+"""Format guard for the release gate. Three checks, all of which must pass:
 
   1. clang-format: every tracked C/C++ file is clang-format-clean
      (`clang-format --dry-run --Werror` against the project .clang-format).
@@ -7,6 +7,12 @@
      `insert_final_newline = true` in .editorconfig (clang-format itself is
      indifferent to it, so it is enforced here to keep the gate and the
      .editorconfig in harmony).
+  3. recorded mode: a tracked file that starts with a shebang is recorded executable,
+     and one recorded executable starts with a shebang. The mode is read from git
+     rather than from disk, because `core.fileMode` is off in this repository: the bit
+     on disk is not the bit that gets committed, and the committed one is what every
+     other checkout - the CI runner included - ends up with. No list to keep: whatever
+     is tracked is checked.
 
 Exits 1 (listing offenders) on any violation, 0 if the whole tree is clean.
 Usable standalone, as a git pre-commit hook, or as a step in release_check.py.
@@ -24,6 +30,8 @@ import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+EXECUTABLE_MODE = "100755"
+NOT_A_FILE_MODES = frozenset({"120000", "160000"})   # symlinks and submodule pointers
 CPP_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".tpp", ".ino", ".inl", ".ipp")
 
 # Bases under which the cpptools extension bundles its clang-format (local fallback).
@@ -57,6 +65,42 @@ def git_ls_files(*patterns: str) -> list[str]:
     result = subprocess.run(["git", "ls-files", "-z", *patterns], cwd=PROJECT_DIR,
                             capture_output=True, text=True, check=True)
     return sorted(name for name in result.stdout.split("\0") if name)
+
+
+def git_ls_files_with_modes() -> list[tuple[str, str]]:
+    """Every tracked file as (mode git has recorded, path), NUL-separated for the same reason."""
+    result = subprocess.run(["git", "ls-files", "-sz"], cwd=PROJECT_DIR,
+                            capture_output=True, text=True, check=True)
+    entries: list[tuple[str, str]] = []
+    for entry in result.stdout.split("\0"):
+        if not entry:
+            continue
+        meta, _, name = entry.partition("\t")
+        entries.append((meta.split()[0], name))
+    return sorted(entries, key=lambda entry: entry[1])
+
+
+def starts_with_shebang(path: Path) -> bool:
+    if path.is_symlink() or not path.is_file():
+        return False
+    with open(path, "rb") as handle:
+        return handle.read(2) == b"#!"
+
+
+def check_recorded_modes() -> tuple[list[str], list[str]]:
+    """Tracked files whose recorded mode and shebang disagree: (unrunnable, executable for nothing)."""
+    unrunnable: list[str] = []
+    pointless: list[str] = []
+    for mode, name in git_ls_files_with_modes():
+        path = PROJECT_DIR / name
+        if mode in NOT_A_FILE_MODES or not path.is_file():
+            continue                                      # tracked, but nothing here to read
+        if starts_with_shebang(path):
+            if mode != EXECUTABLE_MODE:
+                unrunnable.append(name)
+        elif mode == EXECUTABLE_MODE:
+            pointless.append(name)
+    return unrunnable, pointless
 
 
 def is_text_file(path: Path) -> bool:
@@ -105,6 +149,7 @@ def main() -> int:
 
     drifted = check_clang_format(clang_format)
     no_newline = check_final_newlines()
+    unrunnable, pointless = check_recorded_modes()
 
     if drifted:
         print(f"\nformat: {len(drifted)} file(s) need clang-format:")
@@ -114,12 +159,22 @@ def main() -> int:
         print(f"\nformat: {len(no_newline)} file(s) missing a final newline:")
         for path in no_newline:
             print(f"  {path}")
+    if unrunnable:
+        print(f"\nformat: {len(unrunnable)} file(s) start with a shebang but are not recorded executable:")
+        for path in unrunnable:
+            print(f"  {path}")
+        print("  fix with: git update-index --chmod=+x <files>")
+    if pointless:
+        print(f"\nformat: {len(pointless)} file(s) are recorded executable but have no shebang:")
+        for path in pointless:
+            print(f"  {path}")
+        print("  fix with: git update-index --chmod=-x <files>")
 
-    if drifted or no_newline:
-        print("\nFix with: clang-format -i <files>  /  append a trailing newline")
+    if drifted or no_newline or unrunnable or pointless:
+        print("\nFix with: clang-format -i <files>  /  append a trailing newline  /  git update-index --chmod")
         return 1
 
-    print("format: all clean (clang-format + final newline)")
+    print("format: all clean (clang-format + final newline + recorded mode)")
     return 0
 
 

@@ -30,7 +30,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   there is none - matches the pins; `--sync` installs them),
   `scripts/analysis_check.py` (clang-tidy over the check_* environments; `test/` is cppcheck's
   alone, there being no clang headers for the native platform to borrow),
-  `scripts/format_check.py` (clang-format + final newline),
+  `scripts/format_check.py` (clang-format + final newline + the executable bit git recorded,
+  which is not the one on disk: `core.fileMode` is off here),
   `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
