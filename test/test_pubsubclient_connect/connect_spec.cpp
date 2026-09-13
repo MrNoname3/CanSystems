@@ -375,6 +375,32 @@ bool test_connect_refused_with_an_undefined_code() {
   END_IT
 }
 
+bool test_connect_refuses_a_client_id_it_cannot_send() {
+  IT("refuses a missing client id, and an empty one outside a clean session");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+
+  // Every CONNECT carries a client id [MQTT-3.1.3-3]; measuring the length of one that is not
+  // there is the first thing the packet builder would do.
+  IS_FALSE(client.connect(nullptr));
+  // An empty id asks the broker to name this client, which it only does for a clean session
+  // [MQTT-3.1.3-7]; with CleanSession 0 it answers 0x02 and closes the connection.
+  IS_FALSE(client.connect("", nullptr, nullptr, nullptr, 0U, false, nullptr, false));
+
+  // The same empty id is accepted where the standard allows it.
+  IS_TRUE(client.connect("", nullptr, nullptr, nullptr, 0U, false, nullptr, true));
+
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Connect");
 
@@ -388,6 +414,7 @@ int main() {
   test_connect_accepts_username_password();
   test_connect_fails_on_bad_rc();
   test_connect_refused_with_an_undefined_code();
+  test_connect_refuses_a_client_id_it_cannot_send();
   test_connect_properly_formatted_hostname();
 
   test_connect_accepts_username_no_password();

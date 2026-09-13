@@ -40,6 +40,11 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
   // sit beside them: a level too wide for those two bits is shifted straight onto them.
   if((willTopic != nullptr) && ((willQos > 2U) || !topicNameValid(willTopic))) { return false; }
+  // The client id is the one field every CONNECT carries [MQTT-3.1.3-3], and the length of the
+  // string is measured before anything else is decided - there is nothing to measure without it.
+  // An empty one asks the broker to name this client, which it only does for a clean session
+  // [MQTT-3.1.3-7].
+  if((id == nullptr) || ((id[0] == '\0') && !cleanSession)) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
                       static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
