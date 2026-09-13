@@ -45,6 +45,7 @@ private:
   static constexpr const char* const ntpServers[] = { "0.hu.pool.ntp.org", "1.hu.pool.ntp.org", "2.hu.pool.ntp.org" };  // Hungarian NTP pool servers.
   static constexpr const char* tzEuropeBudapest = "CET-1CEST,M3.5.0/2,M10.5.0/3";  // POSIX TZ (CET/CEST, EU DST rules); system time stays UTC, only localtime() applies it.
   // clang-format off
+  static constexpr const char PROGMEM mqttProtocolErrorStr[]          = "MQTT_PROTOCOL_ERROR";            // MQTT forbidden packet string.
   static constexpr const char PROGMEM mqttPacketTooLargeStr[]         = "MQTT_PACKET_TOO_LARGE";          // MQTT packet past the buffer string.
   static constexpr const char PROGMEM mqttConnectionTimeoutStr[]      = "MQTT_CONNECTION_TIMEOUT";        // MQTT connection timeout string.
   static constexpr const char PROGMEM mqttConnectionLostStr[]         = "MQTT_CONNECTION_LOST";           // MQTT connection lost string.

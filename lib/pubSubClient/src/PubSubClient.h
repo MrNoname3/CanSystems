@@ -93,6 +93,7 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
+    PROTOCOL_ERROR          = -7,  // A packet arrived that the standard forbids; the session was ended here.
     PACKET_TOO_LARGE        = -6,  // A packet arrived that the buffer cannot hold; the session was ended here.
     CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
@@ -423,7 +424,9 @@ private:
   /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
   /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
   /// PINGRESP clears the outstanding ping, and a PINGREQ - which only a client sends - is dropped.
-  void dispatchPacket();
+  /// @return `false` for a packet the standard says must not be accepted, which the caller answers
+  ///         by ending the session.
+  [[nodiscard]] bool dispatchPacket();
 
   /// @brief How long a ping run may last, counted from the moment the ping fell due.
   /// @details Seven fifths of a keep-alive interval, less the ping interval: the run starts one

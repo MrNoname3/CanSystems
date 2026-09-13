@@ -341,8 +341,8 @@ bool test_receive_qos1() {
   END_IT
 }
 
-bool test_topic_length_past_the_packet_is_dropped() {
-  IT("drops a message whose topic length runs past the bytes that arrived");
+bool test_topic_length_past_the_packet_ends_the_session() {
+  IT("ends the session on a message whose topic length runs past the bytes that arrived");
   reset_callback();
 
   ShimClient shimClient;
@@ -355,14 +355,17 @@ bool test_topic_length_past_the_packet_is_dropped() {
   bool rc = client.connect("client_test1");
   IS_TRUE(rc);
 
-  // Remaining length 4, but the topic-length field claims 0xFFFF. Both numbers come off the
-  // wire, and a broker is free to disagree with itself.
+  // Remaining length 4, but the topic-length field claims 0xFFFF. Both numbers come off the wire
+  // and are meant to describe the same packet; one that disagrees with itself is a protocol
+  // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
   const uint8_t publish[] = { 0x30U, 0x04U, 0xFFU, 0xFFU, 0x41U, 0x42U };
   shimClient.respond(publish, 6U);
 
   rc = client.loop();
 
-  IS_TRUE(rc);
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
   IS_FALSE(callback_called);
   IS_FALSE(shimClient.error());
 
@@ -394,7 +397,7 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
 
   IS_FALSE(rc);
   IS_FALSE(callback_called);
-  IS_TRUE(client.state() == PubSubClient::State::DISCONNECTED);
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
 
   END_IT
 }
@@ -499,7 +502,7 @@ int main() {
   test_nothing_behind_an_oversized_message_is_read();
   test_resize_buffer();
   test_receive_qos1();
-  test_topic_length_past_the_packet_is_dropped();
+  test_topic_length_past_the_packet_ends_the_session();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
   test_a_ping_request_from_the_broker_is_ignored();
   test_an_acknowledgement_the_link_half_took_ends_the_loop();

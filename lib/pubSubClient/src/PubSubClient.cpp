@@ -178,9 +178,12 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
       granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
       waiting = false;
+    } else if(!dispatchPacket()) {
+      connectionState = State::PROTOCOL_ERROR;
+      tcpClient.stop();
+      waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
-      dispatchPacket();
       waiting = ((millis() - startMs) < timeoutMs);
     }
   }
@@ -276,20 +279,20 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
   return RxResult::Complete;
 }
 
-void PubSubClient::dispatchPacket() {
+bool PubSubClient::dispatchPacket() {
   const uint16_t len = rxLen;
   const uint8_t llen = rxLengthLength;
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
       const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-      // The topic length and the packet length are two independent numbers off the wire, and
-      // every index below is built from the first one. A packet where they disagree is dropped
-      // rather than trusted: the reader consumed exactly the announced bytes, so the stream
-      // stays in step and only this message is lost.
+      // The topic length and the packet length are two independent numbers off the wire, and every
+      // index below is built from the first one. A packet where they disagree is a protocol
+      // violation, which [MQTT-4.8.0-1] answers by closing the connection: the numbers that were
+      // meant to describe the same packet do not, so nothing in it can be trusted.
       const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
       if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
-        return;
+        return false;
       }
       // Taken before the callback runs, as the acknowledgement is built after it: a callback that
       // publishes writes its own packet over the one being read here.
@@ -321,6 +324,7 @@ void PubSubClient::dispatchPacket() {
       pingOutstanding = false;
     }
   }
+  return true;
 }
 
 bool PubSubClient::pumpReader(uint32_t t) {
@@ -333,7 +337,7 @@ bool PubSubClient::pumpReader(uint32_t t) {
   if(rxPhase == RxPhase::Header) {
     result = advanceHeader();
     if((result == RxResult::Malformed) || (result == RxResult::TooLarge)) {
-      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::DISCONNECTED;
+      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::PROTOCOL_ERROR;
       tcpClient.stop();
       resetReader();
       return false;
@@ -344,7 +348,12 @@ bool PubSubClient::pumpReader(uint32_t t) {
   }
   if(result == RxResult::Complete) {
     lastInActivity = t;
-    dispatchPacket();
+    if(!dispatchPacket()) {
+      connectionState = State::PROTOCOL_ERROR;
+      tcpClient.stop();
+      resetReader();
+      return false;
+    }
     resetReader();
     // Answering the packet can end the session - an acknowledgement the link took only half of
     // leaves nothing to carry on with - and the caller is owed the session it has, not the one it
