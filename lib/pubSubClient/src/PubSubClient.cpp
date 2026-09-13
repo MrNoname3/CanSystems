@@ -133,6 +133,7 @@ bool PubSubClient::awaitConnAck() {
   }
   const RxResult connAck = readPacketBlocking();
   const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
+  const bool connAckTooLarge = (connAck == RxResult::TooLarge);
   const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
@@ -156,7 +157,7 @@ bool PubSubClient::awaitConnAck() {
   } else {
     // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
     // ended the last session as the reason this one never started.
-    connectionState = State::CONNECTION_TIMEOUT;
+    connectionState = connAckTooLarge ? State::PACKET_TOO_LARGE : State::CONNECTION_TIMEOUT;
   }
   tcpClient.stop();
   return false;
@@ -170,7 +171,7 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
   while(waiting) {
     const RxResult result = readPacketBlocking();
     if(result != RxResult::Complete) {
-      connectionState = State::CONNECTION_TIMEOUT;
+      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::CONNECTION_TIMEOUT;
       tcpClient.stop();
       waiting = false;
     } else if(isSubAckFor(packetId)) {
@@ -210,7 +211,6 @@ void PubSubClient::resetReader() {
   rxMultiplier = 1U;
   rxRemaining = 0U;
   rxPayloadDone = 0U;
-  rxOversized = false;
 }
 
 PubSubClient::RxResult PubSubClient::readPacketBlocking() {
@@ -220,9 +220,9 @@ PubSubClient::RxResult PubSubClient::readPacketBlocking() {
   while(true) {
     if(rxPhase == RxPhase::Payload) {
       if(advancePayload() == RxResult::Complete) { return RxResult::Complete; }
-    } else if(advanceHeader() == RxResult::Malformed) {
-      return RxResult::Malformed;
     } else {
+      const RxResult header = advanceHeader();
+      if((header == RxResult::Malformed) || (header == RxResult::TooLarge)) { return header; }
       // Header still coming; the timeout below is what ends the wait.
     }
     if((millis() - startMs) >= timeoutMs) { return RxResult::Incomplete; }
@@ -249,8 +249,9 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
       // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
       const bool isPublish = ((this->buffer[0] & 0xF0U) == MQTTPUBLISH);
       if(isPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
-      // Marked here, acted on as the payload arrives: it is taken off the socket either way.
-      rxOversized = (rxLen + rxRemaining) > this->bufferSize;
+      // A packet with nowhere to go is an internal buffer full condition, which [MQTT-4.8.0-2]
+      // answers by ending the connection rather than by reading bytes that cannot be kept.
+      if((rxLen + rxRemaining) > this->bufferSize) { return RxResult::TooLarge; }
       rxPhase = RxPhase::Payload;
       return RxResult::Complete;
     }
@@ -264,35 +265,15 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
     const int ready = tcpClient.available();
     if(ready <= 0) { return RxResult::Incomplete; }
     const uint32_t left = rxRemaining - rxPayloadDone;
-    takePayloadBulk((static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left);
-  }
-  return RxResult::Complete;
-}
-
-void PubSubClient::takePayloadBulk(uint32_t take) {
-  const uint32_t room = (rxLen < this->bufferSize) ? static_cast<uint32_t>(this->bufferSize - rxLen) : 0U;
-  const uint32_t kept = (room < take) ? room : take;
-  uint32_t stored = 0U;
-  if(kept != 0U) {
+    const uint32_t take = (static_cast<uint32_t>(ready) < left) ? static_cast<uint32_t>(ready) : left;
     // What the client hands over is what was taken: counting the request instead would walk the
     // parse position past bytes still on the socket, and every packet after it would be misread.
-    const int got = tcpClient.read(&this->buffer[rxLen], kept);
-    stored = (got > 0) ? static_cast<uint32_t>(got) : 0U;
-    rxLen = static_cast<uint16_t>(rxLen + stored);
-    rxPayloadDone += stored;
+    const int got = tcpClient.read(&this->buffer[rxLen], take);
+    if(got <= 0) { return RxResult::Incomplete; }
+    rxLen = static_cast<uint16_t>(rxLen + static_cast<uint32_t>(got));
+    rxPayloadDone += static_cast<uint32_t>(got);
   }
-  if(stored < kept) { return; }   // Short read: the rest is still coming, so nothing to discard yet.
-  // What will not fit is still taken off the socket: left there, it would be read as the next
-  // packet's header.
-  uint32_t dropped = 0U;
-  while(dropped < (take - kept)) {
-    uint8_t discard[discardChunkSize];
-    const uint32_t want = ((take - kept - dropped) < discardChunkSize) ? (take - kept - dropped) : discardChunkSize;
-    const int got = tcpClient.read(discard, want);
-    if(got <= 0) { break; }
-    dropped += static_cast<uint32_t>(got);
-  }
-  rxPayloadDone += dropped;
+  return RxResult::Complete;
 }
 
 void PubSubClient::dispatchPacket() {
@@ -351,8 +332,8 @@ bool PubSubClient::pumpReader(uint32_t t) {
   RxResult result = RxResult::Incomplete;
   if(rxPhase == RxPhase::Header) {
     result = advanceHeader();
-    if(result == RxResult::Malformed) {
-      connectionState = State::DISCONNECTED;
+    if((result == RxResult::Malformed) || (result == RxResult::TooLarge)) {
+      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::DISCONNECTED;
       tcpClient.stop();
       resetReader();
       return false;
@@ -363,8 +344,7 @@ bool PubSubClient::pumpReader(uint32_t t) {
   }
   if(result == RxResult::Complete) {
     lastInActivity = t;
-    // An oversized packet was taken off the socket to keep the stream in step, and goes no further.
-    if(!rxOversized) { dispatchPacket(); }
+    dispatchPacket();
     resetReader();
     // Answering the packet can end the session - an acknowledgement the link took only half of
     // leaves nothing to carry on with - and the caller is owed the session it has, not the one it

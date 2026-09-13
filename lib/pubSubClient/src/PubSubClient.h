@@ -93,6 +93,7 @@ public:
   /// @brief MQTT connection state codes returned by state().
   // clang-format off
   enum class State : int8_t {
+    PACKET_TOO_LARGE        = -6,  // A packet arrived that the buffer cannot hold; the session was ended here.
     CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
@@ -388,6 +389,7 @@ private:
     Incomplete = 0U,  // Ran out of bytes; come back next pass.
     Complete = 1U,    // The whole packet is in.
     Malformed = 2U,   // The stream cannot be trusted, and cannot be brought back into step.
+    TooLarge = 3U,    // Announced more bytes than the buffer holds; nothing can be made of it.
   };
 
   /// @brief Takes whatever the socket has ready and dispatches a packet once it is whole.
@@ -398,16 +400,15 @@ private:
   /// @brief Collects the fixed header and the remaining-length field.
   /// @return `Complete` once the length is known and the phase has moved on to the payload,
   ///         `Incomplete` while bytes of it are still missing, `Malformed` for a length field
-  ///         that cannot be parsed or announces less than a PUBLISH needs.
+  ///         that cannot be parsed or announces less than a PUBLISH needs, `TooLarge` for one
+  ///         announcing more than the buffer holds.
   RxResult advanceHeader();
 
-  /// @brief Collects the announced payload, buffering and streaming what belongs where.
+  /// @brief Collects the announced payload into the buffer.
+  /// @details The header phase has already refused anything that would not fit, so every announced
+  /// byte has a place to go.
   /// @return `Complete` once every announced byte has been taken off the socket.
   RxResult advancePayload();
-
-  /// @brief Takes several payload bytes at once, keeping what fits and discarding the rest.
-  /// @param take How many bytes to take; the caller has checked that many are ready.
-  void takePayloadBulk(uint32_t take);
 
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
@@ -433,8 +434,6 @@ private:
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
-  // Scratch for the bytes of an oversized packet, which are read only to be thrown away.
-  static constexpr uint8_t discardChunkSize = 64U;
   // Scratch for a run of a PROGMEM payload on its way from flash to the link.
   static constexpr uint8_t progmemChunkSize = 32U;
 
@@ -451,7 +450,6 @@ private:
   uint32_t rxMultiplier = 1U;                     // Place value of the next remaining-length digit.
   uint32_t rxRemaining = 0U;                      // Bytes the remaining-length field announced.
   uint32_t rxPayloadDone = 0U;                    // Announced bytes taken off the socket so far.
-  bool rxOversized = false;                       // Packet longer than the buffer: taken off the socket, then dropped.
   uint32_t rxStartedMs = 0U;                      // millis() when the first byte of the packet arrived.
   bool pingOutstanding = false;                   // `true` if a PINGREQ was sent without a PINGRESP.
   bool pingUnsent = false;                        // `true` while a due PINGREQ has not been taken by the client.

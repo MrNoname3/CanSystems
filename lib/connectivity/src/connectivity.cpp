@@ -475,6 +475,9 @@ bool Connectivity::registerCallback(MqttBase* mqttBasePtr) {
 
 const char* Connectivity::getMqttStatusStr(PubSubClient::State status) {
   switch(status) {
+    case PubSubClient::State::PACKET_TOO_LARGE: {
+      return mqttPacketTooLargeStr;
+    }
     case PubSubClient::State::CONNECTION_TIMEOUT: {
       return mqttConnectionTimeoutStr;
     }

@@ -99,7 +99,7 @@ bool test_receive_max_sized_message() {
 }
 
 bool test_receive_oversized_message() {
-  IT("drops an oversized message");
+  IT("ends the session on a message the buffer cannot hold");
   reset_callback();
 
   ShimClient shimClient;
@@ -122,10 +122,13 @@ bool test_receive_oversized_message() {
   memcpy(bigPublish, publish, 16U);
   shimClient.respond(bigPublish, length);
 
+  // An internal buffer full condition is a Transient Error, which [MQTT-4.8.0-2] answers by
+  // closing the connection: a message read in part and passed on would be worse than none.
   rc = client.loop();
 
-  IS_TRUE(rc);
-
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::PACKET_TOO_LARGE);
+  IS_FALSE(client.connected());
   IS_FALSE(callback_called);
 
   IS_FALSE(shimClient.error());
@@ -133,8 +136,8 @@ bool test_receive_oversized_message() {
   END_IT
 }
 
-bool test_an_oversized_message_leaves_the_next_one_readable() {
-  IT("an oversized message is drained whole, so the message behind it still parses");
+bool test_nothing_behind_an_oversized_message_is_read() {
+  IT("reads nothing behind an oversized message, the session having ended with it");
   reset_callback();
 
   ShimClient shimClient;
@@ -153,17 +156,15 @@ bool test_an_oversized_message_leaves_the_next_one_readable() {
   memset(bigPublish, 'A', length);
   memcpy(bigPublish, publish, 16U);
   shimClient.respond(bigPublish, length);
-  // Right behind it, a message that fits: it can only be read if every byte of the one before it
-  // was taken off the socket rather than left there to be read as this one's header.
+  // Right behind it, a message that fits. It stays unread: the connection the two arrived on is
+  // gone, and what is left in the stream goes with it.
   const uint8_t smallPublish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
   shimClient.respond(smallPublish, 16U);
 
-  IS_TRUE(client.loop());          // the oversized one, dropped
+  IS_FALSE(client.loop());
   IS_FALSE(callback_called);
-  IS_TRUE(client.loop());          // the one behind it
-  IS_TRUE(callback_called);
-  IS_TRUE(strcmp(lastTopic, "topic") == 0);
-  IS_TRUE(memcmp(lastPayload, "payload", 7U) == 0);
+  IS_FALSE(client.loop());
+  IS_FALSE(callback_called);
 
   IS_FALSE(shimClient.error());
   END_IT
@@ -266,7 +267,7 @@ bool test_a_message_that_never_finishes_drops_the_connection() {
 }
 
 bool test_resize_buffer() {
-  IT("receives a message larger than the default maximum");
+  IT("receives a message larger than the default maximum once the buffer is grown");
   reset_callback();
 
   ShimClient shimClient;
@@ -287,18 +288,10 @@ bool test_resize_buffer() {
   memset(bigPublish, 'A', length);
   bigPublish[length] = 'B';
   memcpy(bigPublish, publish, 16U);
-  // Send it twice
-  shimClient.respond(bigPublish, length);
-  shimClient.respond(bigPublish, length);
 
-  rc = client.loop();
-  IS_TRUE(rc);
-
-  // First message fails as it is too big
-  IS_FALSE(callback_called);
-
-  // Resize the buffer
+  // One byte past the buffer it was connected with, and exactly the size of the grown one.
   IS_TRUE(client.setBufferSize(length));
+  shimClient.respond(bigPublish, length);
 
   rc = client.loop();
   IS_TRUE(rc);
@@ -503,7 +496,7 @@ int main() {
   test_a_message_still_arriving_is_waited_for();
   test_a_message_that_never_finishes_drops_the_connection();
   test_receive_oversized_message();
-  test_an_oversized_message_leaves_the_next_one_readable();
+  test_nothing_behind_an_oversized_message_is_read();
   test_resize_buffer();
   test_receive_qos1();
   test_topic_length_past_the_packet_is_dropped();
