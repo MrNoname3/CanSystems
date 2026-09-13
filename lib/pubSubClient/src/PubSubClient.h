@@ -414,6 +414,11 @@ private:
   /// @brief Starts a packet over, whatever became of the last one.
   void resetReader();
 
+  /// @brief The state a read that did not produce a packet leaves the session in.
+  /// @param result What the reader made of it.
+  /// @return The state to report, which names the reason rather than calling every failure a timeout.
+  [[nodiscard]] static State readFailureState(RxResult result);
+
   /// @brief Runs the reader until a whole packet is in or the socket timeout runs out.
   /// @details Only the connect handshake uses this: until the CONNACK arrives there is nothing
   /// else for the caller to get on with, so waiting here costs nothing the main loop would miss.

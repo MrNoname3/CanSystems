@@ -133,7 +133,7 @@ bool PubSubClient::awaitConnAck() {
   }
   const RxResult connAck = readPacketBlocking();
   const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
-  const bool connAckTooLarge = (connAck == RxResult::TooLarge);
+  const State connAckFailure = readFailureState(connAck);
   const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
@@ -157,7 +157,7 @@ bool PubSubClient::awaitConnAck() {
   } else {
     // Nothing came, or what came was not a CONNACK. Leaving the state alone would report whatever
     // ended the last session as the reason this one never started.
-    connectionState = connAckTooLarge ? State::PACKET_TOO_LARGE : State::CONNECTION_TIMEOUT;
+    connectionState = connAckFailure;
   }
   tcpClient.stop();
   return false;
@@ -171,7 +171,7 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
   while(waiting) {
     const RxResult result = readPacketBlocking();
     if(result != RxResult::Complete) {
-      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::CONNECTION_TIMEOUT;
+      connectionState = readFailureState(result);
       tcpClient.stop();
       waiting = false;
     } else if(isSubAckFor(packetId)) {
@@ -216,6 +216,12 @@ void PubSubClient::resetReader() {
   rxPayloadDone = 0U;
 }
 
+PubSubClient::State PubSubClient::readFailureState(RxResult result) {
+  if(result == RxResult::TooLarge) { return State::PACKET_TOO_LARGE; }
+  if(result == RxResult::Malformed) { return State::PROTOCOL_ERROR; }
+  return State::CONNECTION_TIMEOUT;
+}
+
 PubSubClient::RxResult PubSubClient::readPacketBlocking() {
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   const uint32_t startMs = millis();
@@ -237,6 +243,10 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
   while(tcpClient.available() != 0) {
     const uint8_t byteIn = static_cast<uint8_t>(tcpClient.read());
     if(rxLen == 0U) {
+      // Both QoS bits set is the level the standard reserves and gives no delivery protocol for.
+      // [MQTT-3.3.1-4] answers one arriving by closing the connection; read as a QoS 0 message it
+      // would hand the callback the packet identifier as the first two bytes of the payload.
+      if(((byteIn & 0xF0U) == MQTTPUBLISH) && ((byteIn & 0x06U) == 0x06U)) { return RxResult::Malformed; }
       this->buffer[0] = byteIn;
       rxLen = 1U;
       continue;
@@ -337,7 +347,7 @@ bool PubSubClient::pumpReader(uint32_t t) {
   if(rxPhase == RxPhase::Header) {
     result = advanceHeader();
     if((result == RxResult::Malformed) || (result == RxResult::TooLarge)) {
-      connectionState = (result == RxResult::TooLarge) ? State::PACKET_TOO_LARGE : State::PROTOCOL_ERROR;
+      connectionState = readFailureState(result);
       tcpClient.stop();
       resetReader();
       return false;
