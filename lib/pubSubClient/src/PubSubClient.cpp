@@ -137,8 +137,13 @@ bool PubSubClient::awaitConnAck() {
     }
   }
   const RxResult connAck = readPacketBlocking();
-  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
-  const State connAckFailure = readFailureState(connAck);
+  // "The first packet sent from the Server to the Client MUST be a CONNACK Packet" [MQTT-3.2.0-1],
+  // and it is four bytes long. Reading a return code out of anything else takes whatever sits at
+  // that offset for an answer - a PUBACK for message 0x1200 would read as a connection accepted.
+  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U) && ((this->buffer[0] & 0xF0U) == MQTTCONNACK);
+  // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
+  // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
+  const State connAckFailure = (connAck == RxResult::Complete) ? State::PROTOCOL_ERROR : readFailureState(connAck);
   const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
