@@ -17,7 +17,7 @@ clang-format==23.1.0        # format_check.py (check only). Renovate may bump it
                             # reformats anything, the gate fails the PR — review, then match the VS
                             # Code cpptools version so format-on-save agrees.
 ruff==0.16.6               # lint_check.py (lint only; ruff format is never run)
-pyright==1.1.411            # typecheck_check.py (strict)
+pyright==1.1.413            # typecheck_check.py (strict)
 pytest==9.1.1               # pytest_check.py
 gcovr==8.6                  # CI coverage job (native_test line coverage over lib/)
 packaging==26.3             # deps_check.py parses the requirement lines with it (also a pytest dep)
