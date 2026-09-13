@@ -527,7 +527,12 @@ bool PubSubClient::servicePing(uint32_t t) {
   }
   const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
   if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
-    pingDueSince = t;
+    // The run is timed from when the ping fell due, not from the pass that noticed it: a loop()
+    // held up elsewhere would otherwise carry the whole budget along with it, past the point the
+    // broker stops waiting. The side that went quiet first is the one the broker is timing, and
+    // the ping being due puts it a full interval behind t, so the sum stays below it.
+    const uint32_t quietSince = ((t - lastInActivity) > (t - lastOutActivity)) ? lastInActivity : lastOutActivity;
+    pingDueSince = quietSince + pingIntervalMs;
     pingReasked = false;
     keepAlivePing(t);
   }
