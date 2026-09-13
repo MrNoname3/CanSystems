@@ -426,7 +426,10 @@ bool PubSubClient::settleReader() {
     tcpClient.stop();
     return false;
   }
-  return true;
+  // Settling the message can end the session on its own: the acknowledgement it owed may have gone
+  // out only half way. The caller is about to build its packet in this buffer and hand it to a
+  // link that has nothing left to carry it.
+  return this->connectionState == State::CONNECTED;
 }
 
 bool PubSubClient::pumpReader(uint32_t t) {
