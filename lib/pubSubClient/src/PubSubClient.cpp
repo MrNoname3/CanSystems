@@ -360,6 +360,11 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
       if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
         return false;
       }
+      // "All Topic Names and Topic Filters MUST be at least one character long" [MQTT-4.7.3-1];
+      // an empty one names nothing the callback could tell this message apart by.
+      if(tl == 0U) {
+        return false;
+      }
       // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
       // callback as a C string, which would end at that byte and hide what the message was about.
       if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
