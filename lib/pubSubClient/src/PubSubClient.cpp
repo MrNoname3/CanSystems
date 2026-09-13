@@ -137,9 +137,8 @@ bool PubSubClient::awaitConnAck() {
     }
   }
   const RxResult connAck = readPacketBlocking();
-  // "The first packet sent from the Server to the Client MUST be a CONNACK Packet" [MQTT-3.2.0-1],
-  // and it is four bytes long. Reading a return code out of anything else takes whatever sits at
-  // that offset for an answer - a PUBACK for message 0x1200 would read as a connection accepted.
+  // The first packet from the server is a CONNACK [MQTT-3.2.0-1], four bytes long. Read anywhere
+  // else, the return code is whatever sits at that offset: a PUBACK for message 0x1200 accepts.
   const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U) && ((this->buffer[0] & 0xF0U) == MQTTCONNACK);
   // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
   // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
@@ -354,10 +353,8 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
-      // Nothing above QoS 1 is ever subscribed for, and a server delivers at the lower of the
-      // published level and the one it granted [MQTT-3.8.4-6]. A QoS 2 message is therefore one no
-      // conforming broker sends here, and answering it would take the whole two-step flow behind a
-      // PUBREC; read as anything less, its packet identifier lands on the front of the payload.
+      // Nothing above QoS 1 is ever subscribed for, so a QoS 2 delivery is one no conforming broker
+      // sends [MQTT-3.8.4-6]; read as less, its packet identifier lands on the front of the payload.
       if((this->buffer[0] & 0x06U) == MQTTQOS2) {
         return false;
       }
@@ -427,8 +424,7 @@ bool PubSubClient::settleReader() {
     return false;
   }
   // Settling the message can end the session on its own: the acknowledgement it owed may have gone
-  // out only half way. The caller is about to build its packet in this buffer and hand it to a
-  // link that has nothing left to carry it.
+  // out only half way, leaving nothing for the packet the caller is about to build in this buffer.
   return this->connectionState == State::CONNECTED;
 }
 
@@ -530,10 +526,9 @@ bool PubSubClient::servicePing(uint32_t t) {
   }
   const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
   if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
-    // The run is timed from when the ping fell due, not from the pass that noticed it: a loop()
-    // held up elsewhere would otherwise carry the whole budget along with it, past the point the
-    // broker stops waiting. The side that went quiet first is the one the broker is timing, and
-    // the ping being due puts it a full interval behind t, so the sum stays below it.
+    // Timed from when the ping fell due, not from the pass that noticed: a loop() held up
+    // elsewhere would carry the whole budget past the point the broker stops waiting. The side
+    // that went quiet first is the one being timed, and the ping being due puts it behind t.
     const uint32_t quietSince = ((t - lastInActivity) > (t - lastOutActivity)) ? lastInActivity : lastOutActivity;
     pingDueSince = quietSince + pingIntervalMs;
     pingReasked = false;
