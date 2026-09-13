@@ -306,7 +306,10 @@ bool test_subscribe_refuses_a_filter_the_standard_forbids() {
   PubSubClient client(server, 1883U, callback, shimClient);
   IS_TRUE(client.connect("client_test1"));
 
-  const uint16_t afterConnect = shimClient.received();
+  // The only bytes the link may see from here on are this one packet's, carrying packet id 1:
+  // anything a refused call leaked would land on the expectation first and be caught.
+  const uint8_t expected[] = { 0xA2U, 0x9U, 0x0U, 0x1U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U };
+  shimClient.expect(expected, 11U);
 
   // A filter is at least one character [MQTT-4.7.3-1]; '#' stands alone or follows a separator and
   // is the last character [MQTT-4.7.1-2]; '+' occupies an entire level [MQTT-4.7.1-3].
@@ -317,7 +320,7 @@ bool test_subscribe_refuses_a_filter_the_standard_forbids() {
   IS_FALSE(client.unsubscribe(""));
   IS_FALSE(client.unsubscribe("sport/tennis#"));
 
-  IS_EQUAL(shimClient.received(), afterConnect);
+  IS_TRUE(client.unsubscribe("topic"));
   IS_TRUE(client.connected());
   IS_FALSE(shimClient.error());
 

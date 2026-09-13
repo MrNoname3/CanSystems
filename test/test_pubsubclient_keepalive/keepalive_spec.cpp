@@ -687,14 +687,18 @@ bool test_keepalive_zero_leaves_the_session_alone() {
   (void)client.setKeepAlive(0U);
   IS_TRUE(client.connect("client_test1"));
 
-  const uint16_t afterConnect = shimClient.received();
+  // The next bytes the link may see are this publish's, two minutes of silence later: a ping sent
+  // in between would land on the expectation first and be caught as a mismatch.
+  const uint8_t expected[] = { 0x30U, 0x8U, 0x0U, 0x4U, 0x67U, 0x6fU, 0x6fU, 0x64U, 0x31U, 0x32U };
+  shimClient.expect(expected, 10U);
+
   for(uint32_t t = baseMs + tickMs; t <= (baseMs + (120U * tickMs)); t += tickMs) {
     setFakeMillis(t);
     IS_TRUE(client.loop());
   }
 
-  const uint16_t afterIdling = shimClient.received();
-  IS_EQUAL(afterIdling, afterConnect);
+  IS_TRUE(client.publish("good", "12"));
+  IS_FALSE(shimClient.error());
   IS_TRUE(client.state() == PubSubClient::State::CONNECTED);
 
   clearFakeMillis();

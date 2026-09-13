@@ -316,7 +316,10 @@ bool test_publish_refuses_a_topic_name_the_standard_forbids() {
   PubSubClient client(server, 1883U, callback, shimClient);
   IS_TRUE(client.connect("client_test1"));
 
-  const uint16_t afterConnect = shimClient.received();
+  // The only bytes the link may see from here on are this one packet's: anything a refused call
+  // leaked would land on the expectation first and be caught as a mismatch.
+  const uint8_t expected[] = { 0x30U, 0x8U, 0x0U, 0x4U, 0x67U, 0x6fU, 0x6fU, 0x64U, 0x31U, 0x32U };
+  shimClient.expect(expected, 10U);
 
   // "The wildcard characters can be used in Topic Filters, but MUST NOT be used within a Topic
   // Name" [MQTT-4.7.1-1], and a topic name is at least one character long [MQTT-4.7.3-1].
@@ -325,7 +328,7 @@ bool test_publish_refuses_a_topic_name_the_standard_forbids() {
   IS_FALSE(client.publish("", "1"));
   IS_FALSE(client.publish_P("home/+/temp", "1", false));
 
-  IS_EQUAL(shimClient.received(), afterConnect);
+  IS_TRUE(client.publish("good", "12"));
   IS_TRUE(client.connected());
   IS_FALSE(shimClient.error());
 
