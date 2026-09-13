@@ -40,10 +40,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // Bits 3 and 4 of the flags byte hold the will qos, and the will-retain and clean-session flags
   // sit beside them: a level too wide for those two bits is shifted straight onto them.
   if((willTopic != nullptr) && ((willQos > 2U) || !topicNameValid(willTopic))) { return false; }
-  // The client id is the one field every CONNECT carries [MQTT-3.1.3-3], and the length of the
-  // string is measured before anything else is decided - there is nothing to measure without it.
-  // An empty one asks the broker to name this client, which it only does for a clean session
-  // [MQTT-3.1.3-7].
+  // The client id is the one field every CONNECT carries [MQTT-3.1.3-3], and an empty one asks the
+  // broker to name this client, which it only does for a clean session [MQTT-3.1.3-7].
   if((id == nullptr) || ((id[0] == '\0') && !cleanSession)) { return false; }
   if(connected()) { return true; }
   const bool result = (tcpClient.connected() != 0) ||
@@ -345,16 +343,13 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
       const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
       // The topic length and the packet length are two independent numbers off the wire, and every
       // index below is built from the first one. A packet where they disagree is a protocol
-      // violation, which [MQTT-4.8.0-1] answers by closing the connection: the numbers that were
-      // meant to describe the same packet do not, so nothing in it can be trusted.
+      // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
       const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
       if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
         return false;
       }
-      // "A UTF-8 encoded string MUST NOT include an encoding of the null character U+0000. If a
-      // receiver receives a Control Packet containing U+0000 it MUST close the Network Connection"
-      // [MQTT-1.5.3-2]. The topic reaches the callback as a C string, which would end at that byte
-      // and hide whatever the message was really about.
+      // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
+      // callback as a C string, which would end at that byte and hide what the message was about.
       if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
         return false;
       }
@@ -371,12 +366,9 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
         callback(topic, payload, len - llen - 3U - tl - msgIdLen);
       }
       if(msgIdLen != 0U) {
-        // Owed by the protocol rather than by the application: a message nothing was listening for
-        // has still been taken off the link, and an unanswered one holds a place in what the broker
-        // has in flight for the whole session.
-        // Sent the way every other packet is: a link that took none of it has not acknowledged
-        // anything, and counting the attempt as outgoing traffic would put the keep-alive ping
-        // off by a whole interval the broker does not wait through.
+        // Owed by the protocol rather than by the application, and sent the way every other packet
+        // is: a link that took none of it has acknowledged nothing, and counting the attempt as
+        // outgoing traffic would put the keep-alive ping off by an interval the broker does not wait.
         this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
         this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
         (void)write(MQTTPUBACK, this->buffer, 2U);
