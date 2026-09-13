@@ -672,6 +672,35 @@ bool test_keepalive_one_deadline_covers_a_ping_refused_then_taken() {
   END_IT
 }
 
+bool test_keepalive_zero_leaves_the_session_alone() {
+  IT("never pings and never times out when the keep-alive is zero");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // Zero is how the broker is told not to time this client out, so there is nothing to prove.
+  (void)client.setKeepAlive(0U);
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint16_t afterConnect = shimClient.received();
+  for(uint32_t t = baseMs + tickMs; t <= (baseMs + (120U * tickMs)); t += tickMs) {
+    setFakeMillis(t);
+    IS_TRUE(client.loop());
+  }
+
+  const uint16_t afterIdling = shimClient.received();
+  IS_EQUAL(afterIdling, afterConnect);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTED);
+
+  clearFakeMillis();
+  END_IT
+}
+
 int main() {
   SUITE("Keep-alive");
   test_keepalive_pings_idle();
@@ -691,6 +720,7 @@ int main() {
   test_keepalive_a_refused_publish_is_not_traffic();
   test_keepalive_a_refused_puback_is_not_traffic();
   test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
+  test_keepalive_zero_leaves_the_session_alone();
 
   FINISH
 }

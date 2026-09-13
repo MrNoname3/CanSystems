@@ -409,7 +409,7 @@ bool PubSubClient::loop() {
     const uint32_t t = millis();
     const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
     bool alive = true;
-    if(pingOutstanding || pingUnsent) {
+    if((this->keepAlive != 0U) && (pingOutstanding || pingUnsent)) {
       // One deadline covers the whole run, counted from when the ping fell due rather than from
       // whichever attempt is outstanding: a ping first refused and then taken would otherwise get
       // a second budget of its own, and the two together outlast what the broker waits through.
@@ -429,7 +429,9 @@ bool PubSubClient::loop() {
       } else {
         // Still inside the time the last ask has to be answered in.
       }
-    } else if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
+    } else if((this->keepAlive != 0U) && ((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs))) {
+      // A keep-alive of zero is the broker being told not to time this client out, so there is
+      // nothing to prove and no deadline to keep.
       pingDueSince = t;
       pingReasked = false;
       keepAlivePing(t);
