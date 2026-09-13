@@ -55,6 +55,8 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     return false;
   }
   nextMsgId = 0U;   // Stepped before use, so the first id of the session is 1.
+  // Half a packet belongs to the session it was arriving on; this one starts the stream over.
+  resetReader();
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
   // Zero means a string did not fit; checkStringLength() has already stopped the client.
   if(length == 0U) { return false; }
@@ -183,13 +185,18 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
       granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
       waiting = false;
-    } else if(!dispatchPacket()) {
-      connectionState = State::PROTOCOL_ERROR;
-      tcpClient.stop();
-      waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
-      waiting = ((millis() - startMs) < timeoutMs);
+      const uint16_t len = rxLen;
+      const uint8_t llen = rxLengthLength;
+      resetReader();
+      if(!dispatchPacket(len, llen)) {
+        connectionState = State::PROTOCOL_ERROR;
+        tcpClient.stop();
+        waiting = false;
+      } else {
+        waiting = ((millis() - startMs) < timeoutMs);
+      }
     }
   }
   resetReader();
@@ -266,7 +273,8 @@ PubSubClient::State PubSubClient::readFailureState(RxResult result) {
 PubSubClient::RxResult PubSubClient::readPacketBlocking() {
   const uint32_t timeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   const uint32_t startMs = millis();
-  resetReader();
+  // What the reader already has is carried on rather than dropped: the bytes it has taken cannot
+  // be put back, and the rest of that packet is in the stream ahead of whatever is waited for here.
   while(true) {
     if(rxPhase == RxPhase::Payload) {
       if(advancePayload() == RxResult::Complete) { return RxResult::Complete; }
@@ -330,9 +338,7 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
   return RxResult::Complete;
 }
 
-bool PubSubClient::dispatchPacket() {
-  const uint16_t len = rxLen;
-  const uint8_t llen = rxLengthLength;
+bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
@@ -385,6 +391,26 @@ bool PubSubClient::dispatchPacket() {
   return true;
 }
 
+bool PubSubClient::settleReader() {
+  if(rxPhase == RxPhase::Idle) { return true; }
+  const RxResult result = readPacketBlocking();
+  if(result != RxResult::Complete) {
+    connectionState = readFailureState(result);
+    tcpClient.stop();
+    resetReader();
+    return false;
+  }
+  const uint16_t len = rxLen;
+  const uint8_t llen = rxLengthLength;
+  resetReader();
+  if(!dispatchPacket(len, llen)) {
+    connectionState = State::PROTOCOL_ERROR;
+    tcpClient.stop();
+    return false;
+  }
+  return true;
+}
+
 bool PubSubClient::pumpReader(uint32_t t) {
   if((rxPhase == RxPhase::Idle) && (tcpClient.available() == 0)) { return true; }
   if(rxPhase == RxPhase::Idle) {
@@ -406,13 +432,16 @@ bool PubSubClient::pumpReader(uint32_t t) {
   }
   if(result == RxResult::Complete) {
     lastInActivity = t;
-    if(!dispatchPacket()) {
+    const uint16_t len = rxLen;
+    const uint8_t llen = rxLengthLength;
+    // Started over before the packet is answered: the callback may publish, and an outgoing packet
+    // is built in this same buffer.
+    resetReader();
+    if(!dispatchPacket(len, llen)) {
       connectionState = State::PROTOCOL_ERROR;
       tcpClient.stop();
-      resetReader();
       return false;
     }
-    resetReader();
     // Answering the packet can end the session - an acknowledgement the link took only half of
     // leaves nothing to carry on with - and the caller is owed the session it has, not the one it
     // had a packet ago.
@@ -507,6 +536,7 @@ bool PubSubClient::publish(const char* topic, const uint8_t* payload, uint16_t p
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     if(this->bufferSize < MQTT_MAX_HEADER_SIZE + 2U + strnlen(topic, this->bufferSize) + plength) {
       // Too long
       return false;
@@ -538,6 +568,7 @@ bool PubSubClient::publish_P(const char* topic, const uint8_t* payload, uint16_t
   if(!connected()) {
     return false;
   }
+  if(!settleReader()) { return false; }
 
   const uint16_t tlen = static_cast<uint16_t>(strnlen(topic, this->bufferSize));
   // The header and the topic go through the buffer; only the payload is streamed from flash, so
@@ -652,6 +683,7 @@ bool PubSubClient::subscribe(const char* topic, uint8_t qos) {
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     // Leave room in the buffer for header and variable length field
     uint16_t length = MQTT_MAX_HEADER_SIZE;
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
@@ -679,6 +711,7 @@ bool PubSubClient::unsubscribe(const char* topic) {
     return false;
   }
   if(connected()) {
+    if(!settleReader()) { return false; }
     uint16_t length = MQTT_MAX_HEADER_SIZE;
     if(++nextMsgId == 0U) {  // cppcheck-suppress knownConditionTrueFalse
       nextMsgId = 1U;

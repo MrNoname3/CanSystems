@@ -353,6 +353,37 @@ bool test_subscribe_accepts_the_wildcards_the_standard_allows() {
   END_IT
 }
 
+bool test_subscribe_carries_on_a_half_read_message() {
+  IT("finishes a message the reader was part way through and still finds its SUBACK");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The first 8 bytes of a 14-byte PUBLISH: the reader keeps its place and waits for the rest.
+  const uint8_t head[] = { 0x30U, 0x0CU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+
+  // The rest of it, and behind that the answer to the subscription below. Starting the reader over
+  // would take the six bytes left of the message for a packet header and lose the stream.
+  const uint8_t tail[] = { 0x63U, 0x68U, 0x65U, 0x6cU, 0x6cU, 0x6fU };
+  shimClient.respond(tail, 6U);
+  const uint8_t suback[] = { 0x90U, 0x03U, 0x00U, 0x01U, 0x00U };
+  shimClient.respond(suback, 5U);
+
+  IS_TRUE(client.subscribe("topic", 0U));
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 int main() {
   SUITE("Subscribe");
   test_subscribe_no_qos();
@@ -369,6 +400,7 @@ int main() {
   test_packet_ids_step_past_zero_to_one();
   test_subscribe_refuses_a_filter_the_standard_forbids();
   test_subscribe_accepts_the_wildcards_the_standard_allows();
+  test_subscribe_carries_on_a_half_read_message();
 
   FINISH
 }

@@ -7,8 +7,23 @@
 
 uint8_t server[] = { 172U, 16U, 0U, 2U };
 
-void callback([[maybe_unused]] char* topic, [[maybe_unused]] uint8_t* payload, [[maybe_unused]] unsigned int length) {
-  // handle message arrived
+bool callback_called = false;
+char lastTopic[1024];
+char lastPayload[1024];
+uint32_t lastLength = 0U;
+
+void reset_callback() {
+  callback_called = false;
+  lastTopic[0] = '\0';
+  lastPayload[0] = '\0';
+  lastLength = 0U;
+}
+
+void callback(char* topic, uint8_t* payload, unsigned int length) {
+  callback_called = true;
+  strcpy(lastTopic, topic);
+  memcpy(lastPayload, payload, static_cast<size_t>(length));   // NOLINT(bugprone-narrowing-conversions)
+  lastLength = length;
 }
 
 bool test_publish() {
@@ -317,6 +332,73 @@ bool test_publish_refuses_a_topic_name_the_standard_forbids() {
   END_IT
 }
 
+bool test_publish_finishes_a_message_that_was_part_read() {
+  IT("finishes a part-read message before building a packet over it");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Eight bytes of a fourteen-byte PUBLISH to "topic", payload "hello": the reader keeps its place.
+  const uint8_t head[] = { 0x30U, 0x0CU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+  IS_FALSE(callback_called);
+
+  // The rest of it lands, and the application publishes before the next pass reads it. The packet
+  // built for that publish goes in the buffer holding the eight bytes already collected.
+  const uint8_t tail[] = { 0x63U, 0x68U, 0x65U, 0x6cU, 0x6cU, 0x6fU };
+  shimClient.respond(tail, 6U);
+
+  const uint8_t expected[] = { 0x30U, 0xaU, 0x0U, 0x3U, 0x6fU, 0x75U, 0x74U, 0x78U, 0x79U, 0x7aU, 0x31U, 0x32U };
+  shimClient.expect(expected, 12U);
+  IS_TRUE(client.publish("out", "xyz12"));
+
+  // Delivered whole, and by the publish that would otherwise have written over it.
+  IS_TRUE(callback_called);
+  IS_TRUE(strcmp(lastTopic, "topic") == 0);
+  IS_TRUE(lastLength == 5U);
+  IS_TRUE(memcmp(lastPayload, "hello", 5U) == 0);
+  IS_TRUE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
+bool test_publish_gives_up_on_a_message_that_never_finishes() {
+  IT("refuses to publish over a part-read message the peer never finishes");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setSocketTimeout(1U);                      // keep the read timeout out of the suite's runtime
+  IS_TRUE(client.connect("client_test1"));
+
+  const uint8_t head[] = { 0x30U, 0x0CU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+
+  // Nothing behind it. Writing the publish anyway would leave the reader appending the rest of a
+  // message onto bytes that are no longer its own.
+  IS_FALSE(client.publish("out", "xyz"));
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+
+  END_IT
+}
+
 int main() {
   SUITE("Publish");
   test_publish();
@@ -329,6 +411,8 @@ int main() {
   test_publish_P_too_long();
   test_publish_without_a_topic();
   test_publish_refuses_a_topic_name_the_standard_forbids();
+  test_publish_finishes_a_message_that_was_part_read();
+  test_publish_gives_up_on_a_message_that_never_finishes();
   test_publish_P_half_written_ends_the_session();
   test_publish_half_written_ends_the_session();
   test_publish_refused_keeps_the_session();

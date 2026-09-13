@@ -160,9 +160,10 @@ public:
   PubSubClient& setServer(const char* domain, uint16_t port);
 
   /// @brief Sets the callback invoked when an MQTT message is received.
-  /// @details Runs inside loop(), with the message still in the packet buffer. Publishing from it
-  /// is allowed: everything the acknowledgement of that message needs has been read out before it
-  /// is called, so the buffer is the callback's to overwrite. Calling loop() from it is not.
+  /// @details Runs with the message still in the packet buffer, from loop() or from whichever call
+  /// had to finish a message that was part-read. Publishing from it is allowed: everything the
+  /// acknowledgement of that message needs has been read out before it is called, so the buffer is
+  /// the callback's to overwrite. Calling loop() from it is not.
   /// @param callback Function to call on message arrival.
   /// @return Reference to this instance for method chaining.
   PubSubClient& setCallback(MqttCallback callback);
@@ -447,12 +448,23 @@ private:
   RxResult readPacketBlocking();
 
   /// @brief Dispatches a packet the reader has finished assembling.
-  /// @details Reads it out of `buffer`, `rxLen` bytes with `rxLengthLength` of remaining-length
-  /// field, and answers it: a PUBLISH reaches the callback (and is acknowledged at QoS 1), a
-  /// PINGRESP clears the outstanding ping, and a PINGREQ - which only a client sends - is dropped.
+  /// @details Reads it out of `buffer` and answers it: a PUBLISH reaches the callback (and is
+  /// acknowledged at QoS 1), a PINGRESP clears the outstanding ping, and a PINGREQ - which only a
+  /// client sends - is dropped. The caller starts the reader over first, because the callback may
+  /// publish and an outgoing packet is built in this same buffer.
+  /// @param len Bytes of the packet in `buffer`.
+  /// @param llen Bytes its remaining-length field took.
   /// @return `false` for a packet the standard says must not be accepted, which the caller answers
   ///         by ending the session.
-  [[nodiscard]] bool dispatchPacket();
+  [[nodiscard]] bool dispatchPacket(uint16_t len, uint8_t llen);
+
+  /// @brief Finishes and answers a packet the reader is part way through, if there is one.
+  /// @details Every outgoing packet is built in the buffer the reader fills, so one written while
+  /// a message is part-read would overwrite the bytes already collected and the rest of that
+  /// message would be read onto the wrong ones. Blocks for at most the socket timeout, and only
+  /// when a message is actually in progress.
+  /// @return `false` when the session was given up on rather than settled.
+  [[nodiscard]] bool settleReader();
 
   /// @brief How long a ping run may last, counted from the moment the ping fell due.
   /// @details Seven fifths of a keep-alive interval, less the ping interval: the run starts one
