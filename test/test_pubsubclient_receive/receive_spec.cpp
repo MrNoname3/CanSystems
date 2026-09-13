@@ -541,6 +541,32 @@ bool test_a_packet_with_invalid_reserved_flags_ends_the_session() {
   END_IT
 }
 
+bool test_a_topic_carrying_a_null_character_ends_the_session() {
+  IT("ends the session on a topic carrying U+0000");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Topic "a\0b", payload "xy". Handed on as a C string the topic would read as "a", and the
+  // message would be routed by a name nobody published to.
+  const uint8_t publish[] = { 0x30U, 0x07U, 0x00U, 0x03U, 0x61U, 0x00U, 0x62U, 0x78U, 0x79U };
+  shimClient.respond(publish, 9U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -559,6 +585,7 @@ int main() {
   test_a_qos1_message_is_acknowledged_without_a_callback();
   test_a_publish_with_both_qos_bits_set_ends_the_session();
   test_a_packet_with_invalid_reserved_flags_ends_the_session();
+  test_a_topic_carrying_a_null_character_ends_the_session();
 
   FINISH
 }

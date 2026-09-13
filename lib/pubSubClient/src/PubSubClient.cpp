@@ -315,6 +315,13 @@ bool PubSubClient::dispatchPacket() {
       if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
         return false;
       }
+      // "A UTF-8 encoded string MUST NOT include an encoding of the null character U+0000. If a
+      // receiver receives a Control Packet containing U+0000 it MUST close the Network Connection"
+      // [MQTT-1.5.3-2]. The topic reaches the callback as a C string, which would end at that byte
+      // and hide whatever the message was really about.
+      if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
+        return false;
+      }
       // Taken before the callback runs, as the acknowledgement is built after it: a callback that
       // publishes writes its own packet over the one being read here.
       const uint16_t msgId = (msgIdLen != 0U)
