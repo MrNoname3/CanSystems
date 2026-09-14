@@ -300,8 +300,10 @@ bool PubSubClient::remainingLengthValid(uint8_t header, uint32_t remaining) {
   // of the packet identifier it answers.
   if((type == MQTTCONNACK) || (type == MQTTPUBACK) || (type == MQTTPUBREC) ||
      (type == MQTTPUBREL) || (type == MQTTPUBCOMP) || (type == MQTTUNSUBACK)) { return remaining == 2U; }
-  // A SUBACK adds a return code per filter to its packet identifier.
-  if(type == MQTTSUBACK) { return remaining >= 3U; }
+  // A SUBACK carries a return code for each filter of the SUBSCRIBE it answers, in the order they
+  // were asked for [MQTT-3.9.3-1]. One filter goes out per SUBSCRIBE here, so one code comes back;
+  // more than that answers a packet this client did not send.
+  if(type == MQTTSUBACK) { return remaining == 3U; }
   // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
   // announces fewer has none to give: the payload length derived from it would wrap to nearly 4 GB.
   if(type == MQTTPUBLISH) { return remaining >= 2U; }
