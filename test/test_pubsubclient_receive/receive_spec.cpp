@@ -723,6 +723,35 @@ bool test_a_topic_name_carrying_a_wildcard_ends_the_session() {
   END_IT
 }
 
+bool test_a_packet_of_a_length_its_type_cannot_have_ends_the_session() {
+  IT("ends the session on a packet whose remaining length its type cannot carry");
+  reset_callback();
+
+  // A PINGRESP with a byte behind it, where the standard gives it none, and an UNSUBACK half a
+  // packet identifier short of the one it answers. Both lengths are read off the wire and both
+  // decide where the next packet starts, so neither can be taken on trust.
+  const uint8_t misSized[][3] = { { 0xD0U, 0x01U, 0x00U }, { 0xB0U, 0x01U, 0x00U } };
+
+  for(size_t i = 0U; i < (sizeof(misSized) / sizeof(misSized[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+
+    shimClient.respond(misSized[i], 3U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+  }
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -748,6 +777,7 @@ int main() {
   test_a_packet_with_invalid_reserved_flags_ends_the_session();
   test_a_topic_carrying_a_null_character_ends_the_session();
   test_a_topic_name_carrying_a_wildcard_ends_the_session();
+  test_a_packet_of_a_length_its_type_cannot_have_ends_the_session();
 
   FINISH
 }

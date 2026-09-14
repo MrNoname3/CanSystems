@@ -292,6 +292,22 @@ bool PubSubClient::fixedHeaderValid(uint8_t header) {
   return flags == 0U;
 }
 
+bool PubSubClient::remainingLengthValid(uint8_t header, uint32_t remaining) {
+  const uint8_t type = header & 0xF0U;
+  // A PINGRESP is its fixed header and nothing else.
+  if(type == MQTTPINGRESP) { return remaining == 0U; }
+  // A CONNACK is its flags byte and its return code; every acknowledgement below is the two bytes
+  // of the packet identifier it answers.
+  if((type == MQTTCONNACK) || (type == MQTTPUBACK) || (type == MQTTPUBREC) ||
+     (type == MQTTPUBREL) || (type == MQTTPUBCOMP) || (type == MQTTUNSUBACK)) { return remaining == 2U; }
+  // A SUBACK adds a return code per filter to its packet identifier.
+  if(type == MQTTSUBACK) { return remaining >= 3U; }
+  // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
+  // announces fewer has none to give: the payload length derived from it would wrap to nearly 4 GB.
+  if(type == MQTTPUBLISH) { return remaining >= 2U; }
+  return true;
+}
+
 PubSubClient::State PubSubClient::readFailureState(RxResult result) {
   if(result == RxResult::TooLarge) { return State::PACKET_TOO_LARGE; }
   if(result == RxResult::Malformed) { return State::PROTOCOL_ERROR; }
@@ -334,11 +350,8 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
     rxMultiplier <<= 7U;  // multiplier *= 128
     if((byteIn & 128U) == 0U) {
       rxLengthLength = static_cast<uint8_t>(rxLen - 1U);
-      // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
-      // announces fewer has none to give: the payload length derived from it would wrap to nearly
-      // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
-      const bool isPublish = ((this->buffer[0] & 0xF0U) == MQTTPUBLISH);
-      if(isPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
+      // Malformed the same way an invalid remaining length is, and dropped the same way.
+      if(!remainingLengthValid(this->buffer[0], rxRemaining)) { return RxResult::Malformed; }
       // A packet with nowhere to go is an internal buffer full condition, which [MQTT-4.8.0-2]
       // answers by ending the connection rather than by reading bytes that cannot be kept.
       if((rxLen + rxRemaining) > this->bufferSize) { return RxResult::TooLarge; }

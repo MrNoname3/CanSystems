@@ -445,6 +445,15 @@ private:
   /// @return `false` for a byte no conforming broker sends.
   [[nodiscard]] static bool fixedHeaderValid(uint8_t header);
 
+  /// @brief Whether a packet announces a remaining length its type can carry.
+  /// @details Most of what a broker sends is one size: a PINGRESP is its fixed header alone, and
+  /// an acknowledgement adds the packet identifier it answers. A PUBLISH has to reach its
+  /// topic-length field at least, the payload length being derived from that.
+  /// @param header The first byte of the packet.
+  /// @param remaining What its remaining-length field announced.
+  /// @return `false` for a length no conforming broker gives that type.
+  [[nodiscard]] static bool remainingLengthValid(uint8_t header, uint32_t remaining);
+
   /// @brief The state a read that did not produce a packet leaves the session in.
   /// @param result What the reader made of it.
   /// @return The state to report, which names the reason rather than calling every failure a timeout.
