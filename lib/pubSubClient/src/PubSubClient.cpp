@@ -278,9 +278,14 @@ bool PubSubClient::fixedHeaderValid(uint8_t header) {
   // read as: a SUBSCRIBE and a SUBACK differ by a nibble, and the session ends here either way.
   if((type == MQTTCONNECT) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE) ||
      (type == MQTTPINGREQ) || (type == MQTTDISCONNECT)) { return false; }
-  // A PUBLISH spends its low nibble on dup, qos and retain, all but the qos level the standard
-  // reserves and gives no delivery protocol for.
-  if(type == MQTTPUBLISH) { return (flags & 0x06U) != 0x06U; }
+  // A PUBLISH spends its low nibble on dup, qos and retain. Two of the three are its own to set:
+  // the standard reserves one qos level and gives no delivery protocol for it, and leaves the dup
+  // flag clear at qos 0 [MQTT-3.3.1-2], where nothing is acknowledged and so nothing is sent again.
+  if(type == MQTTPUBLISH) {
+    const uint8_t publishQos = flags & 0x06U;
+    if(publishQos == 0x06U) { return false; }
+    return (publishQos != MQTTQOS0) || ((flags & 0x08U) == 0U);
+  }
   // Of the three types carrying 0b0010 only PUBREL reaches a client; the other two were turned
   // back above.
   if(type == MQTTPUBREL) { return flags == 0x02U; }
