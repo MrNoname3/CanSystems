@@ -322,7 +322,7 @@ bool test_connect_fails_when_the_packet_is_not_taken() {
 }
 
 bool test_connect_answer_that_is_not_a_connack() {
-  IT("reports a timeout when the connect answer is not a CONNACK");
+  IT("ends the session when the connect answer is a CONNACK of the wrong size");
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
 
@@ -334,7 +334,25 @@ bool test_connect_answer_that_is_not_a_connack() {
   bool rc = client.connect("client_test1");
   IS_FALSE(rc);
   PubSubClient::State state = client.state();
-  IS_TRUE(state == PubSubClient::State::CONNECTION_TIMEOUT);
+  IS_TRUE(state == PubSubClient::State::PROTOCOL_ERROR);
+  END_IT
+}
+
+bool test_connect_answer_of_the_right_size_but_the_wrong_type() {
+  IT("ends the session when a packet the size of a CONNACK is not one");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  // A PUBACK for message 0x1200: four bytes long, and a zero where the return code is read from.
+  const uint8_t puback[] = { 0x40U, 0x02U, 0x12U, 0x00U };
+  shimClient.respond(puback, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_FALSE(rc);
+  PubSubClient::State state = client.state();
+  IS_TRUE(state == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
   END_IT
 }
 
@@ -407,6 +425,7 @@ int main() {
   test_connect_fails_no_network();
   test_connect_fails_on_no_response();
   test_connect_answer_that_is_not_a_connack();
+  test_connect_answer_of_the_right_size_but_the_wrong_type();
   test_connect_fails_when_the_packet_is_not_taken();
 
   test_connect_properly_formatted();

@@ -335,6 +335,44 @@ bool test_publish_refuses_a_topic_name_the_standard_forbids() {
   END_IT
 }
 
+bool test_publish_stops_when_settling_the_part_read_message_ends_the_session() {
+  IT("does not publish over a session the settled message's acknowledgement ended");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Eight bytes of a sixteen-byte qos1 PUBLISH to "topic", payload "hello", packet id 0x1234.
+  const uint8_t head[] = { 0x32U, 0x0EU, 0x00U, 0x05U, 0x74U, 0x6fU, 0x70U, 0x69U };
+  shimClient.respond(head, 8U);
+  IS_TRUE(client.loop());
+  IS_FALSE(callback_called);
+
+  const uint8_t tail[] = { 0x63U, 0x12U, 0x34U, 0x68U, 0x65U, 0x6cU, 0x6cU, 0x6fU };
+  shimClient.respond(tail, 8U);
+
+  // The link takes half the acknowledgement the settled message is owed and no more. Anything
+  // written after that goes out behind a frame the broker can never finish parsing, so the two
+  // bytes armed here are all the session may see - a publish that tried would run the shim dry.
+  const uint8_t halfPuback[] = { 0x40U, 0x02U };
+  shimClient.expect(halfPuback, 2U);
+  shimClient.truncateNextWrite(2U);
+
+  IS_FALSE(client.publish("out", "xyz12"));
+  IS_TRUE(callback_called);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_LOST);
+  IS_FALSE(client.connected());
+  IS_FALSE(shimClient.error());
+
+  END_IT
+}
+
 bool test_publish_finishes_a_message_that_was_part_read() {
   IT("finishes a part-read message before building a packet over it");
   reset_callback();
@@ -415,6 +453,7 @@ int main() {
   test_publish_without_a_topic();
   test_publish_refuses_a_topic_name_the_standard_forbids();
   test_publish_finishes_a_message_that_was_part_read();
+  test_publish_stops_when_settling_the_part_read_message_ends_the_session();
   test_publish_gives_up_on_a_message_that_never_finishes();
   test_publish_P_half_written_ends_the_session();
   test_publish_half_written_ends_the_session();

@@ -137,8 +137,12 @@ bool PubSubClient::awaitConnAck() {
     }
   }
   const RxResult connAck = readPacketBlocking();
-  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U);
-  const State connAckFailure = readFailureState(connAck);
+  // The first packet from the server is a CONNACK [MQTT-3.2.0-1], four bytes long. Read anywhere
+  // else, the return code is whatever sits at that offset: a PUBACK for message 0x1200 accepts.
+  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U) && ((this->buffer[0] & 0xF0U) == MQTTCONNACK);
+  // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
+  // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
+  const State connAckFailure = (connAck == RxResult::Complete) ? State::PROTOCOL_ERROR : readFailureState(connAck);
   const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
@@ -181,7 +185,16 @@ bool PubSubClient::awaitSubAck(uint16_t packetId) {
       waiting = false;
     } else if(isSubAckFor(packetId)) {
       // One filter goes out per SUBSCRIBE, so the first return code is the one that answers it.
-      granted = (this->buffer[rxLengthLength + 3U] != subscribeFailureCode);
+      const uint8_t returnCode = this->buffer[rxLengthLength + 3U];
+      if((returnCode > subscribeMaxGrantedQos) && (returnCode != subscribeFailureCode)) {
+        // "SUBACK return codes other than 0x00, 0x01, 0x02 and 0x80 are reserved and MUST NOT be
+        // used" [MQTT-3.9.3-2]. Read as a grant, one of those would leave the client listening at
+        // a level the broker never named.
+        connectionState = State::PROTOCOL_ERROR;
+        tcpClient.stop();
+      } else {
+        granted = (returnCode != subscribeFailureCode);
+      }
       waiting = false;
     } else {
       // The broker got a word in first; it is this session's traffic and is answered as such.
@@ -340,12 +353,22 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   {
     const uint8_t type = this->buffer[0] & 0xF0U;
     if(type == MQTTPUBLISH) {
+      // Nothing above QoS 1 is ever subscribed for, so a QoS 2 delivery is one no conforming broker
+      // sends [MQTT-3.8.4-6]; read as less, its packet identifier lands on the front of the payload.
+      if((this->buffer[0] & 0x06U) == MQTTQOS2) {
+        return false;
+      }
       const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
       // The topic length and the packet length are two independent numbers off the wire, and every
       // index below is built from the first one. A packet where they disagree is a protocol
       // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
       const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
       if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
+        return false;
+      }
+      // "All Topic Names and Topic Filters MUST be at least one character long" [MQTT-4.7.3-1];
+      // an empty one names nothing the callback could tell this message apart by.
+      if(tl == 0U) {
         return false;
       }
       // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
@@ -400,7 +423,9 @@ bool PubSubClient::settleReader() {
     tcpClient.stop();
     return false;
   }
-  return true;
+  // Settling the message can end the session on its own: the acknowledgement it owed may have gone
+  // out only half way, leaving nothing for the packet the caller is about to build in this buffer.
+  return this->connectionState == State::CONNECTED;
 }
 
 bool PubSubClient::pumpReader(uint32_t t) {
@@ -501,7 +526,11 @@ bool PubSubClient::servicePing(uint32_t t) {
   }
   const uint32_t pingIntervalMs = static_cast<uint32_t>(this->pingInterval) * 1000U;
   if((t - lastInActivity > pingIntervalMs) || (t - lastOutActivity > pingIntervalMs)) {
-    pingDueSince = t;
+    // Timed from when the ping fell due, not from the pass that noticed: a loop() held up
+    // elsewhere would carry the whole budget past the point the broker stops waiting. The side
+    // that went quiet first is the one being timed, and the ping being due puts it behind t.
+    const uint32_t quietSince = ((t - lastInActivity) > (t - lastOutActivity)) ? lastInActivity : lastOutActivity;
+    pingDueSince = quietSince + pingIntervalMs;
     pingReasked = false;
     keepAlivePing(t);
   }
@@ -774,13 +803,14 @@ PubSubClient& PubSubClient::setCallback(MqttCallback callback) {
 PubSubClient& PubSubClient::setKeepAlive(uint16_t keepAlive) {
   this->keepAlive = keepAlive;
   // Whichever order the two are set in, the ping stays inside what the broker was told to wait for.
-  if(this->pingInterval > keepAlive) {
-    this->pingInterval = keepAlive;
-  }
+  // The cap is applied to what was asked for rather than to the capped value, so a keep-alive
+  // raised again gives the ping interval back instead of leaving it where a lower one pushed it.
+  this->pingInterval = (this->wantedPingInterval > keepAlive) ? keepAlive : this->wantedPingInterval;
   return *this;
 }
 
 PubSubClient& PubSubClient::setPingInterval(uint16_t pingInterval) {
+  this->wantedPingInterval = pingInterval;
   this->pingInterval = (pingInterval > this->keepAlive) ? this->keepAlive : pingInterval;
   return *this;
 }

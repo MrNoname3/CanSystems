@@ -402,10 +402,11 @@ bool test_keepalive_gives_up_on_a_client_that_never_takes_the_ping() {
   IS_TRUE(client.loop());
 
   // The time it has is the same the broker leaves for a ping to be answered in: two fifths of an
-  // interval here, the ping interval being the keep-alive by default.
-  setFakeMillis(baseMs + (21U * tickMs));
+  // interval here, the ping interval being the keep-alive by default, counted from the moment the
+  // ping fell due rather than from the pass that noticed.
+  setFakeMillis(baseMs + (20U * tickMs));
   IS_TRUE(client.loop());
-  setFakeMillis(baseMs + (23U * tickMs));
+  setFakeMillis(baseMs + (21U * tickMs));
   IS_FALSE(client.loop());
   IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
 
@@ -593,6 +594,41 @@ bool test_keepalive_brings_the_ping_down_with_the_keepalive() {
   END_IT
 }
 
+bool test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised() {
+  IT("gives a capped ping interval back when the keep-alive is raised over it again");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  // Twenty seconds asked for, squeezed to five by the keep-alive, then room made for it again.
+  client.setKeepAlive(30U).setPingInterval(20U).setKeepAlive(5U).setKeepAlive(30U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // The next bytes the link may see are this publish's. A ping interval left behind at five would
+  // have one falling due before the pass below, and it would land on the expectation first.
+  const uint8_t expected[] = { 0x30U, 0x8U, 0x0U, 0x4U, 0x67U, 0x6fU, 0x6fU, 0x64U, 0x31U, 0x32U };
+  shimClient.expect(expected, 10U);
+  setFakeMillis(baseMs + (11U * tickMs));
+  IS_TRUE(client.loop());
+  IS_TRUE(client.publish("good", "12"));
+
+  // And the twenty seconds it was given are what the ping waits out.
+  const uint8_t pingreq[] = { 0xC0U, 0x0U };
+  shimClient.expect(pingreq, 2U);
+  setFakeMillis(baseMs + (22U * tickMs));
+  IS_TRUE(client.loop());
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_keepalive_counts_the_answers_that_went_missing() {
   IT("counts one per ping whose answer went missing, not one per ask");
 
@@ -671,8 +707,44 @@ bool test_keepalive_one_deadline_covers_a_ping_refused_then_taken() {
   IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
   // The ping falls due one ping interval after the last traffic and the run lasts seven fifths of
   // a keep-alive from there, whichever attempt is outstanding when the time runs out.
-  IS_EQUAL(gaveUpAt, baseMs + 21100U);
+  IS_EQUAL(gaveUpAt, baseMs + 21000U);
   IS_TRUE(client.getRefusedPingCount() == 1U);
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_a_late_loop_does_not_move_the_deadline() {
+  IT("gives up inside the broker's patience even when loop() comes back late");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  (void)client.setKeepAlive(15U);
+  (void)client.setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+
+  // Three seconds pass between the ping falling due and the pass that gets to notice - a flash
+  // write holding the main loop is enough - and the client will not take the ping when it runs.
+  const uint32_t brokerGivesUpAt = baseMs + 22500U;
+  shimClient.failNextWrites(200U);
+
+  uint32_t gaveUpAt = 0U;
+  for(uint32_t t = baseMs + 8000U; (t < brokerGivesUpAt) && (gaveUpAt == 0U); t += 100U) {
+    setFakeMillis(t);
+    if(!client.loop()) { gaveUpAt = t; }
+  }
+
+  IS_TRUE(gaveUpAt != 0U);
+  IS_TRUE(client.state() == PubSubClient::State::CONNECTION_TIMEOUT);
+  // The same moment a loop() running on time would have reached: the three seconds it was away
+  // come out of the run, not off the front of it.
+  IS_EQUAL(gaveUpAt, baseMs + 21000U);
 
   clearFakeMillis();
   END_IT
@@ -769,12 +841,14 @@ int main() {
   test_keepalive_retries_a_refused_ping();
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();
+  test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised();
   test_keepalive_counts_the_answers_that_went_missing();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
   test_keepalive_a_refused_puback_is_not_traffic();
   test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
+  test_keepalive_a_late_loop_does_not_move_the_deadline();
   test_keepalive_zero_leaves_the_session_alone();
   test_keepalive_ping_leaves_a_part_read_message_alone();
 

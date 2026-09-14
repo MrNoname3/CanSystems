@@ -194,6 +194,30 @@ bool test_subscribe_refused_by_the_broker() {
   END_IT
 }
 
+bool test_subscribe_ends_the_session_on_a_reserved_return_code() {
+  IT("ends the session on a SUBACK return code the standard reserves");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  bool rc = client.connect("client_test1");
+  IS_TRUE(rc);
+
+  // 0x03 is neither a granted qos nor the failure code, so it says nothing about what was granted.
+  const uint8_t suback[] = { 0x90U, 0x3U, 0x0U, 0x1U, 0x03U };
+  shimClient.respond(suback, 5U);
+
+  rc = client.subscribe("topic", 1U);
+  IS_FALSE(rc);
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+
+  END_IT
+}
+
 bool test_subscribe_unanswered() {
   IT("reports a subscription the broker never answers");
   ShimClient shimClient;
@@ -396,6 +420,7 @@ int main() {
   test_subscribe_too_long();
   test_subscribe_filling_the_whole_buffer();
   test_subscribe_refused_by_the_broker();
+  test_subscribe_ends_the_session_on_a_reserved_return_code();
   test_subscribe_unanswered();
   test_subscribe_half_written_ends_the_session();
   test_unsubscribe();
