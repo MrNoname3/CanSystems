@@ -692,6 +692,37 @@ bool test_a_topic_carrying_a_null_character_ends_the_session() {
   END_IT
 }
 
+bool test_a_topic_name_carrying_a_wildcard_ends_the_session() {
+  IT("ends the session on a PUBLISH whose topic name carries a wildcard");
+  reset_callback();
+
+  // Both wildcards, each in a topic name that is otherwise the one the first test receives.
+  const uint8_t wildcards[] = { '+', '#' };
+
+  for(size_t i = 0U; i < (sizeof(wildcards) / sizeof(wildcards[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+
+    // "topi+" and "topi#": a name says where a message was published, and neither of these names
+    // anywhere [MQTT-3.3.2-2] - handed on, the callback would route on a pattern.
+    const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, wildcards[i], 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+    shimClient.respond(publish, 16U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+    IS_FALSE(callback_called);
+  }
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -716,6 +747,7 @@ int main() {
   test_a_qos0_publish_marked_duplicate_ends_the_session();
   test_a_packet_with_invalid_reserved_flags_ends_the_session();
   test_a_topic_carrying_a_null_character_ends_the_session();
+  test_a_topic_name_carrying_a_wildcard_ends_the_session();
 
   FINISH
 }

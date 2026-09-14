@@ -393,6 +393,13 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
       if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
         return false;
       }
+      // A topic name says where a message was published; the wildcards belong to the filters it is
+      // matched against, and a PUBLISH must not carry one [MQTT-3.3.2-2]. The callback routes on
+      // this string, and would be handed a pattern to route by.
+      const uint8_t* const topicName = this->buffer + llen + 3U;
+      if((memchr(topicName, '+', tl) != nullptr) || (memchr(topicName, '#', tl) != nullptr)) {
+        return false;
+      }
       // Taken before the callback runs, as the acknowledgement is built after it: a callback that
       // publishes writes its own packet over the one being read here.
       const uint16_t msgId = (msgIdLen != 0U)
