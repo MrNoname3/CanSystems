@@ -402,8 +402,41 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
   END_IT
 }
 
-bool test_a_ping_request_from_the_broker_is_ignored() {
-  IT("does not answer a ping request from the broker");
+bool test_a_packet_only_a_client_sends_ends_the_session() {
+  IT("ends the session on a packet type that only travels towards the broker");
+  reset_callback();
+
+  // CONNECT, SUBSCRIBE, UNSUBSCRIBE, PINGREQ and DISCONNECT, each with the flags its type is
+  // given: five packets Table 2.1 sends to a broker and never back. A broker putting one on the
+  // wire is not one this stream can go on being read as - a SUBSCRIBE and its SUBACK differ by a
+  // nibble - and the PINGREQ among them is the one a client must not answer.
+  const uint8_t clientOnly[][2] = { { 0x10U, 0x00U }, { 0x82U, 0x00U }, { 0xA2U, 0x00U }, { 0xC0U, 0x00U }, { 0xE0U, 0x00U } };
+
+  for(size_t i = 0U; i < (sizeof(clientOnly) / sizeof(clientOnly[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+    const uint16_t afterConnect = shimClient.received();
+
+    shimClient.respond(clientOnly[i], 2U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+    // Nothing was answered on the way out, least of all the ping request.
+    IS_EQUAL(shimClient.received(), afterConnect);
+  }
+
+  END_IT
+}
+
+bool test_a_second_connack_ends_the_session() {
+  IT("ends the session on a CONNACK arriving after the handshake read one");
   reset_callback();
 
   ShimClient shimClient;
@@ -412,30 +445,16 @@ bool test_a_ping_request_from_the_broker_is_ignored() {
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
-  setFakeMillis(1000U);
   PubSubClient client(server, 1883U, callback, shimClient);
   IS_TRUE(client.connect("client_test1"));
-  const uint16_t afterConnect = shimClient.received();
 
-  // The next thing out of the client is its own ping, not an answer: a PINGRESP would fail the
-  // match here, on its first byte.
-  const uint8_t pingreq[] = { 0xC0U, 0x0U };
-  shimClient.expect(pingreq, 2U);
+  // A session opens with one CONNACK [MQTT-3.2.0-1]; a second answers a CONNECT never sent.
+  shimClient.respond(connack, 4U);
 
-  // The broker asks, which is a thing brokers do not do and clients must not answer.
-  shimClient.respond(pingreq, 2U);
-  setFakeMillis(2000U);
-  IS_TRUE(client.loop());
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
 
-  // Past a ping interval since the connect, and an answer would have put this one off past it.
-  setFakeMillis(18000U);
-  IS_TRUE(client.loop());
-  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
-
-  IS_TRUE(client.connected());
-  IS_FALSE(shimClient.error());
-
-  clearFakeMillis();
   END_IT
 }
 
@@ -631,7 +650,8 @@ int main() {
   test_receive_qos1();
   test_topic_length_past_the_packet_ends_the_session();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
-  test_a_ping_request_from_the_broker_is_ignored();
+  test_a_packet_only_a_client_sends_ends_the_session();
+  test_a_second_connack_ends_the_session();
   test_an_acknowledgement_the_link_half_took_ends_the_loop();
   test_a_qos1_message_is_acknowledged_without_a_callback();
   test_an_empty_topic_name_ends_the_session();

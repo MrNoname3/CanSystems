@@ -269,14 +269,21 @@ bool PubSubClient::topicFilterValid(const char* filter) const {
   return true;
 }
 
-bool PubSubClient::fixedHeaderFlagsValid(uint8_t header) {
+bool PubSubClient::fixedHeaderValid(uint8_t header) {
   const uint8_t type = header & 0xF0U;
   const uint8_t flags = header & 0x0FU;
   if((type == 0U) || (type == MQTTReserved)) { return false; }   // neither number names a packet
+  // Table 2.1 gives each type its direction, and these five travel to the broker alone. One coming
+  // the other way is a packet no server sends, which puts the stream out of step with what it is
+  // read as: a SUBSCRIBE and a SUBACK differ by a nibble, and the session ends here either way.
+  if((type == MQTTCONNECT) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE) ||
+     (type == MQTTPINGREQ) || (type == MQTTDISCONNECT)) { return false; }
   // A PUBLISH spends its low nibble on dup, qos and retain, all but the qos level the standard
   // reserves and gives no delivery protocol for.
   if(type == MQTTPUBLISH) { return (flags & 0x06U) != 0x06U; }
-  if((type == MQTTPUBREL) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE)) { return flags == 0x02U; }
+  // Of the three types carrying 0b0010 only PUBREL reaches a client; the other two were turned
+  // back above.
+  if(type == MQTTPUBREL) { return flags == 0x02U; }
   return flags == 0U;
 }
 
@@ -311,7 +318,7 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
       // "If invalid flags are received, the receiver MUST close the Network Connection"
       // [MQTT-2.2.2-2], which covers the reserved QoS level [MQTT-3.3.1-4] as well: read as a QoS 0
       // message it would hand the callback the packet identifier as the first two payload bytes.
-      if(!fixedHeaderFlagsValid(byteIn)) { return RxResult::Malformed; }
+      if(!fixedHeaderValid(byteIn)) { return RxResult::Malformed; }
       this->buffer[0] = byteIn;
       rxLen = 1U;
       continue;
@@ -401,9 +408,10 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
         this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
         (void)write(MQTTPUBACK, this->buffer, 2U);
       }
-    } else if(type == MQTTPINGREQ) {
-      // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
-      // protocol error. One arriving here goes no further.
+    } else if(type == MQTTCONNACK) {
+      // A session opens with one CONNACK and the handshake reads it [MQTT-3.2.0-1]; a second is
+      // the broker answering a CONNECT this client never sent it.
+      return false;
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
