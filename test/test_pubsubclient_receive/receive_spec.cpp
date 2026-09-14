@@ -435,6 +435,35 @@ bool test_a_packet_only_a_client_sends_ends_the_session() {
   END_IT
 }
 
+bool test_a_qos1_publish_without_a_packet_id_ends_the_session() {
+  IT("ends the session on a qos1 PUBLISH whose packet identifier is zero");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+  const uint16_t afterConnect = shimClient.received();
+
+  // The qos1 message of the test above with a packet identifier of zero, which [MQTT-2.3.1-1]
+  // leaves unassigned: the PUBACK carrying it back would close off no delivery.
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x00U, 0x00U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+  // No acknowledgement went out for it either.
+  IS_EQUAL(shimClient.received(), afterConnect);
+
+  END_IT
+}
+
 bool test_a_second_connack_ends_the_session() {
   IT("ends the session on a CONNACK arriving after the handshake read one");
   reset_callback();
@@ -652,6 +681,7 @@ int main() {
   test_a_publish_too_short_for_its_topic_length_is_dropped();
   test_a_packet_only_a_client_sends_ends_the_session();
   test_a_second_connack_ends_the_session();
+  test_a_qos1_publish_without_a_packet_id_ends_the_session();
   test_an_acknowledgement_the_link_half_took_ends_the_loop();
   test_a_qos1_message_is_acknowledged_without_a_callback();
   test_an_empty_topic_name_ends_the_session();

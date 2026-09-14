@@ -393,6 +393,12 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
       const uint16_t msgId = (msgIdLen != 0U)
                                  ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
                                  : 0U;
+      // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
+      // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
+      // back, it names no delivery the broker can close off, and the message would stay in flight.
+      if((msgIdLen != 0U) && (msgId == 0U)) {
+        return false;
+      }
       if(callback != nullptr) {
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
