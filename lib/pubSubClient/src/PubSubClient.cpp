@@ -44,8 +44,11 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // broker to name this client, which it only does for a clean session [MQTT-3.1.3-7].
   if((id == nullptr) || ((id[0] == '\0') && !cleanSession)) { return false; }
   if(connected()) { return true; }
-  const bool result = (tcpClient.connected() != 0) ||
-                      static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
+  // A CONNECT is the first packet of a network connection, and no connection carries a second one
+  // [MQTT-3.1.0-2]. A socket still open here belongs to a session that ended without it - one the
+  // broker may well still be holding - so it is dropped rather than written down.
+  if(tcpClient.connected() != 0) { tcpClient.stop(); }
+  const bool result = static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
                                                           : tcpClient.connect(this->ip, this->port));
   if(!result) {
     connectionState = State::CONNECT_FAILED;
