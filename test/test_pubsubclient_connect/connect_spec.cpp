@@ -356,6 +356,53 @@ bool test_connect_answer_of_the_right_size_but_the_wrong_type() {
   END_IT
 }
 
+bool test_connect_answer_whose_acknowledge_flags_are_not_clear() {
+  IT("ends the session on a CONNACK offering a session, and on one with a reserved bit set");
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+
+  // Session Present set. This client stores nothing between connections, so there is no session
+  // here to carry on, and [MQTT-3.2.2-2] closes rather than let the broker believe otherwise.
+  const uint8_t sessionPresent[] = { 0x20U, 0x02U, 0x01U, 0x00U };
+  shimClient.respond(sessionPresent, 4U);
+  IS_FALSE(client.connect("client_test1"));
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+
+  // A reserved bit of the same byte, which no conforming broker sets.
+  const uint8_t reservedBit[] = { 0x20U, 0x02U, 0x80U, 0x00U };
+  shimClient.respond(reservedBit, 4U);
+  IS_FALSE(client.connect("client_test1"));
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+
+  END_IT
+}
+
+bool test_connect_opens_a_connection_of_its_own() {
+  IT("opens a connection for the CONNECT rather than sending it down one already open");
+  ShimClient shimClient;
+  // A socket open without a session behind it, and a link that will not give another. Reusing the
+  // one that is there would put a second CONNECT on it, which [MQTT-3.1.0-2] has the broker close
+  // the connection over; the connect is refused here instead, where the caller can see why.
+  shimClient.setAllowConnect(false);
+  shimClient.setConnected(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_FALSE(client.connect("client_test1"));
+  IS_TRUE(client.state() == PubSubClient::State::CONNECT_FAILED);
+  IS_FALSE(client.connected());
+  // Nothing was written down the socket that was open.
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(0U));
+
+  END_IT
+}
+
 bool test_connect_refuses_a_will_qos_it_cannot_send() {
   IT("refuses a will qos that does not fit the two bits kept for it");
   ShimClient shimClient;
@@ -426,7 +473,9 @@ int main() {
   test_connect_fails_on_no_response();
   test_connect_answer_that_is_not_a_connack();
   test_connect_answer_of_the_right_size_but_the_wrong_type();
+  test_connect_answer_whose_acknowledge_flags_are_not_clear();
   test_connect_fails_when_the_packet_is_not_taken();
+  test_connect_opens_a_connection_of_its_own();
 
   test_connect_properly_formatted();
   test_connect_non_clean_session();

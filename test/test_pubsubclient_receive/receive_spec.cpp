@@ -402,8 +402,41 @@ bool test_a_publish_too_short_for_its_topic_length_is_dropped() {
   END_IT
 }
 
-bool test_a_ping_request_from_the_broker_is_ignored() {
-  IT("does not answer a ping request from the broker");
+bool test_a_packet_only_a_client_sends_ends_the_session() {
+  IT("ends the session on a packet type that only travels towards the broker");
+  reset_callback();
+
+  // CONNECT, SUBSCRIBE, UNSUBSCRIBE, PINGREQ and DISCONNECT, each with the flags its type is
+  // given: five packets Table 2.1 sends to a broker and never back. A broker putting one on the
+  // wire is not one this stream can go on being read as - a SUBSCRIBE and its SUBACK differ by a
+  // nibble - and the PINGREQ among them is the one a client must not answer.
+  const uint8_t clientOnly[][2] = { { 0x10U, 0x00U }, { 0x82U, 0x00U }, { 0xA2U, 0x00U }, { 0xC0U, 0x00U }, { 0xE0U, 0x00U } };
+
+  for(size_t i = 0U; i < (sizeof(clientOnly) / sizeof(clientOnly[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+    const uint16_t afterConnect = shimClient.received();
+
+    shimClient.respond(clientOnly[i], 2U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+    // Nothing was answered on the way out, least of all the ping request.
+    IS_EQUAL(shimClient.received(), afterConnect);
+  }
+
+  END_IT
+}
+
+bool test_a_qos1_publish_without_a_packet_id_ends_the_session() {
+  IT("ends the session on a qos1 PUBLISH whose packet identifier is zero");
   reset_callback();
 
   ShimClient shimClient;
@@ -412,30 +445,45 @@ bool test_a_ping_request_from_the_broker_is_ignored() {
   const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
   shimClient.respond(connack, 4U);
 
-  setFakeMillis(1000U);
   PubSubClient client(server, 1883U, callback, shimClient);
   IS_TRUE(client.connect("client_test1"));
   const uint16_t afterConnect = shimClient.received();
 
-  // The next thing out of the client is its own ping, not an answer: a PINGRESP would fail the
-  // match here, on its first byte.
-  const uint8_t pingreq[] = { 0xC0U, 0x0U };
-  shimClient.expect(pingreq, 2U);
+  // The qos1 message of the test above with a packet identifier of zero, which [MQTT-2.3.1-1]
+  // leaves unassigned: the PUBACK carrying it back would close off no delivery.
+  const uint8_t publish[] = { 0x32U, 0x10U, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x00U, 0x00U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 18U);
 
-  // The broker asks, which is a thing brokers do not do and clients must not answer.
-  shimClient.respond(pingreq, 2U);
-  setFakeMillis(2000U);
-  IS_TRUE(client.loop());
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+  // No acknowledgement went out for it either.
+  IS_EQUAL(shimClient.received(), afterConnect);
 
-  // Past a ping interval since the connect, and an answer would have put this one off past it.
-  setFakeMillis(18000U);
-  IS_TRUE(client.loop());
-  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
+  END_IT
+}
 
-  IS_TRUE(client.connected());
-  IS_FALSE(shimClient.error());
+bool test_a_second_connack_ends_the_session() {
+  IT("ends the session on a CONNACK arriving after the handshake read one");
+  reset_callback();
 
-  clearFakeMillis();
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // A session opens with one CONNACK [MQTT-3.2.0-1]; a second answers a CONNECT never sent.
+  shimClient.respond(connack, 4U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+
   END_IT
 }
 
@@ -568,6 +616,32 @@ bool test_a_publish_with_both_qos_bits_set_ends_the_session() {
   END_IT
 }
 
+bool test_a_qos0_publish_marked_duplicate_ends_the_session() {
+  IT("ends the session on a qos0 PUBLISH whose dup flag is set");
+  reset_callback();
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+  IS_TRUE(client.connect("client_test1"));
+
+  // 0x38: the message of the first test with its dup flag set. Nothing acknowledges a qos0
+  // delivery, so nothing repeats one either, and [MQTT-3.3.1-2] has the flag come as zero.
+  const uint8_t publish[] = { 0x38U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, 0x63U, 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+  shimClient.respond(publish, 16U);
+
+  IS_FALSE(client.loop());
+  IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+  IS_FALSE(client.connected());
+  IS_FALSE(callback_called);
+
+  END_IT
+}
+
 bool test_a_packet_with_invalid_reserved_flags_ends_the_session() {
   IT("ends the session on a packet whose reserved flags are not what its type allows");
   reset_callback();
@@ -618,6 +692,66 @@ bool test_a_topic_carrying_a_null_character_ends_the_session() {
   END_IT
 }
 
+bool test_a_topic_name_carrying_a_wildcard_ends_the_session() {
+  IT("ends the session on a PUBLISH whose topic name carries a wildcard");
+  reset_callback();
+
+  // Both wildcards, each in a topic name that is otherwise the one the first test receives.
+  const uint8_t wildcards[] = { '+', '#' };
+
+  for(size_t i = 0U; i < (sizeof(wildcards) / sizeof(wildcards[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+
+    // "topi+" and "topi#": a name says where a message was published, and neither of these names
+    // anywhere [MQTT-3.3.2-2] - handed on, the callback would route on a pattern.
+    const uint8_t publish[] = { 0x30U, 0xeU, 0x0U, 0x5U, 0x74U, 0x6fU, 0x70U, 0x69U, wildcards[i], 0x70U, 0x61U, 0x79U, 0x6cU, 0x6fU, 0x61U, 0x64U };
+    shimClient.respond(publish, 16U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+    IS_FALSE(callback_called);
+  }
+
+  END_IT
+}
+
+bool test_a_packet_of_a_length_its_type_cannot_have_ends_the_session() {
+  IT("ends the session on a packet whose remaining length its type cannot carry");
+  reset_callback();
+
+  // A PINGRESP with a byte behind it, where the standard gives it none, and an UNSUBACK half a
+  // packet identifier short of the one it answers. Both lengths are read off the wire and both
+  // decide where the next packet starts, so neither can be taken on trust.
+  const uint8_t misSized[][3] = { { 0xD0U, 0x01U, 0x00U }, { 0xB0U, 0x01U, 0x00U } };
+
+  for(size_t i = 0U; i < (sizeof(misSized) / sizeof(misSized[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+
+    shimClient.respond(misSized[i], 3U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+  }
+
+  END_IT
+}
+
 int main() {
   SUITE("Receive");
   test_receive_callback();
@@ -631,14 +765,19 @@ int main() {
   test_receive_qos1();
   test_topic_length_past_the_packet_ends_the_session();
   test_a_publish_too_short_for_its_topic_length_is_dropped();
-  test_a_ping_request_from_the_broker_is_ignored();
+  test_a_packet_only_a_client_sends_ends_the_session();
+  test_a_second_connack_ends_the_session();
+  test_a_qos1_publish_without_a_packet_id_ends_the_session();
   test_an_acknowledgement_the_link_half_took_ends_the_loop();
   test_a_qos1_message_is_acknowledged_without_a_callback();
   test_an_empty_topic_name_ends_the_session();
   test_a_qos2_publish_ends_the_session();
   test_a_publish_with_both_qos_bits_set_ends_the_session();
+  test_a_qos0_publish_marked_duplicate_ends_the_session();
   test_a_packet_with_invalid_reserved_flags_ends_the_session();
   test_a_topic_carrying_a_null_character_ends_the_session();
+  test_a_topic_name_carrying_a_wildcard_ends_the_session();
+  test_a_packet_of_a_length_its_type_cannot_have_ends_the_session();
 
   FINISH
 }

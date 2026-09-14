@@ -44,8 +44,11 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // broker to name this client, which it only does for a clean session [MQTT-3.1.3-7].
   if((id == nullptr) || ((id[0] == '\0') && !cleanSession)) { return false; }
   if(connected()) { return true; }
-  const bool result = (tcpClient.connected() != 0) ||
-                      static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
+  // A CONNECT is the first packet of a network connection, and no connection carries a second one
+  // [MQTT-3.1.0-2]. A socket still open here belongs to a session that ended without it - one the
+  // broker may well still be holding - so it is dropped rather than written down.
+  if(tcpClient.connected() != 0) { tcpClient.stop(); }
+  const bool result = static_cast<bool>(domain != nullptr ? tcpClient.connect(this->domain, this->port)
                                                           : tcpClient.connect(this->ip, this->port));
   if(!result) {
     connectionState = State::CONNECT_FAILED;
@@ -139,16 +142,21 @@ bool PubSubClient::awaitConnAck() {
   const RxResult connAck = readPacketBlocking();
   // The first packet from the server is a CONNACK [MQTT-3.2.0-1], four bytes long. Read anywhere
   // else, the return code is whatever sits at that offset: a PUBACK for message 0x1200 accepts.
-  const bool connAckSized = (connAck == RxResult::Complete) && (rxLen == 4U) && ((this->buffer[0] & 0xF0U) == MQTTCONNACK);
+  // Its second byte carries the acknowledge flags: bits 7-1 are reserved and come as zero, and
+  // bit 0 offers a session the broker kept for this client id. This client keeps none of its own
+  // - no subscription and no unfinished delivery outlive a connection here - so a session to pick
+  // up is one it cannot hold up its end of, and [MQTT-3.2.2-2] closes on it.
+  const bool connAckValid = (connAck == RxResult::Complete) && (rxLen == 4U) &&
+                            ((this->buffer[0] & 0xF0U) == MQTTCONNACK) && (this->buffer[2] == 0x00U);
   // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
   // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
   const State connAckFailure = (connAck == RxResult::Complete) ? State::PROTOCOL_ERROR : readFailureState(connAck);
-  const uint8_t connAckCode = connAckSized ? this->buffer[3] : 0xFFU;
+  const uint8_t connAckCode = connAckValid ? this->buffer[3] : 0xFFU;
   // The reader has to start clean for the session: whatever it kept about the CONNACK would
   // otherwise be finished a second time on the first loop(), before any real packet is read.
   resetReader();
 
-  if(connAckSized) {
+  if(connAckValid) {
     if(connAckCode == 0U) {
       lastInActivity = millis();
       pingOutstanding = false;
@@ -264,15 +272,45 @@ bool PubSubClient::topicFilterValid(const char* filter) const {
   return true;
 }
 
-bool PubSubClient::fixedHeaderFlagsValid(uint8_t header) {
+bool PubSubClient::fixedHeaderValid(uint8_t header) {
   const uint8_t type = header & 0xF0U;
   const uint8_t flags = header & 0x0FU;
   if((type == 0U) || (type == MQTTReserved)) { return false; }   // neither number names a packet
-  // A PUBLISH spends its low nibble on dup, qos and retain, all but the qos level the standard
-  // reserves and gives no delivery protocol for.
-  if(type == MQTTPUBLISH) { return (flags & 0x06U) != 0x06U; }
-  if((type == MQTTPUBREL) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE)) { return flags == 0x02U; }
+  // Table 2.1 gives each type its direction, and these five travel to the broker alone. One coming
+  // the other way is a packet no server sends, which puts the stream out of step with what it is
+  // read as: a SUBSCRIBE and a SUBACK differ by a nibble, and the session ends here either way.
+  if((type == MQTTCONNECT) || (type == MQTTSUBSCRIBE) || (type == MQTTUNSUBSCRIBE) ||
+     (type == MQTTPINGREQ) || (type == MQTTDISCONNECT)) { return false; }
+  // A PUBLISH spends its low nibble on dup, qos and retain. Two of the three are its own to set:
+  // the standard reserves one qos level and gives no delivery protocol for it, and leaves the dup
+  // flag clear at qos 0 [MQTT-3.3.1-2], where nothing is acknowledged and so nothing is sent again.
+  if(type == MQTTPUBLISH) {
+    const uint8_t publishQos = flags & 0x06U;
+    if(publishQos == 0x06U) { return false; }
+    return (publishQos != MQTTQOS0) || ((flags & 0x08U) == 0U);
+  }
+  // Of the three types carrying 0b0010 only PUBREL reaches a client; the other two were turned
+  // back above.
+  if(type == MQTTPUBREL) { return flags == 0x02U; }
   return flags == 0U;
+}
+
+bool PubSubClient::remainingLengthValid(uint8_t header, uint32_t remaining) {
+  const uint8_t type = header & 0xF0U;
+  // A PINGRESP is its fixed header and nothing else.
+  if(type == MQTTPINGRESP) { return remaining == 0U; }
+  // A CONNACK is its flags byte and its return code; every acknowledgement below is the two bytes
+  // of the packet identifier it answers.
+  if((type == MQTTCONNACK) || (type == MQTTPUBACK) || (type == MQTTPUBREC) ||
+     (type == MQTTPUBREL) || (type == MQTTPUBCOMP) || (type == MQTTUNSUBACK)) { return remaining == 2U; }
+  // A SUBACK carries a return code for each filter of the SUBSCRIBE it answers, in the order they
+  // were asked for [MQTT-3.9.3-1]. One filter goes out per SUBSCRIBE here, so one code comes back;
+  // more than that answers a packet this client did not send.
+  if(type == MQTTSUBACK) { return remaining == 3U; }
+  // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
+  // announces fewer has none to give: the payload length derived from it would wrap to nearly 4 GB.
+  if(type == MQTTPUBLISH) { return remaining >= 2U; }
+  return true;
 }
 
 PubSubClient::State PubSubClient::readFailureState(RxResult result) {
@@ -306,7 +344,7 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
       // "If invalid flags are received, the receiver MUST close the Network Connection"
       // [MQTT-2.2.2-2], which covers the reserved QoS level [MQTT-3.3.1-4] as well: read as a QoS 0
       // message it would hand the callback the packet identifier as the first two payload bytes.
-      if(!fixedHeaderFlagsValid(byteIn)) { return RxResult::Malformed; }
+      if(!fixedHeaderValid(byteIn)) { return RxResult::Malformed; }
       this->buffer[0] = byteIn;
       rxLen = 1U;
       continue;
@@ -317,11 +355,8 @@ PubSubClient::RxResult PubSubClient::advanceHeader() {
     rxMultiplier <<= 7U;  // multiplier *= 128
     if((byteIn & 128U) == 0U) {
       rxLengthLength = static_cast<uint8_t>(rxLen - 1U);
-      // The topic-length field is two bytes, and the remaining length counts them. A PUBLISH that
-      // announces fewer has none to give: the payload length derived from it would wrap to nearly
-      // 4 GB. Malformed the same way an invalid remaining length is, and dropped the same way.
-      const bool isPublish = ((this->buffer[0] & 0xF0U) == MQTTPUBLISH);
-      if(isPublish && (rxRemaining < 2U)) { return RxResult::Malformed; }
+      // Malformed the same way an invalid remaining length is, and dropped the same way.
+      if(!remainingLengthValid(this->buffer[0], rxRemaining)) { return RxResult::Malformed; }
       // A packet with nowhere to go is an internal buffer full condition, which [MQTT-4.8.0-2]
       // answers by ending the connection rather than by reading bytes that cannot be kept.
       if((rxLen + rxRemaining) > this->bufferSize) { return RxResult::TooLarge; }
@@ -376,11 +411,24 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
       if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
         return false;
       }
+      // A topic name says where a message was published; the wildcards belong to the filters it is
+      // matched against, and a PUBLISH must not carry one [MQTT-3.3.2-2]. The callback routes on
+      // this string, and would be handed a pattern to route by.
+      const uint8_t* const topicName = this->buffer + llen + 3U;
+      if((memchr(topicName, '+', tl) != nullptr) || (memchr(topicName, '#', tl) != nullptr)) {
+        return false;
+      }
       // Taken before the callback runs, as the acknowledgement is built after it: a callback that
       // publishes writes its own packet over the one being read here.
       const uint16_t msgId = (msgIdLen != 0U)
                                  ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
                                  : 0U;
+      // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
+      // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
+      // back, it names no delivery the broker can close off, and the message would stay in flight.
+      if((msgIdLen != 0U) && (msgId == 0U)) {
+        return false;
+      }
       if(callback != nullptr) {
         memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
         this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
@@ -396,9 +444,10 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
         this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
         (void)write(MQTTPUBACK, this->buffer, 2U);
       }
-    } else if(type == MQTTPINGREQ) {
-      // Only a client sends PINGREQ, and a broker handed a PINGRESP by one disconnects it for a
-      // protocol error. One arriving here goes no further.
+    } else if(type == MQTTCONNACK) {
+      // A session opens with one CONNACK and the handshake reads it [MQTT-3.2.0-1]; a second is
+      // the broker answering a CONNECT this client never sent it.
+      return false;
     } else if(type == MQTTPINGRESP) {
       pingOutstanding = false;
     }
