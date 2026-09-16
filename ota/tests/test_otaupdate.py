@@ -1685,3 +1685,168 @@ def test_ota_timeout_flag_parses_and_defaults_to_none() -> None:
     args = parser.parse_args(["--device", "40f52033765d", "--firmware", "--ota-timeout", "120"])
     assert args.ota_timeout == 120.0
     assert ota.build_arg_parser().parse_args([]).ota_timeout is None
+
+
+# --- CAN sub-device reboot verification (FileTransfer, pio_env-carrying entries only) --------
+# The CAN alert firmware upload goes through FileTransfer, not OTAUpdater - the gateway accepting
+# the file says nothing about the CAN nodes it then reflashes on their own, over the bus. Node
+# count and role both come from what is actually on the wire (no devices.yaml list to maintain).
+
+GATEWAY_MAC = "fcf5c401bd83"
+
+
+def test_match_can_node_topic() -> None:
+    assert ota._match_can_node_topic(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", GATEWAY_MAC) == ("alert1", "availability")
+    assert ota._match_can_node_topic(f"iot/dtos/{GATEWAY_MAC}/alert2/info", GATEWAY_MAC) == ("alert2", "info")
+    assert ota._match_can_node_topic(f"iot/dtos/{GATEWAY_MAC}/availability", GATEWAY_MAC) is None  # no node segment
+    assert ota._match_can_node_topic("iot/dtos/othermac/alert1/availability", GATEWAY_MAC) is None  # wrong gateway
+    assert ota._match_can_node_topic(f"iot/dtos/{GATEWAY_MAC}/alert1/common", GATEWAY_MAC) is None  # not avail/info
+
+
+def _make_can_file_transfer(tmp_path: Path, *, pio_env: Optional[str] = "nanoatmega328_alert") -> "ota.FileTransfer":
+    entry = ota.FileEntry(name="CAN alert firmware upload", device_path="/canAlertFw.bin",
+                          local_path=_write(tmp_path, "canAlertFw.bin", b"fake-can-image"), pio_env=pio_env)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address=GATEWAY_MAC, project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        entry,
+    )
+    transfer._on_connected()  # simulates a successful connect: subscribes if pio_env is set
+    return transfer
+
+
+def _seed_can_node_online(transfer: "ota.FileTransfer", node: str) -> None:
+    """Sets a node's discovery baseline directly, bypassing message delivery: the real gap
+    between "upload finished" and "node actually reboots" is tens of seconds,
+    which the scripted MQTT double has no notion of - stating the baseline outright, rather than
+    scripting a message for the discovery phase to happen to catch, is what a real discovery
+    window reliably would too, just without racing wall-clock timing to prove it in a test."""
+    transfer._can_node_state[node] = {"availability": "online", "info": None, "info_fresh": False, "saw_offline": False}
+
+
+def test_ordinary_file_transfer_skips_can_verification_entirely(tmp_path: Path) -> None:
+    entry = ota.FileEntry(name="Server config", device_path="/config/server.json",
+                          local_path=_write(tmp_path, "x.json", b"{}"))
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address=GATEWAY_MAC, project_name="x"), ota.MQTTConfig(host="broker"), entry)
+    scripted = _ScriptedMQTT(transfer._on_message)
+    transfer.mqtt_client = scripted  # type: ignore  # deliberate test double for the MQTT client
+    transfer._on_connected()
+    assert scripted.subscribed == []  # no CAN-node wildcard subscriptions for a plain file
+    assert transfer._verify_after_transfer() is True
+
+
+def test_can_upload_subscribes_the_wildcard_topics_on_connect(tmp_path: Path) -> None:
+    transfer = _make_can_file_transfer(tmp_path)
+    scripted = _ScriptedMQTT(transfer._on_message)
+    transfer.mqtt_client = scripted  # type: ignore  # deliberate test double for the MQTT client
+    transfer._on_connected()
+    assert f'iot/dtos/{GATEWAY_MAC}/+/availability' in scripted.subscribed
+    assert f'iot/dtos/{GATEWAY_MAC}/+/info' in scripted.subscribed
+
+
+def test_warns_and_succeeds_when_pio_env_has_no_role_suffix(tmp_path: Path) -> None:
+    transfer = _make_can_file_transfer(tmp_path, pio_env="noUnderscoreAtAll")
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True
+
+
+def test_warns_and_succeeds_when_no_live_node_matches_the_role(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.2)
+    transfer = _make_can_file_transfer(tmp_path)
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, [])  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True
+
+
+def test_a_node_of_a_different_role_is_not_watched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Future-proofing: a second node TYPE (e.g. a CAN-bridged irrigation node) coexisting on the
+    # same bus must not be dragged into an alert-firmware upload's verification.
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.2)
+    transfer = _make_can_file_transfer(tmp_path)
+    messages = [_fake_message(f"iot/dtos/{GATEWAY_MAC}/irrigation1/availability", {"state": "online"})]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True  # nothing of role "alert" was there to verify
+
+
+def test_an_already_offline_node_is_not_watched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.2)
+    transfer = _make_can_file_transfer(tmp_path)
+    messages = [_fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"})]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True  # skipped, same as the gateway's own OTA cascade would
+
+
+def test_a_single_matching_node_succeeds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.0)  # 0: discovery never runs its loop body at all
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    transfer = _make_can_file_transfer(tmp_path)
+    _seed_can_node_online(transfer, "alert1")
+    messages = [
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}),  # the reboot itself
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"fw": 1399, "git": "1234abcd", "dirty": 0}),
+    ]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True
+
+
+def test_multiple_matching_nodes_all_succeed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.0)  # 0: discovery never runs its loop body at all
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    transfer = _make_can_file_transfer(tmp_path)
+    _seed_can_node_online(transfer, "alert1")
+    _seed_can_node_online(transfer, "alert2")
+    messages = [
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert2/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"fw": 1399, "git": "1234abcd", "dirty": 0}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert2/info", {"fw": 1399, "git": "1234abcd", "dirty": 0}),
+    ]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is True
+
+
+def test_one_of_two_nodes_never_returning_fails_the_whole_check(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.0)  # 0: discovery never runs its loop body at all
+    monkeypatch.setattr(ota, "CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS", 0.05)
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    transfer = _make_can_file_transfer(tmp_path)
+    _seed_can_node_online(transfer, "alert1")
+    _seed_can_node_online(transfer, "alert2")
+    # Only alert1 comes back; alert2 never does.
+    messages = [
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"fw": 1399, "git": "1234abcd", "dirty": 0}),
+    ]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is False
+
+
+def test_a_node_reporting_the_wrong_build_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.0)  # 0: discovery never runs its loop body at all
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    transfer = _make_can_file_transfer(tmp_path)
+    _seed_can_node_online(transfer, "alert1")
+    messages = [
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"fw": 1398, "git": "51142aae", "dirty": 0}),
+    ]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert transfer._verify_after_transfer() is False
+
+
+def test_a_dirty_node_build_warns_but_still_succeeds(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.0)  # 0: discovery never runs its loop body at all
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    transfer = _make_can_file_transfer(tmp_path)
+    _seed_can_node_online(transfer, "alert1")
+    messages = [
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"fw": 1399, "git": "1234abcd", "dirty": 1}),
+    ]
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    with caplog.at_level(logging.WARNING):
+        assert transfer._verify_after_transfer() is True
+    assert any("dirty" in r.message.lower() for r in caplog.records)

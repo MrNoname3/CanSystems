@@ -59,6 +59,14 @@ DEFAULT_REBOOT_TIMEOUT_SECONDS = 60.0
 # moment the subscription is granted - this only bounds a broker that is slow to answer at all.
 PREFLIGHT_ONLINE_TIMEOUT_SECONDS = 10.0
 
+# CAN alert nodes take well under this per device for the transfer, reset and FW_VERSION report -
+# deliberate margin. The bus updates every live node of the matching role one after another, so
+# the total budget scales with how many actually answered discovery.
+CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS = 45.0
+# How long discovery waits for the retained availability/info of every node behind the gateway -
+# same reasoning as PREFLIGHT_ONLINE_TIMEOUT_SECONDS, just named for what it is here.
+CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
+
 
 class TransferState(enum.Enum):
     """States for the OTA update / file transfer / command process"""
@@ -1448,10 +1456,33 @@ class OTAUpdater(_BaseTransfer):
 # File transfer (config files, certificates, or any arbitrary file)
 # ---------------------------------------------------------------------------
 
+def _match_can_node_topic(topic: str, gateway_mac: str) -> Optional[tuple[str, str]]:
+    """If `topic` is `iot/dtos/<gateway_mac>/<node>/availability` or `.../<node>/info`, returns
+    (node, field); otherwise None. `node` is whatever subtopic name the node was given at
+    commissioning time (e.g. "alert1") - never assumed, always read back off the wire."""
+    prefix = f'iot/dtos/{gateway_mac}/'
+    if not topic.startswith(prefix):
+        return None
+    parts = topic[len(prefix):].split('/')
+    if len(parts) != 2 or parts[1] not in ('availability', 'info'):
+        return None
+    return parts[0], parts[1]
+
+
 class FileTransfer(_BaseTransfer):
     """Transfers an arbitrary file to the device via MQTT.
     Uses 'name' + 'fileSize' + 'md5' in the start message instead of 'binId',
-    which signals to the device that this is a generic file transfer, not a firmware update."""
+    which signals to the device that this is a generic file transfer, not a firmware update.
+
+    A `pio_env`-carrying entry additionally means this file is a CAN sub-device image (the CAN
+    alert firmware, staged at the gateway and cascaded over the bus - see the repo README's "OTA
+    and file transfer" section) - the gateway accepting it says nothing about the CAN nodes it
+    then reflashes on their own, over a much slower link. For that case only, the transfer is
+    followed by a watch over every live node behind this gateway whose subtopic matches the
+    firmware's role (the `pio_env` suffix after its first '_', e.g. "alert" from
+    "nanoatmega328_alert"): each such node is expected to go offline and come back reporting the
+    same build. Nothing here is configured up front - the node count and the role both come from
+    what is actually on the wire, so a node or a whole new role added later needs no change here."""
 
     def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, file_entry: FileEntry,
                  provider: "FileDataProvider | RenderedDataProvider | None" = None):
@@ -1462,6 +1493,8 @@ class FileTransfer(_BaseTransfer):
                 raise ValueError(f"File entry '{file_entry.name}' needs an explicit provider (rendered content)")
             provider = FileDataProvider(file_entry.local_path)
         self.file_provider = provider
+        # Keyed by CAN node subtopic (e.g. "alert1"); only populated when file_entry.pio_env is set.
+        self._can_node_state: Dict[str, Dict[str, Any]] = {}
 
     @property
     def data(self) -> bytes:
@@ -1488,6 +1521,105 @@ class FileTransfer(_BaseTransfer):
         logging.info(f"  Device path: {self.file_entry.device_path}")
         logging.info(f"  Size:  {self.file_provider.size} bytes")
         logging.info(f"  MD5:   {self.file_provider.md5}")
+
+    # --- CAN sub-device reboot verification -------------------------------------
+
+    def _on_connected(self) -> None:
+        if self.file_entry.pio_env is not None:
+            # Watched from the moment the connection is up, not just after the transfer: both
+            # topics are retained, and starting early means whatever was already there (the
+            # pre-upload baseline) is very likely in hand well before _verify_after_transfer()
+            # needs it, rather than racing the CAN-bus transfer for it.
+            mac = self.device_config.mac_address
+            self.mqtt_client.subscribe(f'iot/dtos/{mac}/+/availability')
+            self.mqtt_client.subscribe(f'iot/dtos/{mac}/+/info')
+        super()._on_connected()
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        match = _match_can_node_topic(msg.topic, self.device_config.mac_address)
+        if match is not None:
+            node, field = match
+            state = self._can_node_state.setdefault(
+                node, {"availability": None, "info": None, "info_fresh": False, "saw_offline": False})
+            if field == "availability":
+                try:
+                    value = json.loads(msg.payload.decode()).get("state")
+                except json.JSONDecodeError:
+                    value = None
+                state["availability"] = value
+                if value == "offline":
+                    state["saw_offline"] = True
+            else:  # "info"
+                try:
+                    state["info"] = json.loads(msg.payload.decode())
+                except json.JSONDecodeError:
+                    state["info"] = None
+                state["info_fresh"] = True
+            return
+        super()._on_message(client, userdata, msg)
+
+    def _verify_after_transfer(self) -> bool:
+        if self.file_entry.pio_env is None:
+            return True  # an ordinary file: the acknowledged MD5 already speaks for it
+
+        role_parts = self.file_entry.pio_env.split('_', 1)
+        if len(role_parts) < 2 or not role_parts[1]:
+            logging.warning(f"Firmware ID '{self.file_entry.pio_env}' has no '_<role>' suffix to match a CAN "
+                            f"node subtopic against, so no node's reboot could be verified")
+            return True
+        node_role = role_parts[1]
+
+        # Discovery: let whatever is still retained but has not yet arrived catch up, then freeze
+        # the set of nodes this upload is expected to have reached - live, of the matching role,
+        # and not already offline (the gateway's own OTA cascade skips a node that is, rather than
+        # queuing it, so it was never going to be touched by this run).
+        discovery_deadline = time.time() + CAN_NODE_DISCOVERY_TIMEOUT_SECONDS
+        while time.time() < discovery_deadline:
+            self.mqtt_client.loop(timeout=0.1)
+
+        targets = {node: state for node, state in self._can_node_state.items()
+                  if node.startswith(node_role) and state["availability"] == "online"}
+        if not targets:
+            logging.warning(f"No live CAN node behind this gateway matched the role '{node_role}'; "
+                            f"nothing to verify")
+            return True
+        logging.info(f"Watching {len(targets)} CAN node(s) of role '{node_role}': {', '.join(sorted(targets))}")
+
+        # A fresh baseline per node: any offline/info message from here on is this upload's own
+        # doing, not the retained value that predates it (drained just above).
+        for state in targets.values():
+            state["saw_offline"] = False
+            state["info_fresh"] = False
+
+        expected_hash = f"{git_utils.get_git_hash():08x}"
+        total_timeout = CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS * len(targets)
+        deadline = time.time() + total_timeout
+        while time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+            if all(state["saw_offline"] and state["info_fresh"] for state in targets.values()):
+                break
+
+        all_confirmed = True
+        for node in sorted(targets):
+            state = targets[node]
+            if not (state["saw_offline"] and state["info_fresh"]):
+                logging.error(f"{node}: never confirmed a reboot within the {total_timeout:.0f}s budget "
+                              f"(offline seen: {state['saw_offline']}, info seen: {state['info_fresh']})")
+                all_confirmed = False
+                continue
+            info: Dict[str, Any] = state["info"] or {}
+            actual_hash = info.get("git")
+            if actual_hash != expected_hash:
+                logging.error(f"{node}: came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
+                              f"the running firmware is not the one just sent")
+                all_confirmed = False
+                continue
+            if info.get("dirty"):
+                logging.warning(f"{node}: the uploaded build was made from a dirty working tree (uncommitted "
+                                f"or untracked changes) - the git hash matches, but the source it was built "
+                                f"from may not")
+            logging.info(f"{node}: rebooted and confirmed running build {expected_hash}")
+        return all_confirmed
 
 
 # ---------------------------------------------------------------------------
