@@ -394,6 +394,14 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
   }
   if(type == MQTTPINGRESP) {
     pingOutstanding = false;
+    return true;
+  }
+  if((type == MQTTPUBACK) || (type == MQTTPUBREC) || (type == MQTTPUBREL) || (type == MQTTPUBCOMP)) {
+    // Each answers a delivery the sender of the packet identifier it carries put in flight: a
+    // PUBACK the QoS 1 PUBLISH this client sent, the other three a QoS 2 exchange. This client
+    // never publishes above QoS 0 and never lets a QoS 2 delivery start [MQTT-3.8.4-6], so none
+    // of the four is ever a delivery this side owns, whatever identifier it names.
+    return false;
   }
   return true;
 }

@@ -487,6 +487,41 @@ bool test_a_second_connack_ends_the_session() {
   END_IT
 }
 
+bool test_an_unsolicited_acknowledgement_ends_the_session() {
+  IT("ends the session on an acknowledgement for a delivery this client never started");
+  reset_callback();
+
+  // PUBACK answers a qos1 PUBLISH this client sent, and PUBREC/PUBREL/PUBCOMP a qos2 exchange -
+  // this client publishes at qos0 alone and refuses a qos2 delivery before either side could ever
+  // reach these, so all four name a delivery that never belongs to it, whatever packet id they carry.
+  const uint8_t unsolicited[][4] = { { 0x40U, 0x02U, 0x00U, 0x01U },
+                                     { 0x50U, 0x02U, 0x00U, 0x01U },
+                                     { 0x62U, 0x02U, 0x00U, 0x01U },
+                                     { 0x70U, 0x02U, 0x00U, 0x01U } };
+
+  for(size_t i = 0U; i < (sizeof(unsolicited) / sizeof(unsolicited[0])); i++) {
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+    shimClient.respond(connack, 4U);
+
+    PubSubClient client(server, 1883U, callback, shimClient);
+    IS_TRUE(client.connect("client_test1"));
+    const uint16_t afterConnect = shimClient.received();
+
+    shimClient.respond(unsolicited[i], 4U);
+
+    IS_FALSE(client.loop());
+    IS_TRUE(client.state() == PubSubClient::State::PROTOCOL_ERROR);
+    IS_FALSE(client.connected());
+    // Nothing was answered on the way out either.
+    IS_EQUAL(shimClient.received(), afterConnect);
+  }
+
+  END_IT
+}
+
 bool test_an_acknowledgement_the_link_half_took_ends_the_loop() {
   IT("reports the session lost on the pass whose acknowledgement was half written");
   reset_callback();
@@ -767,6 +802,7 @@ int main() {
   test_a_publish_too_short_for_its_topic_length_is_dropped();
   test_a_packet_only_a_client_sends_ends_the_session();
   test_a_second_connack_ends_the_session();
+  test_an_unsolicited_acknowledgement_ends_the_session();
   test_a_qos1_publish_without_a_packet_id_ends_the_session();
   test_an_acknowledgement_the_link_half_took_ends_the_loop();
   test_a_qos1_message_is_acknowledged_without_a_callback();

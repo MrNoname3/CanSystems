@@ -467,8 +467,9 @@ private:
 
   /// @brief Dispatches a packet the reader has finished assembling.
   /// @details Reads it out of `buffer` and answers it: a PUBLISH reaches the callback (and is
-  /// acknowledged at QoS 1), a PINGRESP clears the outstanding ping, and a second CONNACK ends the
-  /// session. The caller starts the reader over first, the callback sharing the buffer.
+  /// acknowledged at QoS 1), a PINGRESP clears the outstanding ping, and a second CONNACK or an
+  /// acknowledgement of a delivery this client never started ends the session. The caller starts
+  /// the reader over first, the callback sharing the buffer.
   /// @param len Bytes of the packet in `buffer`.
   /// @param llen Bytes its remaining-length field took.
   /// @return `false` for a packet the standard says must not be accepted, which the caller answers
