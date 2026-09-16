@@ -9,11 +9,12 @@ deps (paho-mqtt, tqdm, pyyaml) are absent, so it never hard-fails a deps-less en
 import base64
 import hashlib
 import json
+import logging
 import sys
 import time
 from collections import deque as Deque
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 import pytest
 
@@ -1448,3 +1449,239 @@ def test_upload_port_is_refused_for_the_mqtt_actions() -> None:
     assert args.upload_port == "/dev/ttyUSB0"
     # The menu path may name a port too, since it can reach the USB actions.
     assert parser.parse_args(["--upload-port", "/dev/ttyUSB0"]).device is None
+
+
+# --- Reboot verification: OTAUpdater's pre/post-transfer device-state checks ---
+# The device's own availability/info topics, watched on the same MQTT session as the transfer
+# itself. FileTransfer/CommandSender never see any of this - the base class hooks default to
+# a no-op, confirmed at the end of this section.
+
+def _fake_message(topic: str, payload: "Dict[str, Any] | str") -> Any:
+    """Stands in for paho's MQTTMessage: only .topic and .payload matter to _on_message."""
+    class _Msg:
+        pass
+    msg = _Msg()
+    msg.topic = topic  # type: ignore[attr-defined]
+    body = json.dumps(payload) if isinstance(payload, dict) else payload
+    msg.payload = body.encode()  # type: ignore[attr-defined]
+    return msg
+
+
+class _ScriptedMQTT:
+    """Stands in for MQTTClient: subscribe()/publish() just record, and each loop() call
+    delivers the next scripted message (if any remain) straight to on_message - simulating
+    what real networking would eventually do, without any actual waiting or sockets."""
+
+    def __init__(self, on_message: Callable[[Any, Any, Any], None], messages: Optional[list[Any]] = None) -> None:
+        self.published: list[tuple[str, str]] = []
+        self.subscribed: list[str] = []
+        self._on_message = on_message
+        self._messages = list(messages) if messages else []
+
+    def subscribe(self, topic: str) -> None:
+        self.subscribed.append(topic)
+
+    def publish(self, topic: str, payload: str) -> None:
+        self.published.append((topic, payload))
+
+    def loop(self, timeout: float = 0.1) -> None:
+        del timeout
+        if self._messages:
+            self._on_message(None, None, self._messages.pop(0))
+
+
+def _make_ota_updater(tmp_path: Path, *, reboot_timeout: float = 5.0) -> "ota.OTAUpdater":
+    device = ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="project_esp8266_thermo")
+    updater = ota.OTAUpdater(device, ota.MQTTConfig(host="broker"),
+                             _write(tmp_path, "firmware.bin", b"project_esp8266_thermo\x00fw"),
+                             "project_esp8266_thermo", reboot_timeout)
+    updater._on_connected()  # simulates a successful connect: subscribes, marks _connected
+    return updater
+
+
+def test_on_connected_subscribes_availability_and_info(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message)  # type: ignore  # deliberate test double for the MQTT client
+    updater._connected = False
+    updater._on_connected()
+    recorder = cast(_ScriptedMQTT, updater.mqtt_client)
+    assert updater.device_config.availability_topic in recorder.subscribed
+    assert updater.device_config.info_topic in recorder.subscribed
+    assert updater._connected is True
+
+
+def test_on_message_routes_availability_without_queuing_as_an_ack(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater._on_message(None, None, _fake_message(updater.device_config.availability_topic, {"state": "online"}))
+    assert updater._latest_availability == "online"
+    assert len(updater._pending_messages) == 0
+
+
+def test_on_message_routes_info_without_queuing_as_an_ack(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater._on_message(None, None, _fake_message(updater.device_config.info_topic, {"git": "deadbeef", "dirty": 0}))
+    assert updater._latest_info == {"git": "deadbeef", "dirty": 0}
+    assert updater._info_is_fresh is True
+    assert len(updater._pending_messages) == 0
+
+
+def test_on_message_still_queues_common_topic_acks(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater._on_message(None, None, _fake_message(updater.device_config.receive_topic, {"type": 1}))
+    assert list(updater._pending_messages) == [{"type": 1}]
+
+
+def test_offline_availability_sets_the_seen_flag(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater._on_message(None, None, _fake_message(updater.device_config.availability_topic, {"state": "offline"}))
+    assert updater._saw_offline_since_start is True
+
+
+def test_on_message_survives_malformed_availability_json(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    updater._on_message(None, None, _fake_message(updater.device_config.availability_topic, "not json"))
+    assert updater._latest_availability is None
+    assert updater._saw_offline_since_start is False
+
+
+# --- Preflight: refuses to start against a device that is not online ---------
+
+def test_preflight_starts_the_transfer_when_online(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    messages = [
+        _fake_message(updater.device_config.availability_topic, {"state": "online"}),
+        _fake_message(updater.device_config.info_topic, {"git": "51142aae", "dirty": 0}),
+    ]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._await_preflight() is True
+    assert updater.state == ota.TransferState.WAIT_START_ACK  # _send_start_message() ran
+    recorder = cast(_ScriptedMQTT, updater.mqtt_client)
+    assert recorder.published  # the start message went out
+
+
+def test_preflight_refuses_when_no_info_baseline_arrives(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Online, but the retained info that would give the postflight check something to tell the
+    # post-reboot report apart from never turns up - refused rather than started blind.
+    monkeypatch.setattr(ota, "PREFLIGHT_ONLINE_TIMEOUT_SECONDS", 0.01)
+    updater = _make_ota_updater(tmp_path)
+    messages = [_fake_message(updater.device_config.availability_topic, {"state": "online"})]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._await_preflight() is False
+    assert updater.state == ota.TransferState.IDLE
+
+
+def test_a_stale_retained_info_arriving_mid_transfer_is_not_mistaken_for_fresh(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression test: a stale retained `info` value that arrives only after preflight's reset -
+    mid-transfer, not during discovery - must not be mistaken for the device's post-reboot report."""
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x68A468BD)
+    updater = _make_ota_updater(tmp_path)
+    # The stale info is scripted to arrive only *after* preflight's own wait for it - simulating
+    # the broker answering the two subscriptions out of order - followed by the reboot's real
+    # offline/online pair carrying the correct, new build.
+    stale_info = _fake_message(updater.device_config.info_topic, {"git": "51142aae", "dirty": 0})
+    fresh_info = _fake_message(updater.device_config.info_topic, {"git": "68a468bd", "dirty": 0})
+    scripted = _ScriptedMQTT(updater._on_message, [
+        _fake_message(updater.device_config.availability_topic, {"state": "online"}),
+        stale_info,
+    ])
+    updater.mqtt_client = scripted  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._await_preflight() is True
+    # Preflight drained the stale value; nothing must still read as fresh afterwards.
+    assert updater._info_is_fresh is False
+
+    scripted._messages = [  # feeding the reboot sequence into the same test double
+        _fake_message(updater.device_config.availability_topic, {"state": "offline"}),
+        fresh_info,
+    ]
+    assert updater._verify_after_transfer() is True
+
+
+def test_preflight_refuses_when_device_is_offline(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path)
+    messages = [_fake_message(updater.device_config.availability_topic, {"state": "offline"})]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._await_preflight() is False
+    assert updater.state == ota.TransferState.IDLE  # never sent the start message
+
+
+def test_preflight_times_out_when_availability_never_arrives(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "PREFLIGHT_ONLINE_TIMEOUT_SECONDS", 0.01)
+    updater = _make_ota_updater(tmp_path)
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, [])  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._await_preflight() is False
+    assert updater.state == ota.TransferState.IDLE
+
+
+# --- Postflight: confirms the device rebooted into what was just sent -------
+
+def test_verify_after_transfer_succeeds_on_matching_build(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    updater = _make_ota_updater(tmp_path)
+    messages = [
+        _fake_message(updater.device_config.availability_topic, {"state": "offline"}),
+        _fake_message(updater.device_config.info_topic, {"fw": 42, "git": "1234abcd", "dirty": 0}),
+    ]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._verify_after_transfer() is True
+
+
+def test_verify_after_transfer_fails_when_never_offline(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path, reboot_timeout=0.02)
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, [])  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._verify_after_transfer() is False
+
+
+def test_verify_after_transfer_fails_when_offline_but_never_returns(tmp_path: Path) -> None:
+    updater = _make_ota_updater(tmp_path, reboot_timeout=0.02)
+    messages = [_fake_message(updater.device_config.availability_topic, {"state": "offline"})]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._verify_after_transfer() is False
+
+
+def test_verify_after_transfer_fails_on_hash_mismatch(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    updater = _make_ota_updater(tmp_path)
+    messages = [
+        _fake_message(updater.device_config.availability_topic, {"state": "offline"}),
+        _fake_message(updater.device_config.info_topic, {"fw": 1, "git": "deadbeef", "dirty": 0}),
+    ]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    assert updater._verify_after_transfer() is False
+
+
+def test_verify_after_transfer_warns_but_succeeds_when_dirty(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    updater = _make_ota_updater(tmp_path)
+    messages = [
+        _fake_message(updater.device_config.availability_topic, {"state": "offline"}),
+        _fake_message(updater.device_config.info_topic, {"fw": 1, "git": "1234abcd", "dirty": 1}),
+    ]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
+    with caplog.at_level(logging.WARNING):
+        assert updater._verify_after_transfer() is True
+    assert any("dirty" in r.message.lower() for r in caplog.records)
+
+
+# --- Scoping: FileTransfer/CommandSender get no reboot verification at all ---
+
+def test_base_transfer_hooks_are_no_ops(tmp_path: Path) -> None:
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address="AABBCCDDEEFF", project_name="x"),
+        ota.MQTTConfig(host="broker"),
+        ota.FileEntry(name="x", device_path="/x", local_path=_write(tmp_path, "x", b"hi")),
+    )
+    assert transfer._await_preflight() is True
+    assert transfer._verify_after_transfer() is True
+
+
+def test_ota_timeout_flag_parses_and_defaults_to_none() -> None:
+    parser = ota.build_arg_parser()
+    args = parser.parse_args(["--device", "40f52033765d", "--firmware", "--ota-timeout", "120"])
+    assert args.ota_timeout == 120.0
+    assert ota.build_arg_parser().parse_args([]).ota_timeout is None

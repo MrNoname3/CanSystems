@@ -35,6 +35,13 @@ import yaml
 from paho.mqtt.enums import CallbackAPIVersion
 from tqdm import tqdm
 
+# scripts/git_utils.py computes the exact git hash/dirty state the firmware build embeds
+# (scripts/git_commit_info.py, the PlatformIO pre-script, calls the same functions); importing it
+# rather than reimplementing keeps the reboot verification's "expected" build in lock-step with
+# whatever the build actually stamped into the binary.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'scripts'))
+import git_utils
+
 # ---------------------------------------------------------------------------
 # Enums & Data classes
 # ---------------------------------------------------------------------------
@@ -43,6 +50,14 @@ from tqdm import tqdm
 # not the expected one. On a repeated piece it means the device already stored it and only the
 # acknowledgment went missing.
 WRONG_FILE_PIECE_NUMBER = 1 << 8
+
+# Shared by --ota-timeout and the interactive menu (which has no flag to override it), so a
+# firmware upload waits the same length for the device to reboot and confirm the new build
+# whichever way it was started.
+DEFAULT_REBOOT_TIMEOUT_SECONDS = 60.0
+# The pre-upload online check waits on a retained message, which the broker replies with the
+# moment the subscription is granted - this only bounds a broker that is slow to answer at all.
+PREFLIGHT_ONLINE_TIMEOUT_SECONDS = 10.0
 
 
 class TransferState(enum.Enum):
@@ -183,6 +198,14 @@ class DeviceConfig:
     @property
     def receive_topic(self) -> str:
         return f'iot/dtos/{self.mac_address}/common'
+
+    @property
+    def availability_topic(self) -> str:
+        return f'iot/dtos/{self.mac_address}/availability'
+
+    @property
+    def info_topic(self) -> str:
+        return f'iot/dtos/{self.mac_address}/info'
 
 
 # ---------------------------------------------------------------------------
@@ -1235,19 +1258,34 @@ class _BaseTransfer:
         self._close_progress_bar()
         self.mqtt_client.disconnect()
 
+    def _await_preflight(self) -> bool:
+        """Runs once connected, before the transfer's own state machine takes over.
+        The default needs nothing here: _on_connected() already sent the start message by the
+        time this runs. OTAUpdater overrides both to check the device is online first."""
+        return True
+
+    def _verify_after_transfer(self) -> bool:
+        """Runs once the byte transfer itself reaches DONE. The default has nothing further to
+        confirm: the acknowledged MD5 already speaks for a file transfer. OTAUpdater overrides
+        this to confirm the device actually rebooted into what was just sent."""
+        return True
+
     def run(self) -> bool:
         """Run the transfer process."""
         if not self.mqtt_client.connect():
             return False
 
         try:
+            if not self._await_preflight():
+                return False
+
             while self.state not in {TransferState.DONE, TransferState.ERROR}:
                 self.mqtt_client.loop(timeout=0.1)
                 self._process_state()
 
             success = self.state == TransferState.DONE
             logging.info("Transfer completed successfully" if success else "Transfer failed")
-            return success
+            return success and self._verify_after_transfer()
 
         except KeyboardInterrupt:
             logging.info("Transfer interrupted by user")
@@ -1264,11 +1302,26 @@ class _BaseTransfer:
 # ---------------------------------------------------------------------------
 
 class OTAUpdater(_BaseTransfer):
-    """Firmware OTA update – sends firmware.bin to the device via MQTT."""
+    """Firmware OTA update – sends firmware.bin to the device via MQTT.
 
-    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path, pio_project: str):
+    A byte-perfect transfer is not the whole story: the device still has to apply the image and
+    come back up running it. Before starting, this refuses to begin against a device that is not
+    currently online - a wasted attempt at best. After the transfer, it watches the same session
+    for the reboot Connectivity::shutdownMqtt() causes on the device side - an explicit retained
+    `{"state":"offline"}` publish before the clean disconnect, then eventually a fresh `info`
+    topic naming the build that came back up - and fails if the device never reappears, or
+    reappears running something other than what was just sent."""
+
+    def __init__(self, device_config: DeviceConfig, mqtt_config: MQTTConfig, firmware_path: Path, pio_project: str,
+                reboot_timeout: float = DEFAULT_REBOOT_TIMEOUT_SECONDS):
         super().__init__(device_config, mqtt_config)
         self.firmware_manager = FirmwareManager(firmware_path, pio_project)
+        self.reboot_timeout = reboot_timeout
+        self._connected = False
+        self._latest_availability: Optional[str] = None
+        self._saw_offline_since_start = False
+        self._latest_info: Optional[Dict[str, Any]] = None
+        self._info_is_fresh = False  # True once an `info` message has arrived since preflight passed.
 
     @property
     def data(self) -> bytes:
@@ -1293,6 +1346,102 @@ class OTAUpdater(_BaseTransfer):
     def _start_log_info(self):
         logging.info(f"OTA started - Size: {self.firmware_manager.size} bytes")
         logging.info(f"  MD5:   {self.firmware_manager.md5}")
+
+    # --- Reboot verification -----------------------------------------------------
+
+    def _on_connected(self) -> None:
+        # Subscribed here rather than left to _await_preflight(): both topics are retained, so
+        # the broker answers with whatever is current the moment the subscription is granted -
+        # which is exactly the pre-upload baseline the preflight check below waits for. The start
+        # message itself is *not* sent here, unlike the base class's default: _await_preflight()
+        # sends it once the device is confirmed online, not unconditionally on connect.
+        self.mqtt_client.subscribe(self.device_config.availability_topic)
+        self.mqtt_client.subscribe(self.device_config.info_topic)
+        self._connected = True
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        if msg.topic == self.device_config.availability_topic:
+            try:
+                state = json.loads(msg.payload.decode()).get("state")
+            except json.JSONDecodeError:
+                state = None
+            self._latest_availability = state
+            if state == "offline":
+                self._saw_offline_since_start = True
+            return
+        if msg.topic == self.device_config.info_topic:
+            try:
+                self._latest_info = json.loads(msg.payload.decode())
+            except json.JSONDecodeError:
+                self._latest_info = None
+            self._info_is_fresh = True
+            return
+        super()._on_message(client, userdata, msg)
+
+    def _await_preflight(self) -> bool:
+        deadline = time.time() + PREFLIGHT_ONLINE_TIMEOUT_SECONDS
+        while not self._connected and time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+        if not self._connected:
+            logging.error("Never connected to the broker; refusing to start the firmware upload")
+            return False
+
+        while self._latest_availability is None and time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+        if self._latest_availability != "online":
+            logging.error(f"Device is not online (last known state: {self._latest_availability!r}); "
+                          f"refusing to start a firmware upload against it")
+            return False
+
+        # The info topic is retained too, but the broker gives no guarantee about the order - or
+        # even the timing - it answers the two subscriptions in. Waiting for it explicitly here
+        # drains the value that predates this upload: left undrained, it could otherwise arrive
+        # mid-transfer and be mistaken for the device's post-reboot report.
+        while not self._info_is_fresh and time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+        if not self._info_is_fresh:
+            logging.error(f"No info message arrived within {PREFLIGHT_ONLINE_TIMEOUT_SECONDS:.0f}s; refusing to "
+                          f"start without a baseline the post-upload report could be told apart from")
+            return False
+
+        logging.info("Device is online; starting the firmware upload")
+        # A fresh baseline for the postflight check below: any offline/info message from here on
+        # is this upload's own doing, not something left over from before the check ran.
+        self._saw_offline_since_start = False
+        self._info_is_fresh = False
+        self._send_start_message()
+        return True
+
+    def _verify_after_transfer(self) -> bool:
+        expected_hash = f"{git_utils.get_git_hash():08x}"
+        deadline = time.time() + self.reboot_timeout
+        confirmed = False
+        while time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+            if self._saw_offline_since_start and self._info_is_fresh:
+                confirmed = True
+                break
+
+        if not confirmed:
+            if not self._saw_offline_since_start:
+                logging.error(f"Device never went offline within {self.reboot_timeout:.0f}s of the transfer "
+                              f"completing; it may not have rebooted into the new firmware")
+            else:
+                logging.error(f"Device went offline but did not report back within {self.reboot_timeout:.0f}s; "
+                              f"it may be stuck rebooting")
+            return False
+
+        info = self._latest_info or {}
+        actual_hash = info.get("git")
+        if actual_hash != expected_hash:
+            logging.error(f"Device came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
+                          f"the running firmware is not the one just sent")
+            return False
+        if info.get("dirty"):
+            logging.warning("The uploaded build was made from a dirty working tree (uncommitted or "
+                            "untracked changes) - the git hash matches, but the source it was built from may not")
+        logging.info(f"Device rebooted and confirmed running build {expected_hash}")
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -1500,6 +1649,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--upload-port', metavar='PORT',
                         help="serial port for --provision / --serial-flash; without it PlatformIO "
                              "picks one itself, which is a guess when several boards are attached")
+    parser.add_argument('--ota-timeout', type=float, metavar='SECONDS',
+                        help="seconds to wait for the device to reboot and confirm the new build "
+                             f"after --firmware, overriding the shared default ({DEFAULT_REBOOT_TIMEOUT_SECONDS:.0f}s, "
+                             "also what the interactive menu uses)")
     return parser
 
 
@@ -1567,8 +1720,10 @@ def resolve_target(projects: List[ProjectEntry], mac: str, *,
     raise ValueError(f"project '{project.name}' has no command '{command_name}'; it accepts: {known}")
 
 
-def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig):
-    """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender)."""
+def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_config: MQTTConfig,
+                  reboot_timeout: float = DEFAULT_REBOOT_TIMEOUT_SECONDS):
+    """Factory: create the appropriate worker (OTAUpdater / FileTransfer / CommandSender).
+    `reboot_timeout` only matters for the firmware-upload case; every other action ignores it."""
     device_config = DeviceConfig(mac_address=result.device.mac, project_name=result.project.pio_project)
 
     if result.command is not None:
@@ -1595,7 +1750,7 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
     print("  Action:      Firmware upload")
     print(f"  Firmware:    {firmware_path}")
     print()
-    return OTAUpdater(device_config, mqtt_config, firmware_path, result.project.pio_project)
+    return OTAUpdater(device_config, mqtt_config, firmware_path, result.project.pio_project, reboot_timeout)
 
 
 def main():
@@ -1610,6 +1765,8 @@ def main():
         parser.error("an action needs --device MAC")
     if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
         parser.error("--upload-port applies to --provision and --serial-flash only")
+    if args.ota_timeout is not None and not args.firmware:
+        parser.error("--ota-timeout applies to --firmware only")
 
     # Configured here rather than in whichever object happens to be built: the USB actions run
     # without any transfer worker, and their progress lines were dropped on the default level.
@@ -1678,7 +1835,8 @@ def main():
                 success = provisioner.flash_firmware(result.project)
             sys.exit(0 if success else 1)
 
-        worker = _build_worker(result, config_manager, mqtt_config)
+        reboot_timeout = args.ota_timeout if args.ota_timeout is not None else DEFAULT_REBOOT_TIMEOUT_SECONDS
+        worker = _build_worker(result, config_manager, mqtt_config, reboot_timeout)
 
         # Set up signal handler for graceful shutdown
         def signal_handler(sig: int, frame: "FrameType | None") -> None:

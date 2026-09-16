@@ -48,8 +48,9 @@ select = [
 # (the project-root .venv locally, the CI interpreter in CI).
 [tool.pyright]
 include = ["ota", "scripts", "test"]
-# ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime).
-extraPaths = ["ota"]
+# ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime);
+# scripts/ so otaUpdate.py itself resolves `import git_utils` (also at runtime, via sys.path).
+extraPaths = ["ota", "scripts"]
 exclude = [
     "**/.venv",
     "**/__pycache__",
