@@ -385,72 +385,83 @@ PubSubClient::RxResult PubSubClient::advancePayload() {
 }
 
 bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
-  {
-    const uint8_t type = this->buffer[0] & 0xF0U;
-    if(type == MQTTPUBLISH) {
-      // Nothing above QoS 1 is ever subscribed for, so a QoS 2 delivery is one no conforming broker
-      // sends [MQTT-3.8.4-6]; read as less, its packet identifier lands on the front of the payload.
-      if((this->buffer[0] & 0x06U) == MQTTQOS2) {
-        return false;
-      }
-      const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
-      // The topic length and the packet length are two independent numbers off the wire, and every
-      // index below is built from the first one. A packet where they disagree is a protocol
-      // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
-      const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
-      if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
-        return false;
-      }
-      // "All Topic Names and Topic Filters MUST be at least one character long" [MQTT-4.7.3-1];
-      // an empty one names nothing the callback could tell this message apart by.
-      if(tl == 0U) {
-        return false;
-      }
-      // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
-      // callback as a C string, which would end at that byte and hide what the message was about.
-      if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
-        return false;
-      }
-      // A topic name says where a message was published; the wildcards belong to the filters it is
-      // matched against, and a PUBLISH must not carry one [MQTT-3.3.2-2]. The callback routes on
-      // this string, and would be handed a pattern to route by.
-      const uint8_t* const topicName = this->buffer + llen + 3U;
-      if((memchr(topicName, '+', tl) != nullptr) || (memchr(topicName, '#', tl) != nullptr)) {
-        return false;
-      }
-      // Taken before the callback runs, as the acknowledgement is built after it: a callback that
-      // publishes writes its own packet over the one being read here.
-      const uint16_t msgId = (msgIdLen != 0U)
-                                 ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
-                                 : 0U;
-      // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
-      // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
-      // back, it names no delivery the broker can close off, and the message would stay in flight.
-      if((msgIdLen != 0U) && (msgId == 0U)) {
-        return false;
-      }
-      if(callback != nullptr) {
-        memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
-        this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
-        char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
-        uint8_t* const payload = this->buffer + llen + 3U + tl + msgIdLen;
-        callback(topic, payload, len - llen - 3U - tl - msgIdLen);
-      }
-      if(msgIdLen != 0U) {
-        // Owed by the protocol rather than by the application, and sent the way every other packet
-        // is: a link that took none of it has acknowledged nothing, and counting the attempt as
-        // outgoing traffic would put the keep-alive ping off by an interval the broker does not wait.
-        this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
-        this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
-        (void)write(MQTTPUBACK, this->buffer, 2U);
-      }
-    } else if(type == MQTTCONNACK) {
-      // A session opens with one CONNACK and the handshake reads it [MQTT-3.2.0-1]; a second is
-      // the broker answering a CONNECT this client never sent it.
-      return false;
-    } else if(type == MQTTPINGRESP) {
-      pingOutstanding = false;
-    }
+  const uint8_t type = this->buffer[0] & 0xF0U;
+  if(type == MQTTPUBLISH) { return dispatchPublish(len, llen); }
+  if(type == MQTTCONNACK) {
+    // A session opens with one CONNACK and the handshake reads it [MQTT-3.2.0-1]; a second is
+    // the broker answering a CONNECT this client never sent it.
+    return false;
+  }
+  if(type == MQTTPINGRESP) {
+    pingOutstanding = false;
+    return true;
+  }
+  if((type == MQTTPUBACK) || (type == MQTTPUBREC) || (type == MQTTPUBREL) || (type == MQTTPUBCOMP)) {
+    // Each answers a delivery the sender of the packet identifier it carries put in flight: a
+    // PUBACK the QoS 1 PUBLISH this client sent, the other three a QoS 2 exchange. This client
+    // never publishes above QoS 0 and never lets a QoS 2 delivery start [MQTT-3.8.4-6], so none
+    // of the four is ever a delivery this side owns, whatever identifier it names.
+    return false;
+  }
+  return true;
+}
+
+bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
+  // Nothing above QoS 1 is ever subscribed for, so a QoS 2 delivery is one no conforming broker
+  // sends [MQTT-3.8.4-6]; read as less, its packet identifier lands on the front of the payload.
+  if((this->buffer[0] & 0x06U) == MQTTQOS2) {
+    return false;
+  }
+  const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+  // The topic length and the packet length are two independent numbers off the wire, and every
+  // index below is built from the first one. A packet where they disagree is a protocol
+  // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
+  const uint16_t msgIdLen = ((this->buffer[0] & 0x06U) == MQTTQOS1) ? 2U : 0U;   // msgId only present for QOS>0
+  if(len < (static_cast<uint32_t>(llen) + 3U + tl + msgIdLen)) {
+    return false;
+  }
+  // "All Topic Names and Topic Filters MUST be at least one character long" [MQTT-4.7.3-1];
+  // an empty one names nothing the callback could tell this message apart by.
+  if(tl == 0U) {
+    return false;
+  }
+  // A string carrying U+0000 closes the connection [MQTT-1.5.3-2]: the topic reaches the
+  // callback as a C string, which would end at that byte and hide what the message was about.
+  if(memchr(this->buffer + llen + 3U, 0, tl) != nullptr) {
+    return false;
+  }
+  // A topic name says where a message was published; the wildcards belong to the filters it is
+  // matched against, and a PUBLISH must not carry one [MQTT-3.3.2-2]. The callback routes on
+  // this string, and would be handed a pattern to route by.
+  const uint8_t* const topicName = this->buffer + llen + 3U;
+  if((memchr(topicName, '+', tl) != nullptr) || (memchr(topicName, '#', tl) != nullptr)) {
+    return false;
+  }
+  // Taken before the callback runs, as the acknowledgement is built after it: a callback that
+  // publishes writes its own packet over the one being read here.
+  const uint16_t msgId = (msgIdLen != 0U)
+                             ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
+                             : 0U;
+  // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
+  // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
+  // back, it names no delivery the broker can close off, and the message would stay in flight.
+  if((msgIdLen != 0U) && (msgId == 0U)) {
+    return false;
+  }
+  if(callback != nullptr) {
+    memmove(this->buffer + llen + 2U, this->buffer + llen + 3U, tl);                                      /* move topic inside buffer 1 byte to front */
+    this->buffer[llen + 2U + tl] = 0U;                                                                    /* end the topic as a 'C' string with \x00 */
+    char* const topic = reinterpret_cast<char*>(this->buffer + llen + 2U);
+    uint8_t* const payload = this->buffer + llen + 3U + tl + msgIdLen;
+    callback(topic, payload, len - llen - 3U - tl - msgIdLen);
+  }
+  if(msgIdLen != 0U) {
+    // Owed by the protocol rather than by the application, and sent the way every other packet
+    // is: a link that took none of it has acknowledged nothing, and counting the attempt as
+    // outgoing traffic would put the keep-alive ping off by an interval the broker does not wait.
+    this->buffer[MQTT_MAX_HEADER_SIZE] = static_cast<uint8_t>(msgId >> 8U);
+    this->buffer[MQTT_MAX_HEADER_SIZE + 1U] = static_cast<uint8_t>(msgId & 0xFFU);
+    (void)write(MQTTPUBACK, this->buffer, 2U);
   }
   return true;
 }
