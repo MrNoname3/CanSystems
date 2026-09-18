@@ -1903,7 +1903,10 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
     expected_hash = f"{git_utils.get_git_hash():08x}"
 
     lines: List[str] = []
-    for (mac, node), entry in sorted(entries.items()):
+    # A gateway and the nodes behind it share a MAC, so the node has to sort as something: the
+    # empty string, which puts the gateway's own line above the nodes it carries. Sorting the
+    # keys as they are would compare None against a subtopic name and raise.
+    for (mac, node), entry in sorted(entries.items(), key=lambda item: (item[0][0], item[0][1] or '')):
         label = names.get(mac, mac)
         if node is not None:
             label = f"{label} / {node}"

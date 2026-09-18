@@ -1925,5 +1925,22 @@ def test_format_fleet_status_flags_dirty_builds_and_missing_info(monkeypatch: py
     assert "deadbeefcafe" in report and "no info" in report
 
 
+def test_format_fleet_status_sorts_a_gateway_above_the_nodes_it_carries(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # The gateway and its CAN nodes share one MAC, so the entries differ only in the node half of
+    # the key - None for the gateway itself. Sorting those keys directly compares None with a
+    # subtopic name, which raises rather than printing a report.
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        (GATEWAY_MAC, "alert2"): {"availability": "online", "info": {"git": "1234abcd"}},
+        (GATEWAY_MAC, None): {"availability": "online", "info": {"git": "1234abcd"}},
+        (GATEWAY_MAC, "alert1"): {"availability": "online", "info": {"git": "1234abcd"}},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects()).splitlines()
+    assert len(report) == 3
+    assert "/" not in report[0]                 # the gateway's own line comes first
+    assert "alert1" in report[1] and "alert2" in report[2]
+
+
 def test_format_fleet_status_reports_nothing_answered() -> None:
     assert "No device answered" in ota.format_fleet_status({}, _cli_projects())
