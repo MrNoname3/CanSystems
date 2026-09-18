@@ -82,11 +82,13 @@ class TransferState(enum.Enum):
     ERROR = 6
 
 
-# The two secrets.yaml protocol identifiers - our own choice of spelling, unlike paho's own
-# "tcp"/"websockets" transport values below, which are its API and not ours to name. Checked
-# again in MQTTClient._setup_client, which is why this is shared rather than local to the class.
+# The two secrets.yaml protocol identifiers, checked again in MQTTClient._setup_client, which is
+# why they are shared rather than local to the class. The transport values they map to are paho's
+# own vocabulary rather than ours, but still named here so each spelling has one home.
 _PROTOCOL_MQTT = 'mqtt'
 _PROTOCOL_WS = 'ws'
+_TRANSPORT_TCP = 'tcp'
+_TRANSPORT_WEBSOCKETS = 'websockets'
 
 
 @dataclass
@@ -113,7 +115,8 @@ class MQTTConfig:
     def __post_init__(self):
         """Validate and set defaults after initialization"""
         if self.protocol not in (_PROTOCOL_MQTT, _PROTOCOL_WS):
-            raise ValueError(f"Unsupported protocol: {self.protocol}. Must be 'mqtt' or 'ws'")
+            raise ValueError(f"Unsupported protocol: {self.protocol}. "
+                             f"Must be '{_PROTOCOL_MQTT}' or '{_PROTOCOL_WS}'")
 
         # Set default port based on protocol and TLS
         if not self.port:
@@ -215,6 +218,7 @@ _ROOT_SERVER_TO_DEVICE = 'iot/stod'
 _FIELD_COMMON = 'common'
 _FIELD_AVAILABILITY = 'availability'
 _FIELD_INFO = 'info'
+_TOPIC_WILDCARD = '+'  # MQTT's single-level wildcard, standing in for one MAC or node subtopic
 
 # The availability/info JSON payloads (README: "fw version = git commit count, git hash, dirty
 # flag, ..."), read the same way by OTAUpdater, FileTransfer and FleetStatus.
@@ -225,15 +229,21 @@ _STATE_ONLINE = 'online'
 _STATE_OFFLINE = 'offline'
 
 # The file-transfer start message (README: "OTA and file transfer") - one schema, sent by both
-# OTAUpdater (a firmware image, plus binId) and FileTransfer (any other file).
+# OTAUpdater (a firmware image, which alone carries the bin id) and FileTransfer (any other file),
+# followed by the piece messages that carry the content itself.
 _START_KEY_NAME = 'name'
 _START_KEY_FILE_SIZE = 'fileSize'
 _START_KEY_MD5 = 'md5'
+_START_KEY_BIN_ID = 'binId'
+_PIECE_KEY_NUMBER = 'piece'
+_PIECE_KEY_DATA = 'data'
 
 # The device's ack/nack reply on its 'common' topic (README: `{"type":1,"cmd":9,"err":0}`) - one
-# schema, read by both DataTransfer's piece handshake and CommandSender's reply.
+# schema, read by both DataTransfer's piece handshake and CommandSender's reply, the latter of
+# which sends its command under the same name the reply echoes back.
 _ACK_KEY_TYPE = 'type'
 _ACK_KEY_ERR = 'err'
+_COMMAND_KEY_CMD = 'cmd'
 
 
 def _esp_topic(root: str, mac: str, field: str) -> str:
@@ -241,7 +251,7 @@ def _esp_topic(root: str, mac: str, field: str) -> str:
     return f'{root}/{mac}/{field}'
 
 
-def _can_node_topic(gateway_mac: str, field: str, node: str = '+') -> str:
+def _can_node_topic(gateway_mac: str, field: str, node: str = _TOPIC_WILDCARD) -> str:
     """A CAN sub-device topic behind a gateway: `iot/dtos/<gateway_mac>/<node>/<field>`. `node`
     defaults to the single-level wildcard, since every current caller either already knows the one
     node it's watching or is discovering every node there is."""
@@ -280,6 +290,7 @@ class DeviceConfig:
 # in the presence check and a second, independently typed, in the read.
 _YAML_KEY_NAME = 'name'
 _YAML_KEY_CMD = 'cmd'
+_YAML_KEY_DESCRIPTION = 'description'
 _YAML_KEY_COMMANDS = 'commands'
 _YAML_KEY_DEVICE_PATH = 'device_path'
 _YAML_KEY_LOCAL_PATH = 'local_path'
@@ -287,10 +298,17 @@ _YAML_KEY_RENDER = 'render'
 _YAML_KEY_CONTENT = 'content'
 _YAML_KEY_PIO_ENV = 'pio_env'
 _YAML_KEY_MAC = 'mac'
+_YAML_KEY_FRIENDLY_NAME = 'friendly_name'
+_YAML_KEY_FILES = 'files'
+_YAML_KEY_SERVER_CONFIG = 'server_config'
 _YAML_KEY_PIO_PROJECT = 'pio_project'
+_YAML_KEY_DEVICES = 'devices'
+_YAML_KEY_PROJECTS = 'projects'
 # The devices.yaml section of commands shared by every project - both the dict key that finds it
 # and the human-readable label _parse_commands() reports it by on a validation error.
 _YAML_COMMON_SECTION = 'common'
+# The file itself, named in the messages that report what is wrong with it as well as in the path.
+_DEVICES_FILE_NAME = 'devices.yaml'
 
 
 class DeviceManager:
@@ -298,24 +316,24 @@ class DeviceManager:
 
     def __init__(self, script_path: str):
         self.script_dir = Path(script_path).parent
-        self.devices_file = self.script_dir / 'devices.yaml'
+        self.devices_file = self.script_dir / _DEVICES_FILE_NAME
 
     def load(self) -> List[ProjectEntry]:
         """Read devices.yaml and return the projects it lists."""
         if not self.devices_file.exists():
             raise FileNotFoundError(
                 f"Device list file not found: {self.devices_file}\n"
-                f"Please create a devices.yaml file in the same directory as the script."
+                f"Please create a {_DEVICES_FILE_NAME} file in the same directory as the script."
             )
 
         try:
             with open(self.devices_file, encoding='utf-8') as f:
                 data = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse devices.yaml: {e}") from e
+            raise ValueError(f"Failed to parse {_DEVICES_FILE_NAME}: {e}") from e
 
-        if not data or 'projects' not in data:
-            raise ValueError("devices.yaml must contain a 'projects' key")
+        if not data or _YAML_KEY_PROJECTS not in data:
+            raise ValueError(f"{_DEVICES_FILE_NAME} must contain a '{_YAML_KEY_PROJECTS}' key")
 
         # Parse common commands shared across all projects.
         common_commands = self._parse_commands(
@@ -323,10 +341,10 @@ class DeviceManager:
             context=_YAML_COMMON_SECTION
         )
 
-        projects = [self._parse_project(p, common_commands) for p in data['projects']]
+        projects = [self._parse_project(p, common_commands) for p in data[_YAML_KEY_PROJECTS]]
 
         if not projects:
-            raise ValueError("devices.yaml contains no projects")
+            raise ValueError(f"{_DEVICES_FILE_NAME} contains no projects")
 
         return projects
 
@@ -336,12 +354,13 @@ class DeviceManager:
         for c in raw:
             if _YAML_KEY_NAME not in c or _YAML_KEY_CMD not in c:
                 raise ValueError(
-                    f"Each command entry must have 'name' and 'cmd' fields (context: {context})"
+                    f"Each command entry must have '{_YAML_KEY_NAME}' and '{_YAML_KEY_CMD}' "
+                    f"fields (context: {context})"
                 )
             commands.append(CommandEntry(
                 name=c[_YAML_KEY_NAME],
                 cmd=c[_YAML_KEY_CMD],
-                description=c.get('description')
+                description=c.get(_YAML_KEY_DESCRIPTION)
             ))
         return commands
 
@@ -349,13 +368,14 @@ class DeviceManager:
         """Parse a single file entry dict into a FileEntry object."""
         if _YAML_KEY_NAME not in f or _YAML_KEY_DEVICE_PATH not in f:
             raise ValueError(
-                f"Each file entry must have 'name' and 'device_path' fields (device: {mac})"
+                f"Each file entry must have '{_YAML_KEY_NAME}' and '{_YAML_KEY_DEVICE_PATH}' "
+                f"fields (device: {mac})"
             )
         sources = [key for key in (_YAML_KEY_LOCAL_PATH, _YAML_KEY_RENDER, _YAML_KEY_CONTENT) if key in f]
         if len(sources) != 1:
             raise ValueError(
-                f"File entry '{f[_YAML_KEY_NAME]}' must have exactly one of 'local_path', 'render' "
-                f"or 'content' (device: {mac})"
+                f"File entry '{f[_YAML_KEY_NAME]}' must have exactly one of '{_YAML_KEY_LOCAL_PATH}', "
+                f"'{_YAML_KEY_RENDER}' or '{_YAML_KEY_CONTENT}' (device: {mac})"
             )
         if _YAML_KEY_RENDER in f and f[_YAML_KEY_RENDER] != _RENDER_SERVER_JSON:
             raise ValueError(
@@ -364,12 +384,13 @@ class DeviceManager:
             )
         if _YAML_KEY_CONTENT in f and not isinstance(f[_YAML_KEY_CONTENT], dict):
             raise ValueError(
-                f"'content' must be a mapping in file entry '{f[_YAML_KEY_NAME]}' (device: {mac})"
+                f"'{_YAML_KEY_CONTENT}' must be a mapping in file entry "
+                f"'{f[_YAML_KEY_NAME]}' (device: {mac})"
             )
         if _YAML_KEY_PIO_ENV in f and _YAML_KEY_LOCAL_PATH not in f:
             raise ValueError(
-                f"'pio_env' names the build a file on disk has to come from, so it only goes with "
-                f"'local_path' (file entry '{f[_YAML_KEY_NAME]}', device: {mac})"
+                f"'{_YAML_KEY_PIO_ENV}' names the build a file on disk has to come from, so it only "
+                f"goes with '{_YAML_KEY_LOCAL_PATH}' (file entry '{f[_YAML_KEY_NAME]}', device: {mac})"
             )
         return FileEntry(
             name=f[_YAML_KEY_NAME],
@@ -383,21 +404,24 @@ class DeviceManager:
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
         """Parse a single device entry dict into a DeviceEntry object."""
         if _YAML_KEY_MAC not in d:
-            raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
-        server_config: Any = d.get('server_config', {})
+            raise ValueError(f"Each device entry must have a '{_YAML_KEY_MAC}' field "
+                             f"(project: {project_name})")
+        server_config: Any = d.get(_YAML_KEY_SERVER_CONFIG, {})
         if not isinstance(server_config, dict):
-            raise ValueError(f"'server_config' must be a mapping (device: {d[_YAML_KEY_MAC]})")
+            raise ValueError(f"'{_YAML_KEY_SERVER_CONFIG}' must be a mapping "
+                             f"(device: {d[_YAML_KEY_MAC]})")
         return DeviceEntry(
             mac=d[_YAML_KEY_MAC],
-            friendly_name=d.get('friendly_name'),
-            files=[self._parse_file(f, d[_YAML_KEY_MAC]) for f in d.get('files', [])],
+            friendly_name=d.get(_YAML_KEY_FRIENDLY_NAME),
+            files=[self._parse_file(f, d[_YAML_KEY_MAC]) for f in d.get(_YAML_KEY_FILES, [])],
             server_config=cast(Dict[str, Any], server_config)
         )
 
     def _parse_project(self, p: dict[str, Any], common_commands: List[CommandEntry]) -> ProjectEntry:
         """Parse a single project entry dict into a ProjectEntry object."""
         if _YAML_KEY_NAME not in p or _YAML_KEY_PIO_PROJECT not in p:
-            raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
+            raise ValueError(f"Each project entry must have '{_YAML_KEY_NAME}' and "
+                             f"'{_YAML_KEY_PIO_PROJECT}' fields")
         # Merge common commands with project-level commands.
         merged_commands = common_commands + self._parse_commands(
             p.get(_YAML_KEY_COMMANDS, []), context=p[_YAML_KEY_NAME])
@@ -405,7 +429,7 @@ class DeviceManager:
             name=p[_YAML_KEY_NAME],
             pio_project=p[_YAML_KEY_PIO_PROJECT],
             commands=merged_commands,
-            devices=[self._parse_device(d, p[_YAML_KEY_NAME]) for d in p.get('devices', [])]
+            devices=[self._parse_device(d, p[_YAML_KEY_NAME]) for d in p.get(_YAML_KEY_DEVICES, [])]
         )
 
 
@@ -419,6 +443,11 @@ class MenuSelector:
     # Return sentinels
     BACK = "__BACK__"
     CANCEL = "__CANCEL__"
+
+    # The navigation entries' own labels: what _run() appends to the option list, and what it
+    # matches the highlighted entry against to tell a navigation choice from a real option.
+    BACK_LABEL = "← Back"
+    CANCEL_LABEL = "✕ Cancel"
 
     def select(self, title: str, options: List[str], show_back: bool = False) -> str | None:
         """
@@ -436,7 +465,7 @@ class MenuSelector:
         curses.init_pair(3, curses.COLOR_YELLOW, -1)                 # hint line
 
         # Build full item list: real options + navigation entries
-        nav_items = (["← Back"] if show_back else []) + ["✕ Cancel"]
+        nav_items = ([self.BACK_LABEL] if show_back else []) + [self.CANCEL_LABEL]
         all_items = options + nav_items
         current = 0
 
@@ -483,9 +512,9 @@ class MenuSelector:
                 current = (current + 1) % len(all_items)
             elif key in (curses.KEY_ENTER, ord('\n'), ord('\r')):
                 selected = all_items[current]
-                if selected == "✕ Cancel":
+                if selected == self.CANCEL_LABEL:
                     return self.CANCEL
-                if selected == "← Back":
+                if selected == self.BACK_LABEL:
                     return self.BACK
                 return selected
             elif key == 27:  # Escape
@@ -496,6 +525,19 @@ class MenuSelector:
 # Config manager
 # ---------------------------------------------------------------------------
 
+# secrets.yaml's own top-level sections, each named both where it is read and in the message that
+# reports it missing or malformed, plus the file name those messages tell the reader to fix.
+_SECRETS_FILE_NAME = 'secrets.yaml'
+_SECRETS_KEY_BROKER = 'broker'
+_SECRETS_KEY_SERVER_DEFAULTS = 'server_defaults'
+_SECRETS_KEY_DEVICES = 'devices'
+_SECRETS_KEY_PIO = 'pio'
+_SECRETS_KEY_CA_ROOTS = 'ca_roots'
+# The PlatformIO executable the 'pio' override stands in for: looked for in the penv and then on
+# PATH under this name.
+_PIO_EXECUTABLE = 'pio'
+
+
 class ConfigManager:
     """Loads ota/secrets.yaml: the tool's broker connection, the per-device
     server.json secrets, and the optional pio executable override used by
@@ -505,7 +547,7 @@ class ConfigManager:
     def __init__(self, script_path: str):
         self.script_dir = Path(script_path).parent
         self.parent_dir = self.script_dir.parent
-        self.secrets_file = self.script_dir / 'secrets.yaml'
+        self.secrets_file = self.script_dir / _SECRETS_FILE_NAME
         self._secrets: Optional[dict[str, Any]] = None
 
     def _load_secrets(self) -> dict[str, Any]:
@@ -516,7 +558,8 @@ class ConfigManager:
         if not self.secrets_file.exists():
             raise FileNotFoundError(
                 f"Secrets file not found: {self.secrets_file}\n"
-                f"Create ota/secrets.yaml from the template in ota/README.md (it is git-ignored)."
+                f"Create ota/{_SECRETS_FILE_NAME} from the template in ota/README.md "
+                f"(it is git-ignored)."
             )
 
         try:
@@ -530,16 +573,16 @@ class ConfigManager:
             raise OSError(f"Failed to read secrets file: {e}") from e
 
         if not isinstance(data, dict):
-            raise ValueError("secrets.yaml must be a YAML mapping")
+            raise ValueError(f"{_SECRETS_FILE_NAME} must be a YAML mapping")
 
         self._secrets = cast(dict[str, Any], data)
         return self._secrets
 
     def load_mqtt_config(self) -> MQTTConfig:
         """Build the tool's broker connection from the 'broker' section of secrets.yaml."""
-        broker: Any = self._load_secrets().get('broker')
+        broker: Any = self._load_secrets().get(_SECRETS_KEY_BROKER)
         if not isinstance(broker, dict):
-            raise ValueError("secrets.yaml must contain a 'broker' mapping")
+            raise ValueError(f"{_SECRETS_FILE_NAME} must contain a '{_SECRETS_KEY_BROKER}' mapping")
         broker_data = cast(dict[str, Any], broker)
 
         # A relative cafile is resolved against ota/, so the tool works from any CWD.
@@ -548,15 +591,17 @@ class ConfigManager:
             cafile = str(self.script_dir / cafile)
 
         try:
+            # Each fallback is MQTTConfig's own field default rather than a second copy of it -
+            # only client_id differs, this tool having a name to give where the dataclass has none.
             return MQTTConfig(
-                protocol=broker_data.get('protocol', _PROTOCOL_MQTT),
-                host=broker_data.get('host', ''),
-                port=broker_data.get('port', 0),
-                basepath=broker_data.get('basepath', '/'),
+                protocol=broker_data.get('protocol', MQTTConfig.protocol),
+                host=broker_data.get('host', MQTTConfig.host),
+                port=broker_data.get('port', MQTTConfig.port),
+                basepath=broker_data.get('basepath', MQTTConfig.basepath),
                 client_id=broker_data.get('client_id', "OtaUpdater"),
                 username=broker_data.get('username'),
                 password=broker_data.get('password'),
-                tls_enabled=broker_data.get('tls_enabled', False),
+                tls_enabled=broker_data.get('tls_enabled', MQTTConfig.tls_enabled),
                 cafile=cafile
             )
         except (ValueError, FileNotFoundError) as e:
@@ -567,19 +612,21 @@ class ConfigManager:
         with (and overridden by) the device's entry under 'devices'."""
         data = self._load_secrets()
 
-        defaults: Any = data.get('server_defaults') or {}
+        defaults: Any = data.get(_SECRETS_KEY_SERVER_DEFAULTS) or {}
         if not isinstance(defaults, dict):
-            raise ValueError("'server_defaults' in secrets.yaml must be a mapping")
+            raise ValueError(f"'{_SECRETS_KEY_SERVER_DEFAULTS}' in {_SECRETS_FILE_NAME} "
+                             f"must be a mapping")
 
-        devices: Any = data.get('devices') or {}
+        devices: Any = data.get(_SECRETS_KEY_DEVICES) or {}
         if not isinstance(devices, dict):
-            raise ValueError("'devices' in secrets.yaml must be a mapping")
+            raise ValueError(f"'{_SECRETS_KEY_DEVICES}' in {_SECRETS_FILE_NAME} must be a mapping")
 
         entry: Any = cast(dict[Any, Any], devices).get(mac)
         if entry is None:
-            raise ValueError(f"No entry for device {mac} under 'devices' in secrets.yaml")
+            raise ValueError(f"No entry for device {mac} under '{_SECRETS_KEY_DEVICES}' "
+                             f"in {_SECRETS_FILE_NAME}")
         if not isinstance(entry, dict):
-            raise ValueError(f"Device entry {mac} in secrets.yaml must be a mapping")
+            raise ValueError(f"Device entry {mac} in {_SECRETS_FILE_NAME} must be a mapping")
 
         return {**cast(dict[str, Any], defaults), **cast(dict[str, Any], entry)}
 
@@ -587,11 +634,11 @@ class ConfigManager:
         """The pio executable used for provisioning: the optional top-level 'pio'
         key of secrets.yaml, else the standard PlatformIO penv location when it
         exists, else 'pio' from PATH."""
-        override: Any = self._load_secrets().get('pio')
+        override: Any = self._load_secrets().get(_SECRETS_KEY_PIO)
         if override:
             return str(Path(str(override)).expanduser())
-        bundled = Path.home() / '.platformio' / 'penv' / 'bin' / 'pio'
-        return str(bundled) if bundled.exists() else 'pio'
+        bundled = Path.home() / '.platformio' / 'penv' / 'bin' / _PIO_EXECUTABLE
+        return str(bundled) if bundled.exists() else _PIO_EXECUTABLE
 
     # The broker CA roots sent to the devices as mosq-ca.crt. Let's Encrypt's
     # ISRG Root X1 + X2 cover both the RSA and the ECDSA issuance chains.
@@ -601,12 +648,13 @@ class ConfigManager:
         """Subject common names of the CA roots the devices must trust:
         the optional top-level 'ca_roots' list of secrets.yaml, else the
         Let's Encrypt defaults."""
-        roots: Any = self._load_secrets().get('ca_roots')
+        roots: Any = self._load_secrets().get(_SECRETS_KEY_CA_ROOTS)
         if roots is None:
             return list(self.DEFAULT_CA_ROOTS)
         if not isinstance(roots, list) or not roots \
                 or not all(isinstance(r, str) for r in cast(List[Any], roots)):
-            raise ValueError("'ca_roots' in secrets.yaml must be a non-empty list of strings")
+            raise ValueError(f"'{_SECRETS_KEY_CA_ROOTS}' in {_SECRETS_FILE_NAME} must be a "
+                             f"non-empty list of strings")
         return cast(List[str], roots)
 
     @property
@@ -763,10 +811,17 @@ class FileDataProvider:
 # server.json renderer
 # ---------------------------------------------------------------------------
 
+# The four server.json fields a device cannot connect without, also read one by one by the
+# identity preflight below, which is why they are named here rather than spelled out per tuple.
+_SERVER_JSON_KEY_USERNAME = "mqttUserName"
+_SERVER_JSON_KEY_PASSWORD = "mqttPassword"
+_SERVER_JSON_KEY_URL = "mqttServerUrl"
+_SERVER_JSON_KEY_PORT = "mqttServerPort"
+
 # Every field server.json may carry, in the order the rendered content emits them.
-_SERVER_JSON_FIELDS = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort",
-                       "haDiscovery", "ssid", "password")
-_SERVER_JSON_REQUIRED = ("mqttUserName", "mqttPassword", "mqttServerUrl", "mqttServerPort")
+_SERVER_JSON_REQUIRED = (_SERVER_JSON_KEY_USERNAME, _SERVER_JSON_KEY_PASSWORD,
+                         _SERVER_JSON_KEY_URL, _SERVER_JSON_KEY_PORT)
+_SERVER_JSON_FIELDS = (*_SERVER_JSON_REQUIRED, "haDiscovery", "ssid", "password")
 
 
 def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
@@ -883,19 +938,19 @@ def verify_device_connection(server_secrets: Dict[str, Any], cafile: Path, mac: 
     broker accepts the connection. The client id is 'verify_<mac>' — it
     differs from the device's real client id (so a live device is not kicked
     off its session) while broker logs still show whose identity was tested."""
-    host: Any = server_secrets.get('mqttServerUrl')
-    port: Any = server_secrets.get('mqttServerPort')
-    username: Any = server_secrets.get('mqttUserName')
-    password: Any = server_secrets.get('mqttPassword')
+    host: Any = server_secrets.get(_SERVER_JSON_KEY_URL)
+    port: Any = server_secrets.get(_SERVER_JSON_KEY_PORT)
+    username: Any = server_secrets.get(_SERVER_JSON_KEY_USERNAME)
+    password: Any = server_secrets.get(_SERVER_JSON_KEY_PASSWORD)
     if not all(isinstance(v, str) and v for v in (host, username, password)) \
             or not isinstance(port, int):
-        raise ValueError("Device secrets must contain mqttServerUrl/mqttServerPort/"
-                         "mqttUserName/mqttPassword for the identity check")
+        raise ValueError(f"Device secrets must contain {'/'.join(_SERVER_JSON_REQUIRED)} "
+                         f"for the identity check")
 
     client = mqtt.Client(
         client_id=f"verify_{mac}",
         callback_api_version=CallbackAPIVersion.VERSION2,
-        transport="tcp"
+        transport=_TRANSPORT_TCP
     )
     client.username_pw_set(username=cast(str, username), password=cast(str, password))
     # paho's own tls_set stub leaves some parameters unannotated (partially unknown).
@@ -950,6 +1005,11 @@ def run_identity_check(config_manager: "ConfigManager", device: DeviceEntry) -> 
 # ---------------------------------------------------------------------------
 # USB provisioning (initial LittleFS image)
 # ---------------------------------------------------------------------------
+
+# What `pio device list --json-output` reports for a port it could not identify - both the value
+# a missing hwid is read as and the one a listed port is filtered out by.
+_PIO_HWID_UNKNOWN = 'n/a'
+
 
 class Provisioner:
     """Bench (USB) setup for a factory-fresh device: the initial firmware
@@ -1012,7 +1072,7 @@ class Provisioner:
         except (OSError, ValueError):
             return []
         return [f"{e.get('port', '?')}  {e.get('description', '')}".rstrip()
-                for e in entries if str(e.get('hwid', 'n/a')) != 'n/a']
+                for e in entries if str(e.get('hwid', _PIO_HWID_UNKNOWN)) != _PIO_HWID_UNKNOWN]
 
     def _warn_if_the_port_is_ambiguous(self):
         """Says so when PlatformIO has more than one board to choose from.
@@ -1024,7 +1084,7 @@ class Provisioner:
         ports = self._candidate_ports()
         if len(ports) < 2:
             return
-        print("⚠  Several serial ports are attached and no --upload-port was given;")
+        print(f"⚠  Several serial ports are attached and no {_FLAG_UPLOAD_PORT} was given;")
         print("   PlatformIO will pick one of these itself:")
         for port in ports:
             print(f"     {port}")
@@ -1033,7 +1093,7 @@ class Provisioner:
         """Run `pio run -e <env> -t <target>` from the repo root, streaming its output."""
         command = [self.pio_cmd, 'run', '-e', pio_env, '-t', target]
         if self.upload_port is not None:
-            command += ['--upload-port', self.upload_port]
+            command += ['--upload-port', self.upload_port]  # pio's own flag, not this tool's
         else:
             self._warn_if_the_port_is_ambiguous()
         env = dict(os.environ)
@@ -1042,7 +1102,8 @@ class Provisioner:
         try:
             result = subprocess.run(command, cwd=self.repo_root, env=env, check=False)
         except FileNotFoundError:
-            logging.error(f"pio executable not found: {self.pio_cmd} (set the 'pio' key in secrets.yaml)")
+            logging.error(f"pio executable not found: {self.pio_cmd} "
+                          f"(set the '{_SECRETS_KEY_PIO}' key in {_SECRETS_FILE_NAME})")
             return False
         return result.returncode == 0
 
@@ -1060,7 +1121,7 @@ class MQTTClient:
 
     def _setup_client(self):
         """Set up MQTT client based on configuration"""
-        transport = "websockets" if self.config.protocol == _PROTOCOL_WS else "tcp"
+        transport = _TRANSPORT_WEBSOCKETS if self.config.protocol == _PROTOCOL_WS else _TRANSPORT_TCP
         self.client = mqtt.Client(
             client_id=self.config.client_id,
             callback_api_version=CallbackAPIVersion.VERSION2,
@@ -1217,7 +1278,7 @@ class _BaseTransfer:
     def _process_response(self, message: Dict[str, Any]):
         """Process ACK/NACK response messages from device."""
         if _ACK_KEY_TYPE not in message:
-            logging.warning("Received message without 'type' field")
+            logging.warning(f"Received message without '{_ACK_KEY_TYPE}' field")
             return
 
         ack = message[_ACK_KEY_TYPE] != 0
@@ -1272,8 +1333,8 @@ class _BaseTransfer:
     def _publish_piece(self, piece_number: int, offset: int, read_size: int):
         """Put one piece on the wire and start waiting for its acknowledgment."""
         self.mqtt_client.publish(self.device_config.send_topic, json.dumps({
-            "piece": piece_number,
-            "data": base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
+            _PIECE_KEY_NUMBER: piece_number,
+            _PIECE_KEY_DATA:   base64.b64encode(self.data[offset:offset + read_size]).decode('utf-8')
         }))
         self.state = TransferState.WAIT_PIECE_ACK
         self.timer_start = time.time()
@@ -1422,7 +1483,7 @@ class OTAUpdater(_BaseTransfer):
             _START_KEY_NAME:      "espFirmware",
             _START_KEY_FILE_SIZE: self.firmware_manager.size,
             _START_KEY_MD5:       self.firmware_manager.md5,
-            "binId":              self.firmware_manager.firmware_id,
+            _START_KEY_BIN_ID:    self.firmware_manager.firmware_id,
         }
 
     def _start_log_info(self):
@@ -1723,7 +1784,8 @@ class CommandSender(_BaseTransfer):
 
     def _send_command(self):
         """Publish the command message to the device topic."""
-        self.mqtt_client.publish(self.device_config.send_topic, json.dumps({"cmd": self.command.cmd}))
+        self.mqtt_client.publish(self.device_config.send_topic,
+                                 json.dumps({_COMMAND_KEY_CMD: self.command.cmd}))
         logging.info(f"Command sent: '{self.command.cmd}'")
         self.state = TransferState.WAIT_START_ACK
         self.timer_start = time.time()
@@ -1733,7 +1795,7 @@ class CommandSender(_BaseTransfer):
         while self._pending_messages:
             message = self._pending_messages.popleft()
             if _ACK_KEY_TYPE not in message:
-                logging.warning("Received message without 'type' field")
+                logging.warning(f"Received message without '{_ACK_KEY_TYPE}' field")
                 continue
             if message[_ACK_KEY_TYPE] != 0:
                 self.state = TransferState.DONE
@@ -1791,10 +1853,10 @@ class FleetStatus:
 
     def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if reason_code == 0:
-            for topic in (_esp_topic(_ROOT_DEVICE_TO_SERVER, '+', _FIELD_AVAILABILITY),
-                         _esp_topic(_ROOT_DEVICE_TO_SERVER, '+', _FIELD_INFO),
-                         _can_node_topic('+', _FIELD_AVAILABILITY),
-                         _can_node_topic('+', _FIELD_INFO)):
+            for topic in (_esp_topic(_ROOT_DEVICE_TO_SERVER, _TOPIC_WILDCARD, _FIELD_AVAILABILITY),
+                         _esp_topic(_ROOT_DEVICE_TO_SERVER, _TOPIC_WILDCARD, _FIELD_INFO),
+                         _can_node_topic(_TOPIC_WILDCARD, _FIELD_AVAILABILITY),
+                         _can_node_topic(_TOPIC_WILDCARD, _FIELD_INFO)):
                 self.mqtt_client.subscribe(topic)
 
     def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
@@ -1941,31 +2003,56 @@ def select_target(projects: List[ProjectEntry], mqtt_config: MQTTConfig) -> Opti
 # Non-interactive target selection
 # ---------------------------------------------------------------------------
 
+# The command line's own flag names: what the parser is built from, what --list prints as a
+# ready-to-copy line, and what the validation messages name when a combination makes no sense.
+_FLAG_LIST = '--list'
+_FLAG_STATUS = '--status'
+_FLAG_DEVICE = '--device'
+_FLAG_FIRMWARE = '--firmware'
+_FLAG_PROVISION = '--provision'
+_FLAG_SERIAL_FLASH = '--serial-flash'
+_FLAG_FILE = '--file'
+_FLAG_COMMAND = '--command'
+_FLAG_UPLOAD_PORT = '--upload-port'
+_FLAG_OTA_TIMEOUT = '--ota-timeout'
+# The placeholders those flags take an argument under, named again wherever a message spells out
+# the invocation the caller should have used.
+_METAVAR_MAC = 'MAC'
+_METAVAR_NAME = 'NAME'
+_METAVAR_CMD = 'CMD'
+_METAVAR_PORT = 'PORT'
+_METAVAR_SECONDS = 'SECONDS'
+# What a listing prints where a device accepts no files or a project defines no commands.
+_NOTHING_LISTED = 'none'
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Builds the command-line parser. With no arguments at all the interactive menu runs."""
     parser = argparse.ArgumentParser(
         description="OTA update tool. Run without arguments for the interactive menu.",
         epilog="A non-interactive run names its device by MAC and its action in full. Nothing is "
                "defaulted, so a typo fails instead of selecting a target of its own.")
-    parser.add_argument('--list', action='store_true',
+    parser.add_argument(_FLAG_LIST, action='store_true',
                         help="print every device and the arguments that select its actions, then exit")
-    parser.add_argument('--status', action='store_true',
+    parser.add_argument(_FLAG_STATUS, action='store_true',
                         help="query every device and CAN node's current availability/build over MQTT, then exit")
-    parser.add_argument('--device', metavar='MAC',
-                        help="MAC address of the target device, as devices.yaml spells it")
+    parser.add_argument(_FLAG_DEVICE, metavar=_METAVAR_MAC,
+                        help=f"MAC address of the target device, as {_DEVICES_FILE_NAME} spells it")
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--firmware', action='store_true', help="upload this project's firmware over MQTT")
-    action.add_argument('--provision', action='store_true', help="initial provisioning over USB")
-    action.add_argument('--serial-flash', action='store_true', help="initial firmware flash over USB")
-    action.add_argument('--file', metavar='NAME', help="transfer the file entry with this name")
-    action.add_argument('--command', metavar='CMD', help="send this command")
-    parser.add_argument('--upload-port', metavar='PORT',
-                        help="serial port for --provision / --serial-flash; without it PlatformIO "
-                             "picks one itself, which is a guess when several boards are attached")
-    parser.add_argument('--ota-timeout', type=float, metavar='SECONDS',
-                        help="seconds to wait for the device to reboot and confirm the new build "
-                             f"after --firmware, overriding the shared default ({DEFAULT_REBOOT_TIMEOUT_SECONDS:.0f}s, "
-                             "also what the interactive menu uses)")
+    action.add_argument(_FLAG_FIRMWARE, action='store_true', help="upload this project's firmware over MQTT")
+    action.add_argument(_FLAG_PROVISION, action='store_true', help="initial provisioning over USB")
+    action.add_argument(_FLAG_SERIAL_FLASH, action='store_true', help="initial firmware flash over USB")
+    action.add_argument(_FLAG_FILE, metavar=_METAVAR_NAME, help="transfer the file entry with this name")
+    action.add_argument(_FLAG_COMMAND, metavar=_METAVAR_CMD, help="send this command")
+    parser.add_argument(_FLAG_UPLOAD_PORT, metavar=_METAVAR_PORT,
+                        help=f"serial port for {_FLAG_PROVISION} / {_FLAG_SERIAL_FLASH}; without it "
+                             f"PlatformIO picks one itself, which is a guess when several boards "
+                             f"are attached")
+    parser.add_argument(_FLAG_OTA_TIMEOUT, type=float, metavar=_METAVAR_SECONDS,
+                        help=f"seconds to wait for the device to reboot and confirm the new build "
+                             f"after {_FLAG_FIRMWARE}, overriding the shared default "
+                             f"({DEFAULT_REBOOT_TIMEOUT_SECONDS:.0f}s, also what the interactive "
+                             f"menu uses)")
     return parser
 
 
@@ -1976,15 +2063,15 @@ def format_target_list(projects: List[ProjectEntry]) -> str:
     for project in projects:
         lines.append(f"{project.name}  ({project.pio_project})")
         for device in project.devices:
-            label = f"  --device {device.mac}"
+            label = f"  {_FLAG_DEVICE} {device.mac}"
             lines.append(f"{label}  # {device.friendly_name}" if device.friendly_name else label)
-            lines.append("      --firmware")
-            lines.append("      --provision")
-            lines.append("      --serial-flash")
+            lines.append(f"      {_FLAG_FIRMWARE}")
+            lines.append(f"      {_FLAG_PROVISION}")
+            lines.append(f"      {_FLAG_SERIAL_FLASH}")
             for file_entry in device.files:
-                lines.append(f'      --file "{file_entry.name}"')
+                lines.append(f'      {_FLAG_FILE} "{file_entry.name}"')
             for command in project.commands:
-                lines.append(f"      --command {command.cmd}")
+                lines.append(f"      {_FLAG_COMMAND} {command.cmd}")
     return "\n".join(lines)
 
 
@@ -2000,19 +2087,21 @@ def resolve_target(projects: List[ProjectEntry], mac: str, *,
     matches = [(p, d) for p in projects for d in p.devices if d.mac == mac]
     if not matches:
         known = ", ".join(d.mac for p in projects for d in p.devices)
-        raise ValueError(f"unknown device '{mac}'; devices.yaml lists: {known}")
+        raise ValueError(f"unknown device '{mac}'; {_DEVICES_FILE_NAME} lists: {known}")
     if len(matches) > 1:
         raise ValueError(f"device '{mac}' is listed in more than one project")
     project, device = matches[0]
 
-    given = [name for name, chosen in (('--firmware', firmware),
-                                       ('--provision', provision),
-                                       ('--serial-flash', serial_flash),
-                                       ('--file', file_name is not None),
-                                       ('--command', command_name is not None)) if chosen]
+    given = [name for name, chosen in ((_FLAG_FIRMWARE, firmware),
+                                       (_FLAG_PROVISION, provision),
+                                       (_FLAG_SERIAL_FLASH, serial_flash),
+                                       (_FLAG_FILE, file_name is not None),
+                                       (_FLAG_COMMAND, command_name is not None)) if chosen]
     if len(given) != 1:
-        raise ValueError("exactly one action is required: --firmware, --provision, --serial-flash, "
-                         f"--file NAME or --command CMD (got: {', '.join(given) if given else 'none'})")
+        raise ValueError(f"exactly one action is required: {_FLAG_FIRMWARE}, {_FLAG_PROVISION}, "
+                         f"{_FLAG_SERIAL_FLASH}, {_FLAG_FILE} {_METAVAR_NAME} or "
+                         f"{_FLAG_COMMAND} {_METAVAR_CMD} "
+                         f"(got: {', '.join(given) if given else _NOTHING_LISTED})")
 
     if firmware:
         return ActionResult(project=project, device=device)
@@ -2024,12 +2113,12 @@ def resolve_target(projects: List[ProjectEntry], mac: str, *,
         for file_entry in device.files:
             if file_entry.name == file_name:
                 return ActionResult(project=project, device=device, file=file_entry)
-        known = ", ".join(f'"{f.name}"' for f in device.files) or "none"
+        known = ", ".join(f'"{f.name}"' for f in device.files) or _NOTHING_LISTED
         raise ValueError(f"device '{mac}' has no file entry named '{file_name}'; it accepts: {known}")
     for command in project.commands:
         if command.cmd == command_name:
             return ActionResult(project=project, device=device, command=command)
-    known = ", ".join(c.cmd for c in project.commands) or "none"
+    known = ", ".join(c.cmd for c in project.commands) or _NOTHING_LISTED
     raise ValueError(f"project '{project.name}' has no command '{command_name}'; it accepts: {known}")
 
 
@@ -2073,16 +2162,16 @@ def main():
     action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
                     or args.file is not None or args.command is not None)
     if args.list and (args.device is not None or action_given or args.upload_port is not None):
-        parser.error("--list takes no other arguments")
+        parser.error(f"{_FLAG_LIST} takes no other arguments")
     if args.status and (args.list or args.device is not None or action_given or args.upload_port is not None
                        or args.ota_timeout is not None):
-        parser.error("--status takes no other arguments")
+        parser.error(f"{_FLAG_STATUS} takes no other arguments")
     if args.device is None and action_given:
-        parser.error("an action needs --device MAC")
+        parser.error(f"an action needs {_FLAG_DEVICE} {_METAVAR_MAC}")
     if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
-        parser.error("--upload-port applies to --provision and --serial-flash only")
+        parser.error(f"{_FLAG_UPLOAD_PORT} applies to {_FLAG_PROVISION} and {_FLAG_SERIAL_FLASH} only")
     if args.ota_timeout is not None and not args.firmware:
-        parser.error("--ota-timeout applies to --firmware only")
+        parser.error(f"{_FLAG_OTA_TIMEOUT} applies to {_FLAG_FIRMWARE} only")
 
     # Configured here rather than in whichever object happens to be built: the USB actions run
     # without any transfer worker, and their progress lines were dropped on the default level.
