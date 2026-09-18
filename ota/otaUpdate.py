@@ -196,6 +196,27 @@ class ActionResult:
     serial_flash: bool = False              # Set when the initial USB firmware flash was selected.
 
 
+# MQTT topic scheme (see README's "MQTT scheme" section) - the one place every topic string
+# below is assembled, so a root or field name never needs to be found-and-replaced across the file.
+_ROOT_DEVICE_TO_SERVER = 'iot/dtos'
+_ROOT_SERVER_TO_DEVICE = 'iot/stod'
+_FIELD_COMMON = 'common'
+_FIELD_AVAILABILITY = 'availability'
+_FIELD_INFO = 'info'
+
+
+def _esp_topic(root: str, mac: str, field: str) -> str:
+    """A top-level device topic: `<root>/<mac>/<field>`."""
+    return f'{root}/{mac}/{field}'
+
+
+def _can_node_topic(gateway_mac: str, field: str, node: str = '+') -> str:
+    """A CAN sub-device topic behind a gateway: `iot/dtos/<gateway_mac>/<node>/<field>`. `node`
+    defaults to the single-level wildcard, since every current caller either already knows the one
+    node it's watching or is discovering every node there is."""
+    return f'{_ROOT_DEVICE_TO_SERVER}/{gateway_mac}/{node}/{field}'
+
+
 @dataclass
 class DeviceConfig:
     """Configuration data for the target device (used by OTAUpdater and FileTransfer)"""
@@ -204,19 +225,19 @@ class DeviceConfig:
 
     @property
     def send_topic(self) -> str:
-        return f'iot/stod/{self.mac_address}/common'
+        return _esp_topic(_ROOT_SERVER_TO_DEVICE, self.mac_address, _FIELD_COMMON)
 
     @property
     def receive_topic(self) -> str:
-        return f'iot/dtos/{self.mac_address}/common'
+        return _esp_topic(_ROOT_DEVICE_TO_SERVER, self.mac_address, _FIELD_COMMON)
 
     @property
     def availability_topic(self) -> str:
-        return f'iot/dtos/{self.mac_address}/availability'
+        return _esp_topic(_ROOT_DEVICE_TO_SERVER, self.mac_address, _FIELD_AVAILABILITY)
 
     @property
     def info_topic(self) -> str:
-        return f'iot/dtos/{self.mac_address}/info'
+        return _esp_topic(_ROOT_DEVICE_TO_SERVER, self.mac_address, _FIELD_INFO)
 
 
 # ---------------------------------------------------------------------------
@@ -1463,11 +1484,11 @@ def _match_can_node_topic(topic: str, gateway_mac: str) -> Optional[tuple[str, s
     """If `topic` is `iot/dtos/<gateway_mac>/<node>/availability` or `.../<node>/info`, returns
     (node, field); otherwise None. `node` is whatever subtopic name the node was given at
     commissioning time (e.g. "alert1") - never assumed, always read back off the wire."""
-    prefix = f'iot/dtos/{gateway_mac}/'
+    prefix = f'{_ROOT_DEVICE_TO_SERVER}/{gateway_mac}/'
     if not topic.startswith(prefix):
         return None
     parts = topic[len(prefix):].split('/')
-    if len(parts) != 2 or parts[1] not in ('availability', 'info'):
+    if len(parts) != 2 or parts[1] not in (_FIELD_AVAILABILITY, _FIELD_INFO):
         return None
     return parts[0], parts[1]
 
@@ -1534,8 +1555,8 @@ class FileTransfer(_BaseTransfer):
             # pre-upload baseline) is very likely in hand well before _verify_after_transfer()
             # needs it, rather than racing the CAN-bus transfer for it.
             mac = self.device_config.mac_address
-            self.mqtt_client.subscribe(f'iot/dtos/{mac}/+/availability')
-            self.mqtt_client.subscribe(f'iot/dtos/{mac}/+/info')
+            self.mqtt_client.subscribe(_can_node_topic(mac, _FIELD_AVAILABILITY))
+            self.mqtt_client.subscribe(_can_node_topic(mac, _FIELD_INFO))
         super()._on_connected()
 
     def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
@@ -1712,20 +1733,25 @@ class FleetStatus:
 
     def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if reason_code == 0:
-            for topic in ('iot/dtos/+/availability', 'iot/dtos/+/info',
-                         'iot/dtos/+/+/availability', 'iot/dtos/+/+/info'):
+            for topic in (_esp_topic(_ROOT_DEVICE_TO_SERVER, '+', _FIELD_AVAILABILITY),
+                         _esp_topic(_ROOT_DEVICE_TO_SERVER, '+', _FIELD_INFO),
+                         _can_node_topic('+', _FIELD_AVAILABILITY),
+                         _can_node_topic('+', _FIELD_INFO)):
                 self.mqtt_client.subscribe(topic)
 
     def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
-        # iot/dtos/<mac>/<field> (4 parts) or iot/dtos/<mac>/<node>/<field> (5 parts).
+        # <root>/<mac>/<field> (4 parts) or <root>/<mac>/<node>/<field> (5 parts).
         parts = msg.topic.split('/')
-        if len(parts) == 4 and parts[:2] == ['iot', 'dtos']:
+        root = '/'.join(parts[:2])
+        if root != _ROOT_DEVICE_TO_SERVER:
+            return
+        if len(parts) == 4:
             mac, node, field = parts[2], None, parts[3]
-        elif len(parts) == 5 and parts[:2] == ['iot', 'dtos']:
+        elif len(parts) == 5:
             mac, node, field = parts[2], parts[3], parts[4]
         else:
             return
-        if field not in ('availability', 'info'):
+        if field not in (_FIELD_AVAILABILITY, _FIELD_INFO):
             return
         try:
             payload: Optional[Dict[str, Any]] = json.loads(msg.payload.decode())
