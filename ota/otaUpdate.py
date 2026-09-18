@@ -73,8 +73,7 @@ FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
 _FLEET_STATUS_UNLISTED_HEADING = "Not in devices.yaml"
 
 # How long one network turn blocks before the caller gets to re-check its own state. Every wait
-# in this file is a loop of these rather than a single long block, so a deadline is honoured to
-# about this much and Ctrl-C is never more than this away from being noticed.
+# below is a loop of these, so a deadline is honoured to about this much.
 MQTT_LOOP_INTERVAL_SECONDS = 0.1
 
 
@@ -89,9 +88,7 @@ class TransferState(enum.Enum):
     ERROR = 6
 
 
-# The two secrets.yaml protocol identifiers, checked again in MQTTClient._setup_client, which is
-# why they are shared rather than local to the class. The transport values they map to are paho's
-# own vocabulary rather than ours, but still named here so each spelling has one home.
+# The two secrets.yaml protocol identifiers, and the paho transport values they map to.
 _PROTOCOL_MQTT = 'mqtt'
 _PROTOCOL_WS = 'ws'
 _TRANSPORT_TCP = 'tcp'
@@ -161,8 +158,7 @@ class CommandEntry:
         return self.name
 
 
-# The only renderer id `FileEntry.render` currently accepts - checked in three places
-# (devices.yaml validation, provider dispatch, the connection-config preflight decision).
+# The only renderer id `FileEntry.render` accepts.
 _RENDER_SERVER_JSON = 'server_json'
 
 
@@ -218,8 +214,7 @@ class ActionResult:
     serial_flash: bool = False              # Set when the initial USB firmware flash was selected.
 
 
-# MQTT topic scheme (see README's "MQTT scheme" section) - the one place every topic string
-# below is assembled, so a root or field name never needs to be found-and-replaced across the file.
+# MQTT topic scheme (see README's "MQTT scheme" section): every topic below is built from these.
 _ROOT_DEVICE_TO_SERVER = 'iot/dtos'
 _ROOT_SERVER_TO_DEVICE = 'iot/stod'
 _FIELD_COMMON = 'common'
@@ -228,16 +223,16 @@ _FIELD_INFO = 'info'
 _TOPIC_WILDCARD = '+'  # MQTT's single-level wildcard, standing in for one MAC or node subtopic
 
 # The availability/info JSON payloads (README: "fw version = git commit count, git hash, dirty
-# flag, ..."), read the same way by OTAUpdater, FileTransfer and FleetStatus.
+# flag, ...").
 _PAYLOAD_KEY_STATE = 'state'
 _PAYLOAD_KEY_GIT = 'git'
 _PAYLOAD_KEY_DIRTY = 'dirty'
 _STATE_ONLINE = 'online'
 _STATE_OFFLINE = 'offline'
 
-# The file-transfer start message (README: "OTA and file transfer") - one schema, sent by both
-# OTAUpdater (a firmware image, which alone carries the bin id) and FileTransfer (any other file),
-# followed by the piece messages that carry the content itself.
+# The file-transfer start message (README: "OTA and file transfer"), sent by both OTAUpdater (a
+# firmware image, which alone carries the bin id) and FileTransfer (any other file), followed by
+# the piece messages that carry the content itself.
 _START_KEY_NAME = 'name'
 _START_KEY_FILE_SIZE = 'fileSize'
 _START_KEY_MD5 = 'md5'
@@ -245,13 +240,12 @@ _START_KEY_BIN_ID = 'binId'
 _PIECE_KEY_NUMBER = 'piece'
 _PIECE_KEY_DATA = 'data'
 
-# The device's ack/nack reply on its 'common' topic (README: `{"type":1,"cmd":9,"err":0}`) - one
-# schema, read by both DataTransfer's piece handshake and CommandSender's reply, the latter of
-# which sends its command under the same name the reply echoes back.
+# The device's ack/nack reply on its 'common' topic (README: `{"type":1,"cmd":9,"err":0}`), read
+# by the piece handshake and by CommandSender, which sends its command under that same 'cmd' name.
 _ACK_KEY_TYPE = 'type'
 _ACK_KEY_ERR = 'err'
 _COMMAND_KEY_CMD = 'cmd'
-# Warned about in both readers, so the two stay one sentence rather than two that drift apart.
+# Warned about by both readers of that field.
 _MISSING_ACK_FIELD_WARNING = f"Received message without '{_ACK_KEY_TYPE}' field"
 
 
@@ -311,9 +305,7 @@ class DeviceConfig:
 # Device list manager
 # ---------------------------------------------------------------------------
 
-# devices.yaml field names, each checked for presence and then read back by key at least once
-# more in the same or another _parse_* method below - one spelling per field rather than one
-# in the presence check and a second, independently typed, in the read.
+# devices.yaml's field names, as the _parse_* methods below check for them and read them back.
 _YAML_KEY_NAME = 'name'
 _YAML_KEY_CMD = 'cmd'
 _YAML_KEY_DESCRIPTION = 'description'
@@ -330,10 +322,10 @@ _YAML_KEY_SERVER_CONFIG = 'server_config'
 _YAML_KEY_PIO_PROJECT = 'pio_project'
 _YAML_KEY_DEVICES = 'devices'
 _YAML_KEY_PROJECTS = 'projects'
-# The devices.yaml section of commands shared by every project - both the dict key that finds it
-# and the human-readable label _parse_commands() reports it by on a validation error.
+# The devices.yaml section of commands shared by every project, and the label a validation
+# error reports it by.
 _YAML_COMMON_SECTION = 'common'
-# The file itself, named in the messages that report what is wrong with it as well as in the path.
+# The device list this manager reads.
 _DEVICES_FILE_NAME = 'devices.yaml'
 
 
@@ -470,8 +462,8 @@ class MenuSelector:
     BACK = "__BACK__"
     CANCEL = "__CANCEL__"
 
-    # The navigation entries' own labels: what _run() appends to the option list, and what it
-    # matches the highlighted entry against to tell a navigation choice from a real option.
+    # The navigation entries' own labels: appended to the option list, then matched against
+    # whichever entry was highlighted.
     BACK_LABEL = "← Back"
     CANCEL_LABEL = "✕ Cancel"
 
@@ -551,16 +543,14 @@ class MenuSelector:
 # Config manager
 # ---------------------------------------------------------------------------
 
-# secrets.yaml's own top-level sections, each named both where it is read and in the message that
-# reports it missing or malformed, plus the file name those messages tell the reader to fix.
+# secrets.yaml's own top-level sections, and the file name the messages about them point to.
 _SECRETS_FILE_NAME = 'secrets.yaml'
 _SECRETS_KEY_BROKER = 'broker'
 _SECRETS_KEY_SERVER_DEFAULTS = 'server_defaults'
 _SECRETS_KEY_DEVICES = 'devices'
 _SECRETS_KEY_PIO = 'pio'
 _SECRETS_KEY_CA_ROOTS = 'ca_roots'
-# The PlatformIO executable the 'pio' override stands in for: looked for in the penv and then on
-# PATH under this name.
+# The PlatformIO executable the 'pio' override stands in for: looked for in the penv, then on PATH.
 _PIO_EXECUTABLE = 'pio'
 
 
@@ -622,8 +612,8 @@ class ConfigManager:
             cafile = str(self.script_dir / cafile)
 
         try:
-            # Each fallback is MQTTConfig's own field default rather than a second copy of it -
-            # only client_id differs, this tool having a name to give where the dataclass has none.
+            # client_id is the one field with a default of its own; the rest fall back to
+            # MQTTConfig's.
             return MQTTConfig(
                 protocol=broker_data.get('protocol', MQTTConfig.protocol),
                 host=broker_data.get('host', MQTTConfig.host),
@@ -838,7 +828,7 @@ class FileDataProvider:
 # ---------------------------------------------------------------------------
 
 # The four server.json fields a device cannot connect without, also read one by one by the
-# identity preflight below, which is why they are named here rather than spelled out per tuple.
+# identity preflight below.
 _SERVER_JSON_KEY_USERNAME = "mqttUserName"
 _SERVER_JSON_KEY_PASSWORD = "mqttPassword"
 _SERVER_JSON_KEY_URL = "mqttServerUrl"
@@ -1032,8 +1022,7 @@ def run_identity_check(config_manager: "ConfigManager", device: DeviceEntry) -> 
 # USB provisioning (initial LittleFS image)
 # ---------------------------------------------------------------------------
 
-# What `pio device list --json-output` reports for a port it could not identify - both the value
-# a missing hwid is read as and the one a listed port is filtered out by.
+# What `pio device list --json-output` reports for a port it could not identify.
 _PIO_HWID_UNKNOWN = 'n/a'
 
 
@@ -1620,9 +1609,8 @@ def _match_can_node_topic(topic: str, gateway_mac: str) -> Optional[tuple[str, s
     return parts[0], parts[1]
 
 
-# Keys of a CAN node's tracking state below - not wire fields (nothing on the bus is called
-# either of these), just this file's own bookkeeping for "did this node report going down, and
-# does it have a fresh info message since the baseline was last reset".
+# Keys of a CAN node's tracking state below - this file's own bookkeeping, not wire fields:
+# whether the node has been seen offline, and whether its info is newer than the baseline.
 _STATE_SAW_OFFLINE = 'saw_offline'
 _STATE_INFO_FRESH = 'info_fresh'
 
@@ -1918,11 +1906,10 @@ def _format_fleet_build(entry: Dict[str, Any], expected_hash: str) -> str:
 
 def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]],
                         projects: List[ProjectEntry]) -> str:
-    """Everything that answered, grouped the way --list and the menu already group it: by project,
-    then by device, with a gateway's CAN nodes indented under it. A device is named as the menu
-    names it, friendly name and MAC together, so a line can be read and acted on without looking
-    the address up again. What answered from a MAC devices.yaml does not list is kept, under a
-    heading of its own - an unlisted device is the thing most worth noticing here."""
+    """Everything that answered, grouped as --list and the menu group it: by project, then by
+    device, with a gateway's CAN nodes indented under it. A device is named as the menu names it,
+    friendly name and MAC together, so a line can be acted on without looking the address up
+    again. What answered from a MAC devices.yaml does not list keeps a heading of its own."""
     expected_hash = f"{git_utils.get_git_hash():08x}"
 
     nodes_by_mac: Dict[str, List[str]] = {}
@@ -2051,8 +2038,8 @@ def select_target(projects: List[ProjectEntry], mqtt_config: MQTTConfig) -> Opti
 # Non-interactive target selection
 # ---------------------------------------------------------------------------
 
-# The command line's own flag names: what the parser is built from, what --list prints as a
-# ready-to-copy line, and what the validation messages name when a combination makes no sense.
+# The command line's own flag names: the parser is built from these, --list prints them, and the
+# validation messages name them.
 _FLAG_LIST = '--list'
 _FLAG_STATUS = '--status'
 _FLAG_DEVICE = '--device'
@@ -2063,8 +2050,8 @@ _FLAG_FILE = '--file'
 _FLAG_COMMAND = '--command'
 _FLAG_UPLOAD_PORT = '--upload-port'
 _FLAG_OTA_TIMEOUT = '--ota-timeout'
-# The placeholders those flags take an argument under, named again wherever a message spells out
-# the invocation the caller should have used.
+# The placeholders those flags take an argument under, repeated wherever a message spells out an
+# invocation.
 _METAVAR_MAC = 'MAC'
 _METAVAR_NAME = 'NAME'
 _METAVAR_CMD = 'CMD'
@@ -2072,7 +2059,7 @@ _METAVAR_PORT = 'PORT'
 _METAVAR_SECONDS = 'SECONDS'
 # What a listing prints where a device accepts no files or a project defines no commands.
 _NOTHING_LISTED = 'none'
-# Said of both flags that answer on their own and take nothing else with them.
+# Said of --list and --status, each of which answers on its own.
 _TAKES_NO_OTHER_ARGUMENTS = "takes no other arguments"
 
 
