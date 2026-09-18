@@ -70,6 +70,11 @@ CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
 
+# How long one network turn blocks before the caller gets to re-check its own state. Every wait
+# in this file is a loop of these rather than a single long block, so a deadline is honoured to
+# about this much and Ctrl-C is never more than this away from being noticed.
+MQTT_LOOP_INTERVAL_SECONDS = 0.1
+
 
 class TransferState(enum.Enum):
     """States for the OTA update / file transfer / command process"""
@@ -244,6 +249,25 @@ _PIECE_KEY_DATA = 'data'
 _ACK_KEY_TYPE = 'type'
 _ACK_KEY_ERR = 'err'
 _COMMAND_KEY_CMD = 'cmd'
+# Warned about in both readers, so the two stay one sentence rather than two that drift apart.
+_MISSING_ACK_FIELD_WARNING = f"Received message without '{_ACK_KEY_TYPE}' field"
+
+
+def _confirm_reported_build(info: Dict[str, Any], expected_hash: str, subject: str) -> bool:
+    """Reads one info report back against the build just sent, for whoever `subject` names - the
+    device itself after a firmware upload, or a CAN node after the gateway cascaded one to it.
+    A hash that does not match fails; a dirty build only warns, the hash being right either way."""
+    actual_hash = info.get(_PAYLOAD_KEY_GIT)
+    if actual_hash != expected_hash:
+        logging.error(f"{subject}: came back reporting build {actual_hash!r}, expected "
+                      f"{expected_hash!r}: the running firmware is not the one just sent")
+        return False
+    if info.get(_PAYLOAD_KEY_DIRTY):
+        logging.warning(f"{subject}: the uploaded build was made from a dirty working tree "
+                        f"(uncommitted or untracked changes) - the git hash matches, but the "
+                        f"source it was built from may not")
+    logging.info(f"{subject}: rebooted and confirmed running build {expected_hash}")
+    return True
 
 
 def _esp_topic(root: str, mac: str, field: str) -> str:
@@ -578,12 +602,17 @@ class ConfigManager:
         self._secrets = cast(dict[str, Any], data)
         return self._secrets
 
+    @staticmethod
+    def _require_mapping(value: Any, key: str) -> dict[str, Any]:
+        """Every secrets.yaml section is a mapping, and says so the same way when it is not."""
+        if not isinstance(value, dict):
+            raise ValueError(f"'{key}' in {_SECRETS_FILE_NAME} must be a mapping")
+        return cast(dict[str, Any], value)
+
     def load_mqtt_config(self) -> MQTTConfig:
         """Build the tool's broker connection from the 'broker' section of secrets.yaml."""
-        broker: Any = self._load_secrets().get(_SECRETS_KEY_BROKER)
-        if not isinstance(broker, dict):
-            raise ValueError(f"{_SECRETS_FILE_NAME} must contain a '{_SECRETS_KEY_BROKER}' mapping")
-        broker_data = cast(dict[str, Any], broker)
+        broker_data = self._require_mapping(self._load_secrets().get(_SECRETS_KEY_BROKER),
+                                            _SECRETS_KEY_BROKER)
 
         # A relative cafile is resolved against ota/, so the tool works from any CWD.
         cafile: Optional[str] = broker_data.get('cafile')
@@ -612,23 +641,18 @@ class ConfigManager:
         with (and overridden by) the device's entry under 'devices'."""
         data = self._load_secrets()
 
-        defaults: Any = data.get(_SECRETS_KEY_SERVER_DEFAULTS) or {}
-        if not isinstance(defaults, dict):
-            raise ValueError(f"'{_SECRETS_KEY_SERVER_DEFAULTS}' in {_SECRETS_FILE_NAME} "
-                             f"must be a mapping")
+        defaults = self._require_mapping(data.get(_SECRETS_KEY_SERVER_DEFAULTS) or {},
+                                         _SECRETS_KEY_SERVER_DEFAULTS)
+        devices = self._require_mapping(data.get(_SECRETS_KEY_DEVICES) or {}, _SECRETS_KEY_DEVICES)
 
-        devices: Any = data.get(_SECRETS_KEY_DEVICES) or {}
-        if not isinstance(devices, dict):
-            raise ValueError(f"'{_SECRETS_KEY_DEVICES}' in {_SECRETS_FILE_NAME} must be a mapping")
-
-        entry: Any = cast(dict[Any, Any], devices).get(mac)
+        entry: Any = devices.get(mac)
         if entry is None:
             raise ValueError(f"No entry for device {mac} under '{_SECRETS_KEY_DEVICES}' "
                              f"in {_SECRETS_FILE_NAME}")
         if not isinstance(entry, dict):
             raise ValueError(f"Device entry {mac} in {_SECRETS_FILE_NAME} must be a mapping")
 
-        return {**cast(dict[str, Any], defaults), **cast(dict[str, Any], entry)}
+        return {**defaults, **cast(dict[str, Any], entry)}
 
     def pio_command(self) -> str:
         """The pio executable used for provisioning: the optional top-level 'pio'
@@ -1164,7 +1188,7 @@ class MQTTClient:
         """Publish message to MQTT topic"""
         self.client.publish(topic, payload)
 
-    def loop(self, timeout: float = 0.1):
+    def loop(self, timeout: float = MQTT_LOOP_INTERVAL_SECONDS):
         """Process MQTT network events"""
         self.client.loop(timeout=timeout)
 
@@ -1278,7 +1302,7 @@ class _BaseTransfer:
     def _process_response(self, message: Dict[str, Any]):
         """Process ACK/NACK response messages from device."""
         if _ACK_KEY_TYPE not in message:
-            logging.warning(f"Received message without '{_ACK_KEY_TYPE}' field")
+            logging.warning(_MISSING_ACK_FIELD_WARNING)
             return
 
         ack = message[_ACK_KEY_TYPE] != 0
@@ -1423,7 +1447,7 @@ class _BaseTransfer:
                 return False
 
             while self.state not in {TransferState.DONE, TransferState.ERROR}:
-                self.mqtt_client.loop(timeout=0.1)
+                self.mqtt_client.loop()
                 self._process_state()
 
             success = self.state == TransferState.DONE
@@ -1524,13 +1548,13 @@ class OTAUpdater(_BaseTransfer):
     def _await_preflight(self) -> bool:
         deadline = time.time() + PREFLIGHT_ONLINE_TIMEOUT_SECONDS
         while not self._connected and time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
         if not self._connected:
             logging.error("Never connected to the broker; refusing to start the firmware upload")
             return False
 
         while self._latest_availability is None and time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
         if self._latest_availability != _STATE_ONLINE:
             logging.error(f"Device is not online (last known state: {self._latest_availability!r}); "
                           f"refusing to start a firmware upload against it")
@@ -1541,7 +1565,7 @@ class OTAUpdater(_BaseTransfer):
         # drains the value that predates this upload: left undrained, it could otherwise arrive
         # mid-transfer and be mistaken for the device's post-reboot report.
         while not self._info_is_fresh and time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
         if not self._info_is_fresh:
             logging.error(f"No info message arrived within {PREFLIGHT_ONLINE_TIMEOUT_SECONDS:.0f}s; refusing to "
                           f"start without a baseline the post-upload report could be told apart from")
@@ -1560,7 +1584,7 @@ class OTAUpdater(_BaseTransfer):
         deadline = time.time() + self.reboot_timeout
         confirmed = False
         while time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
             if self._saw_offline_since_start and self._info_is_fresh:
                 confirmed = True
                 break
@@ -1574,17 +1598,7 @@ class OTAUpdater(_BaseTransfer):
                               f"it may be stuck rebooting")
             return False
 
-        info = self._latest_info or {}
-        actual_hash = info.get(_PAYLOAD_KEY_GIT)
-        if actual_hash != expected_hash:
-            logging.error(f"Device came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
-                          f"the running firmware is not the one just sent")
-            return False
-        if info.get(_PAYLOAD_KEY_DIRTY):
-            logging.warning("The uploaded build was made from a dirty working tree (uncommitted or "
-                            "untracked changes) - the git hash matches, but the source it was built from may not")
-        logging.info(f"Device rebooted and confirmed running build {expected_hash}")
-        return True
+        return _confirm_reported_build(self._latest_info or {}, expected_hash, "Device")
 
 
 # ---------------------------------------------------------------------------
@@ -1718,7 +1732,7 @@ class FileTransfer(_BaseTransfer):
         # queuing it, so it was never going to be touched by this run).
         discovery_deadline = time.time() + CAN_NODE_DISCOVERY_TIMEOUT_SECONDS
         while time.time() < discovery_deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
 
         targets = {node: state for node, state in self._can_node_state.items()
                   if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == _STATE_ONLINE}
@@ -1738,7 +1752,7 @@ class FileTransfer(_BaseTransfer):
         total_timeout = CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS * len(targets)
         deadline = time.time() + total_timeout
         while time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
             if all(state[_STATE_SAW_OFFLINE] and state[_STATE_INFO_FRESH] for state in targets.values()):
                 break
 
@@ -1751,17 +1765,8 @@ class FileTransfer(_BaseTransfer):
                 all_confirmed = False
                 continue
             info: Dict[str, Any] = state[_FIELD_INFO] or {}
-            actual_hash = info.get(_PAYLOAD_KEY_GIT)
-            if actual_hash != expected_hash:
-                logging.error(f"{node}: came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
-                              f"the running firmware is not the one just sent")
+            if not _confirm_reported_build(info, expected_hash, node):
                 all_confirmed = False
-                continue
-            if info.get(_PAYLOAD_KEY_DIRTY):
-                logging.warning(f"{node}: the uploaded build was made from a dirty working tree (uncommitted "
-                                f"or untracked changes) - the git hash matches, but the source it was built "
-                                f"from may not")
-            logging.info(f"{node}: rebooted and confirmed running build {expected_hash}")
         return all_confirmed
 
 
@@ -1795,7 +1800,7 @@ class CommandSender(_BaseTransfer):
         while self._pending_messages:
             message = self._pending_messages.popleft()
             if _ACK_KEY_TYPE not in message:
-                logging.warning(f"Received message without '{_ACK_KEY_TYPE}' field")
+                logging.warning(_MISSING_ACK_FIELD_WARNING)
                 continue
             if message[_ACK_KEY_TYPE] != 0:
                 self.state = TransferState.DONE
@@ -1814,7 +1819,7 @@ class CommandSender(_BaseTransfer):
 
         try:
             while self.state not in {TransferState.DONE, TransferState.ERROR}:
-                self.mqtt_client.loop(timeout=0.1)
+                self.mqtt_client.loop()
                 self._process_state()
 
             success = self.state == TransferState.DONE
@@ -1889,7 +1894,7 @@ class FleetStatus:
             return {}
         deadline = time.time() + self.discovery_timeout
         while time.time() < deadline:
-            self.mqtt_client.loop(timeout=0.1)
+            self.mqtt_client.loop()
         self.mqtt_client.disconnect()
         return self.entries
 
@@ -2027,6 +2032,8 @@ _METAVAR_PORT = 'PORT'
 _METAVAR_SECONDS = 'SECONDS'
 # What a listing prints where a device accepts no files or a project defines no commands.
 _NOTHING_LISTED = 'none'
+# Said of both flags that answer on their own and take nothing else with them.
+_TAKES_NO_OTHER_ARGUMENTS = "takes no other arguments"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -2165,10 +2172,10 @@ def main():
     action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
                     or args.file is not None or args.command is not None)
     if args.list and (args.device is not None or action_given or args.upload_port is not None):
-        parser.error(f"{_FLAG_LIST} takes no other arguments")
+        parser.error(f"{_FLAG_LIST} {_TAKES_NO_OTHER_ARGUMENTS}")
     if args.status and (args.list or args.device is not None or action_given or args.upload_port is not None
                        or args.ota_timeout is not None):
-        parser.error(f"{_FLAG_STATUS} takes no other arguments")
+        parser.error(f"{_FLAG_STATUS} {_TAKES_NO_OTHER_ARGUMENTS}")
     if args.device is None and action_given:
         parser.error(f"an action needs {_FLAG_DEVICE} {_METAVAR_MAC}")
     if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
