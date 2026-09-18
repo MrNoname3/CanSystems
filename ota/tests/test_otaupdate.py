@@ -1850,3 +1850,80 @@ def test_a_dirty_node_build_warns_but_still_succeeds(
     with caplog.at_level(logging.WARNING):
         assert transfer._verify_after_transfer() is True
     assert any("dirty" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Fleet status: one wildcard subscription across every ESP device and CAN node, read-only.
+# ---------------------------------------------------------------------------
+
+def test_status_flag_parses_and_defaults_to_false() -> None:
+    parser = ota.build_arg_parser()
+    assert parser.parse_args(["--status"]).status is True
+    assert parser.parse_args([]).status is False
+
+
+def test_fleet_status_on_connect_subscribes_all_four_wildcards() -> None:
+    status = ota.FleetStatus(ota.MQTTConfig(host="broker"))
+    status.mqtt_client = _ScriptedMQTT(status._on_message)  # type: ignore  # deliberate test double for the MQTT client
+    status._on_connect(None, None, None, 0, None)
+    assert set(cast(_ScriptedMQTT, status.mqtt_client).subscribed) == {
+        'iot/dtos/+/availability', 'iot/dtos/+/info',
+        'iot/dtos/+/+/availability', 'iot/dtos/+/+/info',
+    }
+
+
+def test_fleet_status_on_connect_does_nothing_on_a_failed_connect() -> None:
+    status = ota.FleetStatus(ota.MQTTConfig(host="broker"))
+    status.mqtt_client = _ScriptedMQTT(status._on_message)  # type: ignore  # deliberate test double for the MQTT client
+    status._on_connect(None, None, None, 1, None)
+    assert cast(_ScriptedMQTT, status.mqtt_client).subscribed == []
+
+
+def test_fleet_status_on_message_routes_device_and_can_node_topics() -> None:
+    status = ota.FleetStatus(ota.MQTTConfig(host="broker"))
+    status._on_message(None, None, _fake_message("iot/dtos/AABBCCDDEEFF/availability", {"state": "online"}))
+    status._on_message(None, None, _fake_message("iot/dtos/AABBCCDDEEFF/info", {"git": "1234abcd", "fw": 42}))
+    status._on_message(None, None, _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/availability", {"state": "offline"}))
+    status._on_message(None, None, _fake_message(f"iot/dtos/{GATEWAY_MAC}/alert1/info", {"git": "deadbeef", "fw": 7}))
+    assert status.entries[("AABBCCDDEEFF", None)] == {"availability": "online", "info": {"git": "1234abcd", "fw": 42}}
+    assert status.entries[(GATEWAY_MAC, "alert1")] == {"availability": "offline", "info": {"git": "deadbeef", "fw": 7}}
+
+
+def test_fleet_status_on_message_ignores_unrelated_topics() -> None:
+    status = ota.FleetStatus(ota.MQTTConfig(host="broker"))
+    status._on_message(None, None, _fake_message("iot/dtos/AABBCCDDEEFF/common", {"whatever": 1}))
+    status._on_message(None, None, _fake_message("iot/stod/AABBCCDDEEFF/availability", {"state": "online"}))
+    assert status.entries == {}
+
+
+def test_fleet_status_on_message_survives_malformed_json() -> None:
+    status = ota.FleetStatus(ota.MQTTConfig(host="broker"))
+    status._on_message(None, None, _fake_message("iot/dtos/AABBCCDDEEFF/info", "not json"))
+    assert status.entries[("AABBCCDDEEFF", None)]["info"] is None
+
+
+def test_format_fleet_status_flags_current_and_outdated_builds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42}},
+        ("fcf5c401bd83", "alert1"): {"availability": "online", "info": {"git": "deadbeef", "fw": 7}},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects())
+    assert "Test2" in report and "online" in report and "1234abcd (current)" in report
+    assert "Living room / alert1" in report  # devices.yaml's friendly name for the gateway MAC, plus the node subtopic
+    assert "deadbeef (outdated, expected 1234abcd)" in report
+
+
+def test_format_fleet_status_flags_dirty_builds_and_missing_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42, "dirty": 1}},
+        ("deadbeefcafe", None): {"availability": "offline", "info": None},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects())
+    assert "[dirty]" in report
+    assert "deadbeefcafe" in report and "no info" in report
+
+
+def test_format_fleet_status_reports_nothing_answered() -> None:
+    assert "No device answered" in ota.format_fleet_status({}, _cli_projects())

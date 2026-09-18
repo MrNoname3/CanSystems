@@ -66,6 +66,9 @@ CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS = 45.0
 # How long discovery waits for the retained availability/info of every node behind the gateway -
 # same reasoning as PREFLIGHT_ONLINE_TIMEOUT_SECONDS, just named for what it is here.
 CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# Same kind of wait, for --status: long enough for every device's and every CAN node's retained
+# availability/info to answer the wildcard subscription.
+FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
 
 
 class TransferState(enum.Enum):
@@ -1691,6 +1694,91 @@ class CommandSender(_BaseTransfer):
 
 
 # ---------------------------------------------------------------------------
+# Fleet status (read-only: no transfer, so no _BaseTransfer state machine involved)
+# ---------------------------------------------------------------------------
+
+class FleetStatus:
+    """Reports the current availability/info for every device and CAN sub-device that answers.
+
+    Discovered live, by wildcard, rather than read from devices.yaml: a device not yet listed
+    there still shows up, and one that never answers within the window does not - which is
+    itself the answer for a device that is off or unreachable."""
+
+    def __init__(self, mqtt_config: MQTTConfig, discovery_timeout: float = FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS):
+        self.mqtt_client = MQTTClient(mqtt_config)
+        self.discovery_timeout = discovery_timeout
+        self.entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {}
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+    def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code == 0:
+            for topic in ('iot/dtos/+/availability', 'iot/dtos/+/info',
+                         'iot/dtos/+/+/availability', 'iot/dtos/+/+/info'):
+                self.mqtt_client.subscribe(topic)
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        # iot/dtos/<mac>/<field> (4 parts) or iot/dtos/<mac>/<node>/<field> (5 parts).
+        parts = msg.topic.split('/')
+        if len(parts) == 4 and parts[:2] == ['iot', 'dtos']:
+            mac, node, field = parts[2], None, parts[3]
+        elif len(parts) == 5 and parts[:2] == ['iot', 'dtos']:
+            mac, node, field = parts[2], parts[3], parts[4]
+        else:
+            return
+        if field not in ('availability', 'info'):
+            return
+        try:
+            payload: Optional[Dict[str, Any]] = json.loads(msg.payload.decode())
+        except json.JSONDecodeError:
+            payload = None
+        entry = self.entries.setdefault((mac, node), {"availability": None, "info": None})
+        if field == 'availability':
+            entry["availability"] = payload.get("state") if payload else None
+        else:
+            entry["info"] = payload
+
+    def collect(self) -> Dict[tuple[str, Optional[str]], Dict[str, Any]]:
+        """Connects, waits out the discovery window, disconnects, and returns what came in."""
+        if not self.mqtt_client.connect():
+            return {}
+        deadline = time.time() + self.discovery_timeout
+        while time.time() < deadline:
+            self.mqtt_client.loop(timeout=0.1)
+        self.mqtt_client.disconnect()
+        return self.entries
+
+
+def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]],
+                        projects: List[ProjectEntry]) -> str:
+    """One line per discovered device or CAN node: its name if devices.yaml knows the MAC (else
+    the MAC itself), online/offline, and its build - flagged against this checkout's own commit,
+    the same expected value the reboot verification above already computes."""
+    names = {d.mac: (d.friendly_name or d.mac) for p in projects for d in p.devices}
+    expected_hash = f"{git_utils.get_git_hash():08x}"
+
+    lines: List[str] = []
+    for (mac, node), entry in sorted(entries.items()):
+        label = names.get(mac, mac)
+        if node is not None:
+            label = f"{label} / {node}"
+        avail = entry["availability"] or "unknown"
+        info: Dict[str, Any] = entry["info"] or {}
+        git_hash = info.get("git")
+        if git_hash is None:
+            build = "no info"
+        elif git_hash == expected_hash:
+            build = f"{git_hash} (current)"
+        else:
+            build = f"{git_hash} (outdated, expected {expected_hash})"
+        if info.get("dirty"):
+            build += " [dirty]"
+        lines.append(f"{label:35s} {avail:8s} {build}")
+    if not lines:
+        lines.append("No device answered within the discovery window.")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1698,12 +1786,13 @@ class CommandSender(_BaseTransfer):
 _FW_OPTION = "Firmware upload"
 _PROVISION_OPTION = "Initial provisioning (USB: build + upload LittleFS image)"
 _SERIAL_FLASH_OPTION = "Initial firmware flash (USB: build + serial upload)"
+_FLEET_STATUS_OPTION = "Fleet status (query every device and CAN node)"
 
 
-def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
+def select_target(projects: List[ProjectEntry], mqtt_config: MQTTConfig) -> Optional[ActionResult]:
     """
     Interactive three-level menu:
-      1. Select project
+      1. Select project (or query fleet status, which loops back here)
       2. Select device
       3. Select action (firmware upload, file transfer, or command)
     Returns an ActionResult, or None if the user cancelled.
@@ -1713,9 +1802,15 @@ def select_target(projects: List[ProjectEntry]) -> Optional[ActionResult]:
 
     while True:
         # --- Level 1: project selection ---
-        choice = menu.select("Select project", list(project_map), show_back=False)
+        choice = menu.select("Select project", [_FLEET_STATUS_OPTION, *project_map], show_back=False)
         if choice in (MenuSelector.CANCEL, None):
             return None
+        if choice == _FLEET_STATUS_OPTION:
+            # curses.wrapper() fully tears down and restores the terminal on each menu.select()
+            # call, so plain print()/input() here is safe between two menu turns.
+            print(format_fleet_status(FleetStatus(mqtt_config).collect(), projects))
+            input("\nPress Enter to continue...")
+            continue
 
         selected_project = project_map[choice]
 
@@ -1770,6 +1865,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                "defaulted, so a typo fails instead of selecting a target of its own.")
     parser.add_argument('--list', action='store_true',
                         help="print every device and the arguments that select its actions, then exit")
+    parser.add_argument('--status', action='store_true',
+                        help="query every device and CAN node's current availability/build over MQTT, then exit")
     parser.add_argument('--device', metavar='MAC',
                         help="MAC address of the target device, as devices.yaml spells it")
     action = parser.add_mutually_exclusive_group()
@@ -1893,6 +1990,9 @@ def main():
                     or args.file is not None or args.command is not None)
     if args.list and (args.device is not None or action_given or args.upload_port is not None):
         parser.error("--list takes no other arguments")
+    if args.status and (args.list or args.device is not None or action_given or args.upload_port is not None
+                       or args.ota_timeout is not None):
+        parser.error("--status takes no other arguments")
     if args.device is None and action_given:
         parser.error("an action needs --device MAC")
     if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
@@ -1918,6 +2018,10 @@ def main():
 
         mqtt_config = config_manager.load_mqtt_config()
 
+        if args.status:
+            print(format_fleet_status(FleetStatus(mqtt_config).collect(), projects))
+            sys.exit(0)
+
         if args.device is not None:
             result = resolve_target(projects, str(args.device),
                                     firmware=bool(args.firmware),
@@ -1927,7 +2031,7 @@ def main():
                                     command_name=cast(Optional[str], args.command))
         else:
             # Interactive target selection (project → device → action)
-            selected = select_target(projects)
+            selected = select_target(projects, mqtt_config)
             if selected is None:
                 print("Cancelled.")
                 sys.exit(0)
