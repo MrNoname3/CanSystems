@@ -82,10 +82,17 @@ class TransferState(enum.Enum):
     ERROR = 6
 
 
+# The two secrets.yaml protocol identifiers - our own choice of spelling, unlike paho's own
+# "tcp"/"websockets" transport values below, which are its API and not ours to name. Checked
+# again in MQTTClient._setup_client, which is why this is shared rather than local to the class.
+_PROTOCOL_MQTT = 'mqtt'
+_PROTOCOL_WS = 'ws'
+
+
 @dataclass
 class MQTTConfig:
     """Configuration data for MQTT connection"""
-    protocol: str = "mqtt"                    # "mqtt" or "ws"
+    protocol: str = _PROTOCOL_MQTT             # _PROTOCOL_MQTT or _PROTOCOL_WS
     host: str = ""                            # Server hostname or IP
     port: int = 0                             # Server port (auto-determined if 0)
     basepath: str = "/"                       # Only used with WebSocket
@@ -97,15 +104,15 @@ class MQTTConfig:
 
     # Default ports keyed by (protocol, tls_enabled)
     _DEFAULT_PORTS: ClassVar[dict[tuple[str, bool], int]] = {
-        ("mqtt", False): 1883,
-        ("mqtt", True):  8883,
-        ("ws",   False): 80,
-        ("ws",   True):  443,
+        (_PROTOCOL_MQTT, False): 1883,
+        (_PROTOCOL_MQTT, True):  8883,
+        (_PROTOCOL_WS,   False): 80,
+        (_PROTOCOL_WS,   True):  443,
     }
 
     def __post_init__(self):
         """Validate and set defaults after initialization"""
-        if self.protocol not in ("mqtt", "ws"):
+        if self.protocol not in (_PROTOCOL_MQTT, _PROTOCOL_WS):
             raise ValueError(f"Unsupported protocol: {self.protocol}. Must be 'mqtt' or 'ws'")
 
         # Set default port based on protocol and TLS
@@ -142,6 +149,11 @@ class CommandEntry:
         if self.description:
             return f"{self.name}  ({self.description})"
         return self.name
+
+
+# The only renderer id `FileEntry.render` currently accepts - checked in three places
+# (devices.yaml validation, provider dispatch, the connection-config preflight decision).
+_RENDER_SERVER_JSON = 'server_json'
 
 
 @dataclass
@@ -327,10 +339,10 @@ class DeviceManager:
                 f"File entry '{f['name']}' must have exactly one of 'local_path', 'render' "
                 f"or 'content' (device: {mac})"
             )
-        if 'render' in f and f['render'] != 'server_json':
+        if 'render' in f and f['render'] != _RENDER_SERVER_JSON:
             raise ValueError(
                 f"Unknown render type '{f['render']}' in file entry '{f['name']}' "
-                f"(device: {mac}); only 'server_json' is supported"
+                f"(device: {mac}); only '{_RENDER_SERVER_JSON}' is supported"
             )
         if 'content' in f and not isinstance(f['content'], dict):
             raise ValueError(
@@ -518,7 +530,7 @@ class ConfigManager:
 
         try:
             return MQTTConfig(
-                protocol=broker_data.get('protocol', 'mqtt'),
+                protocol=broker_data.get('protocol', _PROTOCOL_MQTT),
                 host=broker_data.get('host', ''),
                 port=broker_data.get('port', 0),
                 basepath=broker_data.get('basepath', '/'),
@@ -822,7 +834,7 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
     """Data provider for a file entry: disk-backed for local_path entries,
     rendered in memory for render and inline-content entries. A missing CA
     bundle is generated once from the system trust store."""
-    if file_entry.render == 'server_json':
+    if file_entry.render == _RENDER_SERVER_JSON:
         return RenderedDataProvider(render_server_json(
             config_manager.device_server_secrets(device.mac), device.server_config))
     if file_entry.content is not None:
@@ -1029,14 +1041,14 @@ class MQTTClient:
 
     def _setup_client(self):
         """Set up MQTT client based on configuration"""
-        transport = "websockets" if self.config.protocol == "ws" else "tcp"
+        transport = "websockets" if self.config.protocol == _PROTOCOL_WS else "tcp"
         self.client = mqtt.Client(
             client_id=self.config.client_id,
             callback_api_version=CallbackAPIVersion.VERSION2,
             transport=transport
         )
 
-        if self.config.protocol == "ws" and hasattr(self.client, 'ws_set_options'):
+        if self.config.protocol == _PROTOCOL_WS and hasattr(self.client, 'ws_set_options'):
             self.client.ws_set_options(path=self.config.basepath)
 
         if self.config.username is not None and self.config.password is not None:
@@ -2106,7 +2118,7 @@ def main():
         # are verified by connecting to the broker with the device's own
         # rendered identity first.
         ships_connection_config = result.provision or (result.file is not None and (
-            result.file.render == 'server_json'
+            result.file.render == _RENDER_SERVER_JSON
             or result.file.local_path == config_manager.ca_bundle_path))
         if ships_connection_config and not run_identity_check(config_manager, result.device):
             sys.exit(1)
