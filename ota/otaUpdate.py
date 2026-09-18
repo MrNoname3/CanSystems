@@ -1564,20 +1564,20 @@ class FileTransfer(_BaseTransfer):
         if match is not None:
             node, field = match
             state = self._can_node_state.setdefault(
-                node, {"availability": None, "info": None, "info_fresh": False, "saw_offline": False})
-            if field == "availability":
+                node, {_FIELD_AVAILABILITY: None, _FIELD_INFO: None, "info_fresh": False, "saw_offline": False})
+            if field == _FIELD_AVAILABILITY:
                 try:
                     value = json.loads(msg.payload.decode()).get("state")
                 except json.JSONDecodeError:
                     value = None
-                state["availability"] = value
+                state[_FIELD_AVAILABILITY] = value
                 if value == "offline":
                     state["saw_offline"] = True
-            else:  # "info"
+            else:  # _FIELD_INFO
                 try:
-                    state["info"] = json.loads(msg.payload.decode())
+                    state[_FIELD_INFO] = json.loads(msg.payload.decode())
                 except json.JSONDecodeError:
-                    state["info"] = None
+                    state[_FIELD_INFO] = None
                 state["info_fresh"] = True
             return
         super()._on_message(client, userdata, msg)
@@ -1602,7 +1602,7 @@ class FileTransfer(_BaseTransfer):
             self.mqtt_client.loop(timeout=0.1)
 
         targets = {node: state for node, state in self._can_node_state.items()
-                  if node.startswith(node_role) and state["availability"] == "online"}
+                  if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == "online"}
         if not targets:
             logging.warning(f"No live CAN node behind this gateway matched the role '{node_role}'; "
                             f"nothing to verify")
@@ -1631,7 +1631,7 @@ class FileTransfer(_BaseTransfer):
                               f"(offline seen: {state['saw_offline']}, info seen: {state['info_fresh']})")
                 all_confirmed = False
                 continue
-            info: Dict[str, Any] = state["info"] or {}
+            info: Dict[str, Any] = state[_FIELD_INFO] or {}
             actual_hash = info.get("git")
             if actual_hash != expected_hash:
                 logging.error(f"{node}: came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
@@ -1757,11 +1757,11 @@ class FleetStatus:
             payload: Optional[Dict[str, Any]] = json.loads(msg.payload.decode())
         except json.JSONDecodeError:
             payload = None
-        entry = self.entries.setdefault((mac, node), {"availability": None, "info": None})
-        if field == 'availability':
-            entry["availability"] = payload.get("state") if payload else None
+        entry = self.entries.setdefault((mac, node), {_FIELD_AVAILABILITY: None, _FIELD_INFO: None})
+        if field == _FIELD_AVAILABILITY:
+            entry[_FIELD_AVAILABILITY] = payload.get("state") if payload else None
         else:
-            entry["info"] = payload
+            entry[_FIELD_INFO] = payload
 
     def collect(self) -> Dict[tuple[str, Optional[str]], Dict[str, Any]]:
         """Connects, waits out the discovery window, disconnects, and returns what came in."""
@@ -1787,8 +1787,8 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
         label = names.get(mac, mac)
         if node is not None:
             label = f"{label} / {node}"
-        avail = entry["availability"] or "unknown"
-        info: Dict[str, Any] = entry["info"] or {}
+        avail = entry[_FIELD_AVAILABILITY] or "unknown"
+        info: Dict[str, Any] = entry[_FIELD_INFO] or {}
         git_hash = info.get("git")
         if git_hash is None:
             build = "no info"
