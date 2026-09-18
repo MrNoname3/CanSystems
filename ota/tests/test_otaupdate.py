@@ -1909,8 +1909,8 @@ def test_format_fleet_status_flags_current_and_outdated_builds(monkeypatch: pyte
         ("fcf5c401bd83", "alert1"): {"availability": "online", "info": {"git": "deadbeef", "fw": 7}},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
-    assert "Test2" in report and "online" in report and "1234abcd (current)" in report
-    assert "Living room / alert1" in report  # devices.yaml's friendly name for the gateway MAC, plus the node subtopic
+    assert "Test2  (40f52033765d)" in report    # named as the menu names it: friendly name and MAC
+    assert "online" in report and "1234abcd (current)" in report
     assert "deadbeef (outdated, expected 1234abcd)" in report
 
 
@@ -1925,21 +1925,86 @@ def test_format_fleet_status_flags_dirty_builds_and_missing_info(monkeypatch: py
     assert "deadbeefcafe" in report and "no info" in report
 
 
-def test_format_fleet_status_sorts_a_gateway_above_the_nodes_it_carries(
+def test_format_fleet_status_groups_by_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        (GATEWAY_MAC, None): {"availability": "online", "info": {"git": "1234abcd"}},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects())
+    thermo, gateway = report.split("CAN gateway", 1)
+    assert "Thermometer  (project_esp8266_thermo)" in thermo
+    assert "Test2" in thermo and "Living room" not in thermo
+    assert "Living room" in gateway
+
+
+def test_format_fleet_status_leaves_out_a_project_nothing_answered_from(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    # The gateway and its CAN nodes share one MAC, so the entries differ only in the node half of
-    # the key - None for the gateway itself. Sorting those keys directly compares None with a
-    # subtopic name, which raises rather than printing a report.
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects())
+    assert "Thermometer" in report
+    assert "CAN gateway" not in report          # no empty heading for a project that is all quiet
+
+
+def test_format_fleet_status_tells_two_devices_of_the_same_name_apart(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # devices.yaml may give the same friendly name to a device in each of two projects. The
+    # project heading and the MAC are what make the two lines readable as different devices.
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    projects = _cli_projects()
+    for project in projects:
+        project.devices[0].friendly_name = "Home BP"
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        (GATEWAY_MAC, None): {"availability": "offline", "info": {"git": "1234abcd"}},
+    }
+    report = ota.format_fleet_status(entries, projects)
+    assert "Home BP  (40f52033765d)" in report
+    assert f"Home BP  ({GATEWAY_MAC})" in report
+
+
+def test_format_fleet_status_indents_a_gateways_nodes_under_it(
+        monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
         (GATEWAY_MAC, "alert2"): {"availability": "online", "info": {"git": "1234abcd"}},
         (GATEWAY_MAC, None): {"availability": "online", "info": {"git": "1234abcd"}},
         (GATEWAY_MAC, "alert1"): {"availability": "online", "info": {"git": "1234abcd"}},
     }
+    device, node1, node2 = ota.format_fleet_status(entries, _cli_projects()).splitlines()[1:]
+    assert device.startswith("  Living room") and GATEWAY_MAC in device
+    assert node1.startswith("    alert1") and node2.startswith("    alert2")
+
+
+def test_format_fleet_status_keeps_nodes_of_a_gateway_that_did_not_answer(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # Only the node's retained topics arrived. Its subtopic alone says nothing about whose node it
+    # is, so the gateway still gets its line - just without a state of its own to report.
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        (GATEWAY_MAC, "alert1"): {"availability": "online", "info": {"git": "1234abcd"}},
+    }
     report = ota.format_fleet_status(entries, _cli_projects()).splitlines()
-    assert len(report) == 3
-    assert "/" not in report[0]                 # the gateway's own line comes first
-    assert "alert1" in report[1] and "alert2" in report[2]
+    assert report[1].strip() == f"Living room  ({GATEWAY_MAC})"      # named, but no columns
+    assert report[2].startswith("    alert1") and "online" in report[2]
+
+
+def test_format_fleet_status_files_an_unlisted_mac_under_its_own_heading(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
+    entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
+        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("aabbccddeeff", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("ddeeff001122", "alert9"): {"availability": "online", "info": {"git": "1234abcd"}},
+    }
+    report = ota.format_fleet_status(entries, _cli_projects())
+    known, unlisted = report.split(ota._FLEET_STATUS_UNLISTED_HEADING, 1)
+    assert "Test2" in known and "aabbccddeeff" not in known
+    assert "aabbccddeeff" in unlisted                    # an unknown device
+    assert "ddeeff001122" in unlisted and "alert9" in unlisted   # and an unknown gateway's node
 
 
 def test_format_fleet_status_reports_nothing_answered() -> None:

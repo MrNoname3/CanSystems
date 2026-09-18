@@ -69,6 +69,8 @@ CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# What --status files an answer under when devices.yaml lists no device with that MAC.
+_FLEET_STATUS_UNLISTED_HEADING = "Not in devices.yaml"
 
 # How long one network turn blocks before the caller gets to re-check its own state. Every wait
 # in this file is a loop of these rather than a single long block, so a deadline is honoured to
@@ -1899,36 +1901,74 @@ class FleetStatus:
         return self.entries
 
 
+def _format_fleet_build(entry: Dict[str, Any], expected_hash: str) -> str:
+    """The build half of one status line: what the device reports, against what this checkout is."""
+    info: Dict[str, Any] = entry[_FIELD_INFO] or {}
+    git_hash = info.get(_PAYLOAD_KEY_GIT)
+    if git_hash is None:
+        build = "no info"
+    elif git_hash == expected_hash:
+        build = f"{git_hash} (current)"
+    else:
+        build = f"{git_hash} (outdated, expected {expected_hash})"
+    if info.get(_PAYLOAD_KEY_DIRTY):
+        build += " [dirty]"
+    return build
+
+
 def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]],
                         projects: List[ProjectEntry]) -> str:
-    """One line per discovered device or CAN node: its name if devices.yaml knows the MAC (else
-    the MAC itself), online/offline, and its build - flagged against this checkout's own commit,
-    the same expected value the reboot verification above already computes."""
-    names = {d.mac: (d.friendly_name or d.mac) for p in projects for d in p.devices}
+    """Everything that answered, grouped the way --list and the menu already group it: by project,
+    then by device, with a gateway's CAN nodes indented under it. A device is named as the menu
+    names it, friendly name and MAC together, so a line can be read and acted on without looking
+    the address up again. What answered from a MAC devices.yaml does not list is kept, under a
+    heading of its own - an unlisted device is the thing most worth noticing here."""
     expected_hash = f"{git_utils.get_git_hash():08x}"
 
-    lines: List[str] = []
-    # A gateway and the nodes behind it share a MAC, so the node has to sort as something: the
-    # empty string, which puts the gateway's own line above the nodes it carries. Sorting the
-    # keys as they are would compare None against a subtopic name and raise.
-    for (mac, node), entry in sorted(entries.items(), key=lambda item: (item[0][0], item[0][1] or '')):
-        label = names.get(mac, mac)
+    nodes_by_mac: Dict[str, List[str]] = {}
+    for mac, node in entries:
         if node is not None:
-            label = f"{label} / {node}"
+            nodes_by_mac.setdefault(mac, []).append(node)
+
+    # (label, entry) per line; entry is None for a heading, and for a gateway that did not answer
+    # itself but has nodes to introduce.
+    def device_rows(mac: str, label: str) -> List[tuple[str, Optional[Dict[str, Any]]]]:
+        rows: List[tuple[str, Optional[Dict[str, Any]]]] = [(f"  {label}", entries.get((mac, None)))]
+        rows += [(f"    {node}", entries[(mac, node)]) for node in sorted(nodes_by_mac.get(mac, []))]
+        return rows
+
+    rows: List[tuple[str, Optional[Dict[str, Any]]]] = []
+    for project in projects:
+        answered = [d for d in project.devices if (d.mac, None) in entries or d.mac in nodes_by_mac]
+        if not answered:
+            continue
+        rows.append((f"{project.name}  ({project.pio_project})", None))
+        for device in answered:
+            rows += device_rows(device.mac, device.display_name)
+
+    listed = {d.mac for p in projects for d in p.devices}
+    unlisted = sorted({mac for mac, _ in entries if mac not in listed})
+    if unlisted:
+        rows.append((_FLEET_STATUS_UNLISTED_HEADING, None))
+        for mac in unlisted:
+            rows += device_rows(mac, mac)
+
+    if not rows:
+        return "No device answered within the discovery window."
+
+    # Only the lines that carry columns set their width; a heading is free to be longer.
+    width = max(len(label) for label, entry in rows if entry is not None)
+    lines: List[str] = []
+    for label, entry in rows:
+        if entry is None:
+            # A heading starts a new block; an indented label is a gateway that did not answer
+            # itself and is only here to say whose nodes follow.
+            if lines and not label.startswith(" "):
+                lines.append("")
+            lines.append(label)
+            continue
         avail = entry[_FIELD_AVAILABILITY] or "unknown"
-        info: Dict[str, Any] = entry[_FIELD_INFO] or {}
-        git_hash = info.get(_PAYLOAD_KEY_GIT)
-        if git_hash is None:
-            build = "no info"
-        elif git_hash == expected_hash:
-            build = f"{git_hash} (current)"
-        else:
-            build = f"{git_hash} (outdated, expected {expected_hash})"
-        if info.get(_PAYLOAD_KEY_DIRTY):
-            build += " [dirty]"
-        lines.append(f"{label:35s} {avail:8s} {build}")
-    if not lines:
-        lines.append("No device answered within the discovery window.")
+        lines.append(f"{label:{width}s}  {avail:8s} {_format_fleet_build(entry, expected_hash)}")
     return "\n".join(lines)
 
 
