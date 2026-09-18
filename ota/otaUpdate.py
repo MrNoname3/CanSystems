@@ -275,11 +275,22 @@ class DeviceConfig:
 # Device list manager
 # ---------------------------------------------------------------------------
 
-# devices.yaml field names read by more than one parser method below - CommandEntry, FileEntry
-# and ProjectEntry each have a display 'name', and the command list ('commands') is read once for
-# the shared section and once per project, both feeding _parse_commands().
+# devices.yaml field names, each checked for presence and then read back by key at least once
+# more in the same or another _parse_* method below - one spelling per field rather than one
+# in the presence check and a second, independently typed, in the read.
 _YAML_KEY_NAME = 'name'
+_YAML_KEY_CMD = 'cmd'
 _YAML_KEY_COMMANDS = 'commands'
+_YAML_KEY_DEVICE_PATH = 'device_path'
+_YAML_KEY_LOCAL_PATH = 'local_path'
+_YAML_KEY_RENDER = 'render'
+_YAML_KEY_CONTENT = 'content'
+_YAML_KEY_PIO_ENV = 'pio_env'
+_YAML_KEY_MAC = 'mac'
+_YAML_KEY_PIO_PROJECT = 'pio_project'
+# The devices.yaml section of commands shared by every project - both the dict key that finds it
+# and the human-readable label _parse_commands() reports it by on a validation error.
+_YAML_COMMON_SECTION = 'common'
 
 
 class DeviceManager:
@@ -308,8 +319,8 @@ class DeviceManager:
 
         # Parse common commands shared across all projects.
         common_commands = self._parse_commands(
-            data.get('common', {}).get(_YAML_KEY_COMMANDS, []),
-            context="common"
+            data.get(_YAML_COMMON_SECTION, {}).get(_YAML_KEY_COMMANDS, []),
+            context=_YAML_COMMON_SECTION
         )
 
         projects = [self._parse_project(p, common_commands) for p in data['projects']]
@@ -323,76 +334,76 @@ class DeviceManager:
         """Parse a list of raw command dicts into CommandEntry objects."""
         commands: list[CommandEntry] = []
         for c in raw:
-            if _YAML_KEY_NAME not in c or 'cmd' not in c:
+            if _YAML_KEY_NAME not in c or _YAML_KEY_CMD not in c:
                 raise ValueError(
                     f"Each command entry must have 'name' and 'cmd' fields (context: {context})"
                 )
             commands.append(CommandEntry(
                 name=c[_YAML_KEY_NAME],
-                cmd=c['cmd'],
+                cmd=c[_YAML_KEY_CMD],
                 description=c.get('description')
             ))
         return commands
 
     def _parse_file(self, f: dict[str, Any], mac: str) -> FileEntry:
         """Parse a single file entry dict into a FileEntry object."""
-        if _YAML_KEY_NAME not in f or 'device_path' not in f:
+        if _YAML_KEY_NAME not in f or _YAML_KEY_DEVICE_PATH not in f:
             raise ValueError(
                 f"Each file entry must have 'name' and 'device_path' fields (device: {mac})"
             )
-        sources = [key for key in ('local_path', 'render', 'content') if key in f]
+        sources = [key for key in (_YAML_KEY_LOCAL_PATH, _YAML_KEY_RENDER, _YAML_KEY_CONTENT) if key in f]
         if len(sources) != 1:
             raise ValueError(
                 f"File entry '{f[_YAML_KEY_NAME]}' must have exactly one of 'local_path', 'render' "
                 f"or 'content' (device: {mac})"
             )
-        if 'render' in f and f['render'] != _RENDER_SERVER_JSON:
+        if _YAML_KEY_RENDER in f and f[_YAML_KEY_RENDER] != _RENDER_SERVER_JSON:
             raise ValueError(
-                f"Unknown render type '{f['render']}' in file entry '{f[_YAML_KEY_NAME]}' "
+                f"Unknown render type '{f[_YAML_KEY_RENDER]}' in file entry '{f[_YAML_KEY_NAME]}' "
                 f"(device: {mac}); only '{_RENDER_SERVER_JSON}' is supported"
             )
-        if 'content' in f and not isinstance(f['content'], dict):
+        if _YAML_KEY_CONTENT in f and not isinstance(f[_YAML_KEY_CONTENT], dict):
             raise ValueError(
                 f"'content' must be a mapping in file entry '{f[_YAML_KEY_NAME]}' (device: {mac})"
             )
-        if 'pio_env' in f and 'local_path' not in f:
+        if _YAML_KEY_PIO_ENV in f and _YAML_KEY_LOCAL_PATH not in f:
             raise ValueError(
                 f"'pio_env' names the build a file on disk has to come from, so it only goes with "
                 f"'local_path' (file entry '{f[_YAML_KEY_NAME]}', device: {mac})"
             )
         return FileEntry(
             name=f[_YAML_KEY_NAME],
-            device_path=f['device_path'],
-            local_path=self.script_dir / f['local_path'] if 'local_path' in f else None,
-            render=f.get('render'),
-            content=cast(Optional[Dict[str, Any]], f.get('content')),
-            pio_env=f.get('pio_env')
+            device_path=f[_YAML_KEY_DEVICE_PATH],
+            local_path=self.script_dir / f[_YAML_KEY_LOCAL_PATH] if _YAML_KEY_LOCAL_PATH in f else None,
+            render=f.get(_YAML_KEY_RENDER),
+            content=cast(Optional[Dict[str, Any]], f.get(_YAML_KEY_CONTENT)),
+            pio_env=f.get(_YAML_KEY_PIO_ENV)
         )
 
     def _parse_device(self, d: dict[str, Any], project_name: str) -> DeviceEntry:
         """Parse a single device entry dict into a DeviceEntry object."""
-        if 'mac' not in d:
+        if _YAML_KEY_MAC not in d:
             raise ValueError(f"Each device entry must have a 'mac' field (project: {project_name})")
         server_config: Any = d.get('server_config', {})
         if not isinstance(server_config, dict):
-            raise ValueError(f"'server_config' must be a mapping (device: {d['mac']})")
+            raise ValueError(f"'server_config' must be a mapping (device: {d[_YAML_KEY_MAC]})")
         return DeviceEntry(
-            mac=d['mac'],
+            mac=d[_YAML_KEY_MAC],
             friendly_name=d.get('friendly_name'),
-            files=[self._parse_file(f, d['mac']) for f in d.get('files', [])],
+            files=[self._parse_file(f, d[_YAML_KEY_MAC]) for f in d.get('files', [])],
             server_config=cast(Dict[str, Any], server_config)
         )
 
     def _parse_project(self, p: dict[str, Any], common_commands: List[CommandEntry]) -> ProjectEntry:
         """Parse a single project entry dict into a ProjectEntry object."""
-        if _YAML_KEY_NAME not in p or 'pio_project' not in p:
+        if _YAML_KEY_NAME not in p or _YAML_KEY_PIO_PROJECT not in p:
             raise ValueError("Each project entry must have 'name' and 'pio_project' fields")
         # Merge common commands with project-level commands.
         merged_commands = common_commands + self._parse_commands(
             p.get(_YAML_KEY_COMMANDS, []), context=p[_YAML_KEY_NAME])
         return ProjectEntry(
             name=p[_YAML_KEY_NAME],
-            pio_project=p['pio_project'],
+            pio_project=p[_YAML_KEY_PIO_PROJECT],
             commands=merged_commands,
             devices=[self._parse_device(d, p[_YAML_KEY_NAME]) for d in p.get('devices', [])]
         )
