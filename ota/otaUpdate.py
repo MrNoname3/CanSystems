@@ -204,6 +204,25 @@ _FIELD_COMMON = 'common'
 _FIELD_AVAILABILITY = 'availability'
 _FIELD_INFO = 'info'
 
+# The availability/info JSON payloads (README: "fw version = git commit count, git hash, dirty
+# flag, ..."), read the same way by OTAUpdater, FileTransfer and FleetStatus.
+_PAYLOAD_KEY_STATE = 'state'
+_PAYLOAD_KEY_GIT = 'git'
+_PAYLOAD_KEY_DIRTY = 'dirty'
+_STATE_ONLINE = 'online'
+_STATE_OFFLINE = 'offline'
+
+# The file-transfer start message (README: "OTA and file transfer") - one schema, sent by both
+# OTAUpdater (a firmware image, plus binId) and FileTransfer (any other file).
+_START_KEY_NAME = 'name'
+_START_KEY_FILE_SIZE = 'fileSize'
+_START_KEY_MD5 = 'md5'
+
+# The device's ack/nack reply on its 'common' topic (README: `{"type":1,"cmd":9,"err":0}`) - one
+# schema, read by both DataTransfer's piece handshake and CommandSender's reply.
+_ACK_KEY_TYPE = 'type'
+_ACK_KEY_ERR = 'err'
+
 
 def _esp_topic(root: str, mac: str, field: str) -> str:
     """A top-level device topic: `<root>/<mac>/<field>`."""
@@ -1166,15 +1185,15 @@ class _BaseTransfer:
 
     def _process_response(self, message: Dict[str, Any]):
         """Process ACK/NACK response messages from device."""
-        if "type" not in message:
+        if _ACK_KEY_TYPE not in message:
             logging.warning("Received message without 'type' field")
             return
 
-        ack = message["type"] != 0
+        ack = message[_ACK_KEY_TYPE] != 0
         # The device reports this only for a piece it has already stored, so with a repeat on the
         # wire it says "I have it" rather than "something went wrong".
         answers_a_repeat = (not ack and self._resent_piece is not None
-                            and message.get("err", 0) == WRONG_FILE_PIECE_NUMBER)
+                            and message.get(_ACK_KEY_ERR, 0) == WRONG_FILE_PIECE_NUMBER)
         # ... but it says that about the piece it was sent for, which acknowledges the transfer's
         # position only while that piece is still the one on the wire.
         confirms_the_piece_in_flight = (answers_a_repeat
@@ -1208,7 +1227,7 @@ class _BaseTransfer:
             self._resent_piece = None
 
         else:
-            logging.error(f"Received NACK in state {self.state}, error code: {message.get('err', 0)}")
+            logging.error(f"Received NACK in state {self.state}, error code: {message.get(_ACK_KEY_ERR, 0)}")
             self.state = TransferState.ERROR
 
     def _advance_after_piece(self):
@@ -1369,10 +1388,10 @@ class OTAUpdater(_BaseTransfer):
 
     def _build_start_message(self) -> dict[str, Any]:
         return {
-            "name":     "espFirmware",
-            "fileSize": self.firmware_manager.size,
-            "md5":      self.firmware_manager.md5,
-            "binId":    self.firmware_manager.firmware_id,
+            _START_KEY_NAME:      "espFirmware",
+            _START_KEY_FILE_SIZE: self.firmware_manager.size,
+            _START_KEY_MD5:       self.firmware_manager.md5,
+            "binId":              self.firmware_manager.firmware_id,
         }
 
     def _start_log_info(self):
@@ -1394,11 +1413,11 @@ class OTAUpdater(_BaseTransfer):
     def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
         if msg.topic == self.device_config.availability_topic:
             try:
-                state = json.loads(msg.payload.decode()).get("state")
+                state = json.loads(msg.payload.decode()).get(_PAYLOAD_KEY_STATE)
             except json.JSONDecodeError:
                 state = None
             self._latest_availability = state
-            if state == "offline":
+            if state == _STATE_OFFLINE:
                 self._saw_offline_since_start = True
             return
         if msg.topic == self.device_config.info_topic:
@@ -1420,7 +1439,7 @@ class OTAUpdater(_BaseTransfer):
 
         while self._latest_availability is None and time.time() < deadline:
             self.mqtt_client.loop(timeout=0.1)
-        if self._latest_availability != "online":
+        if self._latest_availability != _STATE_ONLINE:
             logging.error(f"Device is not online (last known state: {self._latest_availability!r}); "
                           f"refusing to start a firmware upload against it")
             return False
@@ -1464,12 +1483,12 @@ class OTAUpdater(_BaseTransfer):
             return False
 
         info = self._latest_info or {}
-        actual_hash = info.get("git")
+        actual_hash = info.get(_PAYLOAD_KEY_GIT)
         if actual_hash != expected_hash:
             logging.error(f"Device came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
                           f"the running firmware is not the one just sent")
             return False
-        if info.get("dirty"):
+        if info.get(_PAYLOAD_KEY_DIRTY):
             logging.warning("The uploaded build was made from a dirty working tree (uncommitted or "
                             "untracked changes) - the git hash matches, but the source it was built from may not")
         logging.info(f"Device rebooted and confirmed running build {expected_hash}")
@@ -1491,6 +1510,13 @@ def _match_can_node_topic(topic: str, gateway_mac: str) -> Optional[tuple[str, s
     if len(parts) != 2 or parts[1] not in (_FIELD_AVAILABILITY, _FIELD_INFO):
         return None
     return parts[0], parts[1]
+
+
+# Keys of a CAN node's tracking state below - not wire fields (nothing on the bus is called
+# either of these), just this file's own bookkeeping for "did this node report going down, and
+# does it have a fresh info message since the baseline was last reset".
+_STATE_SAW_OFFLINE = 'saw_offline'
+_STATE_INFO_FRESH = 'info_fresh'
 
 
 class FileTransfer(_BaseTransfer):
@@ -1534,9 +1560,9 @@ class FileTransfer(_BaseTransfer):
 
     def _build_start_message(self) -> dict[str, Any]:
         return {
-            "name":     self.file_entry.device_path,
-            "fileSize": self.file_provider.size,
-            "md5":      self.file_provider.md5,
+            _START_KEY_NAME:      self.file_entry.device_path,
+            _START_KEY_FILE_SIZE: self.file_provider.size,
+            _START_KEY_MD5:       self.file_provider.md5,
         }
 
     def _start_log_info(self):
@@ -1564,21 +1590,22 @@ class FileTransfer(_BaseTransfer):
         if match is not None:
             node, field = match
             state = self._can_node_state.setdefault(
-                node, {_FIELD_AVAILABILITY: None, _FIELD_INFO: None, "info_fresh": False, "saw_offline": False})
+                node, {_FIELD_AVAILABILITY: None, _FIELD_INFO: None,
+                      _STATE_INFO_FRESH: False, _STATE_SAW_OFFLINE: False})
             if field == _FIELD_AVAILABILITY:
                 try:
-                    value = json.loads(msg.payload.decode()).get("state")
+                    value = json.loads(msg.payload.decode()).get(_PAYLOAD_KEY_STATE)
                 except json.JSONDecodeError:
                     value = None
                 state[_FIELD_AVAILABILITY] = value
-                if value == "offline":
-                    state["saw_offline"] = True
+                if value == _STATE_OFFLINE:
+                    state[_STATE_SAW_OFFLINE] = True
             else:  # _FIELD_INFO
                 try:
                     state[_FIELD_INFO] = json.loads(msg.payload.decode())
                 except json.JSONDecodeError:
                     state[_FIELD_INFO] = None
-                state["info_fresh"] = True
+                state[_STATE_INFO_FRESH] = True
             return
         super()._on_message(client, userdata, msg)
 
@@ -1602,7 +1629,7 @@ class FileTransfer(_BaseTransfer):
             self.mqtt_client.loop(timeout=0.1)
 
         targets = {node: state for node, state in self._can_node_state.items()
-                  if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == "online"}
+                  if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == _STATE_ONLINE}
         if not targets:
             logging.warning(f"No live CAN node behind this gateway matched the role '{node_role}'; "
                             f"nothing to verify")
@@ -1612,33 +1639,33 @@ class FileTransfer(_BaseTransfer):
         # A fresh baseline per node: any offline/info message from here on is this upload's own
         # doing, not the retained value that predates it (drained just above).
         for state in targets.values():
-            state["saw_offline"] = False
-            state["info_fresh"] = False
+            state[_STATE_SAW_OFFLINE] = False
+            state[_STATE_INFO_FRESH] = False
 
         expected_hash = f"{git_utils.get_git_hash():08x}"
         total_timeout = CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS * len(targets)
         deadline = time.time() + total_timeout
         while time.time() < deadline:
             self.mqtt_client.loop(timeout=0.1)
-            if all(state["saw_offline"] and state["info_fresh"] for state in targets.values()):
+            if all(state[_STATE_SAW_OFFLINE] and state[_STATE_INFO_FRESH] for state in targets.values()):
                 break
 
         all_confirmed = True
         for node in sorted(targets):
             state = targets[node]
-            if not (state["saw_offline"] and state["info_fresh"]):
+            if not (state[_STATE_SAW_OFFLINE] and state[_STATE_INFO_FRESH]):
                 logging.error(f"{node}: never confirmed a reboot within the {total_timeout:.0f}s budget "
-                              f"(offline seen: {state['saw_offline']}, info seen: {state['info_fresh']})")
+                              f"(offline seen: {state[_STATE_SAW_OFFLINE]}, info seen: {state[_STATE_INFO_FRESH]})")
                 all_confirmed = False
                 continue
             info: Dict[str, Any] = state[_FIELD_INFO] or {}
-            actual_hash = info.get("git")
+            actual_hash = info.get(_PAYLOAD_KEY_GIT)
             if actual_hash != expected_hash:
                 logging.error(f"{node}: came back reporting build {actual_hash!r}, expected {expected_hash!r}: "
                               f"the running firmware is not the one just sent")
                 all_confirmed = False
                 continue
-            if info.get("dirty"):
+            if info.get(_PAYLOAD_KEY_DIRTY):
                 logging.warning(f"{node}: the uploaded build was made from a dirty working tree (uncommitted "
                                 f"or untracked changes) - the git hash matches, but the source it was built "
                                 f"from may not")
@@ -1674,13 +1701,13 @@ class CommandSender(_BaseTransfer):
         """Process pending messages and check for timeout."""
         while self._pending_messages:
             message = self._pending_messages.popleft()
-            if "type" not in message:
+            if _ACK_KEY_TYPE not in message:
                 logging.warning("Received message without 'type' field")
                 continue
-            if message["type"] != 0:
+            if message[_ACK_KEY_TYPE] != 0:
                 self.state = TransferState.DONE
             else:
-                logging.error(f"Command rejected by device, error code: {message.get('err', 0)}")
+                logging.error(f"Command rejected by device, error code: {message.get(_ACK_KEY_ERR, 0)}")
                 self.state = TransferState.ERROR
 
         if self.state == TransferState.WAIT_START_ACK and time.time() - self.timer_start > self.timeout_seconds:
@@ -1759,7 +1786,7 @@ class FleetStatus:
             payload = None
         entry = self.entries.setdefault((mac, node), {_FIELD_AVAILABILITY: None, _FIELD_INFO: None})
         if field == _FIELD_AVAILABILITY:
-            entry[_FIELD_AVAILABILITY] = payload.get("state") if payload else None
+            entry[_FIELD_AVAILABILITY] = payload.get(_PAYLOAD_KEY_STATE) if payload else None
         else:
             entry[_FIELD_INFO] = payload
 
@@ -1789,14 +1816,14 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
             label = f"{label} / {node}"
         avail = entry[_FIELD_AVAILABILITY] or "unknown"
         info: Dict[str, Any] = entry[_FIELD_INFO] or {}
-        git_hash = info.get("git")
+        git_hash = info.get(_PAYLOAD_KEY_GIT)
         if git_hash is None:
             build = "no info"
         elif git_hash == expected_hash:
             build = f"{git_hash} (current)"
         else:
             build = f"{git_hash} (outdated, expected {expected_hash})"
-        if info.get("dirty"):
+        if info.get(_PAYLOAD_KEY_DIRTY):
             build += " [dirty]"
         lines.append(f"{label:35s} {avail:8s} {build}")
     if not lines:
