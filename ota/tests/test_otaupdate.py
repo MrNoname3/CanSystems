@@ -1652,7 +1652,11 @@ def test_verify_after_transfer_fails_when_never_offline(tmp_path: Path) -> None:
     assert updater._verify_after_transfer() is False
 
 
-def test_verify_after_transfer_fails_when_offline_but_never_returns(tmp_path: Path) -> None:
+def test_verify_after_transfer_fails_when_offline_but_never_returns(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A device seen going offline earns the diagnosis window that follows the budget, so that is
+    # shortened here too; what it reports in that window has tests of its own further down.
+    monkeypatch.setattr(ota, "REBOOT_DIAGNOSIS_WINDOW_SECONDS", 0.02)
     updater = _make_ota_updater(tmp_path, reboot_timeout=0.02)
     messages = [_fake_message(updater.device_config.availability_topic, {"state": "offline"})]
     updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore  # deliberate test double for the MQTT client
@@ -2770,3 +2774,61 @@ def test_soak_heartbeat_never_counts_below_zero(monkeypatch: pytest.MonkeyPatch,
     beats = [r.message for r in caplog.records if "holding," in r.message]
     assert beats, "the heartbeat never fired, so nothing was pinned down"
     assert all("-" not in beat.split("holding, ")[1] for beat in beats), beats
+
+
+# --- A late reboot: what the device says about it, rather than a guess -------
+
+def _late_updater(tmp_path: Path, info: "Optional[Dict[str, Any]]") -> "ota.OTAUpdater":
+    """An updater past the transfer, having seen the device go offline but not come back within
+    its budget. `info` is what the device reports during the diagnosis window, if anything.
+
+    The budget is zero so that it is already spent: the wait for it runs no passes at all, which
+    puts whatever the double has to deliver squarely in the window that follows, whatever the
+    machine is doing."""
+    updater = _make_ota_updater(tmp_path, reboot_timeout=0.0)
+    messages = [] if info is None else [_fake_message(updater.device_config.info_topic, info)]
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, messages)  # type: ignore[assignment]  # deliberate test double
+    updater._saw_offline_since_start = True
+    updater._info_is_fresh = False
+    return updater
+
+
+def test_a_device_that_never_comes_back_is_still_only_a_guess(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "REBOOT_DIAGNOSIS_WINDOW_SECONDS", 0.05)
+    updater = _late_updater(tmp_path, None)
+    assert updater._verify_after_transfer() is False
+    assert "may be stuck rebooting" in updater._late_reboot_report()
+
+
+def test_a_late_report_names_the_reset_and_the_stage_the_last_run_reached(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The device answers after the budget: reset reason 1 is a watchdog on an ESP8266, and boot 9
+    # says the run before it died at BrokerConnect. Guessing "stuck rebooting" throws that away,
+    # and it is what someone would otherwise go and read off the retained topic by hand.
+    monkeypatch.setattr(ota, "REBOOT_DIAGNOSIS_WINDOW_SECONDS", 5.0)
+    updater = _late_updater(tmp_path, {"git": "aa6c3b4d", "rr": 1, "boot": 9})
+    assert updater._verify_after_transfer() is False        # a late answer is still a failure
+    report = updater._late_reboot_report()
+    assert "reset reason 1" in report and "boot stage 9" in report and "aa6c3b4d" in report
+    assert "stuck rebooting" not in report
+
+
+def test_a_late_report_says_unknown_for_fields_the_device_left_out(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "REBOOT_DIAGNOSIS_WINDOW_SECONDS", 5.0)
+    updater = _late_updater(tmp_path, {"git": "aa6c3b4d"})
+    assert updater._verify_after_transfer() is False
+    assert "reset reason unknown" in updater._late_reboot_report()
+
+
+def test_the_diagnosis_window_is_not_entered_when_the_device_never_went_offline(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Nothing to diagnose: the transfer landed but the device never restarted, so there is no
+    # boot to ask about and no reason to wait another window for one.
+    monkeypatch.setattr(ota, "REBOOT_DIAGNOSIS_WINDOW_SECONDS", 30.0)
+    updater = _make_ota_updater(tmp_path, reboot_timeout=0.0)
+    updater.mqtt_client = _ScriptedMQTT(updater._on_message, [])  # type: ignore[assignment]  # deliberate test double
+    started = time.time()
+    assert updater._verify_after_transfer() is False
+    assert time.time() - started < 5.0

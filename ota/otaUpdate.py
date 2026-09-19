@@ -74,6 +74,10 @@ CAN_NODE_PRESENCE_TIMEOUT_PER_NODE_SECONDS = 30.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# After the reboot budget has run out on a device that did go offline, how much longer to listen
+# before giving up on hearing why. The verdict is already failure by then; this only buys the
+# device's own account of its boot, which beats guessing at what became of it.
+REBOOT_DIAGNOSIS_WINDOW_SECONDS = 60.0
 # How long an updated device has to stay up before a rollout moves on to the next one. Matches
 # Connectivity::onlineSettleTime, which is where the firmware itself decides a link has held.
 DEFAULT_SOAK_SECONDS = 300.0
@@ -260,6 +264,9 @@ _STATE_OFFLINE = 'offline'
 # `info` is published once per startup, so a second one means the device restarted; its `boot`
 # field names the stage the run before it reached (BootStage in lib/bootProgress).
 _INFO_KEY_BOOT = 'boot'
+# The reset that started the run reporting this info; what the numbers mean is the platform's
+# business (ResetHandler::getResetReason), which is why they are passed on rather than read here.
+_INFO_KEY_RESET_REASON = 'rr'
 # `diag` is published on every offline->online transition, so one arriving says the link dropped.
 _DIAG_KEY_CAUSE = 'cause'
 _DIAG_KEY_RECONNECTS = 'n'
@@ -1697,12 +1704,34 @@ class OTAUpdater(_BaseTransfer):
             if not self._saw_offline_since_start:
                 logging.error(f"Device never went offline within {self.reboot_timeout:.0f}s of the transfer "
                               f"completing; it may not have rebooted into the new firmware")
-            else:
-                logging.error(f"Device went offline but did not report back within {self.reboot_timeout:.0f}s; "
-                              f"it may be stuck rebooting")
+                return False
+            # It did restart, so it is the coming back that is late. Keep listening a while longer,
+            # not to change the verdict but to let the device say what happened to its boot: a
+            # late report carries the reset that started it and how far the run before it got.
+            diagnosis_deadline = time.time() + REBOOT_DIAGNOSIS_WINDOW_SECONDS
+            while time.time() < diagnosis_deadline and not self._info_is_fresh:
+                self.mqtt_client.loop()
+            logging.error(self._late_reboot_report())
             return False
 
         return _confirm_reported_build(self._latest_info or {}, expected_hash, "Device")
+
+    def _late_reboot_report(self) -> str:
+        """What to say about a device that went offline and did not report back in time.
+
+        The values are passed on as the device spelled them: what a reset reason means differs
+        between the parts this runs against, and a table here would be a second, staler copy of
+        an enum that already lives in the firmware."""
+        if not self._info_is_fresh:
+            waited = self.reboot_timeout + REBOOT_DIAGNOSIS_WINDOW_SECONDS
+            return (f"Device went offline and had still not reported back {waited:.0f}s after the "
+                    f"transfer; it may be stuck rebooting")
+        info: Dict[str, Any] = self._latest_info or {}
+        return (f"Device reported back only after its {self.reboot_timeout:.0f}s budget had run out, "
+                f"running build {info.get(_PAYLOAD_KEY_GIT, 'unknown')}, reset reason "
+                f"{info.get(_INFO_KEY_RESET_REASON, 'unknown')}, the run before it having reached "
+                f"boot stage {info.get(_INFO_KEY_BOOT, 'unknown')} "
+                f"(ResetHandler::getResetReason and BootStage name these)")
 
 
 # ---------------------------------------------------------------------------
