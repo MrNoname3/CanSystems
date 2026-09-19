@@ -2405,9 +2405,11 @@ def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
     planned[0].status = ota.StepStatus.DONE
     planned[1].status = ota.StepStatus.FAILED
     planned[1].detail = "fcf5c401bd83 went offline during the soak"
-    summary = ota.format_rollout_summary(planned)
+    summary = ota.format_rollout_summary(planned, CURRENT)
     assert "done" in summary and "failed" in summary
     assert "went offline during the soak" in summary
+    # A finished step says what it left the device on, not only what discovery found before it.
+    assert f"{OLD} -> {CURRENT}" in summary
 
 
 # --- run_rollout: order, stopping, and what the summary is left holding ------
@@ -2465,7 +2467,7 @@ def test_run_rollout_summary_names_the_step_that_stopped_it(monkeypatch: pytest.
     monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="40f52033765d"))
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
     ota.run_rollout(planned, cast(Any, None), cast(Any, None))
-    summary = ota.format_rollout_summary(planned)
+    summary = ota.format_rollout_summary(planned, CURRENT)
     assert "failed" in summary and "not reached" in summary
     assert "went offline during the soak" in summary
 
