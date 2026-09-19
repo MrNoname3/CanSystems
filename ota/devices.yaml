@@ -92,16 +92,18 @@ projects:
 # leaving until the devices it would take are already done.
 #
 #   soak_seconds     how long a device has to hold its connection before the next step starts.
-#                    The section value is the default; a step may name its own.
+#                    The section value is the default; a step may name its own. For scale: the
+#                    firmware's own Connectivity::onlineSettleTime is five minutes, which is how
+#                    long a link has to hold before it clears the reconnect backoff ladder.
 #   reboot_timeout   how long to wait for a device to come back and report the new build.
 #   before_firmware  file entries sent ahead of the device's own image, in the order given. A
 #                    gateway's CAN node firmware goes here, one entry per node role, so the nodes
 #                    behind it are reflashed through the build that gateway was already proven on.
 rollout:
-  soak_seconds: 300               # Connectivity::onlineSettleTime: what the firmware calls settled.
+  soak_seconds: 180
   steps:
     - mac: 40f52033765d           # Thermometer "Test2"
-      soak_seconds: 900
+      soak_seconds: 360
     - mac: bcddc2b622c9           # Thermometer "Home BP"
     - mac: fcf5c401bd83           # CAN gateway "Home BP living room"
       reboot_timeout: 120         # An ESP32 with CAN nodes to bring back up behind it.
