@@ -2147,7 +2147,7 @@ def build_rollout_plan(steps: List[RolloutStep],
     return planned
 
 
-def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str, str]]:
+def _rollout_rows(planned: List[PlannedStep], expected_hash: str) -> List[tuple[str, str, str, str]]:
     """(place and project, device, status, detail) per step, with each step's pre-firmware
     transfers under it.
 
@@ -2156,10 +2156,17 @@ def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str, str]]
     rows: List[tuple[str, str, str, str]] = []
     for index, entry in enumerate(planned, start=1):
         step = entry.step
-        if entry.detail:
+        was = entry.reported or "no info"
+        if entry.status is StepStatus.DONE:
+            # What it is on now, not what discovery found before the run: the old hash alone reads
+            # as though the step had changed nothing.
+            detail = f"{was} -> {expected_hash}"
+            if entry.detail:
+                detail += f"; {entry.detail}"
+        elif entry.detail:
             detail = entry.detail
         elif entry.status is StepStatus.PENDING:
-            detail = f"{entry.reported or 'no info'} -> soak {step.soak_seconds:.0f}s"
+            detail = f"{was} -> soak {step.soak_seconds:.0f}s"
         else:
             detail = entry.reported or ""
         rows.append((f"  {index}. {step.project.name}", step.device.display_name,
@@ -2168,11 +2175,11 @@ def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str, str]]
     return rows
 
 
-def _format_rollout_rows(heading: str, planned: List[PlannedStep]) -> str:
+def _format_rollout_rows(heading: str, planned: List[PlannedStep], expected_hash: str) -> str:
     """Both listings share this: one column set, sized to whatever the longest entry needs."""
     if not planned:
         return f"{heading}\n  (no steps; {_DEVICES_FILE_NAME} lists no {_YAML_KEY_ROLLOUT} order)"
-    rows = _rollout_rows(planned)
+    rows = _rollout_rows(planned, expected_hash)
     place_width = max(len(place) for place, _, _, _ in rows)
     device_width = max(len(device) for _, device, _, _ in rows)
     status_width = max(len(status) for _, _, status, _ in rows)
@@ -2185,12 +2192,12 @@ def _format_rollout_rows(heading: str, planned: List[PlannedStep]) -> str:
 
 def format_rollout_plan(planned: List[PlannedStep], expected_hash: str) -> str:
     """What the run is about to do, printed before it is allowed to do any of it."""
-    return _format_rollout_rows(f"Rollout plan  (expected build {expected_hash})", planned)
+    return _format_rollout_rows(f"Rollout plan  (expected build {expected_hash})", planned, expected_hash)
 
 
-def format_rollout_summary(planned: List[PlannedStep]) -> str:
+def format_rollout_summary(planned: List[PlannedStep], expected_hash: str) -> str:
     """The same rows once the run has finished with them, however far it got."""
-    return _format_rollout_rows("Rollout summary", planned)
+    return _format_rollout_rows("Rollout summary", planned, expected_hash)
 
 
 def _can_cascade_notes(transfer: FileTransfer) -> List[str]:
@@ -2421,7 +2428,9 @@ class SoakWatcher:
                 if self.failure is not None:
                     return self.failure
                 if time.time() >= next_beat:
-                    logging.info(f"Soak: {self.mac} holding, {end - time.time():.0f}s left")
+                    # Clamped: the loop() this follows can carry the clock past the deadline the
+                    # turn before it was checked, and a countdown does not go below zero.
+                    logging.info(f"Soak: {self.mac} holding, {max(0.0, end - time.time()):.0f}s left")
                     next_beat += SOAK_HEARTBEAT_SECONDS
             logging.info(f"Soak: {self.mac} held for {self.soak_seconds:.0f}s")
             return None
@@ -2703,7 +2712,7 @@ def perform_rollout(device_manager: DeviceManager, projects: List[ProjectEntry],
             return True
     ok = run_rollout(planned, config_manager, mqtt_config)
     print()
-    print(format_rollout_summary(planned))
+    print(format_rollout_summary(planned, expected_hash))
     return ok
 
 

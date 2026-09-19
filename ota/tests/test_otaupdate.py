@@ -2405,9 +2405,11 @@ def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
     planned[0].status = ota.StepStatus.DONE
     planned[1].status = ota.StepStatus.FAILED
     planned[1].detail = "fcf5c401bd83 went offline during the soak"
-    summary = ota.format_rollout_summary(planned)
+    summary = ota.format_rollout_summary(planned, CURRENT)
     assert "done" in summary and "failed" in summary
     assert "went offline during the soak" in summary
+    # A finished step says what it left the device on, not only what discovery found before it.
+    assert f"{OLD} -> {CURRENT}" in summary
 
 
 # --- run_rollout: order, stopping, and what the summary is left holding ------
@@ -2465,7 +2467,7 @@ def test_run_rollout_summary_names_the_step_that_stopped_it(monkeypatch: pytest.
     monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="40f52033765d"))
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
     ota.run_rollout(planned, cast(Any, None), cast(Any, None))
-    summary = ota.format_rollout_summary(planned)
+    summary = ota.format_rollout_summary(planned, CURRENT)
     assert "failed" in summary and "not reached" in summary
     assert "went offline during the soak" in summary
 
@@ -2747,3 +2749,24 @@ def test_rollout_plan_counts_every_node_role_behind_a_gateway() -> None:
         ("fcf5c401bd83", "irrigation1"): _entry(OLD),
     }, CURRENT)
     assert planned[1].nodes == ["alert1", "irrigation1"]
+
+
+class _SlowSoakMQTT(_SoakMQTT):
+    """A loop() that takes long enough to carry the clock past the soak deadline checked the turn
+    before it - which is when a heartbeat gets a negative remaining to print."""
+
+    def loop(self, timeout: float = 0.1) -> None:
+        super().loop(timeout)
+        time.sleep(0.05)
+
+
+def test_soak_heartbeat_never_counts_below_zero(monkeypatch: pytest.MonkeyPatch,
+                                                caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(ota, "SOAK_HEARTBEAT_SECONDS", 0.01)
+    watcher = _watcher(soak_seconds=0.06, baseline_timeout=0.01)
+    watcher.mqtt_client = _SlowSoakMQTT(watcher, [_online()], [])  # type: ignore[assignment]  # deliberate test double
+    with caplog.at_level(logging.INFO):
+        assert watcher.run() is None
+    beats = [r.message for r in caplog.records if "holding," in r.message]
+    assert beats, "the heartbeat never fired, so nothing was pinned down"
+    assert all("-" not in beat.split("holding, ")[1] for beat in beats), beats
