@@ -2506,3 +2506,150 @@ def test_existing_combinations_still_judged_the_same_way() -> None:
     assert _complaint("--firmware") is not None                     # an action with no device
     assert _complaint("--list", "--device", "40f52033765d") is not None
     assert _complaint("--device", "40f52033765d", "--firmware", "--upload-port", "/dev/x") is not None
+
+
+# --- CanNodePresence: the nodes behind a gateway that has just restarted -----
+
+GW = "fcf5c401bd83"
+
+
+class _PresenceMQTT:
+    """MQTTClient stand-in for CanNodePresence: each loop() hands over the next scripted message."""
+
+    def __init__(self, checker: "ota.CanNodePresence", messages: list[Any]) -> None:
+        self._checker = checker
+        self._messages = list(messages)
+        self.subscribed: list[str] = []
+        self.disconnected = False
+
+    def connect(self) -> bool:
+        self._checker._on_connect(None, None, None, 0, None)
+        return True
+
+    def subscribe(self, topic: str) -> None:
+        self.subscribed.append(topic)
+
+    def loop(self, timeout: float = 0.1) -> None:
+        del timeout
+        if self._messages:
+            self._checker._on_message(None, None, self._messages.pop(0))
+
+    def disconnect(self) -> None:
+        self.disconnected = True
+
+
+def _node_avail(node: str, state: str) -> Any:
+    return _fake_message(f"iot/dtos/{GW}/{node}/availability", {"state": state})
+
+
+def _presence(nodes: list[str], messages: list[Any], timeout: float = 0.5) -> "tuple[Optional[str], _PresenceMQTT]":
+    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), GW, nodes, timeout=timeout)
+    double = _PresenceMQTT(checker, messages)
+    checker.mqtt_client = double  # type: ignore[assignment]  # deliberate test double for the MQTT client
+    return checker.run(), double
+
+
+def test_can_node_presence_passes_once_every_node_is_back() -> None:
+    reason, double = _presence(["alert1", "alert2"],
+                               [_node_avail("alert1", "online"), _node_avail("alert2", "online")])
+    assert reason is None
+    assert double.subscribed == [f"iot/dtos/{GW}/+/availability"]
+    assert double.disconnected is True
+
+
+def test_can_node_presence_names_the_node_that_never_returned() -> None:
+    # The gateway came up on MQTT and held its soak, but alert2 never answered over the bus - so
+    # its availability stays where init() left it, and nothing else in the rollout would notice.
+    reason, _ = _presence(["alert1", "alert2"], [_node_avail("alert1", "online")])
+    assert reason is not None and "alert2" in reason and "alert1" not in reason
+
+
+def test_can_node_presence_still_waits_after_a_node_reports_offline_first() -> None:
+    # init() leaves every node's availability retained as offline, so that is what answers the
+    # subscription first; the wait is for the online that follows it.
+    reason, _ = _presence(["alert1"],
+                          [_node_avail("alert1", "offline"), _node_avail("alert1", "online")])
+    assert reason is None
+
+
+def test_can_node_presence_ignores_another_gateways_nodes() -> None:
+    reason, _ = _presence(["alert1"], [
+        _fake_message("iot/dtos/aabbccddeeff/alert1/availability", {"state": "online"}),
+    ])
+    assert reason is not None and "alert1" in reason
+
+
+def test_can_node_presence_has_nothing_to_wait_for_without_nodes() -> None:
+    # A device with no CAN nodes behind it: the check is not something to skip at the call site.
+    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), "40f52033765d", [])
+    assert checker.run() is None
+
+
+def test_rollout_plan_records_the_live_nodes_of_a_step() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(OLD),
+        ("fcf5c401bd83", "alert1"): _entry(OLD),
+        ("fcf5c401bd83", "alert2"): _entry(OLD, state="offline"),
+    }, CURRENT)
+    # Only the one that answered online is expected back: the other was never going to be reached.
+    assert planned[1].nodes == ["alert1"]
+    assert planned[0].nodes == []
+
+
+# --- _run_rollout_step: that the checks are actually reached ----------------
+
+class _StubConfigManager:
+    def get_firmware_path(self, pio_project: str) -> Path:
+        return Path(f"/nonexistent/{pio_project}/firmware.bin")
+
+
+def _stub_step(monkeypatch: pytest.MonkeyPatch, *, upload_ok: bool = True,
+               soak: Optional[str] = None, presence: Optional[str] = None) -> "list[str]":
+    """Runs one gateway step with every worker stubbed out, and reports which ones it reached."""
+    reached: list[str] = []
+
+    class _Updater:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: del args, kwargs
+        def run(self) -> bool:
+            reached.append("firmware")
+            return upload_ok
+
+    class _Soak:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: del args, kwargs
+        def run(self) -> Optional[str]:
+            reached.append("soak")
+            return soak
+
+    class _Presence:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: del args, kwargs
+        def run(self) -> Optional[str]:
+            reached.append("presence")
+            return presence
+
+    monkeypatch.setattr(ota, "OTAUpdater", _Updater)
+    monkeypatch.setattr(ota, "SoakWatcher", _Soak)
+    monkeypatch.setattr(ota, "CanNodePresence", _Presence)
+    _, gateway = _cli_projects()
+    entry = ota.PlannedStep(ota.RolloutStep(project=gateway, device=gateway.devices[0]),
+                            ota.StepStatus.PENDING, nodes=["alert1"])
+    reached.append(f"result={ota._run_rollout_step(entry, cast(Any, _StubConfigManager()), cast(Any, None))}")
+    return reached
+
+
+def test_rollout_step_checks_the_nodes_after_the_gateway_soak(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _stub_step(monkeypatch) == ["firmware", "soak", "presence", "result=None"]
+
+
+def test_rollout_step_fails_when_a_node_never_came_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    reached = _stub_step(monkeypatch, presence="CAN node(s) did not come back: alert1")
+    assert reached[-1] == "result=CAN node(s) did not come back: alert1"
+
+
+def test_rollout_step_does_not_reach_the_nodes_when_the_soak_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    reached = _stub_step(monkeypatch, soak="went offline during the soak")
+    assert "presence" not in reached
+
+
+def test_rollout_step_does_not_soak_an_upload_that_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    reached = _stub_step(monkeypatch, upload_ok=False)
+    assert reached == ["firmware", "result=firmware upload did not complete"]

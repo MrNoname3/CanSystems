@@ -66,6 +66,10 @@ CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS = 45.0
 # How long discovery waits for the retained availability/info of every node behind the gateway -
 # same reasoning as PREFLIGHT_ONLINE_TIMEOUT_SECONDS, just named for what it is here.
 CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# How long the CAN nodes behind a restarted gateway have to answer again. The gateway asks each
+# for its FW_VERSION over the bus as it starts and only marks it online once it replies, so this
+# covers that round trip - not a reflash, which has a budget of its own above.
+CAN_NODE_PRESENCE_TIMEOUT_SECONDS = 60.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
@@ -2088,7 +2092,8 @@ class PlannedStep:
     step: RolloutStep
     status: StepStatus
     reported: Optional[str] = None   # The build the device answered discovery with, if any.
-    detail: str = ""                 # Why a step failed, filled in by the run.
+    detail: str = ""                 # Why a step failed, or what is worth saying about one that did not.
+    nodes: List[str] = field(default_factory=list[str])  # CAN nodes that answered discovery online.
 
 
 def _entry_is_current(entry: Optional[Dict[str, Any]], expected_hash: str) -> bool:
@@ -2114,11 +2119,15 @@ def build_rollout_plan(steps: List[RolloutStep],
         if entry is None or entry.get(_FIELD_AVAILABILITY) != _STATE_ONLINE:
             planned.append(PlannedStep(step, StepStatus.SKIPPED_OFFLINE, reported))
             continue
-        nodes = [e for (mac, node), e in entries.items() if mac == step.device.mac and node is not None]
-        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(n, expected_hash) for n in nodes):
-            planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported))
+        nodes = {node: e for (mac, node), e in entries.items()
+                 if mac == step.device.mac and node is not None}
+        # Only the ones answering online are expected back after the update; one that is off was
+        # never going to be reached by it.
+        live = sorted(node for node, e in nodes.items() if e.get(_FIELD_AVAILABILITY) == _STATE_ONLINE)
+        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(n, expected_hash) for n in nodes.values()):
+            planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported, nodes=live))
             continue
-        planned.append(PlannedStep(step, StepStatus.PENDING, reported))
+        planned.append(PlannedStep(step, StepStatus.PENDING, reported, nodes=live))
     return planned
 
 
@@ -2192,7 +2201,12 @@ def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
                          step.project.pio_project, step.reboot_timeout)
     if not updater.run():
         return "firmware upload did not complete"
-    return SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
+    # Without the nodes: the gateway's own restart takes their presence with it, so watching them
+    # through this soak would fail on a reboot that went perfectly well. They are checked after it.
+    held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
+    if held is not None:
+        return held
+    return CanNodePresence(mqtt_config, step.device.mac, entry.nodes).run()
 
 
 def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",
@@ -2216,6 +2230,66 @@ def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",
                 later.status = StepStatus.NOT_REACHED
         return False
     return True
+
+
+class CanNodePresence:
+    """Confirms the CAN nodes behind a gateway answered again after the gateway itself restarted.
+
+    CanMqttGateway::init() republishes every node's availability as offline on each start, and
+    only marks one online again once that node has replied to the FW_VERSION it asks for over the
+    bus. So this reads whether the CAN side came back at all - which a gateway build that comes up
+    on MQTT, holds its soak and never touches the bus again would otherwise pass.
+
+    Presence only, in both senses: the nodes' own firmware is not what a gateway update changes,
+    so what build they report is the business of the transfer that put it there - and this returns
+    as soon as they are all back rather than watching them stay, which is what the soak before it
+    does for the gateway itself."""
+
+    def __init__(self, mqtt_config: MQTTConfig, mac: str, nodes: List[str],
+                 timeout: float = CAN_NODE_PRESENCE_TIMEOUT_SECONDS):
+        self.mqtt_client = MQTTClient(mqtt_config)
+        self.mac = mac
+        self.expected = set(nodes)
+        self.timeout = timeout
+        self.online: set[str] = set()
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+    def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code == 0:
+            self.mqtt_client.subscribe(_can_node_topic(self.mac, _FIELD_AVAILABILITY))
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        match = _match_can_node_topic(msg.topic, self.mac)
+        if match is None or match[1] != _FIELD_AVAILABILITY:
+            return
+        try:
+            state = json.loads(msg.payload.decode()).get(_PAYLOAD_KEY_STATE)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            state = None
+        if state == _STATE_ONLINE:
+            self.online.add(match[0])
+        else:
+            self.online.discard(match[0])
+
+    def run(self) -> Optional[str]:
+        """Blocks until every expected node is back. Returns None then, or which ones are missing."""
+        if not self.expected:
+            return None
+        if not self.mqtt_client.connect():
+            return f"could not reach the broker to check the CAN nodes behind {self.mac}"
+        try:
+            logging.info(f"CAN nodes: waiting for {', '.join(sorted(self.expected))} to answer again")
+            deadline = time.time() + self.timeout
+            while time.time() < deadline and not self.expected <= self.online:
+                self.mqtt_client.loop()
+            missing = sorted(self.expected - self.online)
+            if missing:
+                return (f"CAN node(s) behind {self.mac} did not come back within "
+                        f"{self.timeout:.0f}s: {', '.join(missing)}")
+            logging.info("CAN nodes: all back")
+            return None
+        finally:
+            self.mqtt_client.disconnect()
 
 
 class SoakWatcher:
