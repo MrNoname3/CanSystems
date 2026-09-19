@@ -84,6 +84,7 @@ private:
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
   static constexpr uint8_t subscribeMaxGrantedQos = 0x02U;                                      // Largest SUBACK return code that names a granted qos; every code between this and the failure one is reserved.
   static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
+  static constexpr uint8_t connAckSessionPresent = 0x01U;                                       // Bit 0 of the CONNACK acknowledge flags: the broker holds a session for this client id.
 
 #if defined(ESP8266) || defined(ESP32)
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
@@ -334,8 +335,10 @@ private:
 
   /// @brief Waits for the CONNACK and records what it said.
   /// @details Tears the connection down on a timeout, a malformed answer or a refusal.
+  /// @param cleanSession What the CONNECT asked for, which decides whether the answer may offer a
+  /// session the broker kept.
   /// @return `true` when the broker accepted the connection; otherwise, `false`.
-  [[nodiscard]] bool awaitConnAck();
+  [[nodiscard]] bool awaitConnAck(bool cleanSession);
 
   /// @brief Waits for the SUBACK answering the packet id given, dispatching whatever precedes it.
   /// @details Drops the connection when nothing parseable arrives before the socket timeout: the

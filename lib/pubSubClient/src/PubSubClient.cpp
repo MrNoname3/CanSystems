@@ -69,7 +69,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     return false;
   }
   lastInActivity = lastOutActivity = millis();
-  return awaitConnAck();
+  return awaitConnAck(cleanSession);
 }
 
 uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, const char* pass, const char* willTopic,
@@ -128,7 +128,7 @@ uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, cons
   return length;
 }
 
-bool PubSubClient::awaitConnAck() {
+bool PubSubClient::awaitConnAck(bool cleanSession) {
   const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   while(tcpClient.available() == 0) {
     yield();
@@ -143,11 +143,13 @@ bool PubSubClient::awaitConnAck() {
   // The first packet from the server is a CONNACK [MQTT-3.2.0-1], four bytes long. Read anywhere
   // else, the return code is whatever sits at that offset: a PUBACK for message 0x1200 accepts.
   // Its second byte carries the acknowledge flags: bits 7-1 are reserved and come as zero, and
-  // bit 0 offers a session the broker kept for this client id. This client keeps none of its own
-  // - no subscription and no unfinished delivery outlive a connection here - so a session to pick
-  // up is one it cannot hold up its end of, and [MQTT-3.2.2-2] closes on it.
+  // bit 0 offers a session the broker kept for this client id. A clean session is answered with
+  // that bit clear [MQTT-3.2.2-1], so a broker setting it there has broken the rule; where a clean
+  // session was not asked for, the bit is the broker's to set [MQTT-3.2.2-2] and says the
+  // subscriptions and queued messages of the last one are still waiting.
+  const uint8_t forbiddenAckFlags = cleanSession ? 0xFFU : static_cast<uint8_t>(~connAckSessionPresent);
   const bool connAckValid = (connAck == RxResult::Complete) && (rxLen == 4U) &&
-                            ((this->buffer[0] & 0xF0U) == MQTTCONNACK) && (this->buffer[2] == 0x00U);
+                            ((this->buffer[0] & 0xF0U) == MQTTCONNACK) && ((this->buffer[2] & forbiddenAckFlags) == 0x00U);
   // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
   // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
   const State connAckFailure = (connAck == RxResult::Complete) ? State::PROTOCOL_ERROR : readFailureState(connAck);
