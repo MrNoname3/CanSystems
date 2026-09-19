@@ -84,12 +84,19 @@ projects:
             render: server_json
             device_path: /config/server.json
 
-# The order --rollout walks, and how long each device has to hold its connection before the next
-# one is started. Test2 goes first as the canary: it is the run that decides whether the build
-# reaches a real device at all, so it gets the longest soak. The radiation detectors are taken
-# last, Home H last of all. The CAN gateway's alert image is sent ahead of its own firmware, so
-# the nodes behind it (alert1, alert2) are reflashed through the build the gateway was already
-# proven on.
+# The order --rollout walks. Each step is one device, started only once the step before it has
+# held its connection for its soak; the first failure stops the run, no board here being able to
+# roll back. Where a device belongs is a judgement about blast radius: whichever is cheapest to
+# lose goes first, as the run that decides whether the build reaches a real device at all - and
+# earns the longest soak for it - while one whose failure takes others down with it is worth
+# leaving until the devices it would take are already done.
+#
+#   soak_seconds     how long a device has to hold its connection before the next step starts.
+#                    The section value is the default; a step may name its own.
+#   reboot_timeout   how long to wait for a device to come back and report the new build.
+#   before_firmware  file entries sent ahead of the device's own image, in the order given. A
+#                    gateway's CAN alert firmware goes here, so the nodes behind it are reflashed
+#                    through the build that gateway was already proven on.
 rollout:
   soak_seconds: 300               # Connectivity::onlineSettleTime: what the firmware calls settled.
   steps:
