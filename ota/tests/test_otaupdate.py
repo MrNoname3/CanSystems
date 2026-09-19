@@ -2128,3 +2128,144 @@ rollout:
 """)
     with pytest.raises(ValueError, match="mac"):
         manager.parse_rollout(projects)
+
+
+# --- SoakWatcher: proving an updated device stayed up ------------------------
+
+MAC = "40f52033765d"
+
+
+def _watcher(**kwargs: Any) -> "ota.SoakWatcher":
+    params: Dict[str, Any] = {"soak_seconds": 0.5, "baseline_timeout": 0.05}
+    params.update(kwargs)
+    return ota.SoakWatcher(ota.MQTTConfig(host="broker"), MAC, **params)
+
+
+class _SoakMQTT:
+    """MQTTClient stand-in for SoakWatcher. Which list a loop() call draws from follows the
+    watcher's own drain flag rather than the clock, so a message lands on the side of the baseline
+    the test meant it to whatever the machine is doing."""
+
+    def __init__(self, watcher: "ota.SoakWatcher", baseline: list[Any], soak: list[Any]) -> None:
+        self._watcher = watcher
+        self._baseline = list(baseline)
+        self._soak = list(soak)
+        self.subscribed: list[str] = []
+        self.disconnected = False
+
+    def connect(self) -> bool:
+        self._watcher._on_connect(None, None, None, 0, None)
+        return True
+
+    def subscribe(self, topic: str) -> None:
+        self.subscribed.append(topic)
+
+    def loop(self, timeout: float = 0.1) -> None:
+        del timeout
+        queue = self._soak if self._watcher.baseline_done else self._baseline
+        if queue:
+            self._watcher._on_message(None, None, queue.pop(0))
+
+    def disconnect(self) -> None:
+        self.disconnected = True
+
+
+def _online(mac: str = MAC) -> Any:
+    return _fake_message(f"iot/dtos/{mac}/availability", {"state": "online"})
+
+
+def _drive(watcher: "ota.SoakWatcher", baseline: list[Any], soak: list[Any]) -> "tuple[Optional[str], _SoakMQTT]":
+    double = _SoakMQTT(watcher, baseline, soak)
+    watcher.mqtt_client = double  # type: ignore[assignment]  # deliberate test double for the MQTT client
+    return watcher.run(), double
+
+
+def test_soak_subscribes_to_the_three_topics_a_drop_shows_up_on() -> None:
+    watcher = _watcher()
+    _, double = _drive(watcher, [_online()], [])
+    assert double.subscribed == [f"iot/dtos/{MAC}/availability",
+                                 f"iot/dtos/{MAC}/info",
+                                 f"iot/dtos/{MAC}/diag"]
+
+
+def test_soak_also_watches_the_can_nodes_when_asked() -> None:
+    watcher = _watcher(watch_nodes=True)
+    _, double = _drive(watcher, [_online()], [])
+    # The nodes answer availability and info; diag is the ESP-side Connectivity's, so they have none.
+    assert f"iot/dtos/{MAC}/+/availability" in double.subscribed
+    assert f"iot/dtos/{MAC}/+/info" in double.subscribed
+    assert f"iot/dtos/{MAC}/+/diag" not in double.subscribed
+
+
+def test_soak_holds_when_nothing_arrives_after_the_baseline() -> None:
+    watcher = _watcher()
+    reason, double = _drive(watcher, [_online()], [])
+    assert reason is None
+    assert double.disconnected is True
+
+
+def test_soak_drains_the_retained_update_aftermath_without_failing() -> None:
+    # Everything the update itself left retained answers the subscription at once: the device is
+    # online, it published info as it started, and diag for the reboot's own outage. None of that
+    # is a fresh drop, and a soak that called it one could never pass.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [
+        _online(),
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 12}),
+        _fake_message(f"iot/dtos/{MAC}/diag", {"cause": "MQTT_CONNECTION_LOST", "n": 3}),
+    ], [])
+    assert reason is None
+
+
+def test_soak_fails_when_the_device_goes_offline() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+    ])
+    assert reason is not None and "went offline" in reason
+
+
+def test_soak_fails_on_a_restart_and_names_the_stage_the_last_run_reached() -> None:
+    # info is published once per startup, so a second one is a restart; boot 9 is BrokerConnect,
+    # which says the run before it never got past connecting to the broker.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 9}),
+    ])
+    assert reason is not None and "restarted" in reason and "boot stage 9" in reason
+
+
+def test_soak_fails_on_a_reconnect_that_left_no_restart_behind() -> None:
+    # diag goes out on every offline->online transition, which catches the drop that does not
+    # reboot the device and so publishes no new info.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/diag", {"cause": "MQTT_CONNECTION_LOST", "n": 4}),
+    ])
+    assert reason is not None
+    assert "dropped its connection" in reason and "MQTT_CONNECTION_LOST" in reason and "#4" in reason
+
+
+def test_soak_reports_the_first_signal_not_the_last() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 9}),
+    ])
+    assert reason is not None and "went offline" in reason
+
+
+def test_soak_fails_on_a_node_that_drops_behind_its_gateway() -> None:
+    watcher = _watcher(watch_nodes=True)
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/alert1/availability", {"state": "offline"}),
+    ])
+    assert reason is not None and f"{MAC}/alert1" in reason
+
+
+def test_soak_refuses_to_start_against_a_device_that_is_not_online() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+    ], [])
+    assert reason is not None and "not online as the soak starts" in reason

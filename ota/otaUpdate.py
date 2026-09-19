@@ -72,6 +72,11 @@ FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
 # How long an updated device has to stay up before a rollout moves on to the next one. Matches
 # Connectivity::onlineSettleTime, which is where the firmware itself decides a link has held.
 DEFAULT_SOAK_SECONDS = 300.0
+# The retained availability/info/diag all answer the moment the subscription is granted. Draining
+# them first is what tells the state left over from the update apart from a fresh drop.
+SOAK_BASELINE_SECONDS = 10.0
+# How often a soak says it is still going. Long waits otherwise look like a hung script.
+SOAK_HEARTBEAT_SECONDS = 60.0
 # What --status files an answer under when devices.yaml lists no device with that MAC.
 _FLEET_STATUS_UNLISTED_HEADING = "Not in devices.yaml"
 
@@ -237,6 +242,7 @@ _ROOT_SERVER_TO_DEVICE = 'iot/stod'
 _FIELD_COMMON = 'common'
 _FIELD_AVAILABILITY = 'availability'
 _FIELD_INFO = 'info'
+_FIELD_DIAG = 'diag'
 _TOPIC_WILDCARD = '+'  # MQTT's single-level wildcard, standing in for one MAC or node subtopic
 
 # The availability/info JSON payloads (README: "fw version = git commit count, git hash, dirty
@@ -246,6 +252,12 @@ _PAYLOAD_KEY_GIT = 'git'
 _PAYLOAD_KEY_DIRTY = 'dirty'
 _STATE_ONLINE = 'online'
 _STATE_OFFLINE = 'offline'
+# `info` is published once per startup, so a second one means the device restarted; its `boot`
+# field names the stage the run before it reached (BootStage in lib/bootProgress).
+_INFO_KEY_BOOT = 'boot'
+# `diag` is published on every offline->online transition, so one arriving says the link dropped.
+_DIAG_KEY_CAUSE = 'cause'
+_DIAG_KEY_RECONNECTS = 'n'
 
 # The file-transfer start message (README: "OTA and file transfer"), sent by both OTAUpdater (a
 # firmware image, which alone carries the bin id) and FileTransfer (any other file), followed by
@@ -2048,6 +2060,108 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
         avail = entry[_FIELD_AVAILABILITY] or "unknown"
         lines.append(f"{label:{width}s}  {avail:8s} {_format_fleet_build(entry, expected_hash)}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Fleet rollout
+# ---------------------------------------------------------------------------
+
+class SoakWatcher:
+    """Watches one device hold its connection for a while after an update.
+
+    A firmware upload that confirms the new build has proven the device came back once. It has not
+    proven it stayed: a fault in the main loop shows up seconds or minutes later, by which time an
+    unattended rollout has moved on. So this waits - not by sleeping, but by watching for the
+    evidence a drop leaves on the broker. Any of the three ends the wait early and names itself,
+    which is why a bad build costs seconds here rather than the whole window.
+
+    A gateway's CAN nodes are watched with it when asked: they answer availability and info, but
+    not diag, which belongs to the ESP-side Connectivity."""
+
+    def __init__(self, mqtt_config: MQTTConfig, mac: str, soak_seconds: float,
+                 watch_nodes: bool = False, baseline_timeout: float = SOAK_BASELINE_SECONDS):
+        self.mqtt_client = MQTTClient(mqtt_config)
+        self.mac = mac
+        self.soak_seconds = soak_seconds
+        self.watch_nodes = watch_nodes
+        self.baseline_timeout = baseline_timeout
+        self.availability: Optional[str] = None
+        # Until the retained baseline is drained, a message says what the update left behind; after
+        # it, the same message says the device has moved since.
+        self.baseline_done = False
+        self.failure: Optional[str] = None
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+    def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code != 0:
+            return
+        for topic_field in (_FIELD_AVAILABILITY, _FIELD_INFO, _FIELD_DIAG):
+            self.mqtt_client.subscribe(_esp_topic(_ROOT_DEVICE_TO_SERVER, self.mac, topic_field))
+        if self.watch_nodes:
+            for topic_field in (_FIELD_AVAILABILITY, _FIELD_INFO):
+                self.mqtt_client.subscribe(_can_node_topic(self.mac, topic_field))
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload: Dict[str, Any] = json.loads(msg.payload.decode())
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            payload = {}
+        node_match = _match_can_node_topic(msg.topic, self.mac)
+        if node_match is not None:
+            subject, topic_field = f"{self.mac}/{node_match[0]}", node_match[1]
+        else:
+            subject, topic_field = self.mac, msg.topic.rsplit('/', 1)[-1]
+        if topic_field == _FIELD_AVAILABILITY and node_match is None:
+            self.availability = payload.get(_PAYLOAD_KEY_STATE)
+        if not self.baseline_done:
+            return
+        self._record_failure(subject, topic_field, payload)
+
+    def _record_failure(self, subject: str, topic_field: str, payload: Dict[str, Any]) -> None:
+        """The first signal to arrive after the baseline is the one reported; later ones are its
+        aftermath and would only bury it."""
+        if self.failure is not None:
+            return
+        if topic_field == _FIELD_AVAILABILITY:
+            if payload.get(_PAYLOAD_KEY_STATE) == _STATE_OFFLINE:
+                self.failure = f"{subject} went offline during the soak"
+        elif topic_field == _FIELD_INFO:
+            stage = payload.get(_INFO_KEY_BOOT)
+            reached = f"; the run before it reached boot stage {stage}" if stage is not None else ""
+            self.failure = f"{subject} restarted during the soak{reached}"
+        elif topic_field == _FIELD_DIAG:
+            cause = payload.get(_DIAG_KEY_CAUSE)
+            count = payload.get(_DIAG_KEY_RECONNECTS)
+            detail = f" (cause {cause}, reconnect #{count})" if cause is not None else ""
+            self.failure = f"{subject} dropped its connection during the soak{detail}"
+
+    def run(self) -> Optional[str]:
+        """Blocks for the soak window. Returns None when the device held it, or what ended it."""
+        if not self.mqtt_client.connect():
+            return f"could not reach the broker to watch {self.mac}"
+        try:
+            deadline = time.time() + self.baseline_timeout
+            while time.time() < deadline:
+                self.mqtt_client.loop()
+            if self.availability != _STATE_ONLINE:
+                return (f"{self.mac} is not online as the soak starts "
+                        f"(last known state: {self.availability!r})")
+            self.baseline_done = True
+            logging.info(f"Soak: watching {self.mac} for {self.soak_seconds:.0f}s")
+
+            end = time.time() + self.soak_seconds
+            next_beat = time.time() + SOAK_HEARTBEAT_SECONDS
+            while time.time() < end:
+                self.mqtt_client.loop()
+                if self.failure is not None:
+                    return self.failure
+                if time.time() >= next_beat:
+                    logging.info(f"Soak: {self.mac} holding, {end - time.time():.0f}s left")
+                    next_beat += SOAK_HEARTBEAT_SECONDS
+            logging.info(f"Soak: {self.mac} held for {self.soak_seconds:.0f}s")
+            return None
+        finally:
+            self.mqtt_client.disconnect()
 
 
 # ---------------------------------------------------------------------------
