@@ -2542,8 +2542,9 @@ def _node_avail(node: str, state: str) -> Any:
     return _fake_message(f"iot/dtos/{GW}/{node}/availability", {"state": state})
 
 
-def _presence(nodes: list[str], messages: list[Any], timeout: float = 0.5) -> "tuple[Optional[str], _PresenceMQTT]":
-    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), GW, nodes, timeout=timeout)
+def _presence(nodes: list[str], messages: list[Any],
+              per_node: float = 0.25) -> "tuple[Optional[str], _PresenceMQTT]":
+    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), GW, nodes, timeout_per_node=per_node)
     double = _PresenceMQTT(checker, messages)
     checker.mqtt_client = double  # type: ignore[assignment]  # deliberate test double for the MQTT client
     return checker.run(), double
@@ -2704,3 +2705,45 @@ def test_verify_records_the_nodes_it_could_not_reach(tmp_path: Path,
     assert transfer._verify_after_transfer() is False
     assert transfer.nodes_missed == ["alert2"]
     assert transfer.nodes_confirmed == []
+
+
+def test_can_node_presence_budget_grows_with_the_bus() -> None:
+    # The gateway asks each node in turn over the bus, so two nodes take twice the waiting of one.
+    one = ota.CanNodePresence(ota.MQTTConfig(host="broker"), GW, ["alert1"], timeout_per_node=30.0)
+    many = ota.CanNodePresence(ota.MQTTConfig(host="broker"), GW,
+                               ["alert1", "alert2", "irrigation1"], timeout_per_node=30.0)
+    assert one.timeout == 30.0
+    assert many.timeout == 90.0
+
+
+def test_rollout_plan_does_not_hold_a_step_pending_for_a_node_that_is_off() -> None:
+    # alert2 is on the old image but switched off, so this run cannot reach it whatever it does.
+    # Holding the step would re-send the gateway's firmware on every rollout and still not update
+    # the node; the run that finds alert2 back on the bus is the one that picks it up.
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
+        ("fcf5c401bd83", "alert2"): _entry(OLD, state="offline"),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.SKIPPED_CURRENT
+    assert planned[1].nodes == ["alert1"]
+
+
+def test_rollout_plan_picks_a_gateway_up_once_its_node_is_back_on_the_bus() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
+        ("fcf5c401bd83", "alert2"): _entry(OLD),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.PENDING
+    assert planned[1].nodes == ["alert1", "alert2"]
+
+
+def test_rollout_plan_counts_every_node_role_behind_a_gateway() -> None:
+    # A second kind of node on the same bus is no different to the first: the plan waits for both.
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(OLD),
+        ("fcf5c401bd83", "alert1"): _entry(OLD),
+        ("fcf5c401bd83", "irrigation1"): _entry(OLD),
+    }, CURRENT)
+    assert planned[1].nodes == ["alert1", "irrigation1"]

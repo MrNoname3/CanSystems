@@ -66,10 +66,11 @@ CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS = 45.0
 # How long discovery waits for the retained availability/info of every node behind the gateway -
 # same reasoning as PREFLIGHT_ONLINE_TIMEOUT_SECONDS, just named for what it is here.
 CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
-# How long the CAN nodes behind a restarted gateway have to answer again. The gateway asks each
-# for its FW_VERSION over the bus as it starts and only marks it online once it replies, so this
-# covers that round trip - not a reflash, which has a budget of its own above.
-CAN_NODE_PRESENCE_TIMEOUT_SECONDS = 60.0
+# How long each CAN node behind a restarted gateway has to answer again. The gateway asks every
+# node for its FW_VERSION over the bus as it starts and only marks one online once it replies, so
+# the budget covers those round trips - counted per node, the bus carrying them one at a time, and
+# far shorter than a reflash of the same node.
+CAN_NODE_PRESENCE_TIMEOUT_PER_NODE_SECONDS = 30.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
@@ -2134,10 +2135,12 @@ def build_rollout_plan(steps: List[RolloutStep],
             continue
         nodes = {node: e for (mac, node), e in entries.items()
                  if mac == step.device.mac and node is not None}
-        # Only the ones answering online are expected back after the update; one that is off was
-        # never going to be reached by it.
+        # Only the ones answering online count, in both decisions below: a node that is off cannot
+        # be reached by this run, so holding the step pending for it would re-send the gateway's
+        # firmware on every rollout and still not update the node. It is picked up by the first
+        # run that finds it back on the bus.
         live = sorted(node for node, e in nodes.items() if e.get(_FIELD_AVAILABILITY) == _STATE_ONLINE)
-        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(n, expected_hash) for n in nodes.values()):
+        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(nodes[n], expected_hash) for n in live):
             planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported, nodes=live))
             continue
         planned.append(PlannedStep(step, StepStatus.PENDING, reported, nodes=live))
@@ -2282,11 +2285,11 @@ class CanNodePresence:
     does for the gateway itself."""
 
     def __init__(self, mqtt_config: MQTTConfig, mac: str, nodes: List[str],
-                 timeout: float = CAN_NODE_PRESENCE_TIMEOUT_SECONDS):
+                 timeout_per_node: float = CAN_NODE_PRESENCE_TIMEOUT_PER_NODE_SECONDS):
         self.mqtt_client = MQTTClient(mqtt_config)
         self.mac = mac
         self.expected = set(nodes)
-        self.timeout = timeout
+        self.timeout = timeout_per_node * len(self.expected)
         self.online: set[str] = set()
         self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
 
