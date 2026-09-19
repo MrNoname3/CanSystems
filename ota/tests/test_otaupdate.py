@@ -1260,6 +1260,23 @@ def test_real_devices_yaml_entries_resolve(tmp_path: Path) -> None:
                 json.loads(payload)  # every JSON config must arrive parseable
 
 
+def test_real_devices_yaml_rollout_covers_every_device() -> None:
+    """The rollout order is the only thing that decides what --rollout touches, so a device added
+    to devices.yaml but left out of it would simply never be updated - silently, and only noticed
+    the next time someone read the fleet status."""
+    ota_dir = Path(ota.__file__).resolve().parent
+    manager = ota.DeviceManager(str(ota_dir / "otaUpdate.py"))
+    projects = manager.load()
+    steps = manager.parse_rollout(projects)
+
+    listed = {d.mac for p in projects for d in p.devices}
+    ordered = {s.device.mac for s in steps}
+    assert ordered == listed, f"not in the rollout order: {sorted(listed - ordered)}"
+    # Whatever a step sends ahead of the firmware has to be a file entry its own device accepts;
+    # parse_rollout() enforces that, so reaching here at all is the check.
+    assert any(s.before_firmware for s in steps), "no step carries a pre-firmware transfer"
+
+
 # --- Non-interactive target selection ---------------------------------------
 
 def _cli_projects() -> "list[ota.ProjectEntry]":
