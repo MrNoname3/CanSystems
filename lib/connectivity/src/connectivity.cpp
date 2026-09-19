@@ -371,7 +371,7 @@ void Connectivity::publishDisconnectDiag() {
   const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
                                              report.cause, report.dropTime, report.offlineSeconds, nowMs / 1000U,
                                              report.reconnectCount,
-                                             mqttClient.getRefusedPingCount(), mqttClient.getUnansweredPingCount());
+                                             mqttClient.getRefusedPingCount(), mqttClient.getLatePingCount());
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
     const bool diagResult = publishRetained(MqttTopics::getDiagSubtopic(), diagPayload);

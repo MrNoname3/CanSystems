@@ -576,9 +576,9 @@ bool PubSubClient::servicePing(uint32_t t) {
     const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
     if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
       if(pingOutstanding && !pingReasked) {
-        // Counted for the ping that went missing, not for each ask after it.
+        // Counted for the ping that was late, not for each ask after it.
         pingReasked = true;
-        if(unansweredPings < UINT16_MAX) { unansweredPings++; }
+        if(latePings < UINT16_MAX) { latePings++; }
       }
       keepAlivePing(t);
     }
@@ -888,8 +888,8 @@ uint16_t PubSubClient::getRefusedPingCount() const {
   return this->refusedPings;
 }
 
-uint16_t PubSubClient::getUnansweredPingCount() const {
-  return this->unansweredPings;
+uint16_t PubSubClient::getLatePingCount() const {
+  return this->latePings;
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {

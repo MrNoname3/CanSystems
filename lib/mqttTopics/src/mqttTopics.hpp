@@ -15,7 +15,7 @@ private:
   static constexpr const char PROGMEM mqttAvailTopic[]  = "%savailability";                               // MQTT availability topic; %s receives the topic base ending with '/'.
   static constexpr const char PROGMEM mqttInfoTopic[]   = "%sinfo";                                       // MQTT retained device info topic; %s receives the topic base ending with '/'.
   static constexpr const char PROGMEM mqttInfoPayload[] = R"({"fw":%hu,"git":"%08x","dirty":%hu,"rr":%hu,"boot":%hhu})"; // Device info JSON payload; args: fwVersion, gitHash, gitDirty, resetReason, startup stage the previous run reached.
-  static constexpr const char PROGMEM mqttDiagPayload[] = R"({"cause":"%s","at":"%s","downSec":%u,"upSec":%u,"n":%u,"pingRetry":%hu,"pingMiss":%hu})"; // Disconnect diagnostics JSON (published to the "diag" subtopic via publishRetained); args: cause string, drop ISO UTC time, offline seconds, seconds since boot, reconnect counter, refused keep-alive pings, keep-alive pings asked again.
+  static constexpr const char PROGMEM mqttDiagPayload[] = R"({"cause":"%s","at":"%s","downSec":%u,"upSec":%u,"n":%u,"pingRetry":%hu,"pingLate":%hu})"; // Disconnect diagnostics JSON (published to the "diag" subtopic via publishRetained); args: cause string, drop ISO UTC time, offline seconds, seconds since boot, reconnect counter, refused keep-alive pings, keep-alive answers that came late.
   // clang-format on
   // Sizes derived from the format strings: sizeof includes null; %s (2 chars) is replaced by the base length.
   static constexpr uint8_t senderTopicBufSize = sizeof(mqttOutTopic) - 2U + macHexLen;                    // "iot/dtos/<MAC>/" + null.

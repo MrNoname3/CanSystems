@@ -629,8 +629,8 @@ bool test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised() 
   END_IT
 }
 
-bool test_keepalive_counts_the_answers_that_went_missing() {
-  IT("counts one per ping whose answer went missing, not one per ask");
+bool test_keepalive_counts_the_late_answers() {
+  IT("counts one per ping whose answer came late, not one per ask");
 
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
@@ -642,21 +642,21 @@ bool test_keepalive_counts_the_answers_that_went_missing() {
   PubSubClient client(server, 1883U, callback, shimClient);
   client.setKeepAlive(15U).setPingInterval(5U);
   IS_TRUE(client.connect("client_test1"));
-  IS_EQUAL(client.getUnansweredPingCount(), 0U);
+  IS_EQUAL(client.getLatePingCount(), 0U);
 
-  // The ping goes out; nothing has gone missing until it is asked for a second time.
+  // The ping goes out; nothing is late until it is asked for a second time.
   setFakeMillis(baseMs + (6U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 0U);
+  IS_EQUAL(client.getLatePingCount(), 0U);
 
   setFakeMillis(baseMs + (7U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 1U);
+  IS_EQUAL(client.getLatePingCount(), 1U);
 
   // The asks after it are the same ping again.
   setFakeMillis(baseMs + (8U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 1U);
+  IS_EQUAL(client.getLatePingCount(), 1U);
 
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
@@ -668,7 +668,7 @@ bool test_keepalive_counts_the_answers_that_went_missing() {
   IS_TRUE(client.loop());
   setFakeMillis(baseMs + (15U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 2U);
+  IS_EQUAL(client.getLatePingCount(), 2U);
 
   IS_FALSE(shimClient.error());
 
@@ -842,7 +842,7 @@ int main() {
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();
   test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised();
-  test_keepalive_counts_the_answers_that_went_missing();
+  test_keepalive_counts_the_late_answers();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
