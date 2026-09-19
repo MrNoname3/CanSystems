@@ -1260,6 +1260,23 @@ def test_real_devices_yaml_entries_resolve(tmp_path: Path) -> None:
                 json.loads(payload)  # every JSON config must arrive parseable
 
 
+def test_real_devices_yaml_rollout_covers_every_device() -> None:
+    """The rollout order is the only thing that decides what --rollout touches, so a device added
+    to devices.yaml but left out of it would simply never be updated - silently, and only noticed
+    the next time someone read the fleet status."""
+    ota_dir = Path(ota.__file__).resolve().parent
+    manager = ota.DeviceManager(str(ota_dir / "otaUpdate.py"))
+    projects = manager.load()
+    steps = manager.parse_rollout(projects)
+
+    listed = {d.mac for p in projects for d in p.devices}
+    ordered = {s.device.mac for s in steps}
+    assert ordered == listed, f"not in the rollout order: {sorted(listed - ordered)}"
+    # Whatever a step sends ahead of the firmware has to be a file entry its own device accepts;
+    # parse_rollout() enforces that, so reaching here at all is the check.
+    assert any(s.before_firmware for s in steps), "no step carries a pre-firmware transfer"
+
+
 # --- Non-interactive target selection ---------------------------------------
 
 def _cli_projects() -> "list[ota.ProjectEntry]":
@@ -2009,3 +2026,467 @@ def test_format_fleet_status_files_an_unlisted_mac_under_its_own_heading(
 
 def test_format_fleet_status_reports_nothing_answered() -> None:
     assert "No device answered" in ota.format_fleet_status({}, _cli_projects())
+
+
+# --- Rollout order: devices.yaml's `rollout` section ------------------------
+
+_ROLLOUT_DEVICES_YAML = """
+projects:
+  - name: Thermometer
+    pio_project: project_esp8266_thermo
+    devices:
+      - mac: 40f52033765d
+        friendly_name: Test2
+  - name: CAN gateway
+    pio_project: project_esp32_can
+    devices:
+      - mac: fcf5c401bd83
+        friendly_name: Living room
+        files:
+          - name: "CAN alert firmware upload"
+            local_path: fw.bin
+            pio_env: nanoatmega328_alert
+            device_path: /canAlertFw.bin
+"""
+
+
+def _rollout_manager(tmp_path: Path, rollout: str) -> "tuple[ota.DeviceManager, list[ota.ProjectEntry]]":
+    """A DeviceManager over a devices.yaml carrying the given `rollout` block, already loaded."""
+    (tmp_path / "devices.yaml").write_text(_ROLLOUT_DEVICES_YAML + rollout, encoding="utf-8")
+    manager = ota.DeviceManager(str(tmp_path / "otaUpdate.py"))
+    return manager, manager.load()
+
+
+def test_parse_rollout_keeps_the_order_given(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: fcf5c401bd83
+    - mac: 40f52033765d
+""")
+    steps = manager.parse_rollout(projects)
+    assert [s.device.mac for s in steps] == ["fcf5c401bd83", "40f52033765d"]
+    assert steps[0].project.pio_project == "project_esp32_can"
+
+
+def test_parse_rollout_inherits_the_section_default_and_takes_an_override(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  soak_seconds: 120
+  steps:
+    - mac: 40f52033765d
+      soak_seconds: 900
+    - mac: fcf5c401bd83
+""")
+    steps = manager.parse_rollout(projects)
+    assert steps[0].soak_seconds == 900.0        # the step's own
+    assert steps[1].soak_seconds == 120.0        # the section default
+    assert steps[1].reboot_timeout == ota.DEFAULT_REBOOT_TIMEOUT_SECONDS
+
+
+def test_parse_rollout_without_a_section_yields_no_steps(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, "")
+    assert manager.parse_rollout(projects) == []
+
+
+def test_parse_rollout_resolves_before_firmware_to_the_devices_file_entries(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: fcf5c401bd83
+      before_firmware:
+        - "CAN alert firmware upload"
+""")
+    step = manager.parse_rollout(projects)[0]
+    assert [f.name for f in step.before_firmware] == ["CAN alert firmware upload"]
+    assert step.before_firmware[0].pio_env == "nanoatmega328_alert"
+
+
+def test_parse_rollout_unknown_mac_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: aabbccddeeff
+""")
+    with pytest.raises(ValueError, match="aabbccddeeff"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_repeated_mac_raises(tmp_path: Path) -> None:
+    # Updating one device twice in a run is never what was meant, and the second pass would find
+    # it already current and skip - hiding the typo instead of reporting it.
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: 40f52033765d
+    - mac: 40f52033765d
+""")
+    with pytest.raises(ValueError, match="more than once"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_before_firmware_the_device_does_not_accept_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: 40f52033765d
+      before_firmware:
+        - "CAN alert firmware upload"
+""")
+    with pytest.raises(ValueError, match="CAN alert firmware upload"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_step_without_a_mac_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - soak_seconds: 60
+""")
+    with pytest.raises(ValueError, match="mac"):
+        manager.parse_rollout(projects)
+
+
+# --- SoakWatcher: proving an updated device stayed up ------------------------
+
+MAC = "40f52033765d"
+
+
+def _watcher(**kwargs: Any) -> "ota.SoakWatcher":
+    params: Dict[str, Any] = {"soak_seconds": 0.5, "baseline_timeout": 0.05}
+    params.update(kwargs)
+    return ota.SoakWatcher(ota.MQTTConfig(host="broker"), MAC, **params)
+
+
+class _SoakMQTT:
+    """MQTTClient stand-in for SoakWatcher. Which list a loop() call draws from follows the
+    watcher's own drain flag rather than the clock, so a message lands on the side of the baseline
+    the test meant it to whatever the machine is doing."""
+
+    def __init__(self, watcher: "ota.SoakWatcher", baseline: list[Any], soak: list[Any]) -> None:
+        self._watcher = watcher
+        self._baseline = list(baseline)
+        self._soak = list(soak)
+        self.subscribed: list[str] = []
+        self.disconnected = False
+
+    def connect(self) -> bool:
+        self._watcher._on_connect(None, None, None, 0, None)
+        return True
+
+    def subscribe(self, topic: str) -> None:
+        self.subscribed.append(topic)
+
+    def loop(self, timeout: float = 0.1) -> None:
+        del timeout
+        queue = self._soak if self._watcher.baseline_done else self._baseline
+        if queue:
+            self._watcher._on_message(None, None, queue.pop(0))
+
+    def disconnect(self) -> None:
+        self.disconnected = True
+
+
+def _online(mac: str = MAC) -> Any:
+    return _fake_message(f"iot/dtos/{mac}/availability", {"state": "online"})
+
+
+def _drive(watcher: "ota.SoakWatcher", baseline: list[Any], soak: list[Any]) -> "tuple[Optional[str], _SoakMQTT]":
+    double = _SoakMQTT(watcher, baseline, soak)
+    watcher.mqtt_client = double  # type: ignore[assignment]  # deliberate test double for the MQTT client
+    return watcher.run(), double
+
+
+def test_soak_subscribes_to_the_three_topics_a_drop_shows_up_on() -> None:
+    watcher = _watcher()
+    _, double = _drive(watcher, [_online()], [])
+    assert double.subscribed == [f"iot/dtos/{MAC}/availability",
+                                 f"iot/dtos/{MAC}/info",
+                                 f"iot/dtos/{MAC}/diag"]
+
+
+def test_soak_also_watches_the_can_nodes_when_asked() -> None:
+    watcher = _watcher(watch_nodes=True)
+    _, double = _drive(watcher, [_online()], [])
+    # The nodes answer availability and info; diag is the ESP-side Connectivity's, so they have none.
+    assert f"iot/dtos/{MAC}/+/availability" in double.subscribed
+    assert f"iot/dtos/{MAC}/+/info" in double.subscribed
+    assert f"iot/dtos/{MAC}/+/diag" not in double.subscribed
+
+
+def test_soak_holds_when_nothing_arrives_after_the_baseline() -> None:
+    watcher = _watcher()
+    reason, double = _drive(watcher, [_online()], [])
+    assert reason is None
+    assert double.disconnected is True
+
+
+def test_soak_drains_the_retained_update_aftermath_without_failing() -> None:
+    # Everything the update itself left retained answers the subscription at once: the device is
+    # online, it published info as it started, and diag for the reboot's own outage. None of that
+    # is a fresh drop, and a soak that called it one could never pass.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [
+        _online(),
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 12}),
+        _fake_message(f"iot/dtos/{MAC}/diag", {"cause": "MQTT_CONNECTION_LOST", "n": 3}),
+    ], [])
+    assert reason is None
+
+
+def test_soak_fails_when_the_device_goes_offline() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+    ])
+    assert reason is not None and "went offline" in reason
+
+
+def test_soak_fails_on_a_restart_and_names_the_stage_the_last_run_reached() -> None:
+    # info is published once per startup, so a second one is a restart; boot 9 is BrokerConnect,
+    # which says the run before it never got past connecting to the broker.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 9}),
+    ])
+    assert reason is not None and "restarted" in reason and "boot stage 9" in reason
+
+
+def test_soak_fails_on_a_reconnect_that_left_no_restart_behind() -> None:
+    # diag goes out on every offline->online transition, which catches the drop that does not
+    # reboot the device and so publishes no new info.
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/diag", {"cause": "MQTT_CONNECTION_LOST", "n": 4}),
+    ])
+    assert reason is not None
+    assert "dropped its connection" in reason and "MQTT_CONNECTION_LOST" in reason and "#4" in reason
+
+
+def test_soak_reports_the_first_signal_not_the_last() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+        _fake_message(f"iot/dtos/{MAC}/info", {"git": "5f14ea69", "boot": 9}),
+    ])
+    assert reason is not None and "went offline" in reason
+
+
+def test_soak_fails_on_a_node_that_drops_behind_its_gateway() -> None:
+    watcher = _watcher(watch_nodes=True)
+    reason, _ = _drive(watcher, [_online()], [
+        _fake_message(f"iot/dtos/{MAC}/alert1/availability", {"state": "offline"}),
+    ])
+    assert reason is not None and f"{MAC}/alert1" in reason
+
+
+def test_soak_refuses_to_start_against_a_device_that_is_not_online() -> None:
+    watcher = _watcher()
+    reason, _ = _drive(watcher, [
+        _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
+    ], [])
+    assert reason is not None and "not online as the soak starts" in reason
+
+
+# --- Rollout plan: what one fleet snapshot says is left to do ----------------
+
+CURRENT = "5f14ea69"
+OLD = "3c82d528"
+
+
+def _rollout_steps() -> "list[ota.RolloutStep]":
+    """The canary thermometer, then the gateway carrying its CAN alert image."""
+    thermo, gateway = _cli_projects()
+    return [
+        ota.RolloutStep(project=thermo, device=thermo.devices[0], soak_seconds=900.0),
+        ota.RolloutStep(project=gateway, device=gateway.devices[0],
+                        before_firmware=[gateway.devices[0].files[0]]),
+    ]
+
+
+def _entry(git: str, state: str = "online", dirty: int = 0) -> "Dict[str, Any]":
+    return {"availability": state, "info": {"git": git, "dirty": dirty}}
+
+
+def test_rollout_plan_marks_an_outdated_device_pending() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(OLD)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.PENDING
+    assert planned[0].reported == OLD
+
+
+def test_rollout_plan_skips_a_device_already_on_this_build() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(CURRENT)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_CURRENT
+
+
+def test_rollout_plan_updates_a_device_whose_build_is_dirty() -> None:
+    # The hash matches but the tree it came from did not, so what is on the device is not this
+    # build and saying "current" would be a lie.
+    planned = ota.build_rollout_plan(_rollout_steps(),
+                                     {("40f52033765d", None): _entry(CURRENT, dirty=1)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_device_that_did_not_answer() -> None:
+    # Nothing came back for the thermometer at all: it is off, and the rest of the fleet carries on.
+    planned = ota.build_rollout_plan(_rollout_steps(), {("fcf5c401bd83", None): _entry(OLD)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+    assert planned[1].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_device_that_answered_offline() -> None:
+    planned = ota.build_rollout_plan(
+        _rollout_steps(), {("40f52033765d", None): _entry(OLD, state="offline")}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+
+
+def test_rollout_plan_picks_up_a_gateway_whose_nodes_were_left_behind() -> None:
+    # The ESP32 is on this build but alert1 is not. Skipping here would leave the node on the old
+    # image with nothing in the order that would ever return to it.
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(OLD),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_gateway_whose_nodes_are_current_too() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
+        ("fcf5c401bd83", "alert2"): _entry(CURRENT),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.SKIPPED_CURRENT
+
+
+def test_rollout_plan_keeps_the_order_the_steps_came_in() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {}, CURRENT)
+    assert [p.step.device.mac for p in planned] == ["40f52033765d", "fcf5c401bd83"]
+
+
+def test_format_rollout_plan_lists_each_step_with_its_soak_and_extras() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("40f52033765d", None): _entry(OLD),
+        ("fcf5c401bd83", None): _entry(OLD),
+    }, CURRENT)
+    lines = ota.format_rollout_plan(planned, CURRENT).splitlines()
+    assert CURRENT in lines[0]
+    assert lines[2].startswith("  1. Test2") and "pending" in lines[2] and "soak 900s" in lines[2]
+    assert lines[3].startswith("  2. Living room") and "soak 300s" in lines[3]
+    # The gateway's pre-firmware transfer is listed under it, so the order inside a step is visible.
+    assert lines[4].strip() == "+ CAN alert firmware upload"
+
+
+def test_format_rollout_plan_says_so_when_there_is_no_order() -> None:
+    assert "no steps" in ota.format_rollout_plan([], CURRENT)
+
+
+def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("40f52033765d", None): _entry(OLD),
+        ("fcf5c401bd83", None): _entry(OLD),
+    }, CURRENT)
+    planned[0].status = ota.StepStatus.DONE
+    planned[1].status = ota.StepStatus.FAILED
+    planned[1].detail = "fcf5c401bd83 went offline during the soak"
+    summary = ota.format_rollout_summary(planned)
+    assert "done" in summary and "failed" in summary
+    assert "went offline during the soak" in summary
+
+
+# --- run_rollout: order, stopping, and what the summary is left holding ------
+
+class _RecordingRun:
+    """Stands in for _run_rollout_step: records the MACs it was asked for, and fails on one."""
+
+    def __init__(self, fail_on: Optional[str] = None, reason: str = "went offline during the soak") -> None:
+        self.seen: list[str] = []
+        self._fail_on = fail_on
+        self._reason = reason
+
+    def __call__(self, entry: "ota.PlannedStep", config_manager: Any, mqtt_config: Any) -> Optional[str]:
+        del config_manager, mqtt_config
+        self.seen.append(entry.step.device.mac)
+        return self._reason if entry.step.device.mac == self._fail_on else None
+
+
+def _planned(*statuses: "ota.StepStatus") -> "list[ota.PlannedStep]":
+    return [ota.PlannedStep(step, status) for step, status in zip(_rollout_steps(), statuses, strict=True)]
+
+
+def test_run_rollout_sends_every_pending_step_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _RecordingRun()
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
+    assert runner.seen == ["40f52033765d", "fcf5c401bd83"]
+    assert [p.status for p in planned] == [ota.StepStatus.DONE, ota.StepStatus.DONE]
+
+
+def test_run_rollout_leaves_a_skipped_step_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _RecordingRun()
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.SKIPPED_OFFLINE, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
+    assert runner.seen == ["fcf5c401bd83"]
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+
+
+def test_run_rollout_stops_at_the_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No board here can roll back, so a build that fails one device must not reach the next: every
+    # device it were sent to afterwards is another one needing a cable.
+    runner = _RecordingRun(fail_on="40f52033765d")
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is False
+    assert runner.seen == ["40f52033765d"]                      # the gateway was never touched
+    assert planned[0].status is ota.StepStatus.FAILED
+    assert planned[0].detail == "went offline during the soak"
+    assert planned[1].status is ota.StepStatus.NOT_REACHED
+
+
+def test_run_rollout_summary_names_the_step_that_stopped_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="40f52033765d"))
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    ota.run_rollout(planned, cast(Any, None), cast(Any, None))
+    summary = ota.format_rollout_summary(planned)
+    assert "failed" in summary and "not reached" in summary
+    assert "went offline during the soak" in summary
+
+
+# --- validate_args: the flag combinations the parser cannot turn back itself --
+
+def _complaint(*argv: str) -> Optional[str]:
+    return ota.validate_args(ota.build_arg_parser().parse_args(list(argv)))
+
+
+def test_rollout_alone_is_accepted() -> None:
+    assert _complaint("--rollout") is None
+    assert _complaint("--rollout", "--dry-run") is None
+    assert _complaint("--rollout", "--yes") is None
+
+
+def test_rollout_refuses_a_target_or_an_action() -> None:
+    # It has its own order to walk, so a device or an action beside it names a second intention.
+    assert _complaint("--rollout", "--device", "40f52033765d") is not None
+    assert _complaint("--rollout", "--device", "40f52033765d", "--firmware") is not None
+    assert _complaint("--rollout", "--ota-timeout", "30") is not None
+    assert _complaint("--rollout", "--upload-port", "/dev/ttyUSB0") is not None
+
+
+def test_answers_that_stand_alone_refuse_the_rollout() -> None:
+    assert _complaint("--list", "--rollout") is not None
+    assert _complaint("--status", "--rollout") is not None
+
+
+def test_rollout_companions_need_the_rollout() -> None:
+    assert _complaint("--dry-run") is not None
+    assert _complaint("--yes") is not None
+    assert _complaint("--device", "40f52033765d", "--firmware", "--yes") is not None
+
+
+def test_existing_combinations_still_judged_the_same_way() -> None:
+    assert _complaint("--device", "40f52033765d", "--firmware") is None
+    assert _complaint("--firmware") is not None                     # an action with no device
+    assert _complaint("--list", "--device", "40f52033765d") is not None
+    assert _complaint("--device", "40f52033765d", "--firmware", "--upload-port", "/dev/x") is not None
