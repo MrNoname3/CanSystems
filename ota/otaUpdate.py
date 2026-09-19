@@ -2066,6 +2066,96 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
 # Fleet rollout
 # ---------------------------------------------------------------------------
 
+class StepStatus(enum.Enum):
+    """Where a rollout step stands: the first three are decided before anything is sent, the last
+    three by the run itself."""
+    PENDING = "pending"
+    SKIPPED_OFFLINE = "skipped: offline"
+    SKIPPED_CURRENT = "skipped: already current"
+    DONE = "done"
+    FAILED = "failed"
+    NOT_REACHED = "not reached"
+
+
+@dataclass
+class PlannedStep:
+    """One line of the plan, and the same line again in the summary once the run has touched it."""
+    step: RolloutStep
+    status: StepStatus
+    reported: Optional[str] = None   # The build the device answered discovery with, if any.
+    detail: str = ""                 # Why a step failed, filled in by the run.
+
+
+def _entry_is_current(entry: Optional[Dict[str, Any]], expected_hash: str) -> bool:
+    """Whether what a device (or node) reported is this checkout's build, cleanly built."""
+    info: Dict[str, Any] = (entry or {}).get(_FIELD_INFO) or {}
+    return info.get(_PAYLOAD_KEY_GIT) == expected_hash and not info.get(_PAYLOAD_KEY_DIRTY)
+
+
+def build_rollout_plan(steps: List[RolloutStep],
+                       entries: Dict[tuple[str, Optional[str]], Dict[str, Any]],
+                       expected_hash: str) -> List[PlannedStep]:
+    """Decides, from one fleet snapshot, what each step of the order has left to do.
+
+    A device that did not answer discovery is passed over rather than allowed to stop the run: one
+    switched off should not hold up the rest of the fleet, and the summary says it was left out. A
+    step counts as current only when its CAN nodes are current too, so a gateway whose nodes were
+    left behind is still picked up."""
+    planned: List[PlannedStep] = []
+    for step in steps:
+        entry = entries.get((step.device.mac, None))
+        info: Dict[str, Any] = (entry or {}).get(_FIELD_INFO) or {}
+        reported = cast(Optional[str], info.get(_PAYLOAD_KEY_GIT))
+        if entry is None or entry.get(_FIELD_AVAILABILITY) != _STATE_ONLINE:
+            planned.append(PlannedStep(step, StepStatus.SKIPPED_OFFLINE, reported))
+            continue
+        nodes = [e for (mac, node), e in entries.items() if mac == step.device.mac and node is not None]
+        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(n, expected_hash) for n in nodes):
+            planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported))
+            continue
+        planned.append(PlannedStep(step, StepStatus.PENDING, reported))
+    return planned
+
+
+def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str]]:
+    """(label, status, detail) per step, with each step's pre-firmware transfers under it."""
+    rows: List[tuple[str, str, str]] = []
+    for index, entry in enumerate(planned, start=1):
+        step = entry.step
+        if entry.detail:
+            detail = entry.detail
+        elif entry.status is StepStatus.PENDING:
+            detail = f"{entry.reported or 'no info'} -> soak {step.soak_seconds:.0f}s"
+        else:
+            detail = entry.reported or ""
+        rows.append((f"  {index}. {step.device.display_name}", entry.status.value, detail))
+        rows += [(f"       + {f.name}", "", "") for f in step.before_firmware]
+    return rows
+
+
+def _format_rollout_rows(heading: str, planned: List[PlannedStep]) -> str:
+    """Both listings share this: one column set, sized to whatever the longest label needs."""
+    if not planned:
+        return f"{heading}\n  (no steps; {_DEVICES_FILE_NAME} lists no {_YAML_KEY_ROLLOUT} order)"
+    rows = _rollout_rows(planned)
+    width = max(len(label) for label, _, _ in rows)
+    status_width = max(len(status) for _, status, _ in rows)
+    lines = [heading, ""]
+    for label, status, detail in rows:
+        lines.append(f"{label:{width}s}  {status:{status_width}s}  {detail}".rstrip())
+    return "\n".join(lines)
+
+
+def format_rollout_plan(planned: List[PlannedStep], expected_hash: str) -> str:
+    """What the run is about to do, printed before it is allowed to do any of it."""
+    return _format_rollout_rows(f"Rollout plan  (expected build {expected_hash})", planned)
+
+
+def format_rollout_summary(planned: List[PlannedStep]) -> str:
+    """The same rows once the run has finished with them, however far it got."""
+    return _format_rollout_rows("Rollout summary", planned)
+
+
 class SoakWatcher:
     """Watches one device hold its connection for a while after an update.
 

@@ -2269,3 +2269,109 @@ def test_soak_refuses_to_start_against_a_device_that_is_not_online() -> None:
         _fake_message(f"iot/dtos/{MAC}/availability", {"state": "offline"}),
     ], [])
     assert reason is not None and "not online as the soak starts" in reason
+
+
+# --- Rollout plan: what one fleet snapshot says is left to do ----------------
+
+CURRENT = "5f14ea69"
+OLD = "3c82d528"
+
+
+def _rollout_steps() -> "list[ota.RolloutStep]":
+    """The canary thermometer, then the gateway carrying its CAN alert image."""
+    thermo, gateway = _cli_projects()
+    return [
+        ota.RolloutStep(project=thermo, device=thermo.devices[0], soak_seconds=900.0),
+        ota.RolloutStep(project=gateway, device=gateway.devices[0],
+                        before_firmware=[gateway.devices[0].files[0]]),
+    ]
+
+
+def _entry(git: str, state: str = "online", dirty: int = 0) -> "Dict[str, Any]":
+    return {"availability": state, "info": {"git": git, "dirty": dirty}}
+
+
+def test_rollout_plan_marks_an_outdated_device_pending() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(OLD)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.PENDING
+    assert planned[0].reported == OLD
+
+
+def test_rollout_plan_skips_a_device_already_on_this_build() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(CURRENT)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_CURRENT
+
+
+def test_rollout_plan_updates_a_device_whose_build_is_dirty() -> None:
+    # The hash matches but the tree it came from did not, so what is on the device is not this
+    # build and saying "current" would be a lie.
+    planned = ota.build_rollout_plan(_rollout_steps(),
+                                     {("40f52033765d", None): _entry(CURRENT, dirty=1)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_device_that_did_not_answer() -> None:
+    # Nothing came back for the thermometer at all: it is off, and the rest of the fleet carries on.
+    planned = ota.build_rollout_plan(_rollout_steps(), {("fcf5c401bd83", None): _entry(OLD)}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+    assert planned[1].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_device_that_answered_offline() -> None:
+    planned = ota.build_rollout_plan(
+        _rollout_steps(), {("40f52033765d", None): _entry(OLD, state="offline")}, CURRENT)
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+
+
+def test_rollout_plan_picks_up_a_gateway_whose_nodes_were_left_behind() -> None:
+    # The ESP32 is on this build but alert1 is not. Skipping here would leave the node on the old
+    # image with nothing in the order that would ever return to it.
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(OLD),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.PENDING
+
+
+def test_rollout_plan_skips_a_gateway_whose_nodes_are_current_too() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("fcf5c401bd83", None): _entry(CURRENT),
+        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
+        ("fcf5c401bd83", "alert2"): _entry(CURRENT),
+    }, CURRENT)
+    assert planned[1].status is ota.StepStatus.SKIPPED_CURRENT
+
+
+def test_rollout_plan_keeps_the_order_the_steps_came_in() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {}, CURRENT)
+    assert [p.step.device.mac for p in planned] == ["40f52033765d", "fcf5c401bd83"]
+
+
+def test_format_rollout_plan_lists_each_step_with_its_soak_and_extras() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("40f52033765d", None): _entry(OLD),
+        ("fcf5c401bd83", None): _entry(OLD),
+    }, CURRENT)
+    lines = ota.format_rollout_plan(planned, CURRENT).splitlines()
+    assert CURRENT in lines[0]
+    assert lines[2].startswith("  1. Test2") and "pending" in lines[2] and "soak 900s" in lines[2]
+    assert lines[3].startswith("  2. Living room") and "soak 300s" in lines[3]
+    # The gateway's pre-firmware transfer is listed under it, so the order inside a step is visible.
+    assert lines[4].strip() == "+ CAN alert firmware upload"
+
+
+def test_format_rollout_plan_says_so_when_there_is_no_order() -> None:
+    assert "no steps" in ota.format_rollout_plan([], CURRENT)
+
+
+def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
+    planned = ota.build_rollout_plan(_rollout_steps(), {
+        ("40f52033765d", None): _entry(OLD),
+        ("fcf5c401bd83", None): _entry(OLD),
+    }, CURRENT)
+    planned[0].status = ota.StepStatus.DONE
+    planned[1].status = ota.StepStatus.FAILED
+    planned[1].detail = "fcf5c401bd83 went offline during the soak"
+    summary = ota.format_rollout_summary(planned)
+    assert "done" in summary and "failed" in summary
+    assert "went offline during the soak" in summary
