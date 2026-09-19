@@ -1753,6 +1753,10 @@ class FileTransfer(_BaseTransfer):
         self.file_provider = provider
         # Keyed by CAN node subtopic (e.g. "alert1"); only populated when file_entry.pio_env is set.
         self._can_node_state: Dict[str, Dict[str, Any]] = {}
+        # What the CAN cascade reached, and what it could not because the node was not live to be
+        # reached. Both stay empty for an ordinary file, which has no nodes behind it.
+        self.nodes_confirmed: List[str] = []
+        self.nodes_missed: List[str] = []
 
     @property
     def data(self) -> bytes:
@@ -1838,6 +1842,13 @@ class FileTransfer(_BaseTransfer):
 
         targets = {node: state for node, state in self._can_node_state.items()
                   if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == _STATE_ONLINE}
+        # Named rather than passed over silently: a node that was off got no firmware, and nothing
+        # later in a rollout would come back to it or say that it had been left behind.
+        self.nodes_missed = sorted(node for node, state in self._can_node_state.items()
+                                   if node.startswith(node_role) and state[_FIELD_AVAILABILITY] != _STATE_ONLINE)
+        if self.nodes_missed:
+            logging.warning(f"CAN node(s) of role '{node_role}' not live, so not reflashed by this "
+                            f"upload: {', '.join(self.nodes_missed)}")
         if not targets:
             logging.warning(f"No live CAN node behind this gateway matched the role '{node_role}'; "
                             f"nothing to verify")
@@ -1869,6 +1880,8 @@ class FileTransfer(_BaseTransfer):
             info: Dict[str, Any] = state[_FIELD_INFO] or {}
             if not _confirm_reported_build(info, expected_hash, node):
                 all_confirmed = False
+                continue
+            self.nodes_confirmed.append(node)
         return all_confirmed
 
 
@@ -2177,6 +2190,22 @@ def format_rollout_summary(planned: List[PlannedStep]) -> str:
     return _format_rollout_rows("Rollout summary", planned)
 
 
+def _can_cascade_notes(transfer: FileTransfer) -> List[str]:
+    """What a CAN firmware upload is worth saying about in the summary though it did not fail.
+
+    A node that was off is not an error - the gateway's cascade skips it rather than queuing it -
+    but it is still a node left on the old image, and the summary is the only place that would
+    ever say so."""
+    if transfer.file_entry.pio_env is None:
+        return []
+    notes: List[str] = []
+    if transfer.nodes_missed:
+        notes.append(f"offline, not reflashed: {', '.join(transfer.nodes_missed)}")
+    if not transfer.nodes_confirmed:
+        notes.append(f"no CAN node answered {transfer.file_entry.name}")
+    return notes
+
+
 def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
                       mqtt_config: MQTTConfig) -> Optional[str]:
     """Sends one step: its pre-firmware transfers first, then the device's own image, each
@@ -2184,12 +2213,15 @@ def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
     whole step held, or what stopped it."""
     step = entry.step
     device_config = DeviceConfig(mac_address=step.device.mac, project_name=step.project.pio_project)
+    notes: List[str] = []
 
     for file_entry in step.before_firmware:
         logging.info(f"Rollout: {step.device.display_name} - {file_entry.name}")
         provider = build_file_provider(file_entry, step.device, config_manager)
-        if not FileTransfer(device_config, mqtt_config, file_entry, provider).run():
+        transfer = FileTransfer(device_config, mqtt_config, file_entry, provider)
+        if not transfer.run():
             return f"{file_entry.name} did not complete"
+        notes += _can_cascade_notes(transfer)
         # The nodes it reflashed have to hold as well, so the gateway is watched with them.
         held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds, watch_nodes=True).run()
         if held is not None:
@@ -2206,7 +2238,11 @@ def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
     held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
     if held is not None:
         return held
-    return CanNodePresence(mqtt_config, step.device.mac, entry.nodes).run()
+    returned = CanNodePresence(mqtt_config, step.device.mac, entry.nodes).run()
+    if returned is not None:
+        return returned
+    entry.detail = "; ".join(notes)
+    return None
 
 
 def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",

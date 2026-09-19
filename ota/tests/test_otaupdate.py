@@ -2653,3 +2653,54 @@ def test_rollout_step_does_not_reach_the_nodes_when_the_soak_failed(monkeypatch:
 def test_rollout_step_does_not_soak_an_upload_that_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     reached = _stub_step(monkeypatch, upload_ok=False)
     assert reached == ["firmware", "result=firmware upload did not complete"]
+
+
+# --- CAN cascade: what an upload reached, and what it could not -------------
+
+def _cascade_transfer(tmp_path: Path, *, confirmed: "list[str]", missed: "list[str]",
+                      pio_env: Optional[str] = "nanoatmega328_alert") -> "ota.FileTransfer":
+    entry = ota.FileEntry(name="CAN alert firmware upload", device_path="/canAlertFw.bin",
+                          local_path=_write(tmp_path, "fw.bin", b"nanoatmega328_alert\x00fw"),
+                          pio_env=pio_env)
+    transfer = ota.FileTransfer(ota.DeviceConfig(mac_address=GW, project_name="project_esp32_can"),
+                                ota.MQTTConfig(host="broker"), entry)
+    transfer.nodes_confirmed = list(confirmed)
+    transfer.nodes_missed = list(missed)
+    return transfer
+
+
+def test_cascade_notes_name_the_nodes_left_on_the_old_image(tmp_path: Path) -> None:
+    notes = ota._can_cascade_notes(_cascade_transfer(tmp_path, confirmed=["alert1"], missed=["alert2"]))
+    assert notes == ["offline, not reflashed: alert2"]
+
+
+def test_cascade_notes_say_when_nothing_answered_at_all(tmp_path: Path) -> None:
+    # Every node off: not a failure, but a run that reflashed nothing should not read as a clean one.
+    notes = ota._can_cascade_notes(_cascade_transfer(tmp_path, confirmed=[], missed=["alert1", "alert2"]))
+    assert "offline, not reflashed: alert1, alert2" in notes
+    assert any("no CAN node answered" in n for n in notes)
+
+
+def test_cascade_notes_stay_silent_on_a_clean_run(tmp_path: Path) -> None:
+    assert ota._can_cascade_notes(_cascade_transfer(tmp_path, confirmed=["alert1", "alert2"], missed=[])) == []
+
+
+def test_cascade_notes_stay_silent_for_an_ordinary_file(tmp_path: Path) -> None:
+    # No pio_env means no CAN nodes behind the transfer at all, so there is nothing to report.
+    assert ota._can_cascade_notes(_cascade_transfer(tmp_path, confirmed=[], missed=[], pio_env=None)) == []
+
+
+def test_verify_records_the_nodes_it_could_not_reach(tmp_path: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "CAN_NODE_DISCOVERY_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(ota, "CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS", 0.05)
+    transfer = _cascade_transfer(tmp_path, confirmed=[], missed=[])
+    transfer.mqtt_client = _ScriptedMQTT(transfer._on_message, [  # type: ignore[assignment]  # deliberate test double
+        _node_avail("alert1", "online"),
+        _node_avail("alert2", "offline"),
+    ])
+    # alert1 is watched and never reports a reboot, so the verification fails; alert2 was off, so
+    # the cascade never had it to reach and it is recorded as left behind rather than as a failure.
+    assert transfer._verify_after_transfer() is False
+    assert transfer.nodes_missed == ["alert2"]
+    assert transfer.nodes_confirmed == []
