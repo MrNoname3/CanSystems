@@ -362,11 +362,15 @@ void Connectivity::recordDisconnect(uint32_t actualTime) {
 }
 
 void Connectivity::publishDisconnectDiag() {
+  const uint32_t nowMs = millis();
   DisconnectDiag::Report report;
-  if(!disconnectDiag.takeReport(millis(), report)) { return; }      // Nothing recorded (first connect after boot).
+  if(!disconnectDiag.takeReport(nowMs, report)) { return; }         // Nothing recorded (first connect after boot).
   char diagPayload[MqttTopics::getDiagPayloadBufSize()] = { '\0' };
+  // The counters beside it are all "since boot", and only the uptime says how much time that is.
+  // It follows millis(), so it wraps with it, after 49.7 days.
   const int32_t diagPayloadSize = snprintf_P(diagPayload, sizeof(diagPayload), MqttTopics::getMqttDiagPayload(),
-                                             report.cause, report.dropTime, report.offlineSeconds, report.reconnectCount,
+                                             report.cause, report.dropTime, report.offlineSeconds, nowMs / 1000U,
+                                             report.reconnectCount,
                                              mqttClient.getRefusedPingCount(), mqttClient.getUnansweredPingCount());
   const bool diagPayloadValid = (diagPayloadSize >= 0 && diagPayloadSize < static_cast<int32_t>(sizeof(diagPayload)));
   if(diagPayloadValid) {
