@@ -2450,7 +2450,7 @@ def test_run_rollout_leaves_a_skipped_step_alone(monkeypatch: pytest.MonkeyPatch
 
 def test_run_rollout_stops_at_the_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     # No board here can roll back, so a build that fails one device must not reach the next: every
-    # device it were sent to afterwards is another one needing a cable.
+    # device it is sent to afterwards is another one needing a cable.
     runner = _RecordingRun(fail_on="40f52033765d")
     monkeypatch.setattr(ota, "_run_rollout_step", runner)
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
