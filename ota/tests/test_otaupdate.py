@@ -2009,3 +2009,122 @@ def test_format_fleet_status_files_an_unlisted_mac_under_its_own_heading(
 
 def test_format_fleet_status_reports_nothing_answered() -> None:
     assert "No device answered" in ota.format_fleet_status({}, _cli_projects())
+
+
+# --- Rollout order: devices.yaml's `rollout` section ------------------------
+
+_ROLLOUT_DEVICES_YAML = """
+projects:
+  - name: Thermometer
+    pio_project: project_esp8266_thermo
+    devices:
+      - mac: 40f52033765d
+        friendly_name: Test2
+  - name: CAN gateway
+    pio_project: project_esp32_can
+    devices:
+      - mac: fcf5c401bd83
+        friendly_name: Living room
+        files:
+          - name: "CAN alert firmware upload"
+            local_path: fw.bin
+            pio_env: nanoatmega328_alert
+            device_path: /canAlertFw.bin
+"""
+
+
+def _rollout_manager(tmp_path: Path, rollout: str) -> "tuple[ota.DeviceManager, list[ota.ProjectEntry]]":
+    """A DeviceManager over a devices.yaml carrying the given `rollout` block, already loaded."""
+    (tmp_path / "devices.yaml").write_text(_ROLLOUT_DEVICES_YAML + rollout, encoding="utf-8")
+    manager = ota.DeviceManager(str(tmp_path / "otaUpdate.py"))
+    return manager, manager.load()
+
+
+def test_parse_rollout_keeps_the_order_given(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: fcf5c401bd83
+    - mac: 40f52033765d
+""")
+    steps = manager.parse_rollout(projects)
+    assert [s.device.mac for s in steps] == ["fcf5c401bd83", "40f52033765d"]
+    assert steps[0].project.pio_project == "project_esp32_can"
+
+
+def test_parse_rollout_inherits_the_section_default_and_takes_an_override(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  soak_seconds: 120
+  steps:
+    - mac: 40f52033765d
+      soak_seconds: 900
+    - mac: fcf5c401bd83
+""")
+    steps = manager.parse_rollout(projects)
+    assert steps[0].soak_seconds == 900.0        # the step's own
+    assert steps[1].soak_seconds == 120.0        # the section default
+    assert steps[1].reboot_timeout == ota.DEFAULT_REBOOT_TIMEOUT_SECONDS
+
+
+def test_parse_rollout_without_a_section_yields_no_steps(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, "")
+    assert manager.parse_rollout(projects) == []
+
+
+def test_parse_rollout_resolves_before_firmware_to_the_devices_file_entries(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: fcf5c401bd83
+      before_firmware:
+        - "CAN alert firmware upload"
+""")
+    step = manager.parse_rollout(projects)[0]
+    assert [f.name for f in step.before_firmware] == ["CAN alert firmware upload"]
+    assert step.before_firmware[0].pio_env == "nanoatmega328_alert"
+
+
+def test_parse_rollout_unknown_mac_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: aabbccddeeff
+""")
+    with pytest.raises(ValueError, match="aabbccddeeff"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_repeated_mac_raises(tmp_path: Path) -> None:
+    # Updating one device twice in a run is never what was meant, and the second pass would find
+    # it already current and skip - hiding the typo instead of reporting it.
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: 40f52033765d
+    - mac: 40f52033765d
+""")
+    with pytest.raises(ValueError, match="more than once"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_before_firmware_the_device_does_not_accept_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - mac: 40f52033765d
+      before_firmware:
+        - "CAN alert firmware upload"
+""")
+    with pytest.raises(ValueError, match="CAN alert firmware upload"):
+        manager.parse_rollout(projects)
+
+
+def test_parse_rollout_step_without_a_mac_raises(tmp_path: Path) -> None:
+    manager, projects = _rollout_manager(tmp_path, """
+rollout:
+  steps:
+    - soak_seconds: 60
+""")
+    with pytest.raises(ValueError, match="mac"):
+        manager.parse_rollout(projects)

@@ -69,6 +69,9 @@ CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# How long an updated device has to stay up before a rollout moves on to the next one. Matches
+# Connectivity::onlineSettleTime, which is where the firmware itself decides a link has held.
+DEFAULT_SOAK_SECONDS = 300.0
 # What --status files an answer under when devices.yaml lists no device with that MAC.
 _FLEET_STATUS_UNLISTED_HEADING = "Not in devices.yaml"
 
@@ -202,6 +205,20 @@ class ProjectEntry:
 
 
 @dataclass
+class RolloutStep:
+    """One device's place in the rollout order, from devices.yaml's `rollout` section.
+
+    `before_firmware` is sent first, in the order given, and the device's own firmware last: the
+    CAN alert image travels through the gateway, so it goes while that gateway is still running
+    the build it was proven on."""
+    project: ProjectEntry
+    device: DeviceEntry
+    soak_seconds: float = DEFAULT_SOAK_SECONDS
+    reboot_timeout: float = DEFAULT_REBOOT_TIMEOUT_SECONDS
+    before_firmware: List[FileEntry] = field(default_factory=list[FileEntry])
+
+
+@dataclass
 class ActionResult:
     """Holds the result of the interactive menu selection.
     At most one of `file` / `command` is not None, or one of the USB flags is
@@ -322,11 +339,19 @@ _YAML_KEY_SERVER_CONFIG = 'server_config'
 _YAML_KEY_PIO_PROJECT = 'pio_project'
 _YAML_KEY_DEVICES = 'devices'
 _YAML_KEY_PROJECTS = 'projects'
+_YAML_KEY_ROLLOUT = 'rollout'
+_YAML_KEY_STEPS = 'steps'
+_YAML_KEY_SOAK_SECONDS = 'soak_seconds'
+_YAML_KEY_REBOOT_TIMEOUT = 'reboot_timeout'
+_YAML_KEY_BEFORE_FIRMWARE = 'before_firmware'
 # The devices.yaml section of commands shared by every project, and the label a validation
 # error reports it by.
 _YAML_COMMON_SECTION = 'common'
 # The device list this manager reads.
 _DEVICES_FILE_NAME = 'devices.yaml'
+
+# What a listing prints where a device accepts no files or a project defines no commands.
+_NOTHING_LISTED = 'none'
 
 
 class DeviceManager:
@@ -335,6 +360,8 @@ class DeviceManager:
     def __init__(self, script_path: str):
         self.script_dir = Path(script_path).parent
         self.devices_file = self.script_dir / _DEVICES_FILE_NAME
+        # Filled by load(); parse_rollout() needs the projects it returns to resolve its MACs.
+        self._rollout_raw: dict[str, Any] = {}
 
     def load(self) -> List[ProjectEntry]:
         """Read devices.yaml and return the projects it lists."""
@@ -364,7 +391,71 @@ class DeviceManager:
         if not projects:
             raise ValueError(f"{_DEVICES_FILE_NAME} contains no projects")
 
+        rollout: Any = data.get(_YAML_KEY_ROLLOUT, {})
+        if not isinstance(rollout, dict):
+            raise ValueError(f"'{_YAML_KEY_ROLLOUT}' must be a mapping in {_DEVICES_FILE_NAME}")
+        self._rollout_raw = cast(dict[str, Any], rollout)
+
         return projects
+
+    def parse_rollout(self, projects: List[ProjectEntry]) -> List[RolloutStep]:
+        """The rollout order, resolved against the projects load() returned.
+
+        Every value is named or inherited from the section default; nothing is guessed. A MAC no
+        project lists, the same MAC twice, or a file entry the device does not accept raises here,
+        where the whole order is still on screen, rather than part way through a fleet."""
+        raw_steps: Any = self._rollout_raw.get(_YAML_KEY_STEPS, [])
+        if not isinstance(raw_steps, list):
+            raise ValueError(f"'{_YAML_KEY_ROLLOUT}.{_YAML_KEY_STEPS}' must be a list "
+                             f"in {_DEVICES_FILE_NAME}")
+        default_soak = float(self._rollout_raw.get(_YAML_KEY_SOAK_SECONDS, DEFAULT_SOAK_SECONDS))
+        default_reboot = float(self._rollout_raw.get(_YAML_KEY_REBOOT_TIMEOUT,
+                                                     DEFAULT_REBOOT_TIMEOUT_SECONDS))
+
+        by_mac = {d.mac: (p, d) for p in projects for d in p.devices}
+        steps: List[RolloutStep] = []
+        seen: set[str] = set()
+        for raw in cast(List[Any], raw_steps):
+            if not isinstance(raw, dict):
+                raise ValueError(f"Each {_YAML_KEY_ROLLOUT} step must be a mapping "
+                                 f"with a '{_YAML_KEY_MAC}' field")
+            step = cast(dict[str, Any], raw)
+            mac = step.get(_YAML_KEY_MAC)
+            if mac is None:
+                raise ValueError(f"Each {_YAML_KEY_ROLLOUT} step must have a '{_YAML_KEY_MAC}' field")
+            if mac not in by_mac:
+                known = ", ".join(by_mac)
+                raise ValueError(f"{_YAML_KEY_ROLLOUT} step names unknown device '{mac}'; "
+                                 f"{_DEVICES_FILE_NAME} lists: {known}")
+            if mac in seen:
+                raise ValueError(f"{_YAML_KEY_ROLLOUT} names device '{mac}' more than once")
+            seen.add(cast(str, mac))
+            project, device = by_mac[mac]
+            steps.append(RolloutStep(
+                project=project,
+                device=device,
+                soak_seconds=float(step.get(_YAML_KEY_SOAK_SECONDS, default_soak)),
+                reboot_timeout=float(step.get(_YAML_KEY_REBOOT_TIMEOUT, default_reboot)),
+                before_firmware=self._parse_before_firmware(step, device),
+            ))
+        return steps
+
+    @staticmethod
+    def _parse_before_firmware(step: dict[str, Any], device: DeviceEntry) -> List[FileEntry]:
+        """The file entries a step sends ahead of the device's own firmware, by name."""
+        raw: Any = step.get(_YAML_KEY_BEFORE_FIRMWARE, [])
+        if not isinstance(raw, list):
+            raise ValueError(f"'{_YAML_KEY_BEFORE_FIRMWARE}' must be a list of file entry names "
+                             f"(device: {device.mac})")
+        by_name = {f.name: f for f in device.files}
+        entries: List[FileEntry] = []
+        for name in cast(List[Any], raw):
+            if name not in by_name:
+                known = ", ".join(f'"{n}"' for n in by_name) or _NOTHING_LISTED
+                raise ValueError(f"'{_YAML_KEY_BEFORE_FIRMWARE}' names '{name}', which device "
+                                 f"'{device.mac}' has no file entry for; it accepts: {known}")
+            entries.append(by_name[cast(str, name)])
+        return entries
 
     def _parse_commands(self, raw: list[Any], context: str) -> List[CommandEntry]:
         """Parse a list of raw command dicts into CommandEntry objects."""
@@ -2057,8 +2148,6 @@ _METAVAR_NAME = 'NAME'
 _METAVAR_CMD = 'CMD'
 _METAVAR_PORT = 'PORT'
 _METAVAR_SECONDS = 'SECONDS'
-# What a listing prints where a device accepts no files or a project defines no commands.
-_NOTHING_LISTED = 'none'
 # Said of --list and --status, each of which answers on its own.
 _TAKES_NO_OTHER_ARGUMENTS = "takes no other arguments"
 
