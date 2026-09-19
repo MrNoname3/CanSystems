@@ -66,6 +66,11 @@ CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS = 45.0
 # How long discovery waits for the retained availability/info of every node behind the gateway -
 # same reasoning as PREFLIGHT_ONLINE_TIMEOUT_SECONDS, just named for what it is here.
 CAN_NODE_DISCOVERY_TIMEOUT_SECONDS = 10.0
+# How long each CAN node behind a restarted gateway has to answer again. The gateway asks every
+# node for its FW_VERSION over the bus as it starts and only marks one online once it replies, so
+# the budget covers those round trips - counted per node, the bus carrying them one at a time, and
+# far shorter than a reflash of the same node.
+CAN_NODE_PRESENCE_TIMEOUT_PER_NODE_SECONDS = 30.0
 # Same kind of wait, for --status: long enough for every device's and every CAN node's retained
 # availability/info to answer the wildcard subscription.
 FLEET_STATUS_DISCOVERY_TIMEOUT_SECONDS = 10.0
@@ -1749,6 +1754,10 @@ class FileTransfer(_BaseTransfer):
         self.file_provider = provider
         # Keyed by CAN node subtopic (e.g. "alert1"); only populated when file_entry.pio_env is set.
         self._can_node_state: Dict[str, Dict[str, Any]] = {}
+        # What the CAN cascade reached, and what it could not because the node was not live to be
+        # reached. Both stay empty for an ordinary file, which has no nodes behind it.
+        self.nodes_confirmed: List[str] = []
+        self.nodes_missed: List[str] = []
 
     @property
     def data(self) -> bytes:
@@ -1834,6 +1843,13 @@ class FileTransfer(_BaseTransfer):
 
         targets = {node: state for node, state in self._can_node_state.items()
                   if node.startswith(node_role) and state[_FIELD_AVAILABILITY] == _STATE_ONLINE}
+        # Named rather than passed over silently: a node that was off got no firmware, and nothing
+        # later in a rollout would come back to it or say that it had been left behind.
+        self.nodes_missed = sorted(node for node, state in self._can_node_state.items()
+                                   if node.startswith(node_role) and state[_FIELD_AVAILABILITY] != _STATE_ONLINE)
+        if self.nodes_missed:
+            logging.warning(f"CAN node(s) of role '{node_role}' not live, so not reflashed by this "
+                            f"upload: {', '.join(self.nodes_missed)}")
         if not targets:
             logging.warning(f"No live CAN node behind this gateway matched the role '{node_role}'; "
                             f"nothing to verify")
@@ -1865,6 +1881,8 @@ class FileTransfer(_BaseTransfer):
             info: Dict[str, Any] = state[_FIELD_INFO] or {}
             if not _confirm_reported_build(info, expected_hash, node):
                 all_confirmed = False
+                continue
+            self.nodes_confirmed.append(node)
         return all_confirmed
 
 
@@ -2088,7 +2106,8 @@ class PlannedStep:
     step: RolloutStep
     status: StepStatus
     reported: Optional[str] = None   # The build the device answered discovery with, if any.
-    detail: str = ""                 # Why a step failed, filled in by the run.
+    detail: str = ""                 # Why a step failed, or what is worth saying about one that did not.
+    nodes: List[str] = field(default_factory=list[str])  # CAN nodes that answered discovery online.
 
 
 def _entry_is_current(entry: Optional[Dict[str, Any]], expected_hash: str) -> bool:
@@ -2114,11 +2133,17 @@ def build_rollout_plan(steps: List[RolloutStep],
         if entry is None or entry.get(_FIELD_AVAILABILITY) != _STATE_ONLINE:
             planned.append(PlannedStep(step, StepStatus.SKIPPED_OFFLINE, reported))
             continue
-        nodes = [e for (mac, node), e in entries.items() if mac == step.device.mac and node is not None]
-        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(n, expected_hash) for n in nodes):
-            planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported))
+        nodes = {node: e for (mac, node), e in entries.items()
+                 if mac == step.device.mac and node is not None}
+        # Only the ones answering online count, in both decisions below: a node that is off cannot
+        # be reached by this run, so holding the step pending for it would re-send the gateway's
+        # firmware on every rollout and still not update the node. It is picked up by the first
+        # run that finds it back on the bus.
+        live = sorted(node for node, e in nodes.items() if e.get(_FIELD_AVAILABILITY) == _STATE_ONLINE)
+        if _entry_is_current(entry, expected_hash) and all(_entry_is_current(nodes[n], expected_hash) for n in live):
+            planned.append(PlannedStep(step, StepStatus.SKIPPED_CURRENT, reported, nodes=live))
             continue
-        planned.append(PlannedStep(step, StepStatus.PENDING, reported))
+        planned.append(PlannedStep(step, StepStatus.PENDING, reported, nodes=live))
     return planned
 
 
@@ -2168,6 +2193,22 @@ def format_rollout_summary(planned: List[PlannedStep]) -> str:
     return _format_rollout_rows("Rollout summary", planned)
 
 
+def _can_cascade_notes(transfer: FileTransfer) -> List[str]:
+    """What a CAN firmware upload is worth saying about in the summary though it did not fail.
+
+    A node that was off is not an error - the gateway's cascade skips it rather than queuing it -
+    but it is still a node left on the old image, and the summary is the only place that would
+    ever say so."""
+    if transfer.file_entry.pio_env is None:
+        return []
+    notes: List[str] = []
+    if transfer.nodes_missed:
+        notes.append(f"offline, not reflashed: {', '.join(transfer.nodes_missed)}")
+    if not transfer.nodes_confirmed:
+        notes.append(f"no CAN node answered {transfer.file_entry.name}")
+    return notes
+
+
 def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
                       mqtt_config: MQTTConfig) -> Optional[str]:
     """Sends one step: its pre-firmware transfers first, then the device's own image, each
@@ -2175,12 +2216,15 @@ def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
     whole step held, or what stopped it."""
     step = entry.step
     device_config = DeviceConfig(mac_address=step.device.mac, project_name=step.project.pio_project)
+    notes: List[str] = []
 
     for file_entry in step.before_firmware:
         logging.info(f"Rollout: {step.device.display_name} - {file_entry.name}")
         provider = build_file_provider(file_entry, step.device, config_manager)
-        if not FileTransfer(device_config, mqtt_config, file_entry, provider).run():
+        transfer = FileTransfer(device_config, mqtt_config, file_entry, provider)
+        if not transfer.run():
             return f"{file_entry.name} did not complete"
+        notes += _can_cascade_notes(transfer)
         # The nodes it reflashed have to hold as well, so the gateway is watched with them.
         held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds, watch_nodes=True).run()
         if held is not None:
@@ -2192,7 +2236,16 @@ def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
                          step.project.pio_project, step.reboot_timeout)
     if not updater.run():
         return "firmware upload did not complete"
-    return SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
+    # Without the nodes: the gateway's own restart takes their presence with it, so watching them
+    # through this soak would fail on a reboot that went perfectly well. They are checked after it.
+    held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
+    if held is not None:
+        return held
+    returned = CanNodePresence(mqtt_config, step.device.mac, entry.nodes).run()
+    if returned is not None:
+        return returned
+    entry.detail = "; ".join(notes)
+    return None
 
 
 def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",
@@ -2216,6 +2269,66 @@ def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",
                 later.status = StepStatus.NOT_REACHED
         return False
     return True
+
+
+class CanNodePresence:
+    """Confirms the CAN nodes behind a gateway answered again after the gateway itself restarted.
+
+    CanMqttGateway::init() republishes every node's availability as offline on each start, and
+    only marks one online again once that node has replied to the FW_VERSION it asks for over the
+    bus. So this reads whether the CAN side came back at all - which a gateway build that comes up
+    on MQTT, holds its soak and never touches the bus again would otherwise pass.
+
+    Presence only, in both senses: the nodes' own firmware is not what a gateway update changes,
+    so what build they report is the business of the transfer that put it there - and this returns
+    as soon as they are all back rather than watching them stay, which is what the soak before it
+    does for the gateway itself."""
+
+    def __init__(self, mqtt_config: MQTTConfig, mac: str, nodes: List[str],
+                 timeout_per_node: float = CAN_NODE_PRESENCE_TIMEOUT_PER_NODE_SECONDS):
+        self.mqtt_client = MQTTClient(mqtt_config)
+        self.mac = mac
+        self.expected = set(nodes)
+        self.timeout = timeout_per_node * len(self.expected)
+        self.online: set[str] = set()
+        self.mqtt_client.set_callbacks(self._on_connect, self._on_message)
+
+    def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
+        if reason_code == 0:
+            self.mqtt_client.subscribe(_can_node_topic(self.mac, _FIELD_AVAILABILITY))
+
+    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        match = _match_can_node_topic(msg.topic, self.mac)
+        if match is None or match[1] != _FIELD_AVAILABILITY:
+            return
+        try:
+            state = json.loads(msg.payload.decode()).get(_PAYLOAD_KEY_STATE)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            state = None
+        if state == _STATE_ONLINE:
+            self.online.add(match[0])
+        else:
+            self.online.discard(match[0])
+
+    def run(self) -> Optional[str]:
+        """Blocks until every expected node is back. Returns None then, or which ones are missing."""
+        if not self.expected:
+            return None
+        if not self.mqtt_client.connect():
+            return f"could not reach the broker to check the CAN nodes behind {self.mac}"
+        try:
+            logging.info(f"CAN nodes: waiting for {', '.join(sorted(self.expected))} to answer again")
+            deadline = time.time() + self.timeout
+            while time.time() < deadline and not self.expected <= self.online:
+                self.mqtt_client.loop()
+            missing = sorted(self.expected - self.online)
+            if missing:
+                return (f"CAN node(s) behind {self.mac} did not come back within "
+                        f"{self.timeout:.0f}s: {', '.join(missing)}")
+            logging.info("CAN nodes: all back")
+            return None
+        finally:
+            self.mqtt_client.disconnect()
 
 
 class SoakWatcher:
