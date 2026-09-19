@@ -232,8 +232,12 @@ bool PubSubClient::isSubAckFor(uint16_t packetId) const {
   if(((this->buffer[0] & 0xF0U) != MQTTSUBACK) || (rxLen < (rxLengthLength + 4U))) {
     return false;
   }
-  const uint16_t acked = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
+  const uint16_t acked = readUint16(static_cast<uint16_t>(rxLengthLength + 1U));
   return acked == packetId;
+}
+
+uint16_t PubSubClient::readUint16(uint16_t pos) const {
+  return static_cast<uint16_t>((static_cast<uint32_t>(this->buffer[pos]) << 8U) + this->buffer[pos + 1U]);
 }
 
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
@@ -426,7 +430,7 @@ bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
   if((this->buffer[0] & 0x06U) == MQTTQOS2) {
     return false;
   }
-  const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+  const uint16_t tl = readUint16(static_cast<uint16_t>(llen + 1U));   /* topic length in bytes */
   // The topic length and the packet length are two independent numbers off the wire, and every
   // index below is built from the first one. A packet where they disagree is a protocol
   // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
@@ -453,9 +457,7 @@ bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
   }
   // Taken before the callback runs, as the acknowledgement is built after it: a callback that
   // publishes writes its own packet over the one being read here.
-  const uint16_t msgId = (msgIdLen != 0U)
-                             ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
-                             : 0U;
+  const uint16_t msgId = (msgIdLen != 0U) ? readUint16(static_cast<uint16_t>(llen + 3U + tl)) : 0U;
   // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
   // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
   // back, it names no delivery the broker can close off, and the message would stay in flight.

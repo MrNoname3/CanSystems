@@ -373,6 +373,13 @@ private:
   /// @return New buffer position after the written string.
   static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
 
+  /// @brief Reads the two-byte big-endian field the packet buffer holds at `pos`.
+  /// @details The high byte is widened to 32 bits before it is shifted. Integral promotion would
+  /// otherwise make it an `int`, and eight places over is past what a 16-bit one carries.
+  /// @param pos Offset of the field's first byte.
+  /// @return The value the two bytes spell.
+  [[nodiscard]] uint16_t readUint16(uint16_t pos) const;
+
   /// @brief Builds the MQTT fixed + variable-length header in-place at the start of buf.
   /// @note The header occupies the last `returned_size` bytes of the MQTT_MAX_HEADER_SIZE-byte
   ///       prefix, i.e. starting at buf[MQTT_MAX_HEADER_SIZE - returned_size].
