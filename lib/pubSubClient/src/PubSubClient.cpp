@@ -393,6 +393,14 @@ bool PubSubClient::dispatchPacket(uint16_t len, uint8_t llen) {
     return false;
   }
   if(type == MQTTPINGRESP) {
+    // millis() rather than loop()'s clock: a PINGRESP is settled from the paths that read a packet
+    // without one too, and this is the moment it landed either way. An answer with no run waiting
+    // for it is a second reply to a run already closed.
+    if(pingOutstanding) {
+      const uint32_t roundTripMs = millis() - pingSentMs;
+      const uint16_t capped = (roundTripMs > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(roundTripMs);
+      if(capped > maxPingRoundTripMs) { maxPingRoundTripMs = capped; }
+    }
     pingOutstanding = false;
     return true;
   }
@@ -544,6 +552,9 @@ void PubSubClient::keepAlivePing(uint32_t t) {
   // written over its header would have the rest of it delivered as something else entirely.
   const uint8_t pingReq[2] = { MQTTPINGREQ, 0U };
   if(tcpClient.write(pingReq, 2U) == 2U) {
+    // Only the first ask of a run starts the clock: the ones after it are the same question again,
+    // and the answer that comes back is as old as the question the broker first heard.
+    if(!pingOutstanding) { pingSentMs = t; }
     lastOutActivity = lastInActivity = t;
     pingOutstanding = true;
     pingUnsent = false;
@@ -574,11 +585,15 @@ bool PubSubClient::servicePing(uint32_t t) {
     // asked again until they have been. A ping the link would not take is a different matter:
     // what arrives says nothing about whether the link will take it now.
     const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
-    if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
+    // A ping the client would not take is handed over again at once, because nothing of it has
+    // left. One already on the wire waits longer: TCP is carrying it, so asking again only covers
+    // a broker that let it go by.
+    const uint32_t askAgainAfterMs = pingUnsent ? pingRetryIntervalMs : pingReaskIntervalMs;
+    if(((t - lastPingAttempt) >= askAgainAfterMs) && !answerMayBeWaiting) {
       if(pingOutstanding && !pingReasked) {
-        // Counted for the ping that went missing, not for each ask after it.
+        // Counted for the ping that was late, not for each ask after it.
         pingReasked = true;
-        if(unansweredPings < UINT16_MAX) { unansweredPings++; }
+        if(latePings < UINT16_MAX) { latePings++; }
       }
       keepAlivePing(t);
     }
@@ -888,8 +903,12 @@ uint16_t PubSubClient::getRefusedPingCount() const {
   return this->refusedPings;
 }
 
-uint16_t PubSubClient::getUnansweredPingCount() const {
-  return this->unansweredPings;
+uint16_t PubSubClient::getLatePingCount() const {
+  return this->latePings;
+}
+
+uint16_t PubSubClient::getMaxPingRoundTripMs() const {
+  return this->maxPingRoundTripMs;
 }
 
 bool PubSubClient::setBufferSize(uint16_t size) {

@@ -239,15 +239,22 @@ bool test_keepalive_asks_again_for_a_missing_ping_answer() {
   IS_TRUE(client.loop());
   IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
 
-  // A second later, with nothing waiting to be read, it is asked again.
+  // The ping is on the wire, so the seconds after it pass without another one going out.
   setFakeMillis(baseMs + (7U * tickMs));
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (9U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
+
+  // A re-ask interval after it went out, with nothing waiting to be read, it is asked again.
+  setFakeMillis(baseMs + (10U * tickMs));
   IS_TRUE(client.loop());
   IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
 
   // This one is answered.
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
-  setFakeMillis(baseMs + (7U * tickMs) + stepMs);
+  setFakeMillis(baseMs + (10U * tickMs) + stepMs);
   IS_TRUE(client.loop());
 
   // Past the point the broker would have stopped waiting on the ping that went missing, the
@@ -629,8 +636,8 @@ bool test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised() 
   END_IT
 }
 
-bool test_keepalive_counts_the_answers_that_went_missing() {
-  IT("counts one per ping whose answer went missing, not one per ask");
+bool test_keepalive_counts_the_late_answers() {
+  IT("counts one per ping whose answer came late, not one per ask");
 
   ShimClient shimClient;
   shimClient.setAllowConnect(true);
@@ -642,33 +649,80 @@ bool test_keepalive_counts_the_answers_that_went_missing() {
   PubSubClient client(server, 1883U, callback, shimClient);
   client.setKeepAlive(15U).setPingInterval(5U);
   IS_TRUE(client.connect("client_test1"));
-  IS_EQUAL(client.getUnansweredPingCount(), 0U);
+  IS_EQUAL(client.getLatePingCount(), 0U);
 
-  // The ping goes out; nothing has gone missing until it is asked for a second time.
+  // The ping goes out; nothing is late until it is asked for a second time.
   setFakeMillis(baseMs + (6U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 0U);
+  IS_EQUAL(client.getLatePingCount(), 0U);
 
-  setFakeMillis(baseMs + (7U * tickMs));
+  setFakeMillis(baseMs + (10U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 1U);
+  IS_EQUAL(client.getLatePingCount(), 1U);
 
   // The asks after it are the same ping again.
-  setFakeMillis(baseMs + (8U * tickMs));
+  setFakeMillis(baseMs + (11U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 1U);
+  IS_EQUAL(client.getLatePingCount(), 1U);
 
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
-  setFakeMillis(baseMs + (8U * tickMs) + stepMs);
+  setFakeMillis(baseMs + (11U * tickMs) + stepMs);
   IS_TRUE(client.loop());
 
-  // A second ping, a second answer that never comes, and the count moves once more.
-  setFakeMillis(baseMs + (14U * tickMs));
+  // A second ping, a second answer that comes late, and the count moves once more.
+  setFakeMillis(baseMs + (16U * tickMs));
   IS_TRUE(client.loop());
-  setFakeMillis(baseMs + (15U * tickMs));
+  setFakeMillis(baseMs + (20U * tickMs));
   IS_TRUE(client.loop());
-  IS_EQUAL(client.getUnansweredPingCount(), 2U);
+  IS_EQUAL(client.getLatePingCount(), 2U);
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_keepalive_records_the_slowest_round_trip() {
+  IT("keeps the slowest keep-alive round trip, not the last one");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setKeepAlive(15U).setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+  IS_EQUAL(client.getMaxPingRoundTripMs(), 0U);
+
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+
+  // A ping answered a quarter of a second after it went out.
+  setFakeMillis(baseMs + (6U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (6U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(stepMs));
+
+  // A slower one takes its place.
+  setFakeMillis(baseMs + (12U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (12U * tickMs) + (2U * stepMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(2U * stepMs));
+
+  // A faster one leaves it where it is.
+  setFakeMillis(baseMs + (18U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (18U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(2U * stepMs));
 
   IS_FALSE(shimClient.error());
 
@@ -842,11 +896,12 @@ int main() {
   test_keepalive_waits_before_asking_the_client_again();
   test_keepalive_counts_the_pings_the_client_refused();
   test_keepalive_gives_the_ping_interval_back_when_the_keepalive_is_raised();
-  test_keepalive_counts_the_answers_that_went_missing();
+  test_keepalive_counts_the_late_answers();
   test_keepalive_gives_up_on_a_client_that_never_takes_the_ping();
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
   test_keepalive_a_refused_puback_is_not_traffic();
+  test_keepalive_records_the_slowest_round_trip();
   test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
   test_keepalive_a_late_loop_does_not_move_the_deadline();
   test_keepalive_zero_leaves_the_session_alone();

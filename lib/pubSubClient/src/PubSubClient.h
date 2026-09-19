@@ -77,7 +77,8 @@ private:
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
   static constexpr uint16_t defaultPingInterval = static_cast<uint16_t>(MQTT_PING_INTERVAL);     // Default quiet time before a PINGREQ is due.
-  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over, and between two asks for a missing answer.
+  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
+  static constexpr uint32_t pingReaskIntervalMs = 4000U;                                        // Least time before a ping already on the wire is asked for again.
   static constexpr uint8_t brokerPatienceNumerator = 7U;                                        // A session ends here at 7/5 of a keep-alive interval;
   static constexpr uint8_t brokerPatienceDenominator = 5U;                                      // a broker stops waiting at 3/2 of one.
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
@@ -304,12 +305,17 @@ public:
   /// caused here apart from one caused by the network. Saturates rather than wrapping.
   [[nodiscard]] uint16_t getRefusedPingCount() const;
 
-  /// @brief How many keep-alive pings went unanswered long enough to be asked again since this
-  /// object was built.
-  /// @details Counted once for the ping that went missing, not once per ask. Unlike a refused
-  /// ping, this one is raised by the link losing a packet rather than by the client refusing it,
-  /// so it is the count that moves on a link that stalls. Saturates rather than wrapping.
-  [[nodiscard]] uint16_t getUnansweredPingCount() const;
+  /// @brief How many keep-alive answers arrived later than the client was willing to wait before
+  /// asking again, since this object was built.
+  /// @details Latency, not loss: the request travels over TCP, which does not lose it without the
+  /// connection failing with it. Counted once for the ping that was late, not once per ask.
+  /// Saturates rather than wrapping.
+  [[nodiscard]] uint16_t getLatePingCount() const;
+
+  /// @brief The slowest keep-alive round trip seen since this object was built, in milliseconds.
+  /// @details Measured from the PINGREQ of a run going out to the PINGRESP that ends it, so a run
+  /// asked again keeps the time of its first ask. Saturates rather than wrapping.
+  [[nodiscard]] uint16_t getMaxPingRoundTripMs() const;
 
 private:
   /// @brief Fills the packet buffer with a CONNECT packet.
@@ -524,8 +530,10 @@ private:
   bool pingReasked = false;                       // `true` once the ping of this run has been asked for a second time.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
   uint32_t pingDueSince = 0U;                     // Timestamp (ms) at which the ping of the current run fell due.
+  uint32_t pingSentMs = 0U;                       // Timestamp (ms) at which the ping of the current run first went out.
   uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
-  uint16_t unansweredPings = 0U;                  // Keep-alive pings that had to be asked again; saturates at its maximum.
+  uint16_t latePings = 0U;                        // Keep-alive answers that arrived after the client asked again; saturates at its maximum.
+  uint16_t maxPingRoundTripMs = 0U;               // Slowest keep-alive round trip seen; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.
