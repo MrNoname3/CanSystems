@@ -458,9 +458,9 @@ bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
   // Taken before the callback runs, as the acknowledgement is built after it: a callback that
   // publishes writes its own packet over the one being read here.
   const uint16_t msgId = (msgIdLen != 0U) ? readUint16(static_cast<uint16_t>(llen + 3U + tl)) : 0U;
-  // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
-  // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
-  // back, it names no delivery the broker can close off, and the message would stay in flight.
+  // "SUBSCRIBE, UNSUBSCRIBE, and PUBLISH (in cases where QoS > 0) Control Packets MUST contain a
+  // non-zero 16-bit Packet Identifier" [MQTT-2.3.1-1]: acknowledged back, zero names no delivery
+  // the broker can close off, and the message would stay in flight.
   if((msgIdLen != 0U) && (msgId == 0U)) {
     return false;
   }
