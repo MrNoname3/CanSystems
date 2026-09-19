@@ -407,6 +407,31 @@ bool test_connect_accepts_the_session_the_broker_kept() {
   END_IT
 }
 
+bool test_connect_reports_the_packet_that_would_not_fit() {
+  IT("reports the connect packet that did not fit rather than what ended the session before it");
+  ShimClient shimClient;
+
+  PubSubClient client(server, 1883U, callback, shimClient);
+
+  // A first connect that fails on its own account, so the state the second one leaves behind can
+  // be told from the one it started with.
+  shimClient.setAllowConnect(false);
+  IS_FALSE(client.connect("client_test1"));
+  IS_TRUE(client.state() == PubSubClient::State::CONNECT_FAILED);
+
+  // A client id with nowhere to go: the packet builder stops the client and gives up, and the
+  // caller is owed the reason this connect failed, not the reason the last one did.
+  shimClient.setAllowConnect(true);
+  IS_TRUE(client.setBufferSize(20U));
+  IS_FALSE(client.connect("an identifier far past what twenty bytes can frame"));
+  IS_TRUE(client.state() == PubSubClient::State::PACKET_TOO_LARGE);
+  IS_FALSE(client.connected());
+  // Nothing went out: the packet was never finished.
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(0U));
+
+  END_IT
+}
+
 bool test_connect_opens_a_connection_of_its_own() {
   IT("opens a connection for the CONNECT rather than sending it down one already open");
   ShimClient shimClient;
@@ -503,6 +528,7 @@ int main() {
   test_connect_accepts_the_session_the_broker_kept();
   test_connect_fails_when_the_packet_is_not_taken();
   test_connect_opens_a_connection_of_its_own();
+  test_connect_reports_the_packet_that_would_not_fit();
 
   test_connect_properly_formatted();
   test_connect_non_clean_session();

@@ -59,8 +59,12 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // Half a packet belongs to the session it was arriving on; this one starts the stream over.
   resetReader();
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
-  // Zero means a string did not fit; checkStringLength() has already stopped the client.
-  if(length == 0U) { return false; }
+  // Zero means a string did not fit; checkStringLength() has already stopped the client. The state
+  // has to name that, or the caller reads back whatever ended the session before this one.
+  if(length == 0U) {
+    connectionState = State::PACKET_TOO_LARGE;
+    return false;
+  }
   if(!write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE)) {
     // The link took less than the whole packet, so no CONNACK is coming: waiting for one anyway
     // would hold the caller for the socket timeout and then name it as the reason.

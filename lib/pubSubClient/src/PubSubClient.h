@@ -97,7 +97,7 @@ public:
   // clang-format off
   enum class State : int8_t {
     PROTOCOL_ERROR          = -7,  // A packet arrived that the standard forbids; the session was ended here.
-    PACKET_TOO_LARGE        = -6,  // A packet arrived that the buffer cannot hold; the session was ended here.
+    PACKET_TOO_LARGE        = -6,  // A packet the buffer cannot hold, arriving or being built; the session was ended here.
     CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
