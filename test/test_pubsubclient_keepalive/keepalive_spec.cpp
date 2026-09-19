@@ -683,6 +683,53 @@ bool test_keepalive_counts_the_late_answers() {
   END_IT
 }
 
+bool test_keepalive_records_the_slowest_round_trip() {
+  IT("keeps the slowest keep-alive round trip, not the last one");
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, 4U);
+
+  setFakeMillis(baseMs);
+  PubSubClient client(server, 1883U, callback, shimClient);
+  client.setKeepAlive(15U).setPingInterval(5U);
+  IS_TRUE(client.connect("client_test1"));
+  IS_EQUAL(client.getMaxPingRoundTripMs(), 0U);
+
+  const uint8_t pingresp[] = { 0xD0U, 0x0U };
+
+  // A ping answered a quarter of a second after it went out.
+  setFakeMillis(baseMs + (6U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (6U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(stepMs));
+
+  // A slower one takes its place.
+  setFakeMillis(baseMs + (12U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (12U * tickMs) + (2U * stepMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(2U * stepMs));
+
+  // A faster one leaves it where it is.
+  setFakeMillis(baseMs + (18U * tickMs));
+  IS_TRUE(client.loop());
+  shimClient.respond(pingresp, 2U);
+  setFakeMillis(baseMs + (18U * tickMs) + stepMs);
+  IS_TRUE(client.loop());
+  IS_EQUAL(client.getMaxPingRoundTripMs(), static_cast<uint16_t>(2U * stepMs));
+
+  IS_FALSE(shimClient.error());
+
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_keepalive_one_deadline_covers_a_ping_refused_then_taken() {
   IT("gives up inside the broker's patience when the ping is refused before it is taken");
 
@@ -854,6 +901,7 @@ int main() {
   test_keepalive_starts_the_refusal_deadline_over_on_reconnect();
   test_keepalive_a_refused_publish_is_not_traffic();
   test_keepalive_a_refused_puback_is_not_traffic();
+  test_keepalive_records_the_slowest_round_trip();
   test_keepalive_one_deadline_covers_a_ping_refused_then_taken();
   test_keepalive_a_late_loop_does_not_move_the_deadline();
   test_keepalive_zero_leaves_the_session_alone();

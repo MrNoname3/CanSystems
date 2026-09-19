@@ -312,6 +312,11 @@ public:
   /// Saturates rather than wrapping.
   [[nodiscard]] uint16_t getLatePingCount() const;
 
+  /// @brief The slowest keep-alive round trip seen since this object was built, in milliseconds.
+  /// @details Measured from the PINGREQ of a run going out to the PINGRESP that ends it, so a run
+  /// asked again keeps the time of its first ask. Saturates rather than wrapping.
+  [[nodiscard]] uint16_t getMaxPingRoundTripMs() const;
+
 private:
   /// @brief Fills the packet buffer with a CONNECT packet.
   /// @details Stops the client and returns 0 when a string would not fit the buffer.
@@ -525,8 +530,10 @@ private:
   bool pingReasked = false;                       // `true` once the ping of this run has been asked for a second time.
   uint32_t lastPingAttempt = 0U;                  // Timestamp (ms) of the last attempt to hand the PINGREQ over.
   uint32_t pingDueSince = 0U;                     // Timestamp (ms) at which the ping of the current run fell due.
+  uint32_t pingSentMs = 0U;                       // Timestamp (ms) at which the ping of the current run first went out.
   uint16_t refusedPings = 0U;                     // Keep-alive pings the client would not take; saturates at its maximum.
   uint16_t latePings = 0U;                        // Keep-alive answers that arrived after the client asked again; saturates at its maximum.
+  uint16_t maxPingRoundTripMs = 0U;               // Slowest keep-alive round trip seen; saturates at its maximum.
   MqttCallback callback = nullptr;                // User callback invoked on message receipt.
   IPAddress ip;                                   // Server IP address (used when domain is nullptr).
   const char* domain = nullptr;                   // Server domain name; takes priority over ip when set.
