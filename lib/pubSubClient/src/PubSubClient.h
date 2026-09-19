@@ -84,6 +84,7 @@ private:
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
   static constexpr uint8_t subscribeMaxGrantedQos = 0x02U;                                      // Largest SUBACK return code that names a granted qos; every code between this and the failure one is reserved.
   static constexpr uint8_t highestNamedConnAckCode = 5U;                                        // Largest CONNACK return code the State enum has a name for.
+  static constexpr uint8_t connAckSessionPresent = 0x01U;                                       // Bit 0 of the CONNACK acknowledge flags: the broker holds a session for this client id.
 
 #if defined(ESP8266) || defined(ESP32)
   using MqttCallback = std::function<void(char*, uint8_t*, uint32_t)>;  // Callback type for received MQTT messages (ESP).
@@ -96,7 +97,7 @@ public:
   // clang-format off
   enum class State : int8_t {
     PROTOCOL_ERROR          = -7,  // A packet arrived that the standard forbids; the session was ended here.
-    PACKET_TOO_LARGE        = -6,  // A packet arrived that the buffer cannot hold; the session was ended here.
+    PACKET_TOO_LARGE        = -6,  // A packet the buffer cannot hold, arriving or being built; the session was ended here.
     CONNECT_REFUSED         = -5,  // Broker refused the connect with a code the standard leaves undefined.
     CONNECTION_TIMEOUT      = -4,  // Server did not answer within socketTimeout.
     CONNECTION_LOST         = -3,  // TCP connection dropped unexpectedly.
@@ -334,8 +335,10 @@ private:
 
   /// @brief Waits for the CONNACK and records what it said.
   /// @details Tears the connection down on a timeout, a malformed answer or a refusal.
+  /// @param cleanSession What the CONNECT asked for, which decides whether the answer may offer a
+  /// session the broker kept.
   /// @return `true` when the broker accepted the connection; otherwise, `false`.
-  [[nodiscard]] bool awaitConnAck();
+  [[nodiscard]] bool awaitConnAck(bool cleanSession);
 
   /// @brief Waits for the SUBACK answering the packet id given, dispatching whatever precedes it.
   /// @details Drops the connection when nothing parseable arrives before the socket timeout: the
@@ -369,6 +372,13 @@ private:
   /// @param pos Offset in buf to write to.
   /// @return New buffer position after the written string.
   static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
+
+  /// @brief Reads the two-byte big-endian field the packet buffer holds at `pos`.
+  /// @details The high byte is widened to 32 bits before it is shifted. Integral promotion would
+  /// otherwise make it an `int`, and eight places over is past what a 16-bit one carries.
+  /// @param pos Offset of the field's first byte.
+  /// @return The value the two bytes spell.
+  [[nodiscard]] uint16_t readUint16(uint16_t pos) const;
 
   /// @brief Builds the MQTT fixed + variable-length header in-place at the start of buf.
   /// @note The header occupies the last `returned_size` bytes of the MQTT_MAX_HEADER_SIZE-byte
@@ -414,9 +424,9 @@ private:
 
   /// @brief Collects the fixed header and the remaining-length field.
   /// @return `Complete` once the length is known and the phase has moved on to the payload,
-  ///         `Incomplete` while bytes of it are still missing, `Malformed` for a length field
-  ///         that cannot be parsed or announces less than a PUBLISH needs, `TooLarge` for one
-  ///         announcing more than the buffer holds.
+  ///         `Incomplete` while bytes of it are still missing, `Malformed` for a fixed header no
+  ///         broker sends or a length field that cannot be parsed or that its packet type cannot
+  ///         carry, `TooLarge` for one announcing more than the buffer holds.
   RxResult advanceHeader();
 
   /// @brief Collects the announced payload into the buffer.
@@ -507,7 +517,7 @@ private:
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
-  // Scratch for a run of a PROGMEM payload on its way from flash to the link.
+  // Bytes of a PROGMEM payload copied out of flash at a time on the way to the link.
   static constexpr uint8_t progmemChunkSize = 32U;
 
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().

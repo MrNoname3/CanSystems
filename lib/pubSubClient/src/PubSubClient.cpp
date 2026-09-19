@@ -59,8 +59,12 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
   // Half a packet belongs to the session it was arriving on; this one starts the stream over.
   resetReader();
   const uint16_t length = buildConnectPacket(id, user, pass, willTopic, willQos, willRetain, willMessage, cleanSession);
-  // Zero means a string did not fit; checkStringLength() has already stopped the client.
-  if(length == 0U) { return false; }
+  // Zero means a string did not fit; checkStringLength() has already stopped the client. The state
+  // has to name that, or the caller reads back whatever ended the session before this one.
+  if(length == 0U) {
+    connectionState = State::PACKET_TOO_LARGE;
+    return false;
+  }
   if(!write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE)) {
     // The link took less than the whole packet, so no CONNACK is coming: waiting for one anyway
     // would hold the caller for the socket timeout and then name it as the reason.
@@ -69,7 +73,7 @@ bool PubSubClient::connect(const char* id, const char* user, const char* pass, c
     return false;
   }
   lastInActivity = lastOutActivity = millis();
-  return awaitConnAck();
+  return awaitConnAck(cleanSession);
 }
 
 uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, const char* pass, const char* willTopic,
@@ -128,7 +132,7 @@ uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, cons
   return length;
 }
 
-bool PubSubClient::awaitConnAck() {
+bool PubSubClient::awaitConnAck(bool cleanSession) {
   const uint32_t socketTimeoutMs = static_cast<uint32_t>(this->socketTimeout) * 1000U;
   while(tcpClient.available() == 0) {
     yield();
@@ -143,11 +147,13 @@ bool PubSubClient::awaitConnAck() {
   // The first packet from the server is a CONNACK [MQTT-3.2.0-1], four bytes long. Read anywhere
   // else, the return code is whatever sits at that offset: a PUBACK for message 0x1200 accepts.
   // Its second byte carries the acknowledge flags: bits 7-1 are reserved and come as zero, and
-  // bit 0 offers a session the broker kept for this client id. This client keeps none of its own
-  // - no subscription and no unfinished delivery outlive a connection here - so a session to pick
-  // up is one it cannot hold up its end of, and [MQTT-3.2.2-2] closes on it.
+  // bit 0 offers a session the broker kept for this client id. A clean session is answered with
+  // that bit clear [MQTT-3.2.2-1], so a broker setting it there has broken the rule; where a clean
+  // session was not asked for, the bit is the broker's to set [MQTT-3.2.2-2] and says the
+  // subscriptions and queued messages of the last one are still waiting.
+  const uint8_t forbiddenAckFlags = cleanSession ? 0xFFU : static_cast<uint8_t>(~connAckSessionPresent);
   const bool connAckValid = (connAck == RxResult::Complete) && (rxLen == 4U) &&
-                            ((this->buffer[0] & 0xF0U) == MQTTCONNACK) && (this->buffer[2] == 0x00U);
+                            ((this->buffer[0] & 0xF0U) == MQTTCONNACK) && ((this->buffer[2] & forbiddenAckFlags) == 0x00U);
   // A packet that did arrive whole and is not the CONNACK is a protocol violation, not a link that
   // went quiet; [MQTT-4.8.0-1] closes on those, and the state says which of the two it was.
   const State connAckFailure = (connAck == RxResult::Complete) ? State::PROTOCOL_ERROR : readFailureState(connAck);
@@ -226,8 +232,12 @@ bool PubSubClient::isSubAckFor(uint16_t packetId) const {
   if(((this->buffer[0] & 0xF0U) != MQTTSUBACK) || (rxLen < (rxLengthLength + 4U))) {
     return false;
   }
-  const uint16_t acked = static_cast<uint16_t>((this->buffer[rxLengthLength + 1U] << 8U) + this->buffer[rxLengthLength + 2U]);
+  const uint16_t acked = readUint16(static_cast<uint16_t>(rxLengthLength + 1U));
   return acked == packetId;
+}
+
+uint16_t PubSubClient::readUint16(uint16_t pos) const {
+  return static_cast<uint16_t>((static_cast<uint32_t>(this->buffer[pos]) << 8U) + this->buffer[pos + 1U]);
 }
 
 bool PubSubClient::checkStringLength(uint16_t length, const char* str) const {
@@ -420,7 +430,7 @@ bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
   if((this->buffer[0] & 0x06U) == MQTTQOS2) {
     return false;
   }
-  const uint16_t tl = static_cast<uint16_t>((this->buffer[llen + 1U] << 8U) + this->buffer[llen + 2U]); /* topic length in bytes */
+  const uint16_t tl = readUint16(static_cast<uint16_t>(llen + 1U));   /* topic length in bytes */
   // The topic length and the packet length are two independent numbers off the wire, and every
   // index below is built from the first one. A packet where they disagree is a protocol
   // violation, and [MQTT-4.8.0-1] answers those by closing the connection.
@@ -447,12 +457,10 @@ bool PubSubClient::dispatchPublish(uint16_t len, uint8_t llen) {
   }
   // Taken before the callback runs, as the acknowledgement is built after it: a callback that
   // publishes writes its own packet over the one being read here.
-  const uint16_t msgId = (msgIdLen != 0U)
-                             ? static_cast<uint16_t>((this->buffer[llen + 3U + tl] << 8U) + this->buffer[llen + 3U + tl + 1U])
-                             : 0U;
-  // "Each time a Client sends a new packet of one of these types it MUST assign it a currently
-  // unused Packet Identifier" [MQTT-2.3.1-1], and zero is never one of those: acknowledged
-  // back, it names no delivery the broker can close off, and the message would stay in flight.
+  const uint16_t msgId = (msgIdLen != 0U) ? readUint16(static_cast<uint16_t>(llen + 3U + tl)) : 0U;
+  // "SUBSCRIBE, UNSUBSCRIBE, and PUBLISH (in cases where QoS > 0) Control Packets MUST contain a
+  // non-zero 16-bit Packet Identifier" [MQTT-2.3.1-1]: acknowledged back, zero names no delivery
+  // the broker can close off, and the message would stay in flight.
   if((msgIdLen != 0U) && (msgId == 0U)) {
     return false;
   }
