@@ -2747,3 +2747,24 @@ def test_rollout_plan_counts_every_node_role_behind_a_gateway() -> None:
         ("fcf5c401bd83", "irrigation1"): _entry(OLD),
     }, CURRENT)
     assert planned[1].nodes == ["alert1", "irrigation1"]
+
+
+class _SlowSoakMQTT(_SoakMQTT):
+    """A loop() that takes long enough to carry the clock past the soak deadline checked the turn
+    before it - which is when a heartbeat gets a negative remaining to print."""
+
+    def loop(self, timeout: float = 0.1) -> None:
+        super().loop(timeout)
+        time.sleep(0.05)
+
+
+def test_soak_heartbeat_never_counts_below_zero(monkeypatch: pytest.MonkeyPatch,
+                                                caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(ota, "SOAK_HEARTBEAT_SECONDS", 0.01)
+    watcher = _watcher(soak_seconds=0.06, baseline_timeout=0.01)
+    watcher.mqtt_client = _SlowSoakMQTT(watcher, [_online()], [])  # type: ignore[assignment]  # deliberate test double
+    with caplog.at_level(logging.INFO):
+        assert watcher.run() is None
+    beats = [r.message for r in caplog.records if "holding," in r.message]
+    assert beats, "the heartbeat never fired, so nothing was pinned down"
+    assert all("-" not in beat.split("holding, ")[1] for beat in beats), beats

@@ -2421,7 +2421,9 @@ class SoakWatcher:
                 if self.failure is not None:
                     return self.failure
                 if time.time() >= next_beat:
-                    logging.info(f"Soak: {self.mac} holding, {end - time.time():.0f}s left")
+                    # Clamped: the loop() this follows can carry the clock past the deadline the
+                    # turn before it was checked, and a countdown does not go below zero.
+                    logging.info(f"Soak: {self.mac} holding, {max(0.0, end - time.time()):.0f}s left")
                     next_beat += SOAK_HEARTBEAT_SECONDS
             logging.info(f"Soak: {self.mac} held for {self.soak_seconds:.0f}s")
             return None
