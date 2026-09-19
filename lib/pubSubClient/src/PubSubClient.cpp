@@ -574,7 +574,11 @@ bool PubSubClient::servicePing(uint32_t t) {
     // asked again until they have been. A ping the link would not take is a different matter:
     // what arrives says nothing about whether the link will take it now.
     const bool answerMayBeWaiting = pingOutstanding && (tcpClient.available() != 0);
-    if(((t - lastPingAttempt) >= pingRetryIntervalMs) && !answerMayBeWaiting) {
+    // A ping the client would not take is handed over again at once, because nothing of it has
+    // left. One already on the wire waits longer: TCP is carrying it, so asking again only covers
+    // a broker that let it go by.
+    const uint32_t askAgainAfterMs = pingUnsent ? pingRetryIntervalMs : pingReaskIntervalMs;
+    if(((t - lastPingAttempt) >= askAgainAfterMs) && !answerMayBeWaiting) {
       if(pingOutstanding && !pingReasked) {
         // Counted for the ping that was late, not for each ask after it.
         pingReasked = true;

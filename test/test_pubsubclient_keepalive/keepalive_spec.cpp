@@ -239,15 +239,22 @@ bool test_keepalive_asks_again_for_a_missing_ping_answer() {
   IS_TRUE(client.loop());
   IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
 
-  // A second later, with nothing waiting to be read, it is asked again.
+  // The ping is on the wire, so the seconds after it pass without another one going out.
   setFakeMillis(baseMs + (7U * tickMs));
+  IS_TRUE(client.loop());
+  setFakeMillis(baseMs + (9U * tickMs));
+  IS_TRUE(client.loop());
+  IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 2U));
+
+  // A re-ask interval after it went out, with nothing waiting to be read, it is asked again.
+  setFakeMillis(baseMs + (10U * tickMs));
   IS_TRUE(client.loop());
   IS_EQUAL(shimClient.received(), static_cast<uint16_t>(afterConnect + 4U));
 
   // This one is answered.
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
-  setFakeMillis(baseMs + (7U * tickMs) + stepMs);
+  setFakeMillis(baseMs + (10U * tickMs) + stepMs);
   IS_TRUE(client.loop());
 
   // Past the point the broker would have stopped waiting on the ping that went missing, the
@@ -649,24 +656,24 @@ bool test_keepalive_counts_the_late_answers() {
   IS_TRUE(client.loop());
   IS_EQUAL(client.getLatePingCount(), 0U);
 
-  setFakeMillis(baseMs + (7U * tickMs));
+  setFakeMillis(baseMs + (10U * tickMs));
   IS_TRUE(client.loop());
   IS_EQUAL(client.getLatePingCount(), 1U);
 
   // The asks after it are the same ping again.
-  setFakeMillis(baseMs + (8U * tickMs));
+  setFakeMillis(baseMs + (11U * tickMs));
   IS_TRUE(client.loop());
   IS_EQUAL(client.getLatePingCount(), 1U);
 
   const uint8_t pingresp[] = { 0xD0U, 0x0U };
   shimClient.respond(pingresp, 2U);
-  setFakeMillis(baseMs + (8U * tickMs) + stepMs);
+  setFakeMillis(baseMs + (11U * tickMs) + stepMs);
   IS_TRUE(client.loop());
 
-  // A second ping, a second answer that never comes, and the count moves once more.
-  setFakeMillis(baseMs + (14U * tickMs));
+  // A second ping, a second answer that comes late, and the count moves once more.
+  setFakeMillis(baseMs + (16U * tickMs));
   IS_TRUE(client.loop());
-  setFakeMillis(baseMs + (15U * tickMs));
+  setFakeMillis(baseMs + (20U * tickMs));
   IS_TRUE(client.loop());
   IS_EQUAL(client.getLatePingCount(), 2U);
 

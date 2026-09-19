@@ -77,7 +77,8 @@ private:
   static constexpr uint16_t defaultKeepAlive = static_cast<uint16_t>(MQTT_KEEPALIVE);           // Default keep-alive interval in seconds.
   static constexpr uint16_t defaultSocketTimeout = static_cast<uint16_t>(MQTT_SOCKET_TIMEOUT);  // Default socket timeout in seconds.
   static constexpr uint16_t defaultPingInterval = static_cast<uint16_t>(MQTT_PING_INTERVAL);     // Default quiet time before a PINGREQ is due.
-  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over, and between two asks for a missing answer.
+  static constexpr uint32_t pingRetryIntervalMs = 1000U;                                        // Least time between two attempts to hand the same PINGREQ over.
+  static constexpr uint32_t pingReaskIntervalMs = 4000U;                                        // Least time before a ping already on the wire is asked for again.
   static constexpr uint8_t brokerPatienceNumerator = 7U;                                        // A session ends here at 7/5 of a keep-alive interval;
   static constexpr uint8_t brokerPatienceDenominator = 5U;                                      // a broker stops waiting at 3/2 of one.
   static constexpr uint8_t subscribeFailureCode = 0x80U;                                        // SUBACK return code for a filter the broker would not grant.
