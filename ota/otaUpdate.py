@@ -2122,9 +2122,13 @@ def build_rollout_plan(steps: List[RolloutStep],
     return planned
 
 
-def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str]]:
-    """(label, status, detail) per step, with each step's pre-firmware transfers under it."""
-    rows: List[tuple[str, str, str]] = []
+def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str, str]]:
+    """(place and project, device, status, detail) per step, with each step's pre-firmware
+    transfers under it.
+
+    The order runs across projects rather than through one at a time, so each line carries its
+    own - which is also what tells two devices of the same friendly name apart."""
+    rows: List[tuple[str, str, str, str]] = []
     for index, entry in enumerate(planned, start=1):
         step = entry.step
         if entry.detail:
@@ -2133,21 +2137,24 @@ def _rollout_rows(planned: List[PlannedStep]) -> List[tuple[str, str, str]]:
             detail = f"{entry.reported or 'no info'} -> soak {step.soak_seconds:.0f}s"
         else:
             detail = entry.reported or ""
-        rows.append((f"  {index}. {step.device.display_name}", entry.status.value, detail))
-        rows += [(f"       + {f.name}", "", "") for f in step.before_firmware]
+        rows.append((f"  {index}. {step.project.name}", step.device.display_name,
+                     entry.status.value, detail))
+        rows += [("", f"  + {f.name}", "", "") for f in step.before_firmware]
     return rows
 
 
 def _format_rollout_rows(heading: str, planned: List[PlannedStep]) -> str:
-    """Both listings share this: one column set, sized to whatever the longest label needs."""
+    """Both listings share this: one column set, sized to whatever the longest entry needs."""
     if not planned:
         return f"{heading}\n  (no steps; {_DEVICES_FILE_NAME} lists no {_YAML_KEY_ROLLOUT} order)"
     rows = _rollout_rows(planned)
-    width = max(len(label) for label, _, _ in rows)
-    status_width = max(len(status) for _, status, _ in rows)
+    place_width = max(len(place) for place, _, _, _ in rows)
+    device_width = max(len(device) for _, device, _, _ in rows)
+    status_width = max(len(status) for _, _, status, _ in rows)
     lines = [heading, ""]
-    for label, status, detail in rows:
-        lines.append(f"{label:{width}s}  {status:{status_width}s}  {detail}".rstrip())
+    for place, device, status, detail in rows:
+        lines.append(f"{place:{place_width}s}  {device:{device_width}s}  "
+                     f"{status:{status_width}s}  {detail}".rstrip())
     return "\n".join(lines)
 
 

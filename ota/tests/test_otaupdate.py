@@ -2371,10 +2371,26 @@ def test_format_rollout_plan_lists_each_step_with_its_soak_and_extras() -> None:
     }, CURRENT)
     lines = ota.format_rollout_plan(planned, CURRENT).splitlines()
     assert CURRENT in lines[0]
-    assert lines[2].startswith("  1. Test2") and "pending" in lines[2] and "soak 900s" in lines[2]
-    assert lines[3].startswith("  2. Living room") and "soak 300s" in lines[3]
+    assert lines[2].startswith("  1. Thermometer") and "Test2" in lines[2]
+    assert "pending" in lines[2] and "soak 900s" in lines[2]
+    assert lines[3].startswith("  2. CAN gateway") and "Living room" in lines[3]
+    assert "soak 300s" in lines[3]
     # The gateway's pre-firmware transfer is listed under it, so the order inside a step is visible.
     assert lines[4].strip() == "+ CAN alert firmware upload"
+
+
+def test_format_rollout_plan_names_the_project_on_every_line() -> None:
+    # The order runs across projects, so the heading --status groups under is no help here; two
+    # devices of the same friendly name are only told apart by the project beside them.
+    thermo, gateway = _cli_projects()
+    thermo.devices[0].friendly_name = "Home BP"
+    gateway.devices[0].friendly_name = "Home BP"
+    planned = [ota.PlannedStep(ota.RolloutStep(project=thermo, device=thermo.devices[0]),
+                               ota.StepStatus.PENDING),
+               ota.PlannedStep(ota.RolloutStep(project=gateway, device=gateway.devices[0]),
+                               ota.StepStatus.PENDING)]
+    lines = ota.format_rollout_plan(planned, CURRENT).splitlines()
+    assert "Thermometer" in lines[2] and "CAN gateway" in lines[3]
 
 
 def test_format_rollout_plan_says_so_when_there_is_no_order() -> None:
@@ -2434,7 +2450,7 @@ def test_run_rollout_leaves_a_skipped_step_alone(monkeypatch: pytest.MonkeyPatch
 
 def test_run_rollout_stops_at_the_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     # No board here can roll back, so a build that fails one device must not reach the next: every
-    # device it were sent to afterwards is another one needing a cable.
+    # device it is sent to afterwards is another one needing a cable.
     runner = _RecordingRun(fail_on="40f52033765d")
     monkeypatch.setattr(ota, "_run_rollout_step", runner)
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
