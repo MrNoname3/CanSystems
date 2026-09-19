@@ -278,6 +278,11 @@ _COMMAND_KEY_CMD = 'cmd'
 _MISSING_ACK_FIELD_WARNING = f"Received message without '{_ACK_KEY_TYPE}' field"
 
 
+def _expected_build_hash() -> str:
+    """The build this checkout would put on a device, spelled the way `info` reports it."""
+    return f"{git_utils.get_git_hash():08x}"
+
+
 def _confirm_reported_build(info: Dict[str, Any], expected_hash: str, subject: str) -> bool:
     """Reads one info report back against the build just sent, for whoever `subject` names - the
     device itself after a firmware upload, or a CAN node after the gateway cascaded one to it.
@@ -1674,7 +1679,7 @@ class OTAUpdater(_BaseTransfer):
         return True
 
     def _verify_after_transfer(self) -> bool:
-        expected_hash = f"{git_utils.get_git_hash():08x}"
+        expected_hash = _expected_build_hash()
         deadline = time.time() + self.reboot_timeout
         confirmed = False
         while time.time() < deadline:
@@ -1841,7 +1846,7 @@ class FileTransfer(_BaseTransfer):
             state[_STATE_SAW_OFFLINE] = False
             state[_STATE_INFO_FRESH] = False
 
-        expected_hash = f"{git_utils.get_git_hash():08x}"
+        expected_hash = _expected_build_hash()
         total_timeout = CAN_NODE_REBOOT_TIMEOUT_PER_NODE_SECONDS * len(targets)
         deadline = time.time() + total_timeout
         while time.time() < deadline:
@@ -2013,7 +2018,7 @@ def format_fleet_status(entries: Dict[tuple[str, Optional[str]], Dict[str, Any]]
     device, with a gateway's CAN nodes indented under it. A device is named as the menu names it,
     friendly name and MAC together, so a line can be acted on without looking the address up
     again. What answered from a MAC devices.yaml does not list keeps a heading of its own."""
-    expected_hash = f"{git_utils.get_git_hash():08x}"
+    expected_hash = _expected_build_hash()
 
     nodes_by_mac: Dict[str, List[str]] = {}
     for mac, node in entries:
@@ -2156,6 +2161,56 @@ def format_rollout_summary(planned: List[PlannedStep]) -> str:
     return _format_rollout_rows("Rollout summary", planned)
 
 
+def _run_rollout_step(entry: PlannedStep, config_manager: "ConfigManager",
+                      mqtt_config: MQTTConfig) -> Optional[str]:
+    """Sends one step: its pre-firmware transfers first, then the device's own image, each
+    followed by the soak that has to hold before anything else is sent. Returns None when the
+    whole step held, or what stopped it."""
+    step = entry.step
+    device_config = DeviceConfig(mac_address=step.device.mac, project_name=step.project.pio_project)
+
+    for file_entry in step.before_firmware:
+        logging.info(f"Rollout: {step.device.display_name} - {file_entry.name}")
+        provider = build_file_provider(file_entry, step.device, config_manager)
+        if not FileTransfer(device_config, mqtt_config, file_entry, provider).run():
+            return f"{file_entry.name} did not complete"
+        # The nodes it reflashed have to hold as well, so the gateway is watched with them.
+        held = SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds, watch_nodes=True).run()
+        if held is not None:
+            return held
+
+    logging.info(f"Rollout: {step.device.display_name} - firmware")
+    firmware_path = config_manager.get_firmware_path(step.project.pio_project)
+    updater = OTAUpdater(device_config, mqtt_config, firmware_path,
+                         step.project.pio_project, step.reboot_timeout)
+    if not updater.run():
+        return "firmware upload did not complete"
+    return SoakWatcher(mqtt_config, step.device.mac, step.soak_seconds).run()
+
+
+def run_rollout(planned: List[PlannedStep], config_manager: "ConfigManager",
+                mqtt_config: MQTTConfig) -> bool:
+    """Walks the plan, updating each step's status as it goes.
+
+    Stops at the first failure and marks whatever was still to come as not reached. There is no
+    rollback on any board here, so a build that fails one device is a build that must not be sent
+    to the next; carrying on would multiply the devices needing a cable."""
+    for index, entry in enumerate(planned):
+        if entry.status is not StepStatus.PENDING:
+            continue
+        failure = _run_rollout_step(entry, config_manager, mqtt_config)
+        if failure is None:
+            entry.status = StepStatus.DONE
+            continue
+        entry.status = StepStatus.FAILED
+        entry.detail = failure
+        for later in planned[index + 1:]:
+            if later.status is StepStatus.PENDING:
+                later.status = StepStatus.NOT_REACHED
+        return False
+    return True
+
+
 class SoakWatcher:
     """Watches one device hold its connection for a while after an update.
 
@@ -2263,28 +2318,36 @@ _FW_OPTION = "Firmware upload"
 _PROVISION_OPTION = "Initial provisioning (USB: build + upload LittleFS image)"
 _SERIAL_FLASH_OPTION = "Initial firmware flash (USB: build + serial upload)"
 _FLEET_STATUS_OPTION = "Fleet status (query every device and CAN node)"
+_ROLLOUT_OPTION = "Fleet rollout (update every device in the configured order)"
 
 
-def select_target(projects: List[ProjectEntry], mqtt_config: MQTTConfig) -> Optional[ActionResult]:
+def select_target(projects: List[ProjectEntry], mqtt_config: MQTTConfig,
+                  rollout_action: Callable[[], None]) -> Optional[ActionResult]:
     """
     Interactive three-level menu:
-      1. Select project (or query fleet status, which loops back here)
+      1. Select project (or query fleet status / run the rollout, which loop back here)
       2. Select device
       3. Select action (firmware upload, file transfer, or command)
-    Returns an ActionResult, or None if the user cancelled.
+    Returns an ActionResult, or None if the user cancelled. `rollout_action` runs the whole
+    configured order; it is passed in rather than built here so this stays about the choosing.
     """
     menu = MenuSelector()
     project_map = {p.name: p for p in projects}
 
     while True:
         # --- Level 1: project selection ---
-        choice = menu.select("Select project", [_FLEET_STATUS_OPTION, *project_map], show_back=False)
+        choice = menu.select("Select project", [_FLEET_STATUS_OPTION, _ROLLOUT_OPTION, *project_map],
+                             show_back=False)
         if choice in (MenuSelector.CANCEL, None):
             return None
         if choice == _FLEET_STATUS_OPTION:
             # curses.wrapper() fully tears down and restores the terminal on each menu.select()
             # call, so plain print()/input() here is safe between two menu turns.
             print(format_fleet_status(FleetStatus(mqtt_config).collect(), projects))
+            input("\nPress Enter to continue...")
+            continue
+        if choice == _ROLLOUT_OPTION:
+            rollout_action()
             input("\nPress Enter to continue...")
             continue
 
@@ -2345,6 +2408,9 @@ _FLAG_FILE = '--file'
 _FLAG_COMMAND = '--command'
 _FLAG_UPLOAD_PORT = '--upload-port'
 _FLAG_OTA_TIMEOUT = '--ota-timeout'
+_FLAG_ROLLOUT = '--rollout'
+_FLAG_DRY_RUN = '--dry-run'
+_FLAG_YES = '--yes'
 # The placeholders those flags take an argument under, repeated wherever a message spells out an
 # invocation.
 _METAVAR_MAC = 'MAC'
@@ -2354,6 +2420,8 @@ _METAVAR_PORT = 'PORT'
 _METAVAR_SECONDS = 'SECONDS'
 # Said of --list and --status, each of which answers on its own.
 _TAKES_NO_OTHER_ARGUMENTS = "takes no other arguments"
+# --rollout names no target of its own; these two are the only flags that go with it.
+_ROLLOUT_COMPANION_FLAGS = f"{_FLAG_DRY_RUN} and {_FLAG_YES}"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -2378,6 +2446,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help=f"serial port for {_FLAG_PROVISION} / {_FLAG_SERIAL_FLASH}; without it "
                              f"PlatformIO picks one itself, which is a guess when several boards "
                              f"are attached")
+    parser.add_argument(_FLAG_ROLLOUT, action='store_true',
+                        help=f"update every device the {_YAML_KEY_ROLLOUT} section of "
+                             f"{_DEVICES_FILE_NAME} lists, in the order it gives, waiting for each "
+                             f"to hold its connection before starting the next")
+    parser.add_argument(_FLAG_DRY_RUN, action='store_true',
+                        help=f"with {_FLAG_ROLLOUT}, print the plan and exit without sending anything")
+    parser.add_argument(_FLAG_YES, action='store_true',
+                        help=f"with {_FLAG_ROLLOUT}, start without asking to confirm the plan")
     parser.add_argument(_FLAG_OTA_TIMEOUT, type=float, metavar=_METAVAR_SECONDS,
                         help=f"seconds to wait for the device to reboot and confirm the new build "
                              f"after {_FLAG_FIRMWARE}, overriding the shared default "
@@ -2485,23 +2561,68 @@ def _build_worker(result: ActionResult, config_manager: ConfigManager, mqtt_conf
     return OTAUpdater(device_config, mqtt_config, firmware_path, result.project.pio_project, reboot_timeout)
 
 
+def perform_rollout(device_manager: DeviceManager, projects: List[ProjectEntry],
+                    config_manager: ConfigManager, mqtt_config: MQTTConfig,
+                    dry_run: bool = False, assume_yes: bool = False) -> bool:
+    """Prints the plan, gets it agreed to, runs it and reports. Shared by --rollout and the menu,
+    so both show the same thing before sending anything and the same summary afterwards."""
+    steps = device_manager.parse_rollout(projects)
+    expected_hash = _expected_build_hash()
+    planned = build_rollout_plan(steps, FleetStatus(mqtt_config).collect(), expected_hash)
+    print(format_rollout_plan(planned, expected_hash))
+    if dry_run:
+        return True
+    pending = sum(1 for p in planned if p.status is StepStatus.PENDING)
+    if pending == 0:
+        print("\nNothing to do.")
+        return True
+    if not assume_yes:
+        answer = input(f"\nUpdate {pending} device(s) in this order? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Cancelled.")
+            return True
+    ok = run_rollout(planned, config_manager, mqtt_config)
+    print()
+    print(format_rollout_summary(planned))
+    return ok
+
+
+def validate_args(args: argparse.Namespace) -> Optional[str]:
+    """The combinations the parser itself cannot turn back, checked in one place so they can be.
+
+    Returns the message to fail with, or None when the arguments go together. Each answer that
+    stands alone refuses company, and each modifier names the action it belongs to: a run that
+    typed one flag too many should say so rather than quietly pick one of them.
+    """
+    action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
+                    or args.file is not None or args.command is not None)
+    if args.list and (args.device is not None or action_given or args.upload_port is not None
+                      or args.rollout):
+        return f"{_FLAG_LIST} {_TAKES_NO_OTHER_ARGUMENTS}"
+    if args.status and (args.list or args.device is not None or action_given or args.upload_port is not None
+                       or args.ota_timeout is not None or args.rollout):
+        return f"{_FLAG_STATUS} {_TAKES_NO_OTHER_ARGUMENTS}"
+    if args.rollout and (args.device is not None or action_given
+                         or args.upload_port is not None or args.ota_timeout is not None):
+        return f"{_FLAG_ROLLOUT} takes no arguments besides {_ROLLOUT_COMPANION_FLAGS}"
+    if (args.dry_run or args.yes) and not args.rollout:
+        return f"{_ROLLOUT_COMPANION_FLAGS} apply to {_FLAG_ROLLOUT} only"
+    if args.device is None and action_given:
+        return f"an action needs {_FLAG_DEVICE} {_METAVAR_MAC}"
+    if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
+        return f"{_FLAG_UPLOAD_PORT} applies to {_FLAG_PROVISION} and {_FLAG_SERIAL_FLASH} only"
+    if args.ota_timeout is not None and not args.firmware:
+        return f"{_FLAG_OTA_TIMEOUT} applies to {_FLAG_FIRMWARE} only"
+    return None
+
+
 def main():
     """Main entry point"""
     parser = build_arg_parser()
     args = parser.parse_args()
-    action_given = (bool(args.firmware) or bool(args.provision) or bool(args.serial_flash)
-                    or args.file is not None or args.command is not None)
-    if args.list and (args.device is not None or action_given or args.upload_port is not None):
-        parser.error(f"{_FLAG_LIST} {_TAKES_NO_OTHER_ARGUMENTS}")
-    if args.status and (args.list or args.device is not None or action_given or args.upload_port is not None
-                       or args.ota_timeout is not None):
-        parser.error(f"{_FLAG_STATUS} {_TAKES_NO_OTHER_ARGUMENTS}")
-    if args.device is None and action_given:
-        parser.error(f"an action needs {_FLAG_DEVICE} {_METAVAR_MAC}")
-    if args.upload_port is not None and (bool(args.firmware) or args.file is not None or args.command is not None):
-        parser.error(f"{_FLAG_UPLOAD_PORT} applies to {_FLAG_PROVISION} and {_FLAG_SERIAL_FLASH} only")
-    if args.ota_timeout is not None and not args.firmware:
-        parser.error(f"{_FLAG_OTA_TIMEOUT} applies to {_FLAG_FIRMWARE} only")
+    complaint = validate_args(args)
+    if complaint is not None:
+        parser.error(complaint)
 
     # Configured here rather than in whichever object happens to be built: the USB actions run
     # without any transfer worker, and their progress lines were dropped on the default level.
@@ -2525,6 +2646,11 @@ def main():
             print(format_fleet_status(FleetStatus(mqtt_config).collect(), projects))
             sys.exit(0)
 
+        if args.rollout:
+            sys.exit(0 if perform_rollout(device_manager, projects, config_manager, mqtt_config,
+                                          dry_run=bool(args.dry_run),
+                                          assume_yes=bool(args.yes)) else 1)
+
         if args.device is not None:
             result = resolve_target(projects, str(args.device),
                                     firmware=bool(args.firmware),
@@ -2534,7 +2660,10 @@ def main():
                                     command_name=cast(Optional[str], args.command))
         else:
             # Interactive target selection (project → device → action)
-            selected = select_target(projects, mqtt_config)
+            def menu_rollout() -> None:
+                perform_rollout(device_manager, projects, config_manager, mqtt_config)
+
+            selected = select_target(projects, mqtt_config, menu_rollout)
             if selected is None:
                 print("Cancelled.")
                 sys.exit(0)

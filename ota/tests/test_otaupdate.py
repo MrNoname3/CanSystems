@@ -2375,3 +2375,101 @@ def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
     summary = ota.format_rollout_summary(planned)
     assert "done" in summary and "failed" in summary
     assert "went offline during the soak" in summary
+
+
+# --- run_rollout: order, stopping, and what the summary is left holding ------
+
+class _RecordingRun:
+    """Stands in for _run_rollout_step: records the MACs it was asked for, and fails on one."""
+
+    def __init__(self, fail_on: Optional[str] = None, reason: str = "went offline during the soak") -> None:
+        self.seen: list[str] = []
+        self._fail_on = fail_on
+        self._reason = reason
+
+    def __call__(self, entry: "ota.PlannedStep", config_manager: Any, mqtt_config: Any) -> Optional[str]:
+        del config_manager, mqtt_config
+        self.seen.append(entry.step.device.mac)
+        return self._reason if entry.step.device.mac == self._fail_on else None
+
+
+def _planned(*statuses: "ota.StepStatus") -> "list[ota.PlannedStep]":
+    return [ota.PlannedStep(step, status) for step, status in zip(_rollout_steps(), statuses, strict=True)]
+
+
+def test_run_rollout_sends_every_pending_step_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _RecordingRun()
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
+    assert runner.seen == ["40f52033765d", "fcf5c401bd83"]
+    assert [p.status for p in planned] == [ota.StepStatus.DONE, ota.StepStatus.DONE]
+
+
+def test_run_rollout_leaves_a_skipped_step_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _RecordingRun()
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.SKIPPED_OFFLINE, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
+    assert runner.seen == ["fcf5c401bd83"]
+    assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
+
+
+def test_run_rollout_stops_at_the_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No board here can roll back, so a build that fails one device must not reach the next: every
+    # device it were sent to afterwards is another one needing a cable.
+    runner = _RecordingRun(fail_on="40f52033765d")
+    monkeypatch.setattr(ota, "_run_rollout_step", runner)
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is False
+    assert runner.seen == ["40f52033765d"]                      # the gateway was never touched
+    assert planned[0].status is ota.StepStatus.FAILED
+    assert planned[0].detail == "went offline during the soak"
+    assert planned[1].status is ota.StepStatus.NOT_REACHED
+
+
+def test_run_rollout_summary_names_the_step_that_stopped_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="40f52033765d"))
+    planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
+    ota.run_rollout(planned, cast(Any, None), cast(Any, None))
+    summary = ota.format_rollout_summary(planned)
+    assert "failed" in summary and "not reached" in summary
+    assert "went offline during the soak" in summary
+
+
+# --- validate_args: the flag combinations the parser cannot turn back itself --
+
+def _complaint(*argv: str) -> Optional[str]:
+    return ota.validate_args(ota.build_arg_parser().parse_args(list(argv)))
+
+
+def test_rollout_alone_is_accepted() -> None:
+    assert _complaint("--rollout") is None
+    assert _complaint("--rollout", "--dry-run") is None
+    assert _complaint("--rollout", "--yes") is None
+
+
+def test_rollout_refuses_a_target_or_an_action() -> None:
+    # It has its own order to walk, so a device or an action beside it names a second intention.
+    assert _complaint("--rollout", "--device", "40f52033765d") is not None
+    assert _complaint("--rollout", "--device", "40f52033765d", "--firmware") is not None
+    assert _complaint("--rollout", "--ota-timeout", "30") is not None
+    assert _complaint("--rollout", "--upload-port", "/dev/ttyUSB0") is not None
+
+
+def test_answers_that_stand_alone_refuse_the_rollout() -> None:
+    assert _complaint("--list", "--rollout") is not None
+    assert _complaint("--status", "--rollout") is not None
+
+
+def test_rollout_companions_need_the_rollout() -> None:
+    assert _complaint("--dry-run") is not None
+    assert _complaint("--yes") is not None
+    assert _complaint("--device", "40f52033765d", "--firmware", "--yes") is not None
+
+
+def test_existing_combinations_still_judged_the_same_way() -> None:
+    assert _complaint("--device", "40f52033765d", "--firmware") is None
+    assert _complaint("--firmware") is not None                     # an action with no device
+    assert _complaint("--list", "--device", "40f52033765d") is not None
+    assert _complaint("--device", "40f52033765d", "--firmware", "--upload-port", "/dev/x") is not None
