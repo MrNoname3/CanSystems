@@ -86,19 +86,19 @@ projects:
 
 # The order --rollout walks, and how long each device has to hold its connection before the next
 # one is started. Test2 goes first as the canary: it is the run that decides whether the build
-# reaches a real device at all, so it gets the longest soak. The CAN gateway goes last, being the
-# only device whose failure takes others (alert1, alert2) down with it - and its alert image is
-# sent ahead of its own firmware, so the nodes are reflashed through the build the gateway was
-# already proven on.
+# reaches a real device at all, so it gets the longest soak. The radiation detectors are taken
+# last, Home H last of all. The CAN gateway's alert image is sent ahead of its own firmware, so
+# the nodes behind it (alert1, alert2) are reflashed through the build the gateway was already
+# proven on.
 rollout:
   soak_seconds: 300               # Connectivity::onlineSettleTime: what the firmware calls settled.
   steps:
     - mac: 40f52033765d           # Thermometer "Test2"
       soak_seconds: 900
     - mac: bcddc2b622c9           # Thermometer "Home BP"
-    - mac: c82b96034710           # Radiation detector "Home BP"
-    - mac: cc50e30872d3           # Radiation detector "Home H"
     - mac: fcf5c401bd83           # CAN gateway "Home BP living room"
       reboot_timeout: 120         # An ESP32 with CAN nodes to bring back up behind it.
       before_firmware:
         - "CAN alert firmware upload"
+    - mac: c82b96034710           # Radiation detector "Home BP"
+    - mac: cc50e30872d3           # Radiation detector "Home H"
