@@ -424,9 +424,9 @@ private:
 
   /// @brief Collects the fixed header and the remaining-length field.
   /// @return `Complete` once the length is known and the phase has moved on to the payload,
-  ///         `Incomplete` while bytes of it are still missing, `Malformed` for a length field
-  ///         that cannot be parsed or announces less than a PUBLISH needs, `TooLarge` for one
-  ///         announcing more than the buffer holds.
+  ///         `Incomplete` while bytes of it are still missing, `Malformed` for a fixed header no
+  ///         broker sends or a length field that cannot be parsed or that its packet type cannot
+  ///         carry, `TooLarge` for one announcing more than the buffer holds.
   RxResult advanceHeader();
 
   /// @brief Collects the announced payload into the buffer.
@@ -517,7 +517,7 @@ private:
 
   Client& tcpClient;                              // The TCP client the session runs over; fixed for this object's life.
   uint8_t buffer[defaultBufferSize]{};            // Internal packet buffer, zero-initialised.
-  // Scratch for a run of a PROGMEM payload on its way from flash to the link.
+  // Bytes of a PROGMEM payload copied out of flash at a time on the way to the link.
   static constexpr uint8_t progmemChunkSize = 32U;
 
   uint16_t bufferSize = defaultBufferSize;        // Active buffer size; may be reduced by setBufferSize().
