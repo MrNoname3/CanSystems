@@ -68,6 +68,10 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   `AlignTrailingComments: Leave`, and `ruff format` is **never** run (it would collapse them) —
   ruff is lint-only.
 - Don't rename loop variables (e.g. `i`).
+- A **`lib/` class is a whole library**, not a stub trimmed to today's call sites: an unused
+  public method stays, and "nothing calls this" is not a finding against one — `--gc-sections`
+  keeps them out of the images anyway. What does count is a degenerate mechanism under `src/`,
+  something wired up but never driven, or configurability that is read but never written.
 - Match the surrounding file's style and idiom.
 
 ## Git workflow
