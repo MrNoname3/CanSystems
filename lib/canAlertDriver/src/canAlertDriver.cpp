@@ -120,6 +120,15 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
       if(!dataOutValid) { return; }
       (void)MqttBase::sendMessage(dataOut);
     } break;
+    case static_cast<uint16_t>(AlertCmd::HUM_TEMP_SENSOR_ERROR): {
+      Logger::get()->printf_P(PSTR("[CAN] \"%s\": humidity/temperature sensor read failed\r\n"),
+                              MqttBase::getSubtopic());
+    } break;
+    case static_cast<uint16_t>(AlertCmd::MP3_PLAY_ERROR): {
+      const uint16_t track = static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U);
+      Logger::get()->printf_P(PSTR("[CAN] \"%s\": MP3 module would not start track %u\r\n"),
+                              MqttBase::getSubtopic(), track);
+    } break;
     default: {
     } break;
   }

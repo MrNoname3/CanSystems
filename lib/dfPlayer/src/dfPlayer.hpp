@@ -77,6 +77,11 @@ public:
   /// @brief Prints errors from the DFPlayer module.
   using DFPlayerMiniFast::printError;
 
+  /// @brief Adds a callback invoked when a track could not be started at all.
+  /// @param playFailedCallback Function pointer taking the track number that was given up on.
+  /// @note Called once per abandoned track, after the re-sends and the power cycle have failed.
+  void addPlayFailedCallback(void (*playFailedCallback)(uint16_t track));
+
   DFPlayer(const DFPlayer&) = delete;                       // Define copy constructor.
   DFPlayer& operator=(const DFPlayer&) = delete;            // Define copy assignment operator.
   DFPlayer(DFPlayer&&) = delete;                            // Define move constructor.
@@ -113,11 +118,23 @@ private:
     SET_VOLUME,                     // Set the playback volume.
     WAIT_FOR_CMD,                   // Wait for the command to complete.
     PLAY,                           // Start playing the current track.
+    WAIT_FOR_START,                 // Wait for the module to report that playback began.
     WAIT_FOR_PLAY,                  // Wait for the track to finish.
+    RESTART_MODULE,                 // Power the module down before trying the track again.
     CHECK_QUEUE,                    // Check if more tracks are in the queue.
     PLAYING_DELAY,                  // Delay between consecutive tracks.
     TURN_OFF,                       // Turn off the DFPlayer module.
   };
+
+  /// @brief Cuts the module's power and parks the lines it would otherwise pick noise up on.
+  void powerDownModule();
+
+  /// @brief Decides where WAIT_FOR_START goes next.
+  /// @details Started, still within the window, or lost - and a lost command is re-sent while
+  /// there are attempts left, then answered with one power cycle, then given up on.
+  /// @param actualTime The time this round of the state machine is running at.
+  /// @return The state to move to.
+  PlayingStates nextStateWaitingForStart(uint32_t actualTime);
 
   static constexpr uint16_t maxTrack = 9999U;                               // Highest track number the module addresses.
   static constexpr uint8_t maxVolume = 30U;                                 // Highest volume level the module accepts.
@@ -125,6 +142,14 @@ private:
   static constexpr uint8_t cmdExecTime = 120U;                              // Command execution time (ms).
   static constexpr uint16_t playDelayTime = 400U;                           // Delay between tracks (ms).
   static constexpr uint16_t playTimeoutTime = Time::secToMs(10U);           // Timeout for track playback (ms).
+  // A command the module acts on shows up on BUSY within tens of ms, and the slowest start seen
+  // on the bench - with the command sent before the module was ready for it - was near a third of
+  // a second. Past this window the command is gone rather than slow, and re-sending it cannot
+  // restart a track that had in fact begun.
+  static constexpr uint16_t playStartTime = 500U;                           // Grace for playback to begin (ms).
+  static constexpr uint8_t playStartRetries = 2U;                           // Re-sends before power-cycling.
+  static constexpr uint8_t moduleRestartLimit = 1U;                         // Power-cycles before giving up.
+  static constexpr uint16_t moduleRestartTime = Time::secToMs(1U);          // Off time of a power-cycle (ms).
 
   static volatile bool enablePlay;                                          // Interrupt flag indicating readiness to play.
   RgbLedWrapper& rgbLed;                                                    // Reference to the RGB LED controller.
@@ -135,5 +160,9 @@ private:
   const uint8_t intPin;                                                     // Interrupt pin (LOW when playing).
   uint32_t eventTimer;                                                      // Class wide variable for universal timings.
   PlayingStates playingState;                                               // Current state of the playback state machine.
+  PlayQueueItem currentItem;                                                // The item being played, kept across retries.
+  void (*playFailedCallback)(uint16_t track);                               // Reports an abandoned track.
+  uint8_t playRetries;                                                      // Play commands re-sent for currentItem.
+  uint8_t moduleRestarts;                                                   // Power-cycles spent on currentItem.
   CircularBuffer<PlayQueueItem, 5U> playingQueue;                           // Playback queue for tracks.
 };
