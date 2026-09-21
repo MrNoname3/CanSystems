@@ -120,6 +120,10 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
       if(!dataOutValid) { return; }
       (void)MqttBase::sendMessage(dataOut);
     } break;
+    case static_cast<uint16_t>(AlertCmd::HUM_TEMP_SENSOR_ERROR): {
+      Logger::get()->printf_P(PSTR("[CAN] \"%s\": humidity/temperature sensor read failed\r\n"),
+                              MqttBase::getSubtopic());
+    } break;
     default: {
     } break;
   }
