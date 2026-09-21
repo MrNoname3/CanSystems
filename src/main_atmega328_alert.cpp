@@ -35,6 +35,7 @@ static constexpr uint8_t RS232_TX                   = 16U;          // RS232 ser
 //--- Functions ---//
 void canMessageArrived(uint16_t command, const uint8_t (&data)[8]);
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent);
+void mp3PlayFailed(uint16_t track);
 void maxRoundTimeCallback(uint32_t maxRoundTime);
 
 //--- Asserts ---//
@@ -69,6 +70,7 @@ void setup() {
   Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
+  mp3Player.addPlayFailedCallback(mp3PlayFailed);
 
   extSensor.on();
 
@@ -103,6 +105,15 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       (void)canHandler.send(command);
     } break;
   }
+}
+
+void mp3PlayFailed(uint16_t track) {
+  const uint8_t payload[8] = {
+    static_cast<uint8_t>(track & 0xFF),
+    static_cast<uint8_t>((track >> 8U) & 0xFF),
+    0U, 0U, 0U, 0U, 0U, 0U
+  };
+  (void)canHandler.send(AlertCmd::MP3_PLAY_ERROR, payload);
 }
 
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {

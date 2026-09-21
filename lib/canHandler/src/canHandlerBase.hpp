@@ -31,6 +31,7 @@ enum class AlertCmd : uint16_t {
   PLAY_MP3 = CBS,                             // Command to play an MP3 file on the node.
   READ_HUM_TEMP_LDR,                          // Read humidity, temperature, and light sensor values.
   HUM_TEMP_SENSOR_ERROR,                      // Error occurred while using the I2C sensor.
+  MP3_PLAY_ERROR,                             // A track the MP3 module would not start, even re-sent.
 };
 
 /// @brief Commands only the ATmega328P irrigation node understands.

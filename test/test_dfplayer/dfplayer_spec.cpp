@@ -16,11 +16,21 @@ static constexpr uint8_t BUSY_PIN = 3U;
 
 using LedStrip = NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod>;
 
+// Records what the player reports as unplayable.
+static uint16_t reportedTrack = 0U;
+static uint8_t reportCount = 0U;
+static void recordPlayFailure(uint16_t track) {
+  reportedTrack = track;
+  ++reportCount;
+}
+
 static void resetEnv() {
   resetGpioState();
   LedStrip::resetState();
   Stream::clearCaptured();
   setFakeMillis(0U);
+  reportedTrack = 0U;
+  reportCount = 0U;
 }
 
 static size_t packetCount() { return Stream::captured.size() / 10U; }
@@ -41,6 +51,9 @@ static uint16_t packetChecksum(size_t index) {
   return static_cast<uint16_t>((static_cast<uint16_t>(Stream::captured[index * 10U + 7U]) << 8U) | Stream::captured[index * 10U + 8U]);
 }
 
+// The module holds BUSY low only while a track is sounding; it idles high.
+static void setBusy(bool playing) { digitalWrite(BUSY_PIN, playing ? LOW : HIGH); }
+
 // Advances the fake clock and runs the task once.
 static void step(Task& task, uint32_t& now, uint32_t advanceMs) {
   now += advanceMs;
@@ -50,9 +63,10 @@ static void step(Task& task, uint32_t& now, uint32_t advanceMs) {
 
 // Walks a freshly queued track up to the point where the PLAY command was just sent
 // (state: WAIT_FOR_PLAY). Returns the current fake time.
-static uint32_t walkToPlaying(Task& task) {
+static uint32_t walkToPlay(Task& task) {
   uint32_t now = 0U;
   setFakeMillis(now);
+  setBusy(false);             // module idle, as it is before a track starts
   step(task, now, 0U);        // IDLE -> TURN_ON
   step(task, now, 0U);        // TURN_ON: power pins HIGH
   step(task, now, 1001U);     // WAIT_FOR_BOOT elapsed -> SET_VOLUME
@@ -62,8 +76,17 @@ static uint32_t walkToPlaying(Task& task) {
   return now;
 }
 
+// As above, and then the module takes the command: BUSY falls and the track is running.
+static uint32_t walkToPlaying(Task& task) {
+  uint32_t now = walkToPlay(task);
+  setBusy(true);
+  step(task, now, 30U);       // WAIT_FOR_START sees BUSY low -> WAIT_FOR_PLAY
+  return now;
+}
+
 // Finishes the track: busy interrupt fires, queue empties, module powers off.
 static void finishTrack(Task& task, uint32_t now) {
+  setBusy(false);
   triggerInterrupt(BUSY_PIN);
   step(task, now, 0U);        // WAIT_FOR_PLAY -> CHECK_QUEUE
   step(task, now, 0U);        // CHECK_QUEUE (empty) -> TURN_OFF
@@ -270,6 +293,128 @@ bool test_every_packet_carries_its_own_checksum() {
   END_IT
 }
 
+bool test_a_lost_play_command_is_sent_again() {
+  IT("a play command the module never acts on is sent again rather than waited out");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(7U, 20U, 0U, 0U, 0U);
+  uint32_t now = walkToPlay(task);                  // BUSY stays high: nothing started
+  IS_EQUAL(packetCount(), 2U);
+  step(task, now, 501U);                            // start window elapses -> back to PLAY
+  step(task, now, 0U);                              // PLAY sends the command again
+  IS_EQUAL(packetCount(), 3U);
+  IS_EQUAL(packetCmd(2U), CMD_PLAY);
+  IS_EQUAL(packetLsb(2U), 7U);                      // the same track, not the next one
+  IS_EQUAL(getDigitalWriteValue(EN_PIN), HIGH);     // still powered, no restart yet
+  END_IT
+}
+
+bool test_a_deaf_module_is_power_cycled() {
+  IT("a module that ignores every re-send is powered down and brought back up");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(7U, 20U, 0U, 0U, 0U);
+  uint32_t now = walkToPlay(task);
+  for(int attempt = 0; attempt < 2; ++attempt) {    // both re-sends go unanswered
+    step(task, now, 501U);
+    step(task, now, 0U);
+  }
+  IS_EQUAL(packetCount(), 4U);
+  step(task, now, 501U);                            // retries spent -> power cycle
+  IS_EQUAL(getDigitalWriteValue(EN_PIN), LOW);
+  step(task, now, 1001U);                           // off time elapses -> TURN_ON
+  step(task, now, 0U);
+  IS_EQUAL(getDigitalWriteValue(EN_PIN), HIGH);     // module brought back for another try
+  END_IT
+}
+
+bool test_a_module_that_never_answers_gives_the_track_up() {
+  IT("a module still deaf after the power cycle is left off instead of hanging on the track");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(7U, 20U, 0U, 0U, 0U);
+  uint32_t now = 0U;
+  setFakeMillis(now);
+  setBusy(false);
+  for(int i = 0; i < 40; ++i) { step(task, now, 1001U); }   // every wait state elapses, nothing plays
+
+  // Three attempts on each side of the one power cycle: waiting the track out instead would
+  // have sent the command once.
+  size_t playCount = 0U;
+  for(size_t i = 0U; i < packetCount(); ++i) {
+    if(packetCmd(i) == CMD_PLAY) { ++playCount; }
+  }
+  IS_EQUAL(playCount, 6U);
+  IS_EQUAL(getDigitalWriteValue(EN_PIN), LOW);              // powered off, not stuck
+  const size_t settled = packetCount();
+  for(int i = 0; i < 10; ++i) { step(task, now, 1001U); }
+  IS_EQUAL(packetCount(), settled);                         // and it stopped trying
+  END_IT
+}
+
+bool test_a_queued_track_plays_its_own_number() {
+  IT("the second track in the queue is played by its own number, not the first one's");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.play(4U, 10U, 0U, 0U, 0U);
+  player.play(9U, 10U, 0U, 0U, 0U);
+  uint32_t now = walkToPlaying(task);
+  IS_EQUAL(packetLsb(1U), 4U);                      // first track
+  setBusy(false);
+  triggerInterrupt(BUSY_PIN);
+  step(task, now, 0U);                              // WAIT_FOR_PLAY -> CHECK_QUEUE
+  step(task, now, 0U);                              // CHECK_QUEUE (not empty) -> PLAYING_DELAY
+  step(task, now, 401U);                            // delay elapsed -> SET_VOLUME
+  step(task, now, 0U);                              // volume for the second track
+  step(task, now, 121U);                            // WAIT_FOR_CMD -> PLAY
+  step(task, now, 0U);                              // play packet for the second track
+  IS_EQUAL(packetCount(), 4U);
+  IS_EQUAL(packetCmd(3U), CMD_PLAY);
+  IS_EQUAL(packetLsb(3U), 9U);
+  END_IT
+}
+
+bool test_an_abandoned_track_is_reported_once() {
+  IT("a track the module never plays is reported once, by its number");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.addPlayFailedCallback(recordPlayFailure);
+  player.play(7U, 20U, 0U, 0U, 0U);
+  uint32_t now = 0U;
+  setFakeMillis(now);
+  setBusy(false);
+  for(int i = 0; i < 40; ++i) { step(task, now, 1001U); }
+  IS_EQUAL(reportCount, 1U);                        // once the whole ladder is spent, not per attempt
+  IS_EQUAL(reportedTrack, 7U);
+  for(int i = 0; i < 10; ++i) { step(task, now, 1001U); }
+  IS_EQUAL(reportCount, 1U);                        // and not again afterwards
+  END_IT
+}
+
+bool test_a_track_that_plays_is_not_reported() {
+  IT("a track that plays normally is not reported as a failure");
+  resetEnv();
+  RgbLedWrapper rgbLed(19U, 7U);
+  DFPlayer player(rgbLed, RX_PIN, TX_PIN, EN_PIN, BUSY_PIN);
+  Task& task = player;
+  player.addPlayFailedCallback(recordPlayFailure);
+  player.play(7U, 20U, 0U, 0U, 0U);
+  const uint32_t now = walkToPlaying(task);
+  finishTrack(task, now);
+  IS_EQUAL(reportCount, 0U);
+  END_IT
+}
+
 int main() {
   SUITE("DFPlayer");
   test_arming_the_busy_interrupt_leaves_the_other_flags_alone();
@@ -283,5 +428,11 @@ int main() {
   test_an_out_of_range_volume_is_clamped_to_the_limit();
   test_an_in_range_track_reaches_the_module_unchanged();
   test_every_packet_carries_its_own_checksum();
+  test_a_lost_play_command_is_sent_again();
+  test_a_deaf_module_is_power_cycled();
+  test_a_module_that_never_answers_gives_the_track_up();
+  test_a_queued_track_plays_its_own_number();
+  test_an_abandoned_track_is_reported_once();
+  test_a_track_that_plays_is_not_reported();
   FINISH
 }
