@@ -1,0 +1,10 @@
+0002_door_open	The door is open.
+0003_door_closed	The door is closed.
+0004_water_leak_bathroom	Warning. Water leak detected in the bathroom.
+0005_water_leak_bathroom_end	Bathroom leak cleared.
+0006_water_leak_kitchen	Warning. Water leak detected in the kitchen.
+0007_water_leak_kitchen_end	Kitchen leak cleared.
+0008_water_leak_toilet	Warning. Water leak detected in the toilet.
+0009_water_leak_toilet_end	Toilet leak cleared.
+0010_water_leak_fridge	Warning. Water leak detected at the fridge.
+0011_water_leak_fridge_end	Fridge leak cleared.
