@@ -70,9 +70,9 @@ void setup() {
   Build::printBuildInfo();
   rgbLed.begin();
   buttonHandler.addBtnCallback(btnEventHandling);
-  mp3Player.addPlayFailedCallback(mp3PlayFailed);
 
   extSensor.on();
+  mp3Player.addPlayFailedCallback(mp3PlayFailed);
 
   const uint32_t initResult = taskHandler.initTasks();
   const bool initSuccess = (initResult == 0U);
