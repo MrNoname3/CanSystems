@@ -8,6 +8,9 @@
 #
 # Compiler args (-std, -I, -D) are intentionally NOT here: the gate passes
 # `--extra-arg=-std=c++17`, the editor uses its own compile settings.
+#
+# The last block of exclusions holds the checks clang-tidy gained after version 15 that report on
+# this code; each stays off until it has been gone through on its own.
 Checks: >
   clang-analyzer-*,
   readability-*,
@@ -24,4 +27,17 @@ Checks: >
   -modernize-use-auto,
   -readability-convert-member-functions-to-static,
   -readability-static-accessed-through-instance,
-  -performance-no-int-to-ptr
+  -performance-no-int-to-ptr,
+  -readability-use-concise-preprocessor-directives,
+  -readability-redundant-inline-specifier,
+  -readability-math-missing-parentheses,
+  -readability-use-std-min-max,
+  -readability-redundant-casting,
+  -readability-avoid-nested-conditional-operator,
+  -performance-enum-size,
+  -bugprone-switch-missing-default-case,
+  -modernize-type-traits,
+  -clang-analyzer-core.FixedAddressDereference
+# avr-libc's PSTR() declares a __pstr__ at every use.
+CheckOptions:
+  bugprone-reserved-identifier.AllowedIdentifiers: '__pstr__'

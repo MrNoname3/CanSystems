@@ -88,6 +88,16 @@ public:
     wdt_reset();
   }
 #elif defined(ESP32)
+  // The idle tasks the core's own configuration has the watchdog watch; enabling keeps them watched.
+  static constexpr uint32_t idleCoreMask = 0U
+#if defined(CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0)
+                                           | (static_cast<uint32_t>(1) << 0U)
+#endif
+#if defined(CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1)
+                                           | (static_cast<uint32_t>(1) << 1U)
+#endif
+      ;
+
   /// @brief Deleted constructor to prevent instantiation of `WdtHandler` on ESP32.
   WdtHandler() = delete;
 
@@ -99,7 +109,13 @@ public:
   /// @param handle The task handle to be monitored by the watchdog (default is `nullptr`, which monitors the current task).
   /// @return `true` if the watchdog timer is successfully enabled, otherwise `false`.
   [[nodiscard]] static inline bool enableWatchdog(uint32_t wdtTimeSec = 10U, TaskHandle_t handle = nullptr) {
-    const esp_err_t wdtInit = esp_task_wdt_init(wdtTimeSec, true);    // Enable panic too, so ESP32 restarts.
+    esp_task_wdt_config_t wdtConfig{};
+    wdtConfig.timeout_ms = wdtTimeSec * 1000U;
+    wdtConfig.idle_core_mask = idleCoreMask;
+    wdtConfig.trigger_panic = true;                                 // Enable panic too, so ESP32 restarts.
+    // The core starts the watchdog before setup(), so this normally retunes the running one.
+    esp_err_t wdtInit = esp_task_wdt_reconfigure(&wdtConfig);
+    if(wdtInit == ESP_ERR_INVALID_STATE) { wdtInit = esp_task_wdt_init(&wdtConfig); }
     const esp_err_t wdtAdded = esp_task_wdt_add(handle);
     return ((wdtInit == ESP_OK) && (wdtAdded == ESP_OK));
   }

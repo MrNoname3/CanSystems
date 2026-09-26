@@ -170,7 +170,7 @@ NetworkHandler::NetworkErrorType NetworkHandler::connectLan8720(void (*resetWdt)
   Logger::get()->printf_P(PSTR("[LAN8720]\r\n"));
   WiFi.mode(WIFI_OFF);
   WiFi.onEvent(NetworkHandler::WiFiEvent);
-  const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
+  const bool ethInit = ETH.begin(ethPhyType, ethPhyAddress, ethPhyMdcPin, ethPhyMdioPin, ethPhyPower, ethClockMode);
   Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
   if(!ethInit) {
     networkErrState.setError(NetworkError::LAN8720_INIT_FAILED);
