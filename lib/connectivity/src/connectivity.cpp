@@ -67,9 +67,9 @@ bool Connectivity::initOnce() {
 bool Connectivity::initFileSystem() {
   BootProgress::set(BootStage::FileSystem);
   delay(10U);
-  uint32_t totalBytes = 0U;
-  uint32_t usedBytes = 0U;
-  uint32_t freeBytes = 0U;
+  size_t totalBytes = 0U;
+  size_t usedBytes = 0U;
+  size_t freeBytes = 0U;
   const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
   Logger::get()->printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
   if(!initFS) { return false; }
