@@ -2,6 +2,7 @@
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 #include <string.h>                                                 /// Methods for string handling.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 #ifndef MQTT_MAX_PACKET_SIZE                                        /// Ensure the `MQTT_MAX_PACKET_SIZE` macro is defined.
 #error "MQTT_MAX_PACKET_SIZE is not defined in platformio.ini file!"
 #endif
@@ -348,7 +349,7 @@ public:
   /// @param errCode Error code included in the response; 0 means no error.
   /// @return `true` when the whole payload fit.
   [[nodiscard]] static bool formatResponse(char (&buffer)[responseBufferSize], Response response, uint16_t command, uint32_t errCode) {
-    const int32_t written = snprintf_P(buffer, responseBufferSize, PSTR(R"({"type":%hu,"cmd":%hu,"err":%u})"), static_cast<uint16_t>(response), command, errCode);
+    const int32_t written = snprintf_P(buffer, responseBufferSize, PSTR(R"({"type":%hu,"cmd":%hu,"err":%)" PRIu32 R"(})"), static_cast<uint16_t>(response), command, errCode);
     return (written >= 0) && (written < static_cast<int32_t>(responseBufferSize));
   }
 

@@ -1,5 +1,6 @@
 #include "haDiscovery.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
+#include <inttypes.h>                                               /// PRIx32: uint32_t is not unsigned int on every core.
 #include <ctype.h>
 
 namespace {
@@ -56,7 +57,7 @@ HADiscovery::HADiscovery(PublishFn publishFn, void* publishCtx,
   availabilityTopic(availabilityTopic) {}
 
 void HADiscovery::getSwVersionStr(char (&buf)[swVersionBufSize]) {
-  (void)snprintf_P(buf, sizeof(buf), PSTR("%hu (%08x)"), Build::getFwVersion(), Build::getGitHash());
+  (void)snprintf_P(buf, sizeof(buf), PSTR("%hu (%08" PRIx32 ")"), Build::getFwVersion(), Build::getGitHash());
 }
 
 void HADiscovery::buildDeviceName(const uint8_t mac[6], const char* deviceId) {

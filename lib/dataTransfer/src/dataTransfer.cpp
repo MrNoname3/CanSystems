@@ -1,5 +1,6 @@
 #include "dataTransfer.hpp"
 #include "base64.hpp"                                               /// Base64 encoding and decoding utilities.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 #ifdef ESP8266
 #include <Updater.h>                                                /// ESP8266-specific firmware update functionality.
 #elif defined ESP32
@@ -128,13 +129,13 @@ bool DataTransfer::begin(uint32_t fileSize, const char* fileMd5, const char* fil
 #endif
     const bool isEnoughFreeSpace = freeSpace > fileSizeLocal;
     if(!isEnoughFreeSpace) {
-      Logger::get()->printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %u\r\n  Required: %u\r\n"), freeSpace, fileSizeLocal);
+      Logger::get()->printf_P(PSTR("[FT] Not enough free space!\r\n  Available: %" PRIu32 "\r\n  Required: %" PRIu32 "\r\n"), freeSpace, fileSizeLocal);
       dataTransferErrState.setError(DataTransferError::NOT_ENOUGH_STORAGE);
       receivedFile.close();
       return false;
     }
   }
-  Logger::get()->printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %u\r\n  MD5: %s\r\n"), fileNameLocal, fileSizeLocal, fileMd5Local);
+  Logger::get()->printf_P(PSTR("[FT] File transfer started:\r\n  Name: %s\r\n  Size: %" PRIu32 "\r\n  MD5: %s\r\n"), fileNameLocal, fileSizeLocal, fileMd5Local);
   transferTimeoutTimer = millis();
   transferState = TransferState::STORING;
   return true;
@@ -238,7 +239,7 @@ bool DataTransfer::finalizeTransfer() {
       return false;
     }
     if(receivedFile.size() != fileSizeLocal) {
-      Logger::get()->printf_P(PSTR("[FT] File size mismatch! %u != %u\r\n"), receivedFile.size(), fileSizeLocal);
+      Logger::get()->printf_P(PSTR("[FT] File size mismatch! %u != %" PRIu32 "\r\n"), receivedFile.size(), fileSizeLocal);
       dataTransferErrState.setError(DataTransferError::RECEIVED_FILE_SIZE_ERROR);
       transferState = TransferState::CLEANUP;
       return false;

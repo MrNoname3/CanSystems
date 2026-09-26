@@ -91,7 +91,7 @@ void Connectivity::waitOutBackoff() {
   // a device that dies mid-attempt from starting over at the shortest wait on every boot.
   RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
   if(hadRecord) {
-    Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
+    Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %" PRIu32 "s before reconnect\r\n"), backoff.getDelayMs() / 1000U);
     const uint32_t startMs = millis();
     while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
       delay(1000U);
@@ -346,7 +346,7 @@ bool Connectivity::run() {
   }
 
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
-    Logger::get()->printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
+    Logger::get()->printf_P(PSTR("[RUN] Device is offline since: %" PRIu32 "ms\r\n"), (actualTime - deviceResetTimer));
     ResetHandler::restartMCU();
   }
   return true;

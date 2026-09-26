@@ -4,7 +4,8 @@
 #include "resetHandler.hpp"                                         /// Reset reason captured during startup.
 #elif defined(ESP8266) || defined(ESP32)
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
-#include <time.h>                                                   /// UTC time retrieval/formatting (NTP-backed clock).
+#include <inttypes.h>                                               /// PRIu32/PRIx32: uint32_t is not unsigned int on every core.
+#include <time.h>                                                  /// UTC time retrieval/formatting (NTP-backed clock).
 #endif
 
 #if defined(ESP8266) || defined(ESP32)
@@ -113,9 +114,9 @@ void Build::printBuildInfo() {
 #elif defined(ESP8266) || defined(ESP32)
   Logger::get()->printf_P(PSTR("Build info:\r\n"));
   Logger::get()->printf_P(PSTR("  Env: %s\r\n"), getPioEnv());
-  Logger::get()->printf_P(PSTR("  CPP: %u\r\n"), getCppVersion());
+  Logger::get()->printf_P(PSTR("  CPP: %" PRIu32 "\r\n"), getCppVersion());
   Logger::get()->printf_P(PSTR("  FW: %hu\r\n"), getFwVersion());
-  Logger::get()->printf_P(PSTR("  GIT: %08x\r\n"), getGitHash());
+  Logger::get()->printf_P(PSTR("  GIT: %08" PRIx32 "\r\n"), getGitHash());
   Logger::get()->printf_P(PSTR("  Dirty: %hu\r\n"), getGitDirty());
   Logger::get()->printf_P(PSTR("Reset reason: %hu\r\n"), ResetHandler::getResetReason());
 #endif
