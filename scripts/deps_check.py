@@ -13,7 +13,7 @@ through the parsed specifier, so a `>=` pin is compared rather than skipped.
 The environment checked is the one the other guards will use, found the same way they find their
 tools: the project-root .venv when there is one, otherwise the interpreter this runs under.
 
-requirements-ci.txt is deliberately not read: platformio and intelhex are installed only in CI,
+requirements-ci.txt is deliberately not read: pioarduino and intelhex are installed only in CI,
 and PlatformIO itself runs from its own penv.
 
 `--sync` installs the pinned set before checking, instead of only reporting the difference.

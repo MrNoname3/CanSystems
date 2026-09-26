@@ -37,7 +37,7 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
   -r requirements-dev.txt`) — every gate guard finds it there. pio is unaffected by the root
   `.venv` (it runs from its own penv). `ota/requirements.txt` holds only the OTA tool's runtime
-  deps, and `requirements-ci.txt` the two CI-only ones (platformio, intelhex). All three are
+  deps, and `requirements-ci.txt` the two CI-only ones (pioarduino, intelhex). All three are
   pinned exact.
 - urboot bootloader: `scripts/build_urboot.sh [771|800|801]` (podman/docker; see `bootloader/README.md`)
 - MQTT trace/fault proxy: `python scripts/mqtt_proxy.py [--drop client:PINGREQ:3] [--inject ...]` -

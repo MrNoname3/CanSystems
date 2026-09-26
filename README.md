@@ -193,14 +193,14 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-- **PlatformIO** provides the build (`pio`). Install it via the VS Code PlatformIO IDE
-  extension (recommended in `.vscode/extensions.json`) or `pip install platformio`; it runs from
+- **PlatformIO** provides the build (`pio`). Install it via the VS Code pioarduino IDE
+  extension (recommended in `.vscode/extensions.json`) or `pip install pioarduino`; it runs from
   its own install (`~/.platformio/penv/bin/pio`), not from `.venv`, and the root `.venv` does not
   interfere with it. Toolchains download on the first build (needs internet).
 - The Python tooling for the release gate (clang-format, ruff, pyright, pytest, gcovr) plus the
   OTA tool's runtime deps are pinned in `requirements-dev.txt`; installed into the **project-root
   `.venv`**, every gate guard discovers it automatically. CI installs the same file plus
-  `platformio` and `intelhex` on top.
+  `pioarduino` and `intelhex` on top.
 - **Remotes:** the canonical repo is the self-hosted Gitea, which push-mirrors to GitHub
   automatically — a single `origin` (the Gitea URL) is all a working clone needs. A clone
   from GitHub works too; it just cannot push.

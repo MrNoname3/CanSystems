@@ -53,7 +53,7 @@ jobs:
         # requirements-dev.txt is the single source of truth for the pinned gate tooling
         # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
         # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
-        # requirements-ci.txt adds the two that are not installed locally: platformio and intelhex.
+        # requirements-ci.txt adds the two that are not installed locally: pioarduino and intelhex.
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
@@ -166,7 +166,7 @@ jobs:
             pio-${{ runner.os }}-
 
       - name: Install PlatformIO + gcovr
-        # gcovr comes from requirements-dev.txt, platformio from requirements-ci.txt (see release-gate).
+        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see release-gate).
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
