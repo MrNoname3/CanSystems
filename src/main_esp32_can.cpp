@@ -6,7 +6,7 @@
 #include "appBootstrap.hpp"     /// Shared ESP startup and loop body.
 #include "common.hpp"           /// Common definitions and functions.
 #include "performance.hpp"      /// Performance measurement class.
-#include "networkManager.hpp"   /// Manages the network connection.
+#include "networkHandler.hpp"   /// Manages the network connection.
 #include "connectivity.hpp"     /// Handles the MQTT connection.
 #include "mqttCommon.hpp"       /// Handles the basic interaction between server and client.
 #include "CAN.h"                /// The board's CAN controller instance.
@@ -25,9 +25,9 @@ void maxRoundTimeCallback(uint32_t maxRoundTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(2U, maxRoundTimeCallback);
-NetworkManager networkManager(NetworkManager::Interface::LAN8720);
+NetworkHandler networkHandler(NetworkHandler::Interface::LAN8720);
 Connectivity iotConn(
-    networkManager,
+    networkHandler,
     [](bool state) -> void {
       state ? debugLed.stopTicker() : debugLed.startTicker(250U);
     },

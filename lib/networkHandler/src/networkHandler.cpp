@@ -1,4 +1,4 @@
-#include "networkManager.hpp"
+#include "networkHandler.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
 #include "configHandler.hpp"
 #include "bootProgress.hpp"                                        /// Records how far startup got.
@@ -14,17 +14,17 @@ namespace {
 } // namespace
 
 #ifdef ESP32
-volatile bool NetworkManager::ethConnected = false;
+volatile bool NetworkHandler::ethConnected = false;
 #endif
 
-NetworkManager::NetworkManager(Interface interface, uint8_t ethernetShieldCsPin) :
+NetworkHandler::NetworkHandler(Interface interface, uint8_t ethernetShieldCsPin) :
   networkInterface(Interface::UNKNOWN),
   interfaceStatus(WL_DISCONNECTED),
   mac{ 0U } {
   setNetworkInterface(interface, ethernetShieldCsPin);
 }
 
-void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetShieldCsPin) {
+void NetworkHandler::setNetworkInterface(Interface interface, uint8_t ethernetShieldCsPin) {
   if(interface == Interface::UNKNOWN) { return; }
 #ifdef ESP8266
   if((interface == Interface::ENC28J60) && (ethernetShieldCsPin != invalidPin)) {
@@ -34,7 +34,7 @@ void NetworkManager::setNetworkInterface(Interface interface, uint8_t ethernetSh
   networkInterface = interface;
 }
 
-void NetworkManager::buildHostname() {
+void NetworkHandler::buildHostname() {
   const char* envName = Build::getPioEnv();
   static constexpr uint8_t prefixLen = sizeof(hostnamePrefix) - 1U;
   if(strncmp(envName, hostnamePrefix, prefixLen) == 0) {
@@ -43,7 +43,7 @@ void NetworkManager::buildHostname() {
   snprintf(hostnameBuffer, sizeof(hostnameBuffer), "%s_%02x%02x%02x", envName, mac[3], mac[4], mac[5]);
 }
 
-NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) {
+NetworkHandler::NetworkErrorType NetworkHandler::connect(void (*resetWdt)()) {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   BootProgress::set(BootStage::NetworkStart);
   Logger::get()->printf_P(PSTR("[NETWORK] Network interface: "));
@@ -74,7 +74,7 @@ NetworkManager::NetworkErrorType NetworkManager::connect(void (*resetWdt)()) {
   return networkErrState.getRawErrorState();
 }
 
-NetworkManager::NetworkErrorType NetworkManager::connectWifi(void (*resetWdt)()) {
+NetworkHandler::NetworkErrorType NetworkHandler::connectWifi(void (*resetWdt)()) {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   Logger::get()->printf_P(PSTR("[Wi-Fi]\r\n"));
   WiFi.disconnect(true);                           // Wipe cached BSSID/FT state from SDK flash before each connect attempt.
@@ -122,7 +122,7 @@ NetworkManager::NetworkErrorType NetworkManager::connectWifi(void (*resetWdt)())
 }
 
 #ifdef ESP8266
-NetworkManager::NetworkErrorType NetworkManager::connectEnc28j60(void (*resetWdt)()) {
+NetworkHandler::NetworkErrorType NetworkHandler::connectEnc28j60(void (*resetWdt)()) {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   Logger::get()->printf_P(PSTR("[ENC28J60]\r\n"));
   if(!ethernetEnc28j60.has_value()) {
@@ -165,11 +165,11 @@ NetworkManager::NetworkErrorType NetworkManager::connectEnc28j60(void (*resetWdt
 #endif
 
 #ifdef ESP32
-NetworkManager::NetworkErrorType NetworkManager::connectLan8720(void (*resetWdt)()) {
+NetworkHandler::NetworkErrorType NetworkHandler::connectLan8720(void (*resetWdt)()) {
   ErrorState<NetworkError, NetworkErrorType> networkErrState;
   Logger::get()->printf_P(PSTR("[LAN8720]\r\n"));
   WiFi.mode(WIFI_OFF);
-  WiFi.onEvent(NetworkManager::WiFiEvent);
+  WiFi.onEvent(NetworkHandler::WiFiEvent);
   const bool ethInit = ETH.begin(ethPhyAddress, ethPhyPower, ethPhyMdcPin, ethPhyMdioPin, ethPhyType, ethClockMode);
   Logger::get()->printf_P(logEthInit, Str::getStateStr(ethInit));
   if(!ethInit) {
@@ -197,7 +197,7 @@ NetworkManager::NetworkErrorType NetworkManager::connectLan8720(void (*resetWdt)
 }
 #endif
 
-bool NetworkManager::isNetworkAvailable() {
+bool NetworkHandler::isNetworkAvailable() {
   yield();                                             // Keeps the network stack alive and processes pending events.
   wl_status_t actualInterfaceStatus = WL_DISCONNECTED;
   switch(networkInterface) {
@@ -225,12 +225,12 @@ bool NetworkManager::isNetworkAvailable() {
   return (interfaceStatus == WL_CONNECTED);
 }
 
-bool NetworkManager::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
+bool NetworkHandler::getMacAddress(uint8_t (&macAddress)[macAddressSize]) {
   memcpy(macAddress, mac, sizeof(mac));
   return memcmp(macAddress, "\0\0\0\0\0\0", sizeof(macAddress)) != 0;
 }
 
-const char* NetworkManager::getIntStatusStr(wl_status_t status) {
+const char* NetworkHandler::getIntStatusStr(wl_status_t status) {
   switch(status) {
     case WL_NO_SHIELD: {
       return wlNoShieldStr;
@@ -268,7 +268,7 @@ const char* NetworkManager::getIntStatusStr(wl_status_t status) {
 }
 
 #ifdef ESP32
-void NetworkManager::WiFiEvent(WiFiEvent_t event) {
+void NetworkHandler::WiFiEvent(WiFiEvent_t event) {
   switch(event) {
     case ARDUINO_EVENT_ETH_START: {
     } break;

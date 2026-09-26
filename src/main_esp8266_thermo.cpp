@@ -6,7 +6,7 @@
 #include "appBootstrap.hpp"     /// Shared ESP startup and loop body.
 #include "common.hpp"           /// Common definitions and functions.
 #include "performance.hpp"      /// Performance measurement class.
-#include "networkManager.hpp"   /// Manages the network connection.
+#include "networkHandler.hpp"   /// Manages the network connection.
 #include "connectivity.hpp"     /// Handles the MQTT connection.
 #include "mqttCommon.hpp"       /// Basic server <-> client interaction (commands, inbound file transfer).
 #include "mqttThermometer.hpp"  /// DS18B20 multi-sensor reader + MQTT publisher.
@@ -25,9 +25,9 @@ void maxRoundTimeCallback(uint32_t maxRoundTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, LOW);
 Performance performance(1U, maxRoundTimeCallback);
-NetworkManager networkManager(NetworkManager::Interface::WIFI);
+NetworkHandler networkHandler(NetworkHandler::Interface::WIFI);
 Connectivity iotConn(
-    networkManager,
+    networkHandler,
     [](bool state) -> void {
       state ? debugLed.stopTicker() : debugLed.startTicker(250U);
     },

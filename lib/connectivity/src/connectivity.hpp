@@ -8,7 +8,7 @@
 
 static_assert(MQTT_MAX_PACKET_SIZE >= 1024U, "MQTT buffer size is too short (minimum: 1024 bytes)!");
 
-#include "networkManager.hpp"                                       /// Manages the network connection.
+#include "networkHandler.hpp"                                       /// Manages the network connection.
 #include <pgmspace.h>                                               /// Provides PROGMEM support for storing data in flash memory.
 #ifdef ESP8266
 #include <optional>                                                 /// Optional type for conditional storage.
@@ -62,10 +62,10 @@ private:
   // clang-format on
 public:
   /// @brief Constructs a Connectivity instance.
-  /// @param networkManager Reference to the network manager handling WiFi/Ethernet connections.
+  /// @param networkHandler Reference to the network handler handling WiFi/Ethernet connections.
   /// @param debugLedFunc Function pointer for controlling the debug LED state.
   /// @param resetWdtFunc Function pointer for resetting the watchdog timer.
-  Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
+  Connectivity(NetworkHandler& networkHandler, void (*debugLedFunc)(bool state), void (*resetWdtFunc)());
 
   /// @brief Destructor of the object.
   ~Connectivity() override = default;
@@ -258,7 +258,7 @@ private:
   /// under-reports the outage by the whole handshake.
   void publishDisconnectDiag();
 
-  NetworkManager& networkManager;                                   // Reference to the network manager.
+  NetworkHandler& networkHandler;                                   // Reference to the network handler.
   WiFiClientSecure tcpClient;                                       // Secure TCP client for MQTT connections.
   PubSubClient mqttClient;                                          // MQTT client instance.
   RecursiveMutex mqttMutex;                                         // Serializes all PubSubClient access across tasks (no-op off-ESP32).

@@ -10,8 +10,8 @@
 
 uint8_t MqttBase::unregisteredHandlers = 0U;
 
-Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
-  networkManager(networkManager),
+Connectivity::Connectivity(NetworkHandler& networkHandler, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
+  networkHandler(networkHandler),
   mqttClient(tcpClient),
   networkState(true),
   mqttState(PubSubClient::State::CONNECTED),
@@ -103,7 +103,7 @@ void Connectivity::waitOutBackoff() {
 }
 
 bool Connectivity::startNetwork() {
-  const uint16_t connResult = networkManager.connect(resetWdt);
+  const uint16_t connResult = networkHandler.connect(resetWdt);
   const bool connResultOk = (connResult == 0U);
   Logger::get()->printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
   if(!connResultOk) { Logger::get()->printf_P(Str::getErrCodeFmt(), connResult); }
@@ -138,7 +138,7 @@ bool Connectivity::loadCredentials() {
 
 bool Connectivity::buildMqttTopics() {
   uint8_t mac[6] = { 0U };
-  if(!networkManager.getMacAddress(mac)) { return false; }
+  if(!networkHandler.getMacAddress(mac)) { return false; }
   const char* pioEnv = Build::getPioEnv();
   if(pioEnv == nullptr) { return false; }
   const char* underscore = strchr(pioEnv, '_');
@@ -294,7 +294,7 @@ bool Connectivity::connectToMqttServer() {
 bool Connectivity::run() {
   LockGuard guard(mqttMutex);                                       // Serializes loop()/reconnect against publishes from other tasks.
   const uint32_t actualTime = millis();
-  const bool actualNetworkState = networkManager.isNetworkAvailable();
+  const bool actualNetworkState = networkHandler.isNetworkAvailable();
   if(actualNetworkState != networkState) {
     networkState = actualNetworkState;
     if(networkState) {
