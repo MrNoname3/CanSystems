@@ -9,8 +9,12 @@
 # Compiler args (-std, -I, -D) are intentionally NOT here: the gate passes
 # `--extra-arg=-std=c++17`, the editor uses its own compile settings.
 #
-# The last block of exclusions holds the checks clang-tidy gained after version 15 that report on
-# this code; each stays off until it has been gone through on its own.
+# Exclusions that need a reason:
+#   readability-use-std-min-max - the AVR toolchain has no C++ standard library, and much of lib/
+#     builds for AVR.
+#   clang-analyzer-core.FixedAddressDereference - every memory-mapped register access is one.
+# The last block holds the checks clang-tidy gained after version 15 that report on this code; each
+# stays off until it has been gone through on its own.
 Checks: >
   clang-analyzer-*,
   readability-*,
@@ -28,14 +32,14 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-static-accessed-through-instance,
   -performance-no-int-to-ptr,
-  -readability-math-missing-parentheses,
   -readability-use-std-min-max,
+  -clang-analyzer-core.FixedAddressDereference,
+  -readability-math-missing-parentheses,
   -readability-redundant-casting,
   -readability-avoid-nested-conditional-operator,
   -performance-enum-size,
   -bugprone-switch-missing-default-case,
-  -modernize-type-traits,
-  -clang-analyzer-core.FixedAddressDereference
+  -modernize-type-traits
 # avr-libc's PSTR() declares a __pstr__ at every use.
 CheckOptions:
   bugprone-reserved-identifier.AllowedIdentifiers: '__pstr__'
