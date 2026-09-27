@@ -13,6 +13,8 @@
 #   readability-use-std-min-max - the AVR toolchain has no C++ standard library, and much of lib/
 #     builds for AVR.
 #   clang-analyzer-core.FixedAddressDereference - every memory-mapped register access is one.
+#   readability-math-missing-parentheses - it wants parentheses around every a + b * c, and it
+#     reports inside avr-libc's UINT16_MAX and UINT32_MAX, which it has no option to skip.
 # The last block holds the checks clang-tidy gained after version 15 that report on this code; each
 # stays off until it has been gone through on its own.
 Checks: >
