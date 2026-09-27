@@ -1,6 +1,7 @@
 #if defined(ESP32) || defined(NATIVE_TEST)
 #include "canHandlerEsp32.hpp"
 #include "common.hpp"                                               /// Common definitions and functions.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 
 QueueHandle_t CanHandlerEsp32::canRxQueue = xQueueCreate(canRxQueueSize, sizeof(CanFrame));
 volatile uint32_t CanHandlerEsp32::rxQueueFullFrames = 0U;
@@ -156,13 +157,13 @@ bool CanHandlerEsp32::run() {
 void CanHandlerEsp32::reportDroppedFrames() {
   const uint32_t queueFull = rxQueueFullReporter.takeGrowth(rxQueueFullFrames);
   if(queueFull != 0U) {
-    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %u frames the queue had no room for\r\n"), queueFull);
+    Logger::get()->printf_P(PSTR("[CAN] RX dropped: %" PRIu32 " frames the queue had no room for\r\n"), queueFull);
   }
   // endPacket() hands the frame over without waiting for it, so this is where a frame the bus
   // never took is reported.
   const uint32_t abandoned = txAbandonedReporter.takeGrowth(controller.getAbandonedTxFrames());
   if(abandoned != 0U) {
-    Logger::get()->printf_P(PSTR("[CAN] TX abandoned: %u frames the bus did not take\r\n"), abandoned);
+    Logger::get()->printf_P(PSTR("[CAN] TX abandoned: %" PRIu32 " frames the bus did not take\r\n"), abandoned);
   }
 }
 
@@ -189,7 +190,7 @@ bool CanHandlerEsp32::transmitFrame(const CanFrame& frameOut) const {
   if(!endPacketResult) {
     // The frame is already consumed from the queue, so a TX failure would otherwise vanish
     // silently (the mains discard the runTasks() failure mask).
-    Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%u cmd=%u from=%u\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
+    Logger::get()->printf_P(PSTR("[CAN] TX failed: to=%" PRIu32 " cmd=%" PRIu32 " from=%" PRIu32 "\r\n"), static_cast<uint32_t>(frameOut.to), static_cast<uint32_t>(frameOut.cmd), static_cast<uint32_t>(frameOut.from));
     return false;
   }
   // Logger::get()->printf_P(PSTR("[CAN] Sending: %hu | %hu | %hu\r\n"), frameOut.to, frameOut.cmd, frameOut.from);

@@ -3,6 +3,7 @@
 #include "esp_intr_alloc.h"
 #include "soc/dport_reg.h"
 #include "driver/gpio.h"
+#include "esp_rom_gpio.h"
 
 #include "ESP32SJA1000.h"
 #if defined(NATIVE_TEST)
@@ -57,13 +58,13 @@ uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
 
   // RX pin
   gpio_set_direction(rxPin, GPIO_MODE_INPUT);
-  gpio_matrix_in(rxPin, CAN_RX_IDX, false);
-  gpio_pad_select_gpio(rxPin);
+  esp_rom_gpio_connect_in_signal(rxPin, CAN_RX_IDX, false);
+  esp_rom_gpio_pad_select_gpio(rxPin);
 
   // TX pin
   gpio_set_direction(txPin, GPIO_MODE_OUTPUT);
-  gpio_matrix_out(txPin, CAN_TX_IDX, false, false);
-  gpio_pad_select_gpio(txPin);
+  esp_rom_gpio_connect_out_signal(txPin, CAN_TX_IDX, false, false);
+  esp_rom_gpio_pad_select_gpio(txPin);
 
   modifyRegister(regCdr, 0x80U, 0x80U); // pelican mode
   modifyRegister(regBtr0, 0xC0U, 0x40U); // SJW = 1

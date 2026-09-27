@@ -1,5 +1,6 @@
 #include "canMqttGateway.hpp"
 #include "bootProgress.hpp"                                        /// BootStage::Unknown for sub-devices.
+#include <inttypes.h>                                               /// PRIx32: uint32_t is not unsigned int on every core.
 #include <ctype.h>
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
@@ -350,7 +351,7 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       const uint8_t resetReason = canFrame.data[7];   // MCUSR bits plus the intentional-restart bit
       {
         const LockGuard guard = lockShared();                       // canSwVersion feeds the discovery payload.
-        (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08x)", fwVersion, gitHash);
+        (void)snprintf(canSwVersion, sizeof(canSwVersion), "%hu (%08" PRIx32 ")", fwVersion, gitHash);
       }
       char dataOut[MqttTopics::getInfoPayloadBufSize()] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), MqttTopics::getMqttInfoPayload(), fwVersion, gitHash, gitDirty, resetReason,

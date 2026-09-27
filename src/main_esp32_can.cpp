@@ -1,12 +1,13 @@
 //--- Headers ---//
 #include <Arduino.h>            /// Arduino libraries header.
+#include <inttypes.h>           /// PRIu32: uint32_t is not unsigned int on every core.
 #include "wdtHandler.hpp"       /// Handles the watchdog timer.
 #include "debugLedHandler.hpp"  /// Handles the debug LED.
 #include "taskHandler.hpp"      /// Class for task scheduling.
 #include "appBootstrap.hpp"     /// Shared ESP startup and loop body.
 #include "common.hpp"           /// Common definitions and functions.
 #include "performance.hpp"      /// Performance measurement class.
-#include "networkManager.hpp"   /// Manages the network connection.
+#include "networkHandler.hpp"   /// Manages the network connection.
 #include "connectivity.hpp"     /// Handles the MQTT connection.
 #include "mqttCommon.hpp"       /// Handles the basic interaction between server and client.
 #include "CAN.h"                /// The board's CAN controller instance.
@@ -25,9 +26,9 @@ void maxRoundTimeCallback(uint32_t maxRoundTime);
 //--- Driver objects ---//
 DebugLedHandler debugLed(LED_PIN, HIGH);
 Performance performance(2U, maxRoundTimeCallback);
-NetworkManager networkManager(NetworkManager::Interface::LAN8720);
+NetworkHandler networkHandler(NetworkHandler::Interface::LAN8720);
 Connectivity iotConn(
-    networkManager,
+    networkHandler,
     [](bool state) -> void {
       state ? debugLed.stopTicker() : debugLed.startTicker(250U);
     },
@@ -56,5 +57,5 @@ void loop() {
 }
 
 void maxRoundTimeCallback(uint32_t maxRoundTime) {
-  Logger::get()->printf_P(PSTR("Max round time: %ums\r\n"), maxRoundTime);
+  Logger::get()->printf_P(PSTR("Max round time: %" PRIu32 "ms\r\n"), maxRoundTime);
 }

@@ -12,7 +12,7 @@
 #endif
 
 /// @brief Manages network interfaces and connectivity for ESP-based devices.
-class NetworkManager final {
+class NetworkHandler final {
 private:
   using NetworkErrorType = uint16_t;                                // Underlying type for network error states.
   static constexpr uint8_t macAddressSize = 6U;                     // Size of the MAC address array.
@@ -60,13 +60,13 @@ public:
     LAN8720                                       // LAN8720 Ethernet interface.
   };
 
-  /// @brief Constructs a NetworkManager instance.
+  /// @brief Constructs a NetworkHandler instance.
   /// @param interface Initial network interface to configure.
   /// @param ethernetShieldCsPin Chip Select pin for ENC28J60 (optional).
-  explicit NetworkManager(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
+  explicit NetworkHandler(Interface interface, uint8_t ethernetShieldCsPin = invalidPin);
 
   /// @brief Default destructor.
-  ~NetworkManager() = default;
+  ~NetworkHandler() = default;
 
   /// @brief Sets the network interface.
   /// @param interface Network interface to configure.
@@ -105,10 +105,10 @@ public:
   /// @return True if the MAC address was successfully retrieved, false if the MAC address is uninitialized (all zeros).
   [[nodiscard]] bool getMacAddress(uint8_t (&macAddress)[macAddressSize]);
 
-  NetworkManager(const NetworkManager&) = delete;                       // Define copy constructor.
-  NetworkManager& operator=(const NetworkManager&) = delete;            // Define copy assignment operator.
-  NetworkManager(NetworkManager&&) = delete;                            // Define move constructor.
-  NetworkManager& operator=(NetworkManager&&) = delete;                 // Define move assignment operator
+  NetworkHandler(const NetworkHandler&) = delete;                       // Define copy constructor.
+  NetworkHandler& operator=(const NetworkHandler&) = delete;            // Define copy assignment operator.
+  NetworkHandler(NetworkHandler&&) = delete;                            // Define move constructor.
+  NetworkHandler& operator=(NetworkHandler&&) = delete;                 // Define move assignment operator
 
 private:
   /// @brief Converts an internal Wi-Fi status to a string.

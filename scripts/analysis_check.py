@@ -9,6 +9,10 @@ paths, one from a predefined macro PlatformIO passes through. This guard runs th
 `pio check` and looks for what each of them leaves behind.
 
 Defects themselves are still `pio check`'s business; its exit code is passed straight on.
+
+The clang-tidy it runs is not pinned in platformio.ini: the pioarduino platform installs its own,
+and platform_packages cannot hold it (see the note there). So the version is checked here, and a
+platform bump that brings another one fails until CLANG_TIDY_VERSION follows it.
 """
 
 import os
@@ -20,10 +24,13 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 ENVIRONMENTS = ("check_avr", "check_esp8266", "check_esp32")
+CLANG_TIDY_VERSION = "21.1.0"
 
 ENVIRONMENT_HEADING = re.compile(r"^Checking (\S+) > clangtidy ")
 DIAGNOSTIC = re.compile(r": (?:error|warning|note): ")
 NOT_FOUND = re.compile(r"'([^']+)' file not found")
+TOOL_COMMAND = re.compile(r"^(\S*clang-tidy) ", re.MULTILINE)
+LLVM_VERSION = re.compile(r"LLVM version (\S+)")
 
 
 def find_pio() -> str:
@@ -47,6 +54,24 @@ def run_check(pio: str) -> tuple[int, str]:
     result = subprocess.run(command, cwd=PROJECT_DIR, capture_output=True, text=True,
                             check=False, env={**os.environ, "VIRTUAL_ENV": ""})
     return result.returncode, result.stdout + result.stderr
+
+
+def clang_tidy_binary(output: str) -> str | None:
+    """The clang-tidy executable `pio check --verbose` echoed running, if it ran one at all."""
+    match = TOOL_COMMAND.search(output)
+    return match.group(1) if match is not None else None
+
+
+def parse_version(version_output: str) -> str | None:
+    """The LLVM version `clang-tidy --version` reports."""
+    match = LLVM_VERSION.search(version_output)
+    return match.group(1) if match is not None else None
+
+
+def clang_tidy_version(binary: str) -> str | None:
+    """Ask the clang-tidy that ran for its version."""
+    result = subprocess.run([binary, "--version"], capture_output=True, text=True, check=False)
+    return parse_version(result.stdout + result.stderr)
 
 
 def diagnostics_per_environment(output: str) -> dict[str, list[str]]:
@@ -79,6 +104,7 @@ def report(per_environment: dict[str, list[str]]) -> list[str]:
 def main() -> int:
     pio = find_pio()
     status, output = run_check(pio)
+
     per_environment = diagnostics_per_environment(output)
     silent = report(per_environment)
 
@@ -87,6 +113,19 @@ def main() -> int:
               f"reports that as a pass, so the gate has to catch it here.")
         print("Run `pio check --verbose -e <environment>` and check the include paths and the "
               "--target in platformio.ini's check_* environments.")
+        return 1
+
+    binary = clang_tidy_binary(output)
+    if binary is None:
+        print("\nanalysis: the clang-tidy command is missing from `pio check --verbose`'s output, "
+              "so its version cannot be checked.")
+        return 1
+    version = clang_tidy_version(binary)
+    print(f"analysis: clang-tidy {version} ({binary})")
+    if version != CLANG_TIDY_VERSION:
+        print(f"\nanalysis: this is not the clang-tidy {CLANG_TIDY_VERSION} the project was set up "
+              f"with. A platform bump brought it: go through what the new version reports, then "
+              f"update CLANG_TIDY_VERSION in {Path(__file__).name}.")
         return 1
 
     if status != 0:

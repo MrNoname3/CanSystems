@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>                                            /// Handle JSON files.
 #include "resetHandler.hpp"                                         /// Handles MCU reset from the program.
 #include "common.hpp"                                               /// Common definitions and functions.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 
 MqttCommon::MqttCommon(Connectivity& connectivity, const char* subtopic) :
   MqttBase(connectivity, subtopic),
@@ -23,7 +24,7 @@ bool MqttCommon::run() {
     const uint32_t errCode = dataTransfer.getErrorCode();
     sendResult(isFileValid, errCode);
     if(!isFileValid) {
-      Logger::get()->printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %u\r\n"), errCode);
+      Logger::get()->printf_P(PSTR("[COMMON] Stored file is not valid!\r\n  Code: %" PRIu32 "\r\n"), errCode);
     } else {
       if(isRestartRequired) {
         reboot();
@@ -102,7 +103,7 @@ void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
     const uint32_t beginErrCode = dataTransfer.getErrorCode();
     sendResult(transferBeginResult, beginErrCode);
     if(!transferBeginResult) {
-      Logger::get()->printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %u\r\n"), fileName, beginErrCode);
+      Logger::get()->printf_P(PSTR("[COMMON] Can't begin file transfer: %s\r\n  Code: %" PRIu32 "\r\n"), fileName, beginErrCode);
     }
   } else if(filePiecePresented && fileDataPresented) {
     const uint32_t filePieceNumber = filePieceJsonVar.as<uint32_t>();
@@ -111,7 +112,7 @@ void MqttCommon::messageArrivedCallback(JsonVariant payloadJson) {
     const uint32_t storingErrCode = dataTransfer.getErrorCode();
     sendResult(storingResult, storingErrCode);
     if(!storingResult) {
-      Logger::get()->printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %u\r\n"), storingErrCode);
+      Logger::get()->printf_P(PSTR("[COMMON] File storing failed!\r\n  Code: %" PRIu32 "\r\n"), storingErrCode);
     }
   } else {
     Logger::get()->printf_P(PSTR("[COMMON] Unknown JSON file!\r\n"));

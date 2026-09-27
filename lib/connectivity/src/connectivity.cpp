@@ -10,8 +10,8 @@
 
 uint8_t MqttBase::unregisteredHandlers = 0U;
 
-Connectivity::Connectivity(NetworkManager& networkManager, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
-  networkManager(networkManager),
+Connectivity::Connectivity(NetworkHandler& networkHandler, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
+  networkHandler(networkHandler),
   mqttClient(tcpClient),
   networkState(true),
   mqttState(PubSubClient::State::CONNECTED),
@@ -67,9 +67,9 @@ bool Connectivity::initOnce() {
 bool Connectivity::initFileSystem() {
   BootProgress::set(BootStage::FileSystem);
   delay(10U);
-  uint32_t totalBytes = 0U;
-  uint32_t usedBytes = 0U;
-  uint32_t freeBytes = 0U;
+  size_t totalBytes = 0U;
+  size_t usedBytes = 0U;
+  size_t freeBytes = 0U;
   const bool initFS = ConfigHandler::initialiseFileSystem(totalBytes, usedBytes, freeBytes);
   Logger::get()->printf_P(PSTR("[FS] File system initialisation: %s\r\n"), Str::getStateStr(initFS));
   if(!initFS) { return false; }
@@ -91,7 +91,7 @@ void Connectivity::waitOutBackoff() {
   // a device that dies mid-attempt from starting over at the shortest wait on every boot.
   RtcStore::write(RtcStore::Slot::BackoffStep, backoff.getStepIndex());
   if(hadRecord) {
-    Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %us before reconnect\r\n"), backoff.getDelayMs() / 1000U);
+    Logger::get()->printf_P(PSTR("[MQTT] Restarted while offline — waiting %" PRIu32 "s before reconnect\r\n"), backoff.getDelayMs() / 1000U);
     const uint32_t startMs = millis();
     while(!Time::hasElapsed(millis(), startMs, backoff.getDelayMs())) {
       delay(1000U);
@@ -103,7 +103,7 @@ void Connectivity::waitOutBackoff() {
 }
 
 bool Connectivity::startNetwork() {
-  const uint16_t connResult = networkManager.connect(resetWdt);
+  const uint16_t connResult = networkHandler.connect(resetWdt);
   const bool connResultOk = (connResult == 0U);
   Logger::get()->printf_P(PSTR("[NETWORK] Connection: %s\r\n"), Str::getStateStr(connResultOk));
   if(!connResultOk) { Logger::get()->printf_P(Str::getErrCodeFmt(), connResult); }
@@ -138,7 +138,7 @@ bool Connectivity::loadCredentials() {
 
 bool Connectivity::buildMqttTopics() {
   uint8_t mac[6] = { 0U };
-  if(!networkManager.getMacAddress(mac)) { return false; }
+  if(!networkHandler.getMacAddress(mac)) { return false; }
   const char* pioEnv = Build::getPioEnv();
   if(pioEnv == nullptr) { return false; }
   const char* underscore = strchr(pioEnv, '_');
@@ -294,7 +294,7 @@ bool Connectivity::connectToMqttServer() {
 bool Connectivity::run() {
   LockGuard guard(mqttMutex);                                       // Serializes loop()/reconnect against publishes from other tasks.
   const uint32_t actualTime = millis();
-  const bool actualNetworkState = networkManager.isNetworkAvailable();
+  const bool actualNetworkState = networkHandler.isNetworkAvailable();
   if(actualNetworkState != networkState) {
     networkState = actualNetworkState;
     if(networkState) {
@@ -346,7 +346,7 @@ bool Connectivity::run() {
   }
 
   if(Time::hasElapsed(actualTime, deviceResetTimer, deviceResetTime)) {
-    Logger::get()->printf_P(PSTR("[RUN] Device is offline since: %ums\r\n"), (actualTime - deviceResetTimer));
+    Logger::get()->printf_P(PSTR("[RUN] Device is offline since: %" PRIu32 "ms\r\n"), (actualTime - deviceResetTimer));
     ResetHandler::restartMCU();
   }
   return true;

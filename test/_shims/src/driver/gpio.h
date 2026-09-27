@@ -18,6 +18,3 @@ constexpr uint32_t CAN_TX_IDX = 0U;
 constexpr uint32_t CAN_RX_IDX = 0U;
 
 inline void gpio_set_direction(gpio_num_t /*pin*/, gpio_mode_t /*mode*/) {}
-inline void gpio_pad_select_gpio(gpio_num_t /*pin*/) {}
-inline void gpio_matrix_out(gpio_num_t /*pin*/, uint32_t /*signal*/, bool /*invert*/, bool /*invertEnable*/) {}
-inline void gpio_matrix_in(gpio_num_t /*pin*/, uint32_t /*signal*/, bool /*invert*/) {}
