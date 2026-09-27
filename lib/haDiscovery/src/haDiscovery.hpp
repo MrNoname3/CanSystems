@@ -148,7 +148,7 @@ private:
   static constexpr uint16_t subDeviceDiscoveryPayloadBufSize = 752U; // Sub-device entity payload: dual avail + via_device.
   static constexpr uint8_t swVersionBufSize = 24U;    // "65535 (ffffffff)" sw version string buffer.
   static constexpr uint8_t deviceNameBufSize = 32U;   // "CAN a1b2c3" device name buffer.
-#if defined(ESP8266)
+#ifdef ESP8266
   static constexpr const char PROGMEM hwVersionStr[] = "ESP8266";
 #elif defined(ESP32)
   static constexpr const char PROGMEM hwVersionStr[] = "ESP32";

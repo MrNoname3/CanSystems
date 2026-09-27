@@ -103,12 +103,12 @@ private:
   }
 
   /// @brief Detaches the interrupt from the specified pin.
-  inline void detachInt() const {
+  void detachInt() const {
     detachInterrupt(digitalPinToInterrupt(intPin));
   }
 
   /// @brief Interrupt handler to set the play flag.
-  static inline void irqHandler() { enablePlay = true; }
+  static void irqHandler() { enablePlay = true; }
 
   /// @brief State machine states for playing.
   enum class PlayingStates : uint8_t {

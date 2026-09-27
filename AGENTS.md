@@ -62,8 +62,9 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - New headers open with `#pragma once`, and an `#ifndef` guard in a header you are editing anyway
   gets converted, so the old style retires without a churn commit. Watch for an `#endif` that
   closes a platform guard rather than the include guard: that one stays.
-- `#if not defined(X)` is the spelling used here; leave it alone rather than normalising it to
-  `#if !defined(X)`.
+- A single macro is tested with `#ifdef X` / `#ifndef X`, which clang-tidy's
+  readability-use-concise-preprocessor-directives enforces. `#elif defined(X)` stays as it is:
+  `#elifdef` is C++23.
 - Preserve **manually column-aligned trailing comments**: clang-format runs with
   `AlignTrailingComments: Leave`, and `ruff format` is **never** run (it would collapse them) —
   ruff is lint-only.

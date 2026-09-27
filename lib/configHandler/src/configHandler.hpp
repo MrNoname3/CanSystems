@@ -48,7 +48,7 @@ public:
   /// @return `true` if the file was parsed and the key was found with the expected type.
   template<typename T>
   [[nodiscard]] static bool getJsonValue(const char* filePath_P, const char* key_P, T& outValue) {
-    static_assert(!std::is_pointer<T>::value, "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
+    static_assert(!std::is_pointer_v<T>, "getJsonValue: pointer types are unsafe (dangling pointer); use loadJsonFile for string values");
     JsonDocument doc;
     if(loadJsonFile(filePath_P, doc) != JsonLoadResult::Ok) { return false; }
     JsonVariant var = doc[FPSTR(key_P)];

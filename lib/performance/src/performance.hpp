@@ -53,7 +53,7 @@ public:
   }
 
   /// @brief Restarts the measurement from now, so the startup time is not reported as a round.
-  inline void resetTimer() {
+  void resetTimer() {
     lastRunTime = millis();
     windowStart = lastRunTime;
   }

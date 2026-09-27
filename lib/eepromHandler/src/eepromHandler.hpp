@@ -97,7 +97,7 @@ private:
   /// @brief Initialize the EEPROM for storing data.
   /// @return `true` if the EEPROM is successfully initialized or was already initialized;
   ///         `false` if the initialization fails.
-  static inline bool init() {
+  static bool init() {
     // cppcheck-suppress knownConditionTrueFalse
     if(eepromInitialised) { return true; }
     eepromInitialised = EEPROM.begin(eepromAddress + sizeof(EEPROMData));

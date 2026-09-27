@@ -1,5 +1,5 @@
 #include "resetHandler.hpp"
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 #include <avr/wdt.h>                                                /// Watchdog timer library for AVR microcontrollers.
 #include <avr/io.h>                                                 /// MCUSR for the reset flags.
 #elif defined(ESP8266)
@@ -12,7 +12,7 @@
 #endif
 #include "common.hpp"                                               /// Common definitions and functions.
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 namespace {
   // .noinit survives a reset; volatile keeps the .init3 stores from being dropped as dead, which
   // would also free the register holding the r2 read.
@@ -49,7 +49,7 @@ uint8_t ResetHandler::getResetReason() {
 }
 #endif
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 void ResetHandler::restartMCU() {
   restartMCU(RestartCause::Unspecified);
 }

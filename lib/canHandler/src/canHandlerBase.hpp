@@ -143,7 +143,7 @@ public:
   /// @brief Sends a CAN frame with a specified command.
   /// @param command 9-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool send(uint16_t command) const {
+  [[nodiscard]] bool send(uint16_t command) const {
     const uint8_t data[8] = { 0U };
     return send(command, data);
   }
@@ -154,7 +154,7 @@ public:
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  [[nodiscard]] inline bool send(Cmd command, const uint8_t (&data)[8]) const {
+  [[nodiscard]] bool send(Cmd command, const uint8_t (&data)[8]) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command), data);
   }
@@ -164,7 +164,7 @@ public:
   /// @param command Command to send.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  [[nodiscard]] inline bool send(Cmd command) const {
+  [[nodiscard]] bool send(Cmd command) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     return send(static_cast<uint16_t>(command));
   }
@@ -175,7 +175,7 @@ public:
   /// @param response Enum value of `Response`.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  [[nodiscard]] inline bool send(Cmd command, Response response) const {
+  [[nodiscard]] bool send(Cmd command, Response response) const {
     static_assert(IsCanCommand<Cmd>::value, "send() takes a CAN command enum, not a raw value");
     const uint8_t data[8] = { static_cast<uint8_t>(response), 0U, 0U, 0U, 0U, 0U, 0U, 0U };
     return send(static_cast<uint16_t>(command), data);
@@ -187,21 +187,21 @@ public:
 
   /// @brief Calculate the mask to ignore the upper bits of the extended CAN ID and only consider the lower 10 bits.
   /// @return Filtered local CAN ID.
-  [[nodiscard]] inline uint32_t getCanFilteredId() const {
+  [[nodiscard]] uint32_t getCanFilteredId() const {
     return getLocalCanId() & canIdFilterMask;
   }
 
   /// @brief Retrieves the master CAN ID.
   /// @return Master CAN ID.
-  [[nodiscard]] inline uint16_t getMasterCanId() const { return canId.master; }
+  [[nodiscard]] uint16_t getMasterCanId() const { return canId.master; }
 
   /// @brief Retrieves the local CAN ID.
   /// @return Local CAN ID.
-  [[nodiscard]] inline uint16_t getLocalCanId() const { return canId.local; }
+  [[nodiscard]] uint16_t getLocalCanId() const { return canId.local; }
 
   /// @brief Checks if the device is the master node.
   /// @return `true` if the device is the master node, `false` otherwise.
-  [[nodiscard]] inline bool isDeviceMaster() const { return (canId.master == canId.local); }
+  [[nodiscard]] bool isDeviceMaster() const { return (canId.master == canId.local); }
 
   CanHandlerBase(const CanHandlerBase&) = delete;                       // Define copy constructor.
   CanHandlerBase& operator=(const CanHandlerBase&) = delete;            // Define copy assignment operator.
@@ -218,13 +218,13 @@ protected:
 
   /// @brief Loads the CAN IDs from EEPROM.
   /// @return `true` if the CAN IDs were loaded successfully, `false` otherwise.
-  inline bool loadCanIds() { return eepromHandler.load(); }
+  bool loadCanIds() { return eepromHandler.load(); }
 
   /// @brief Saves the CAN IDs to EEPROM.
   /// @param master Master CAN ID.
   /// @param local Local CAN ID.
   /// @return `true` if the CAN IDs were saved successfully, `false` otherwise.
-  inline bool saveCanIds(uint16_t master, uint16_t local) {
+  bool saveCanIds(uint16_t master, uint16_t local) {
     setCanIds(master, local);
     return eepromHandler.save();
   }
@@ -236,7 +236,7 @@ protected:
   /// @param master Master CAN ID to store.
   /// @param local Local CAN ID to store.
   /// @return `true` if the CAN IDs were stored successfully, `false` otherwise.
-  [[nodiscard]] static inline bool storeCanIds(uint16_t master, uint16_t local) {
+  [[nodiscard]] static bool storeCanIds(uint16_t master, uint16_t local) {
     CanId stored(static_cast<uint16_t>(master & canIdFilterMask), static_cast<uint16_t>(local & canIdFilterMask));
     return EEPROMHandler<CanId, 0U>::save(&stored);
   }
@@ -247,13 +247,13 @@ protected:
   /// should.
   /// @param master Master CAN ID to use.
   /// @param local Local CAN ID to use.
-  inline void useCanIds(uint16_t master, uint16_t local) { setCanIds(master, local); }
+  void useCanIds(uint16_t master, uint16_t local) { setCanIds(master, local); }
 
 private:
   /// @brief Sets the master and local CAN IDs.
   /// @param master Master CAN ID.
   /// @param local Local CAN ID.
-  inline void setCanIds(uint16_t master, uint16_t local) {
+  void setCanIds(uint16_t master, uint16_t local) {
     master &= canIdFilterMask;
     local &= canIdFilterMask;
     canId = CanId(master, local);

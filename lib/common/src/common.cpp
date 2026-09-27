@@ -1,5 +1,5 @@
 #include "common.hpp"
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 #include <avr/boot.h>                                               /// Reading fuses.
 #include "resetHandler.hpp"                                         /// Reset reason captured during startup.
 #elif defined(ESP8266) || defined(ESP32)
@@ -81,7 +81,7 @@ bool FileName::isOwnFirmwareFileName(const char* fileName) {
 #endif
 
 void Build::printBuildInfo() {
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   // This print is also what puts the environment name into the image: nothing else on this part
   // reads it, so without a reference the string is not linked in at all. ota/otaUpdate.py reads it
   // back out of the .bin to refuse sending one node's firmware to the other, which is the only

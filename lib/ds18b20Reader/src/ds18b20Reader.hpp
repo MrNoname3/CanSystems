@@ -2,6 +2,7 @@
 // ESP-only (OneWire + DallasTemperature). Guarded so non-ESP builds / native static analysis skip it.
 #if defined(ESP8266) || defined(ESP32)
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <algorithm>                                                 /// std::clamp for the resolution.
 #include <OneWire.h>                                                /// 1-Wire bus driver.
 #include <DallasTemperature.h>                                      /// DS18B20 temperature sensor driver.
 #include "common.hpp"                                               /// Common definitions and functions.
@@ -26,7 +27,7 @@ public:
   explicit Ds18b20Reader(uint8_t oneWirePin, uint8_t resolutionBits = 12U) :
     oneWire(oneWirePin),
     sensors(&oneWire),
-    resolutionBits((resolutionBits < 9U) ? 9U : ((resolutionBits > 12U) ? 12U : resolutionBits)) {}
+    resolutionBits(std::clamp<uint8_t>(resolutionBits, 9U, 12U)) {}
 
   /// @brief Scans the bus and caches sensor addresses.
   /// @details A sensor that does not answer with its ROM address is not counted: every later call
@@ -39,7 +40,7 @@ public:
     const uint8_t found = sensors.getDeviceCount();
     sensorCount = (found > MaxSensors) ? MaxSensors : found;
     if(found > MaxSensors) {
-      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, static_cast<uint8_t>(MaxSensors));
+      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, MaxSensors);
     }
     uint8_t stored = 0U;
     for(uint8_t i = 0U; i < sensorCount; ++i) {

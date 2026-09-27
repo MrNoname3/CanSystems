@@ -3,7 +3,7 @@
 bool ConfigHandler::initialiseFileSystem(size_t& totalBytes, size_t& usedBytes, size_t& freeBytes) {
   const bool initFS = LittleFS.begin();
   if(!initFS) { return false; }
-#if defined(ESP8266)
+#ifdef ESP8266
   FSInfo fsInfo;
   LittleFS.info(fsInfo);
   totalBytes = fsInfo.totalBytes;

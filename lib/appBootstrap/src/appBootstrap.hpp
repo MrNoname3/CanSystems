@@ -26,7 +26,7 @@ namespace AppBootstrap {
   /// @brief Arms the watchdog.
   /// @return `false` only where the platform can tell, which is the ESP32.
   [[nodiscard]] inline bool armWatchdog() {
-#if defined(ESP32)
+#ifdef ESP32
     return WdtHandler::enableWatchdog();
 #else
     WdtHandler::enableWatchdog();
@@ -37,7 +37,7 @@ namespace AppBootstrap {
   /// @brief Feeds the watchdog.
   /// @return `false` only where the platform can tell, which is the ESP32.
   [[nodiscard]] inline bool feedWatchdog() {
-#if defined(ESP32)
+#ifdef ESP32
     return WdtHandler::resetWatchdog();
 #else
     WdtHandler::resetWatchdog();
@@ -90,7 +90,7 @@ namespace AppBootstrap {
       Logger::get()->printf_P(PSTR("WDT reset failed!\r\n"));
     }
     (void)taskHandler.runTasks();
-#if defined(ESP32)
+#ifdef ESP32
     taskYIELD();
 #endif
   }

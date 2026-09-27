@@ -13,7 +13,7 @@ namespace {
   // Throws away a firmware image that will never be finished. The ESP8266 Updater has no abort();
   // its end(false) resets quietly, while the ESP32 one logs the unfinished image as an error.
   void abortFirmwareUpdate() {
-#if defined(ESP8266)
+#ifdef ESP8266
     (void)Update.end(false);
 #else
     Update.abort();

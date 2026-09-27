@@ -9,8 +9,15 @@
 # Compiler args (-std, -I, -D) are intentionally NOT here: the gate passes
 # `--extra-arg=-std=c++17`, the editor uses its own compile settings.
 #
-# The last block of exclusions holds the checks clang-tidy gained after version 15 that report on
-# this code; each stays off until it has been gone through on its own.
+# Exclusions that need a reason:
+#   readability-use-std-min-max - the AVR toolchain has no C++ standard library, and much of lib/
+#     builds for AVR.
+#   clang-analyzer-core.FixedAddressDereference - every memory-mapped register access is one.
+#   readability-math-missing-parentheses - it wants parentheses around every a + b * c, and it
+#     reports inside avr-libc's UINT16_MAX and UINT32_MAX, which it has no option to skip.
+#   readability-redundant-casting - a cast one target needs looks redundant on another: uint16_t is
+#     unsigned int on AVR and unsigned short on the ESPs, and analogRead() and resetWatchdog()
+#     return different types per platform.
 Checks: >
   clang-analyzer-*,
   readability-*,
@@ -28,16 +35,12 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-static-accessed-through-instance,
   -performance-no-int-to-ptr,
-  -readability-use-concise-preprocessor-directives,
-  -readability-redundant-inline-specifier,
-  -readability-math-missing-parentheses,
   -readability-use-std-min-max,
-  -readability-redundant-casting,
-  -readability-avoid-nested-conditional-operator,
-  -performance-enum-size,
-  -bugprone-switch-missing-default-case,
-  -modernize-type-traits,
-  -clang-analyzer-core.FixedAddressDereference
-# avr-libc's PSTR() declares a __pstr__ at every use.
+  -clang-analyzer-core.FixedAddressDereference,
+  -readability-math-missing-parentheses,
+  -readability-redundant-casting
+# avr-libc's PSTR() declares a __pstr__ at every use. The CAN command enums are as wide as the
+# command field they travel in, whatever values they hold today.
 CheckOptions:
   bugprone-reserved-identifier.AllowedIdentifiers: '__pstr__'
+  performance-enum-size.EnumIgnoreList: '::CanCmd;::AlertCmd;::IrrigationCmd'

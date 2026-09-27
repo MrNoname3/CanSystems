@@ -4,7 +4,7 @@
 #include "rtcStore.hpp"                                             /// Storage that survives a reset.
 #include <time.h>
 
-#if defined(ESP32)
+#ifdef ESP32
 #include <esp_sntp.h>
 #endif
 
@@ -404,7 +404,7 @@ bool Connectivity::syncNtpTime() {
   configTzTime(tzEuropeBudapest, ntpServers[0], ntpServers[1], ntpServers[2]);
 
   const uint32_t startMs = millis();
-#if defined(ESP32)
+#ifdef ESP32
   while(sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) {
 #else
   constexpr time_t minValidTime = time_t{ 8 } * 3600 * 2;

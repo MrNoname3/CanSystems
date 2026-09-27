@@ -3,7 +3,7 @@
 // whether or not a second task exists yet, so a guarded member is safe the moment one is added.
 // Everywhere else there is a single thread of execution and these compile away.
 
-#if defined(ESP32)
+#ifdef ESP32
 #include "freertos/FreeRTOS.h"                                      /// FreeRTOS base.
 #include "freertos/semphr.h"                                        /// FreeRTOS semaphores/mutexes.
 

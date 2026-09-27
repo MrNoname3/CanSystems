@@ -32,7 +32,7 @@ public:
   /// @brief Turns the debug LED off.
   static void ledOff();
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   /// @brief Toggles the LED state on AVR platforms.
   static void ledToggle();
 #elif defined(ESP8266) || defined(ESP32)

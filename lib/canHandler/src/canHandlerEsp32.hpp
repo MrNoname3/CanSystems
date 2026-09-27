@@ -138,7 +138,7 @@ public:
   /// @brief Checks if a client CAN ID is valid.
   /// @param clientCanId The client CAN ID to validate.
   /// @return `true` if the CAN ID is valid, `false` otherwise.
-  [[nodiscard]] inline bool isClientCanIdValid(uint16_t clientCanId) {
+  [[nodiscard]] bool isClientCanIdValid(uint16_t clientCanId) {
     const bool isLocalCanId = (clientCanId == canHandler.getLocalCanId());
     const bool isMasterCanId = (clientCanId == canHandler.getMasterCanId());
     return (!isLocalCanId && !isMasterCanId);
@@ -146,14 +146,14 @@ public:
 
   /// @brief Gets the client CAN ID.
   /// @return The client CAN ID.
-  [[nodiscard]] inline uint16_t getClientCanId() const { return clientCanId; }
+  [[nodiscard]] uint16_t getClientCanId() const { return clientCanId; }
 
   /// @brief Whether an id could be given to a device without colliding with something known.
   /// @details Beyond the reserved pair, this rules out the ids the handler's own devices already
   /// answer on - two of them on one address would talk over each other on the bus.
   /// @param candidateCanId The id to test.
   /// @return `true` when nothing known holds it.
-  [[nodiscard]] inline bool isClientCanIdFree(uint16_t candidateCanId) {
+  [[nodiscard]] bool isClientCanIdFree(uint16_t candidateCanId) {
     return isClientCanIdValid(candidateCanId) && !canHandler.isClientIdRegistered(candidateCanId);
   }
 
@@ -165,7 +165,7 @@ public:
   /// @param command 9-bit command value representing the specific action or request.
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
+  [[nodiscard]] bool sendCanFrame(uint16_t command, const uint8_t (&data)[8]) const {
     return canHandler.send(CanHandler::CanFrame{ getClientCanId(), command, canHandler.getLocalCanId(), data });
   }
 
@@ -174,7 +174,7 @@ public:
   /// @param data Array of 8 bytes containing the payload.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  [[nodiscard]] inline bool sendCanFrame(Cmd command, const uint8_t (&data)[8]) const {
+  [[nodiscard]] bool sendCanFrame(Cmd command, const uint8_t (&data)[8]) const {
     static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command), data);
   }
@@ -182,7 +182,7 @@ public:
   /// @brief Sends a CAN frame with a specified command and an empty data payload.
   /// @param command 9-bit command value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
-  [[nodiscard]] inline bool sendCanFrame(uint16_t command) const {
+  [[nodiscard]] bool sendCanFrame(uint16_t command) const {
     uint8_t data[8] = { 0U };
     return sendCanFrame(command, data);
   }
@@ -191,7 +191,7 @@ public:
   /// @param command A `CanCmd` value representing the specific action or request.
   /// @return `true` if the frame was sent successfully, `false` otherwise.
   template<typename Cmd>
-  [[nodiscard]] inline bool sendCanFrame(Cmd command) const {
+  [[nodiscard]] bool sendCanFrame(Cmd command) const {
     static_assert(IsCanCommand<Cmd>::value, "sendCanFrame() takes a CAN command enum, not a raw value");
     return sendCanFrame(static_cast<uint16_t>(command));
   }

@@ -110,7 +110,7 @@ private:
   uint32_t abandonedTxFrames = 0U;                                  // Frames aborted because the bus never took them.
 };
 
-#if !defined(NATIVE_TEST)
+#ifndef NATIVE_TEST
 extern ESP32SJA1000 CAN;      // On the host the tests construct their own; CAN is the MCP2515 there.
 #endif
 
