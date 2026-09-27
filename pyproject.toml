@@ -35,12 +35,13 @@ select = [
 "scripts/check_avr_startup.py" = ["F821"]
 "scripts/check_esp8266_memory.py" = ["F821"]
 "scripts/elf_to_bin.py" = ["F821", "E402"]
+"scripts/esp32_drop_matter.py" = ["F821"]
 "scripts/git_commit_info.py" = ["F821", "E402"]
 "scripts/patch_elf2bin.py" = ["F821", "E402"]
 "scripts/relax_core_warnings.py" = ["F821", "E402"]
 
 # Static type checking (run by scripts/typecheck_check.py, enforced in CI). Strict over the OTA
-# tool, the dev scripts and the OTA tests. Excluded: the four SCons build scripts (Import("env")
+# tool, the dev scripts and the OTA tests. Excluded: the SCons build scripts (Import("env")
 # injects names pyright cannot see, same reason they are ruff per-file-ignored above), and the
 # PlatformIO test runner, which subclasses an API that lives in PlatformIO's own penv rather
 # than the .venv pyright runs against. ruff still covers all of them. The OTA tool's
@@ -59,6 +60,7 @@ exclude = [
     "scripts/check_avr_startup.py",
     "scripts/check_esp8266_memory.py",
     "scripts/elf_to_bin.py",
+    "scripts/esp32_drop_matter.py",
     "scripts/git_commit_info.py",
     "scripts/patch_elf2bin.py",
     "scripts/relax_core_warnings.py",
