@@ -36,6 +36,13 @@
         "bootloader/urboot.Dockerfile"
       ],
       "automerge": false
+    },
+    {
+      "description": "The pioarduino ESP32 platform stays manual: a release brings a new Arduino core and ESP-IDF, and may bring another clang-tidy, so it wants a bench test before it lands",
+      "matchDepNames": [
+        "pioarduino/platform-espressif32"
+      ],
+      "automerge": false
     }
   ],
   "customManagers": [
@@ -51,6 +58,19 @@
       "depNameTemplate": "platformio/platform-atmelavr",
       "datasourceTemplate": "github-tags",
       "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The ESP32 platform is pinned by its pioarduino release URL. A tag like 55.03.312-1 is ESP-IDF 5.5 with Arduino core 3.3.12, re-released once: the versioning reads the core's single-digit minor and its patch out of the joined third field, and leaves out pre-releases and the tags that follow another scheme",
+      "managerFilePatterns": [
+        "/^platformio\\.ini$/"
+      ],
+      "matchStrings": [
+        "platform\\s*=\\s*https://github\\.com/pioarduino/platform-espressif32/releases/download/(?<currentValue>[^/\\s]+)/platform-espressif32\\.zip"
+      ],
+      "depNameTemplate": "pioarduino/platform-espressif32",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{2})\\.\\d{2}\\.(?<minor>\\d)(?<patch>\\d+)(?:-(?<build>\\d+))?$"
     }
   ]
 }

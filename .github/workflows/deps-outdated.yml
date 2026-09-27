@@ -3,7 +3,9 @@ name: Dependencies
 # The PlatformIO pins in platformio.ini - platforms, tools and libraries - have no Renovate
 # manager, so nothing opens a pull request when one falls behind. `pio pkg outdated` answers with
 # PlatformIO's own registry knowledge, which needs no name mapping and no regex, so this reports
-# weekly instead. Renovate covers the pip, GitHub Actions and Dockerfile side (see renovate.json).
+# weekly instead. Renovate covers the pip, GitHub Actions and Dockerfile side, and the two platform
+# pins it reads with a regex (see renovate.json) - the ESP32 one is a release URL, which
+# `pio pkg outdated` cannot look up.
 
 on:
   schedule:

@@ -88,14 +88,17 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   runner-specific steps. The one exception is `actions/cache`, skipped off github.com because the
   self-hosted runner's cache API is v1 while `actions/cache@v6` speaks v2; that only costs a cold
   (slower) run.
-- Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the
-  pip and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and
-  the `atmelavr` platform pin through a custom manager. Patch/pin/digest automerge after a 3-day
-  soak (plus minor for Actions); everything else waits on the dashboard. The urboot image is
-  excluded from automerge - the bootloader `.hex` files are committed, so a base-image change
-  wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). Dependabot is deliberately not used: it only runs on GitHub,
-  and GitHub here is a push mirror, so its PRs would land where they cannot be merged. PlatformIO
-  pins in `platformio.ini` stay manual.
+- Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip
+  and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and the
+  `atmelavr` and pioarduino ESP32 platform pins through custom managers. Patch/pin/digest automerge
+  after a 3-day soak (plus minor for Actions); everything else waits on the dashboard. The urboot
+  image is excluded from automerge - the bootloader `.hex` files are committed, so a base-image
+  change wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). So is the
+  ESP32 platform: a release brings a new Arduino core and ESP-IDF, and possibly another clang-tidy
+  (`scripts/analysis_check.py` fails until `CLANG_TIDY_VERSION` follows), so it wants the gate and
+  a bench test. Dependabot is deliberately not used: it only runs on GitHub, and GitHub here is a
+  push mirror, so its PRs would land where they cannot be merged. The other PlatformIO pins in
+  `platformio.ini` stay manual.
 - A commit message describes what is in its diff — not the paths that were tried and dropped, not
   a correction of an earlier analysis, not the measurements behind it, and not the circumstances of
   whoever wrote it.
