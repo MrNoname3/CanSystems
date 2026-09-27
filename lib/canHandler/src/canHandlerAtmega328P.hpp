@@ -48,7 +48,7 @@ public:
 
   /// @brief Adds a custom callback for handling incoming CAN frames.
   /// @param canCallback Pointer to the callback function.
-  inline void addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
+  void addCanCallback(void (*canCallback)(uint16_t command, const uint8_t (&data)[8])) {
     this->canCallback = canCallback;
   }
 

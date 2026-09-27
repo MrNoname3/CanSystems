@@ -99,7 +99,7 @@ public:
 private:
   /// @brief Executes the single managed task.
   /// @return A bitmask with bit 0 set if the task failed, otherwise 0.
-  [[nodiscard]] inline uint32_t runSingleTask() {
+  [[nodiscard]] uint32_t runSingleTask() {
     if(taskList[0] != nullptr) {
       if(!taskList[0]->run()) {
         return 1U;
@@ -110,7 +110,7 @@ private:
 
   /// @brief Executes the next task in full round-robin order.
   /// @return A bitmask with the corresponding bit set if the task failed, otherwise 0.
-  [[nodiscard]] inline uint32_t runFullRoundRobin() {
+  [[nodiscard]] uint32_t runFullRoundRobin() {
     uint32_t failureMask = 0U;
     if(taskList[currentTask] != nullptr) {
       if(!taskList[currentTask]->run()) {
@@ -123,7 +123,7 @@ private:
 
   /// @brief Executes the first task and one additional task in partial round-robin order.
   /// @return A bitmask with the corresponding bits set for any failed tasks, otherwise 0.
-  [[nodiscard]] inline uint32_t runPartialRoundRobin() {
+  [[nodiscard]] uint32_t runPartialRoundRobin() {
     uint32_t failureMask = 0U;
     if(taskList[0] != nullptr) {
       if(!taskList[0]->run()) {

@@ -445,7 +445,7 @@ public:
 
   /// @brief Initialize the logger with a hardware serial instance.
   /// @param serialPort The hardware serial instance (e.g., `Serial`, `Serial1`).
-  static inline void begin(HardwareSerial& serialPort) noexcept {
+  static void begin(HardwareSerial& serialPort) noexcept {
     serial = &serialPort;
   }
 
@@ -454,7 +454,7 @@ public:
   /// statement, so a single log call cannot interleave with another task's output; off ESP32 the
   /// proxy is optimized away to the bare serial pointer.
   /// @return RAII proxy forwarding to HardwareSerial via `operator->` (holds the logger lock on ESP32).
-  static inline LockedSerial get() noexcept {
+  static LockedSerial get() noexcept {
 #ifdef ESP32
     return { *serial, mutex };
 #else

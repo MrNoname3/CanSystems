@@ -42,18 +42,18 @@ public:
 
   /// @brief Enables the watchdog timer on AVR platforms.
   /// @param wdtTime The timeout interval for the watchdog timer, specified as a value from the `WDT` enumeration.
-  static inline void enableWatchdog(WDT wdtTime) {
+  static void enableWatchdog(WDT wdtTime) {
     wdt_enable(static_cast<uint8_t>(wdtTime));
   }
 
   /// @brief Disables the watchdog timer on AVR platforms.
-  static inline void disableWatchdog() {
+  static void disableWatchdog() {
     wdt_disable();
   }
 
   /// @brief Resets the watchdog timer to prevent a system reset.
   /// @note This function must be called periodically within the configured timeout interval.
-  static inline void resetWatchdog() {
+  static void resetWatchdog() {
     wdt_reset();
   }
 #elif defined(ESP8266)
@@ -71,20 +71,20 @@ public:
   /// @details Counter-intuitively calls wdt_disable(): it turns OFF the short (~3.2 s) software
   /// WDT so only the hardware WDT (~8.4 s, cannot be disabled) guards the device — long
   /// operations like the TLS handshake need the bigger budget. Named for cross-platform symmetry.
-  static inline void enableWatchdog() {
+  static void enableWatchdog() {
     wdt_disable();
   }
 
   /// @brief Restores the default short (~3.2 s) software WDT on ESP8266.
   /// @details The hardware WDT cannot be turned off on this platform; "disable" here means
   /// reverting this firmware's relaxed watchdog policy. Named for cross-platform symmetry.
-  static inline void disableWatchdog() {
+  static void disableWatchdog() {
     wdt_enable(0U);
   }
 
   /// @brief Resets the watchdog timer to prevent a system reset.
   /// @note This function must be called periodically within the configured timeout interval.
-  static inline void resetWatchdog() {
+  static void resetWatchdog() {
     wdt_reset();
   }
 #elif defined(ESP32)
@@ -108,7 +108,7 @@ public:
   /// @param wdtTimeSec Timeout interval in seconds for the watchdog timer (default is `10s`).
   /// @param handle The task handle to be monitored by the watchdog (default is `nullptr`, which monitors the current task).
   /// @return `true` if the watchdog timer is successfully enabled, otherwise `false`.
-  [[nodiscard]] static inline bool enableWatchdog(uint32_t wdtTimeSec = 10U, TaskHandle_t handle = nullptr) {
+  [[nodiscard]] static bool enableWatchdog(uint32_t wdtTimeSec = 10U, TaskHandle_t handle = nullptr) {
     esp_task_wdt_config_t wdtConfig{};
     wdtConfig.timeout_ms = wdtTimeSec * 1000U;
     wdtConfig.idle_core_mask = idleCoreMask;
@@ -123,7 +123,7 @@ public:
   /// @brief Disables the watchdog timer on ESP32.
   /// @param handle The task handle to be removed from watchdog monitoring (default is `nullptr`, which removes the current task).
   /// @return `true` if the watchdog timer is successfully disabled, otherwise `false`.
-  [[nodiscard]] static inline bool disableWatchdog(TaskHandle_t handle = nullptr) {
+  [[nodiscard]] static bool disableWatchdog(TaskHandle_t handle = nullptr) {
     const esp_err_t wdtDeleted = esp_task_wdt_delete(handle);
     const esp_err_t wdtDeinit = esp_task_wdt_deinit();
     return ((wdtDeinit == ESP_OK) && (wdtDeleted == ESP_OK));
@@ -131,7 +131,7 @@ public:
 
   /// @brief Resets the watchdog timer to prevent a system reset.
   /// @return `true` if the watchdog timer is successfully reset, otherwise `false`.
-  [[nodiscard]] static inline bool resetWatchdog() {
+  [[nodiscard]] static bool resetWatchdog() {
     return (esp_task_wdt_reset() == ESP_OK);
   }
 #endif

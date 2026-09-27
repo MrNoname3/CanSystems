@@ -55,7 +55,7 @@ public:
 
   /// @brief Checks if an OTA process is currently in progress.
   /// @return True if OTA is in progress, false otherwise.
-  [[nodiscard]] inline bool isOtaInProgress() const { return transferState != TransferState::IDLE; }
+  [[nodiscard]] bool isOtaInProgress() const { return transferState != TransferState::IDLE; }
 
   /// @brief Handles incoming CAN frames related to the OTA process.
   /// @param canFrame The received CAN frame.
