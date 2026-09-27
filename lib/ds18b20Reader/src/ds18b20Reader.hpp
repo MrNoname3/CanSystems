@@ -40,7 +40,7 @@ public:
     const uint8_t found = sensors.getDeviceCount();
     sensorCount = (found > MaxSensors) ? MaxSensors : found;
     if(found > MaxSensors) {
-      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, static_cast<uint8_t>(MaxSensors));
+      Logger::get()->printf_P(PSTR("[DS18B20] %hhu sensors on bus exceed MaxSensors=%hhu; extra ignored!\r\n"), found, MaxSensors);
     }
     uint8_t stored = 0U;
     for(uint8_t i = 0U; i < sensorCount; ++i) {
