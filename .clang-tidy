@@ -36,7 +36,6 @@ Checks: >
   -clang-analyzer-core.FixedAddressDereference,
   -readability-math-missing-parentheses,
   -readability-redundant-casting,
-  -readability-avoid-nested-conditional-operator,
   -performance-enum-size,
   -modernize-type-traits
 # avr-libc's PSTR() declares a __pstr__ at every use.
