@@ -18,8 +18,6 @@
 #   readability-redundant-casting - a cast one target needs looks redundant on another: uint16_t is
 #     unsigned int on AVR and unsigned short on the ESPs, and analogRead() and resetWatchdog()
 #     return different types per platform.
-# The last block holds the checks clang-tidy gained after version 15 that report on this code; each
-# stays off until it has been gone through on its own.
 Checks: >
   clang-analyzer-*,
   readability-*,
@@ -40,8 +38,9 @@ Checks: >
   -readability-use-std-min-max,
   -clang-analyzer-core.FixedAddressDereference,
   -readability-math-missing-parentheses,
-  -readability-redundant-casting,
-  -performance-enum-size
-# avr-libc's PSTR() declares a __pstr__ at every use.
+  -readability-redundant-casting
+# avr-libc's PSTR() declares a __pstr__ at every use. The CAN command enums are as wide as the
+# command field they travel in, whatever values they hold today.
 CheckOptions:
   bugprone-reserved-identifier.AllowedIdentifiers: '__pstr__'
+  performance-enum-size.EnumIgnoreList: '::CanCmd;::AlertCmd;::IrrigationCmd'

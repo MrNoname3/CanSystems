@@ -95,9 +95,7 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
   { 350, 0, { 0, 0 }, 1, { 1, 31 }, { 1, 3 }, { 3, 1 }, false, 0 },  // 01 (Princeton, PT-2240)
 };
 
-enum {
-  numProto = sizeof(proto) / sizeof(proto[0])
-};
+static constexpr uint8_t numProto = static_cast<uint8_t>(sizeof(proto) / sizeof(proto[0]));
 
 #ifndef RCSwitchDisableReceiving
 uint64_t RCSwitch::nReceivedValue = 0;
