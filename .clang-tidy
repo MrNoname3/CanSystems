@@ -28,7 +28,6 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-static-accessed-through-instance,
   -performance-no-int-to-ptr,
-  -readability-use-concise-preprocessor-directives,
   -readability-redundant-inline-specifier,
   -readability-math-missing-parentheses,
   -readability-use-std-min-max,

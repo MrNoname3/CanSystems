@@ -110,7 +110,7 @@ public:
 /// @brief Utility class for configuring and managing analog input settings.
 class Analog final {
 public:
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   /// @brief Configures the analog input settings.
   /// @details Takes the reference from the supply and shortens the conversion: the prescaler set
   /// below runs the ADC faster than the clock range the part specifies for its full resolution.
@@ -162,7 +162,7 @@ public:
   /// @return Constant string `"[ERR]"`.
   static constexpr const char* getErrStr() { return errStr; }
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   /// @brief Retrieves the spacer string.
   /// @return Constant string `"|"`.
   static constexpr const char* getSpacerStr() { return spacerStr; }
@@ -191,7 +191,7 @@ public:
   Str& operator=(Str&&) = delete;                 // Define move assignment operator.
 
 private:
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   // clang-format off
   static constexpr const char* okStr            = "[OK]";     // Status string for "OK" on AVR platforms.
   static constexpr const char* errStr           = "[ERR]";    // Status string for "Error" on AVR platforms.
@@ -242,7 +242,7 @@ public:
   /// @return Length of the `pioEnv` string excluding the null terminator.
   static constexpr uint32_t getPioEnvLength() { return sizeof(pioEnv) - 1U; }
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   /// @brief Gets the PlatformIO environment name as a flash string.
   /// @details The same name getPioEnv() returns, in the form this part can print: a 2 KB device
   /// has no room to keep it in RAM as well.
@@ -419,7 +419,7 @@ public:
   /// pointer that the optimizer collapses to the original reference — zero flash and RAM cost.
   class LockedSerial final {
   public:
-#if defined(ESP32)
+#ifdef ESP32
     LockedSerial(HardwareSerial& serialPort, RecursiveMutex& mutex) noexcept :
       serial(&serialPort),
       guard(mutex) {}
@@ -438,7 +438,7 @@ public:
 
   private:
     HardwareSerial* serial;   // Underlying hardware serial (not owned).
-#if defined(ESP32)
+#ifdef ESP32
     LockGuard guard;          // Holds the logger mutex for the proxy's lifetime (ESP32 only).
 #endif
   };
@@ -455,7 +455,7 @@ public:
   /// proxy is optimized away to the bare serial pointer.
   /// @return RAII proxy forwarding to HardwareSerial via `operator->` (holds the logger lock on ESP32).
   static inline LockedSerial get() noexcept {
-#if defined(ESP32)
+#ifdef ESP32
     return { *serial, mutex };
 #else
     return LockedSerial(*serial);   // the single-argument constructor is explicit
@@ -469,7 +469,7 @@ public:
 
 private:
   static inline HardwareSerial* serial = &Serial;   // Pointer to the hardware serial instance, defaults to `Serial`.
-#if defined(ESP32)
+#ifdef ESP32
   static inline RecursiveMutex mutex;               // Serializes log output across concurrent tasks (ESP32 only).
 #endif
 };

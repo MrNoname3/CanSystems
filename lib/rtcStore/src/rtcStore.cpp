@@ -1,5 +1,5 @@
 #include "rtcStore.hpp"
-#if defined(ESP8266)
+#ifdef ESP8266
 #include <Esp.h>                                                    /// RTC user memory access.
 #elif defined(ESP32)
 #include <esp_attr.h>                                               /// RTC_NOINIT_ATTR.
@@ -12,7 +12,7 @@ namespace {
   constexpr uint8_t firstValueWord = 2U;
   constexpr uint8_t recordWords = firstValueWord + RtcStore::slotCount;
 
-#if defined(ESP8266)
+#ifdef ESP8266
   constexpr uint32_t rtcOffset = 64U;                               // In 4-byte words.
 
   void loadRecord(uint32_t* record) {

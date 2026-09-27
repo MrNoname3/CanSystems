@@ -6,7 +6,7 @@
 #include "esp_rom_gpio.h"
 
 #include "ESP32SJA1000.h"
-#if defined(NATIVE_TEST)
+#ifdef NATIVE_TEST
 #include "esp32CanModel.h"
 #define CAN_REG_ACCESS(address, isWrite) esp32CanOnAccess((address), (isWrite))
 #else
@@ -14,7 +14,7 @@
 #endif
 
 namespace {
-#if defined(NATIVE_TEST)
+#ifdef NATIVE_TEST
   const uintptr_t regBase = reinterpret_cast<uintptr_t>(esp32CanRegisterFile());
 #else
   constexpr uintptr_t regBase = 0x3FF6B000U;
@@ -405,7 +405,7 @@ void ESP32SJA1000::onInterrupt(void* arg) {
   static_cast<ESP32SJA1000*>(arg)->handleInterrupt();
 }
 
-#if !defined(NATIVE_TEST)
+#ifndef NATIVE_TEST
 ESP32SJA1000 CAN;
 #endif
 

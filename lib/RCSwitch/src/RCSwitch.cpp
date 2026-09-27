@@ -99,7 +99,7 @@ enum {
   numProto = sizeof(proto) / sizeof(proto[0])
 };
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
 uint64_t RCSwitch::nReceivedValue = 0;
 uint32_t RCSwitch::nReceivedBitlength = 0;
 uint32_t RCSwitch::nReceivedDelay = 0;
@@ -114,7 +114,7 @@ RCSwitch::RCSwitch() {
   this->nTransmitterPin = -1;
   this->setRepeatTransmit(5);
   this->setProtocol(1);
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   this->nReceiverInterrupt = -1;
   RCSwitch::nReceivedValue = 0;
 #endif
@@ -196,7 +196,7 @@ static inline void safeDelayMicroseconds(uint32_t duration) {
 void RCSwitch::send(uint64_t code, uint32_t length) {
   if(this->nTransmitterPin == -1) { return; }
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   // make sure the receiver is disabled while we transmit
   int32_t nReceiverInterrupt_backup = nReceiverInterrupt;
   if(nReceiverInterrupt_backup != -1) {
@@ -234,7 +234,7 @@ void RCSwitch::send(uint64_t code, uint32_t length) {
   // Disable transmit after sending (i.e., for inverted protocols)
   digitalWrite(this->nTransmitterPin, LOW);
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   // enable receiver again if we just disabled it, keeping any frame that arrived beforehand
   if(nReceiverInterrupt_backup != -1) {
     this->resumeReceive(nReceiverInterrupt_backup);
@@ -259,7 +259,7 @@ void RCSwitch::transmit(HighLow pulses) const {
   }
 }
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
 /**
  * Enable receiving data
  */

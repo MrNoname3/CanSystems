@@ -32,7 +32,7 @@
 #include "Arduino.h"                                                /// Arduino core types and pin functions.
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
 
-#if defined(ESP8266)
+#ifdef ESP8266
 // interrupt handler and related code must be in RAM on ESP8266,
 // according to issue #46.
 #define RECEIVE_ATTR IRAM_ATTR
@@ -75,7 +75,7 @@ public:
   /// receiver off for its duration, without discarding an already received frame.
   void send(uint64_t code, uint32_t length);
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   /// @brief Starts reception on an interrupt, discarding any frame held from before.
   /// @param interrupt Interrupt number the receiver pin is attached to.
   void enableReceive(int32_t interrupt);
@@ -170,7 +170,7 @@ private:
   void transmit(HighLow pulses) const;
   void attachReceiveInterrupt() const;
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   inline static RECEIVE_ATTR void handOverRecorded(uint32_t changeCount) __attribute__((optimize("-O3")));
   inline static RECEIVE_ATTR void handleInterrupt() __attribute__((optimize("-O3")));
   inline static bool receiveProtocol(int32_t p, uint32_t changeCount) __attribute__((optimize("-O3")));
@@ -182,7 +182,7 @@ private:
   int32_t nRepeatTransmit;
   Protocol protocol;
 
-#if not defined(RCSwitchDisableReceiving)
+#ifndef RCSwitchDisableReceiving
   // How far a pulse may deviate from the protocol's nominal length, in percent.
   static constexpr uint32_t nReceiveTolerance = 60U;
   // The interrupt handler shares only pendingTimings and pendingChangeCount, so none of these

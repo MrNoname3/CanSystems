@@ -1,13 +1,13 @@
 #include "pumpControl.hpp"
 #include <Arduino.h>
-#if defined(ARDUINO_ARCH_AVR)
+#ifdef ARDUINO_ARCH_AVR
 #include <util/atomic.h>                                            /// ATOMIC_BLOCK for ISR-shared variable access.
 #endif
 
 volatile uint16_t PumpControl::flowCounter = 0U;
 
 uint16_t PumpControl::readFlowCounter() {
-#if defined(ARDUINO_ARCH_AVR)
+#ifdef ARDUINO_ARCH_AVR
   // 16-bit access is two 8-bit operations on AVR; guard against tearing by the flow ISR.
   uint16_t value = 0U;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { value = flowCounter; }
@@ -18,7 +18,7 @@ uint16_t PumpControl::readFlowCounter() {
 }
 
 void PumpControl::clearFlowCounter() {
-#if defined(ARDUINO_ARCH_AVR)
+#ifdef ARDUINO_ARCH_AVR
   // 16-bit store is two 8-bit operations on AVR; guard against a flow ISR between the two bytes.
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { flowCounter = 0U; }
 #else

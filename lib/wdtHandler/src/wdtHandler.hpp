@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 #include <avr/wdt.h>                                                /// Watchdog timer library for AVR.
 #elif defined(ESP8266)
 #include <Esp.h>                                                    /// ESP8266 watchdog timer functions.
@@ -14,7 +14,7 @@
 /// @brief A platform-agnostic utility class for managing Watchdog Timers (WDT).
 class WdtHandler final {
 public:
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
   /// @brief Enumeration for Watchdog Timer (WDT) timeout intervals on AVR platforms.
   enum class WDT : uint8_t {
     T_15MS = WDTO_15MS,                                             // Timeout interval: 15 milliseconds.
@@ -90,10 +90,10 @@ public:
 #elif defined(ESP32)
   // The idle tasks the core's own configuration has the watchdog watch; enabling keeps them watched.
   static constexpr uint32_t idleCoreMask = 0U
-#if defined(CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0)
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
                                            | (static_cast<uint32_t>(1) << 0U)
 #endif
-#if defined(CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1)
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
                                            | (static_cast<uint32_t>(1) << 1U)
 #endif
       ;

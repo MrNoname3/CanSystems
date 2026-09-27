@@ -1,4 +1,4 @@
-#if !defined(ARDUINO_ARCH_ESP32)
+#ifndef ARDUINO_ARCH_ESP32
 #pragma once
 
 #include <SPI.h>                                                    /// SPI bus the controller is reached over.

@@ -1,4 +1,4 @@
-#if !defined(ARDUINO_ARCH_ESP32)
+#ifndef ARDUINO_ARCH_ESP32
 
 #include "MCP2515.h"
 
@@ -275,7 +275,7 @@ void MCP2515::onReceive(void (*callback)(int)) {
     attachInterrupt(digitalPinToInterrupt(intPin), MCP2515::onInterrupt, LOW);
   } else {
     detachInterrupt(digitalPinToInterrupt(intPin));
-#if defined(SPI_HAS_NOTUSINGINTERRUPT)
+#ifdef SPI_HAS_NOTUSINGINTERRUPT
     SPI.notUsingInterrupt(digitalPinToInterrupt(intPin));
 #endif
   }

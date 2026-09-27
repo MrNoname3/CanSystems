@@ -29,7 +29,7 @@ void DebugLedHandler::ledOff() {
   }
 }
 
-#if defined(__AVR_ATmega328P__)
+#ifdef __AVR_ATmega328P__
 void DebugLedHandler::ledToggle() {
   if(dbgLedPin == invalidPin) { return; }
   ledState ^= 1U;
