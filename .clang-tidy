@@ -38,7 +38,6 @@ Checks: >
   -readability-redundant-casting,
   -readability-avoid-nested-conditional-operator,
   -performance-enum-size,
-  -bugprone-switch-missing-default-case,
   -modernize-type-traits
 # avr-libc's PSTR() declares a __pstr__ at every use.
 CheckOptions:

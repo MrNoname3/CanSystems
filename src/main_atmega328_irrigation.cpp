@@ -140,6 +140,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       moistureReader.triggerImmediateMeasurement();
       (void)canHandler.send(command);
     } break;
+    default: {
+    } break;
   }
 }
 

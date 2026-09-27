@@ -104,6 +104,8 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       (void)canHandler.send(command);
     } break;
+    default: {
+    } break;
   }
 }
 
