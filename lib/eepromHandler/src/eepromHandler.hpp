@@ -100,7 +100,14 @@ private:
   static bool init() {
     // cppcheck-suppress knownConditionTrueFalse
     if(eepromInitialised) { return true; }
-    eepromInitialised = EEPROM.begin(eepromAddress + sizeof(EEPROMData));
+    constexpr size_t requiredSize = eepromAddress + sizeof(EEPROMData);
+#ifdef ESP8266
+    // The ESP8266 core's begin() reports nothing; it caps the size at one flash sector instead.
+    EEPROM.begin(requiredSize);
+    eepromInitialised = (EEPROM.length() >= requiredSize);
+#else
+    eepromInitialised = EEPROM.begin(requiredSize);
+#endif
     return eepromInitialised;
   }
 #endif

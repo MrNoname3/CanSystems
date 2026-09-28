@@ -62,7 +62,6 @@ EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/canAlertDriver/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
         ("lib/canMqttGateway/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
         ("src/main_esp32_can.cpp", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
-        ("lib/eepromHandler/*", "EEPROM.begin() returns void on the ESP8266 core"),
         ("lib/ambientSensor/*", AVR_WIRE),
         ("lib/pcf8574/*", AVR_WIRE),
         ("lib/ota/*", AVR_OTA),
