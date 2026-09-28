@@ -19,7 +19,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Static analysis: `… pio check` (cppcheck) and
   `python scripts/analysis_check.py` (clang-tidy; checks live in `.clang-tidy`). Split because
   they need opposite `check_skip_packages` settings; the guard also fails a clang-tidy that
-  analysed nothing, which `pio check` reports as a pass.
+  analysed nothing, and a clang error in project code, both of which `pio check` reports as a
+  pass. A source written for another target that cannot parse in an environment goes in the
+  guard's `EXPECTED_ERRORS`, with the reason.
 - **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs

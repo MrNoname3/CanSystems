@@ -6,7 +6,7 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   2. pio run                    (build every default environment)
   3. pio test -e native_test    (native unit-test suite)
   4. pio check --fail-on-defect (cppcheck over every environment; ANY defect fails)
-  5. analysis_check.py          (clang-tidy over the check_* environments; ANY defect fails)
+  5. analysis_check.py          (clang-tidy over the check_* environments; ANY project defect fails)
   6. format_check.py            (clang-format + final-newline check; ANY violation fails)
   7. lint_check.py              (ruff check over the Python; ANY finding fails)
   8. typecheck_check.py         (pyright strict over the Python; ANY error fails)
