@@ -73,8 +73,8 @@ EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/ota/*", AVR_OTA),
         ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
         ("lib/dfPlayer/*", "the ATmega328P's DFPlayer, on the AVR core's SoftwareSerial"),
-        ("lib/rgbLedWrapper/*", AVR_LED),
         ("src/main_esp8266_*.cpp", "the ESP8266 board's pin names and Connectivity constructor"),
+        ("src/main_atmega328_*.cpp", "the ATmega328P nodes' pins, watchdog and CAN handler"),
     ),
 }
 
