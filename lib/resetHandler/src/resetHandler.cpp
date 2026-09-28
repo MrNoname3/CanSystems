@@ -24,7 +24,12 @@ namespace {
 
 // .init3 runs after the stack is up but before .data/.bss and the global constructors, so this
 // reads r2 before the compiler can use it and reaches the watchdog before WdtHandler's constructor.
+// clang only ever analyses this file, never builds it, and rejects C statements in a naked function.
+#ifdef __clang_analyzer__
+void captureResetFlags() __attribute__((used, section(".init3")));
+#else
 void captureResetFlags() __attribute__((naked, used, section(".init3")));
+#endif
 void captureResetFlags() {
   uint8_t handedOver;
   __asm__ __volatile__("mov %0, r2" : "=r"(handedOver));   // where urboot leaves MCUSR before clearing it
