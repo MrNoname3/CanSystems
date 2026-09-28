@@ -99,7 +99,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   change wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). So is the
   ESP32 platform: a release brings a new Arduino core and ESP-IDF, and possibly another clang-tidy
   (`scripts/analysis_check.py` fails until `CLANG_TIDY_VERSION` follows), so it wants the gate and
-  a bench test. Dependabot is deliberately not used: it only runs on GitHub, and GitHub here is a
+  a bench test - a serial upload to an ESP8266 among them, the ESP8266 builds flashing with that
+  platform's esptool. Dependabot is deliberately not used: it only runs on GitHub, and GitHub here is a
   push mirror, so its PRs would land where they cannot be merged. The other PlatformIO pins in
   `platformio.ini` stay manual.
 - A commit message describes what is in its diff — not the paths that were tried and dropped, not
