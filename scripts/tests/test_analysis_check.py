@@ -1,4 +1,4 @@
-"""Unit tests for scripts/analysis_check.py: finding the clang-tidy that ran and its version.
+"""Unit tests for scripts/analysis_check.py: the clang-tidy that ran, its version, and the defects it counts.
 
 Running `pio check` itself is the gate's job; these cover reading its output and the version the
 binary reports.
@@ -58,4 +58,33 @@ def test_output_without_the_command_fails_the_gate(monkeypatch: object) -> None:
     without_command = "\n".join(line for line in VERBOSE_OUTPUT.splitlines() if BINARY not in line)
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
     monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, without_command))   # type: ignore[attr-defined]
+    assert analysis_check.main() == 1
+
+
+def _run_main(monkeypatch: object, output: str) -> int:
+    monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, output))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
+    return analysis_check.main()
+
+
+def _output_with_defect(path: str) -> str:
+    return VERBOSE_OUTPUT + f"{path}:142: [medium:warning] Out of bound access  [clang-analyzer-security.ArrayBound]\n"
+
+
+def test_a_defect_in_project_code_fails_the_gate(monkeypatch: object) -> None:
+    assert _run_main(monkeypatch, _output_with_defect("lib/canCommissioner/src/canCommissioner.cpp")) == 1
+
+
+def test_defects_in_library_and_framework_code_pass(monkeypatch: object) -> None:
+    library = ".pio/libdeps/check_esp32/ArduinoJson/src/ArduinoJson/Numbers/parseNumber.hpp"
+    framework = "/home/user/.platformio/packages/framework-arduinoespressif32-libs/esp32/include/sdkconfig.h"
+    assert _run_main(monkeypatch, _output_with_defect(library)) == 0
+    assert _run_main(monkeypatch, _output_with_defect(framework)) == 0
+
+
+def test_a_failing_tool_still_fails_the_gate(monkeypatch: object) -> None:
+    monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (1, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
     assert analysis_check.main() == 1

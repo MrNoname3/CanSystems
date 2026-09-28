@@ -8,7 +8,10 @@ back as PASSED with no output at all. Both failures have happened here: one from
 paths, one from a predefined macro PlatformIO passes through. This guard runs the same
 `pio check` and looks for what each of them leaves behind.
 
-Defects themselves are still `pio check`'s business; its exit code is passed straight on.
+The defects are counted here too, those in project files only. clang-tidy reports a finding in a
+library header whenever the path leading to it starts in project code, and no header filter drops
+it; the libraries are not this project's to fix, as cppcheck's --suppress=*:*.pio/* says as well.
+`pio check`'s exit code then speaks for the tool alone.
 
 The clang-tidy it runs is not pinned in platformio.ini: the pioarduino platform installs its own,
 and platform_packages cannot hold it (see the note there). So the version is checked here, and a
@@ -27,6 +30,7 @@ ENVIRONMENTS = ("check_avr", "check_esp8266", "check_esp32")
 CLANG_TIDY_VERSION = "21.1.0"
 
 ENVIRONMENT_HEADING = re.compile(r"^Checking (\S+) > clangtidy ")
+DEFECT = re.compile(r"^(\S+?):\d+: \[(?:low|medium|high):\w+\] ")
 DIAGNOSTIC = re.compile(r": (?:error|warning|note): ")
 NOT_FOUND = re.compile(r"'([^']+)' file not found")
 TOOL_COMMAND = re.compile(r"^(\S*clang-tidy) ", re.MULTILINE)
@@ -49,8 +53,6 @@ def run_check(pio: str) -> tuple[int, str]:
     command = [pio, "check", "--verbose"]
     for environment in ENVIRONMENTS:
         command += ["-e", environment]
-    for severity in ("low", "medium", "high"):
-        command += ["--fail-on-defect", severity]
     result = subprocess.run(command, cwd=PROJECT_DIR, capture_output=True, text=True,
                             check=False, env={**os.environ, "VIRTUAL_ENV": ""})
     return result.returncode, result.stdout + result.stderr
@@ -101,6 +103,30 @@ def report(per_environment: dict[str, list[str]]) -> list[str]:
     return silent
 
 
+def project_file(path: str) -> str | None:
+    """The path relative to the project, if it is one of the project's own files."""
+    try:
+        relative = (PROJECT_DIR / path).resolve().relative_to(PROJECT_DIR.resolve())
+    except ValueError:
+        return None
+    return None if relative.parts[0] == ".pio" else relative.as_posix()
+
+
+def project_defects(output: str) -> tuple[list[str], int]:
+    """The defect lines `pio check` printed for project files, and how many it printed for others."""
+    own: list[str] = []
+    outside = 0
+    for line in output.splitlines():
+        match = DEFECT.match(line)
+        if match is None:
+            continue
+        if project_file(match.group(1)) is None:
+            outside += 1
+        else:
+            own.append(line)
+    return own, outside
+
+
 def main() -> int:
     pio = find_pio()
     status, output = run_check(pio)
@@ -128,12 +154,20 @@ def main() -> int:
               f"update CLANG_TIDY_VERSION in {Path(__file__).name}.")
         return 1
 
-    if status != 0:
+    defects, outside = project_defects(output)
+    if outside:
+        print(f"analysis: {outside} defect(s) in library and framework code left out")
+    if status != 0 or defects:
         # From the first environment heading on: what precedes it is the command line pio echoes
         # under --verbose, which is thousands of characters of -D and -I.
         start = output.find("Checking ")
         print(output[start:] if start >= 0 else output)
-    return status
+    if defects:
+        print(f"\nanalysis: {len(defects)} defect(s) in project code:")
+        for defect in defects:
+            print(f"  {defect}")
+
+    return 1 if defects else status
 
 
 if __name__ == "__main__":
