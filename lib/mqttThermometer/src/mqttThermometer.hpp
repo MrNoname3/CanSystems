@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include <inttypes.h>                                               /// PRIx32: uint32_t is not unsigned int on every core.
 #include "connectivity.hpp"                                         /// Handles the MQTT connection (MqttBase, HADiscovery).
 #include "ds18b20Reader.hpp"                                        /// DS18B20 multi-sensor reader.
 #include "common.hpp"                                               /// Time/Logger/Build/Str helpers.
@@ -40,7 +41,7 @@ private:
   static constexpr const char PROGMEM subSubFmt[] = "%s/%s";             // <subtopic>/<rom>.
   static constexpr const char PROGMEM deviceIdFmt[] = "%s_%s";             // <clientName>_<rom>.
   static constexpr const char PROGMEM deviceNameFmt[] = "DS18B20 %s";        // DS18B20 <rom>.
-  static constexpr const char PROGMEM swVersionFmt[] = "%hu (%08x)";
+  static constexpr const char PROGMEM swVersionFmt[] = "%hu (%08" PRIx32 ")";
 
   /// @brief Cooperative measurement cycle: request -> wait conversion -> read each -> wait period.
   enum class State : uint8_t {
