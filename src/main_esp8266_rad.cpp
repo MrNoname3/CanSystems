@@ -1,5 +1,6 @@
 //--- Headers ---//
 #include <Arduino.h>            /// Arduino libraries header.
+#include <inttypes.h>           /// PRIu32: uint32_t is not unsigned int on every core.
 #include "wdtHandler.hpp"       /// Handles the watchdog timer.
 #include "debugLedHandler.hpp"  /// Handles the debug LED.
 #include "taskHandler.hpp"      /// Class for task scheduling.
@@ -54,5 +55,5 @@ void loop() {
 }
 
 void maxRoundTimeCallback(uint32_t maxRoundTime) {
-  Logger::get()->printf_P(PSTR("Max round time: %ums\r\n"), maxRoundTime);
+  Logger::get()->printf_P(PSTR("Max round time: %" PRIu32 "ms\r\n"), maxRoundTime);
 }

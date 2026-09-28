@@ -4,6 +4,7 @@
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include "RCSwitch.h"                                               /// RF driver library.
 #include "CircularBuffer.hpp"                                       /// Fixed-size queue for pending transmissions.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 
 /// @brief Class for handling RF communication and integrating with MQTT.
 /// This class supports receiving and transmitting RF signals, filtering duplicate data, and sending the processed data via MQTT.
@@ -24,7 +25,7 @@ private:
   static constexpr uint32_t maxBitLength = 64U;
 
   // Format string for the MQTT message containing RF data.
-  static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%u,"Protocol":%u,"Pulse":%u}})";
+  static constexpr const char PROGMEM rfMessageFrame[] = R"({"RfReceived":{"Data":%llu,"Bits":%)" PRIu32 R"(,"Protocol":%)" PRIu32 R"(,"Pulse":%)" PRIu32 R"(}})";
 
 public:
   /// @brief Constructs the RF handler object.

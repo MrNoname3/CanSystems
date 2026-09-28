@@ -5,6 +5,7 @@
 #include "connectivity.hpp"                                         /// Handles the MQTT connection.
 #include <Arduino.h>                                                /// Arduino libraries header.
 #include <Ticker.h>                                                 /// Timer interrupt handler.
+#include <inttypes.h>                                               /// PRIu32: uint32_t is not unsigned int on every core.
 #include "common.hpp"                                               /// Common definitions and functions.
 
 /// @brief Class for monitoring radiation levels using a sensor and publishing data over MQTT.
@@ -26,7 +27,7 @@ private:
 
   // Message frame; sievert and radian are 0 when tube type is unknown.
   // Both are printed from one scaled integer, so their shared digits can never disagree.
-  static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%u,"sievert":%u.%04u,"radian":%u.%02u})";
+  static constexpr const char PROGMEM fullMessageFrame[] = R"({"tick":%)" PRIu32 R"(,"sievert":%)" PRIu32 R"(.%04)" PRIu32 R"(,"radian":%)" PRIu32 R"(.%02)" PRIu32 R"(})";
 
 public:
   /// @brief Constructs the Radiation monitoring object.
