@@ -30,9 +30,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # Same rule as ci.yml: only on github.com, where actions/cache@v6's API is served.
         # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all.
-        if: ${{ github.server_url == 'https://github.com' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |

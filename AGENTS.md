@@ -88,9 +88,7 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - CI runs the release gate plus non-blocking firmware size-diff and native-coverage jobs, and a
   weekly PlatformIO outdated report. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
-  runner-specific steps. The one exception is `actions/cache`, skipped off github.com because the
-  self-hosted runner's cache API is v1 while `actions/cache@v6` speaks v2; that only costs a cold
-  (slower) run.
+  runner-specific steps.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip
   and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and the
   `atmelavr` and pioarduino ESP32 platform pins through custom managers. Patch/pin/digest automerge

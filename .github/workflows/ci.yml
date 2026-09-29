@@ -35,11 +35,6 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # Only on github.com: a self-hosted runner's built-in cache server speaks the
-        # legacy v1 cache API, but actions/cache@v6 uses v2 — its post/save step 404s
-        # there and fails the job at cleanup. Skipping it off github.com just means a
-        # cold (slower) build, not a failure.
-        if: ${{ github.server_url == 'https://github.com' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -85,11 +80,6 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # Only on github.com: a self-hosted runner's built-in cache server speaks the
-        # legacy v1 cache API, but actions/cache@v6 uses v2 — its post/save step 404s
-        # there and fails the job at cleanup. Skipping it off github.com just means a
-        # cold (slower) build, not a failure.
-        if: ${{ github.server_url == 'https://github.com' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -151,11 +141,6 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # Only on github.com: a self-hosted runner's built-in cache server speaks the
-        # legacy v1 cache API, but actions/cache@v6 uses v2 — its post/save step 404s
-        # there and fails the job at cleanup. Skipping it off github.com just means a
-        # cold (slower) build, not a failure.
-        if: ${{ github.server_url == 'https://github.com' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
