@@ -29,9 +29,11 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Cache PlatformIO toolchains and pip
-        # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all.
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore PlatformIO toolchains and pip
+        # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all, but
+        # none of their toolchains. Restore only: an entry saved here, under the key ci.yml shares,
+        # would be restored there in place of the full one, which would then never be saved.
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.platformio

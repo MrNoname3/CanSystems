@@ -140,16 +140,8 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Cache PlatformIO toolchains and pip
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.platformio
-            ~/.cache/pip
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
-          restore-keys: |
-            pio-${{ runner.os }}-
-
+      # No PlatformIO cache: the native tests build with the host compiler, and restoring the
+      # toolchains the other jobs cache takes longer than installing what this job uses.
       - name: Install PlatformIO + gcovr
         # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see release-gate).
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
