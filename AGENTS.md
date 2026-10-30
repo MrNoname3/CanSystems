@@ -85,8 +85,9 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   done, reviewed, and CI-green, then delete the branch (local + remote) and push `master` to
   `origin` (= the self-hosted Gitea, which **push-mirrors to GitHub** automatically — no second
   remote needed).
-- CI runs the release gate plus non-blocking firmware size-diff and native-coverage jobs, and a
-  weekly PlatformIO outdated report. **Gitea Actions and GitHub Actions both run the same
+- CI runs the release gate, a firmware size-diff and a native-coverage job; a `check` job is
+  green only when all three are, and it is the one status master's branch protection requires.
+  A weekly PlatformIO outdated report runs separately. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
   runner-specific steps.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip

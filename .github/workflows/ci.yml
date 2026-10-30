@@ -62,10 +62,9 @@ jobs:
         run: python scripts/release_check.py
 
   size-diff:
-    # Informational firmware flash/RAM delta vs a baseline (merge-base with master, or the
-    # previous commit when pushing master). continue-on-error: it never blocks — the
-    # release-gate job is the source of truth for build health; this only reports sizes.
-    continue-on-error: true
+    # Firmware flash/RAM delta vs a baseline (merge-base with master, or the previous commit
+    # when pushing master). A size change never fails it; a baseline or current build that
+    # cannot be measured does.
     runs-on: ubuntu-latest
     timeout-minutes: 60   # builds the baseline AND the current tree (2 builds); ~30min on the laptop, so 60 leaves room
     steps:
@@ -123,10 +122,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
-    # Informational native-test line coverage over lib/ (gcovr); continue-on-error, never blocks.
+    # Native-test line coverage over lib/ (gcovr); no coverage threshold, it fails only when
+    # the instrumented tests or the report do.
     # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
     # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 30   # only ~3min even on the laptop; a generous ceiling that still catches a hang
     steps:
@@ -173,3 +172,17 @@ jobs:
             echo ""
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  check:
+    # The one status master's branch protection requires. always(): a failed job above
+    # turns this red instead of skipping it.
+    if: always()
+    needs: [release-gate, size-diff, coverage]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The release gate, the size diff and the coverage run all passed
+        run: |
+          test "${{ needs.release-gate.result }}" = success
+          test "${{ needs.size-diff.result }}" = success
+          test "${{ needs.coverage.result }}" = success
