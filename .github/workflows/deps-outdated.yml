@@ -33,10 +33,19 @@ jobs:
         # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all, but
         # none of their toolchains. Restore only: an entry saved here, under the key ci.yml shares,
         # would be restored there in place of the full one, which would then never be saved.
+        # The paths are ci.yml's, unchanged: they are part of the cache version.
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.platformio
+            ~/.platformio/*
+            !~/.platformio/.cache
+            !~/.platformio/dist
+            !~/.platformio/tools
+            !~/.platformio/packages
+            ~/.platformio/packages/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs
+            ~/.platformio/packages/framework-arduinoespressif32-libs/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
             ~/.cache/pip
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |

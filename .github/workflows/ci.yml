@@ -35,10 +35,23 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
+        # actions/cache archives a matched directory whole, so ~/.platformio is listed level by
+        # level to let the exclusions bite. Left out: the download and install staging (.cache,
+        # dist, tools) and the Arduino libraries of every ESP chip but the ESP32; a board on
+        # another chip needs its libs directory listed after the esp32?* line. The path list is
+        # part of the cache version: the other two cache steps carry it unchanged.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.platformio
+            ~/.platformio/*
+            !~/.platformio/.cache
+            !~/.platformio/dist
+            !~/.platformio/tools
+            !~/.platformio/packages
+            ~/.platformio/packages/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs
+            ~/.platformio/packages/framework-arduinoespressif32-libs/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
             ~/.cache/pip
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
@@ -79,10 +92,19 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
+        # Same paths as in release-gate, which says what they leave out.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.platformio
+            ~/.platformio/*
+            !~/.platformio/.cache
+            !~/.platformio/dist
+            !~/.platformio/tools
+            !~/.platformio/packages
+            ~/.platformio/packages/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs
+            ~/.platformio/packages/framework-arduinoespressif32-libs/*
+            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
             ~/.cache/pip
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
