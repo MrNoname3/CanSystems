@@ -18,6 +18,11 @@ concurrency:                # a newer push to the same ref cancels the in-flight
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# A named bash runs with pipefail, the default one without it: `cmd | tee` fails when cmd does.
+defaults:
+  run:
+    shell: bash
+
 env:
   # What the PlatformIO cache keeps. actions/cache archives a matched directory whole, so
   # ~/.platformio is listed level by level to let the exclusions bite. Left out: the download and

@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# A named bash runs with pipefail, the default one without it: `cmd | tee` fails when cmd does.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   platformio-outdated:
     # Reports only: nothing here gates a release, and `pio pkg outdated` exits 0 either way.
