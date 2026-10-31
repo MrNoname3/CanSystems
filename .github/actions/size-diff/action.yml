@@ -1,0 +1,57 @@
+name: Firmware size diff
+description: >-
+  Flash and RAM of one release-gate group's environments against a baseline: the merge-base with
+  master, or the previous commit when pushing master. A size change never fails it; a baseline or
+  current build that cannot be measured does. Every master commit's sizes are cached, so a later
+  run reads its baseline rather than building it whenever the same runner kept them.
+
+inputs:
+  group:
+    description: The release-gate group whose environments to compare (scripts/gate_groups.py)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Determine baseline commit
+      id: base
+      shell: bash
+      run: |
+        git fetch --no-tags --prune origin master
+        if [ "$GITHUB_REF_NAME" = master ]; then
+          base=$(git rev-parse HEAD^)              # delta of this push to master
+        else
+          base=$(git merge-base HEAD origin/master) # delta the branch adds vs master
+        fi
+        echo "commit=$base" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the baseline's sizes
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/firmware-sizes.json
+        key: sizes-${{ runner.os }}-${{ inputs.group }}-${{ steps.base.outputs.commit }}
+
+    - name: Firmware size diff vs baseline
+      shell: bash
+      run: |
+        baseline=()
+        if [ -f ~/.cache/firmware-sizes.json ]; then
+          mv ~/.cache/firmware-sizes.json "$RUNNER_TEMP/baseline-sizes.json"
+          baseline=(--baseline-sizes "$RUNNER_TEMP/baseline-sizes.json")
+        fi
+        mkdir -p ~/.cache
+        python scripts/size_compare.py --commit "${{ steps.base.outputs.commit }}" --group "${{ inputs.group }}" \
+          "${baseline[@]}" --save-sizes ~/.cache/firmware-sizes.json | tee "$RUNNER_TEMP/size.log"
+        {
+          echo "## Firmware size of ${{ inputs.group }} vs \`${{ steps.base.outputs.commit }}\`"
+          echo '```'
+          sed -n '/Size comparison:/,$p' "$RUNNER_TEMP/size.log"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Keep this commit's sizes for the runs built on it
+      if: github.ref == 'refs/heads/master'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/firmware-sizes.json
+        key: sizes-${{ runner.os }}-${{ inputs.group }}-${{ github.sha }}
