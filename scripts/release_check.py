@@ -22,6 +22,9 @@ after it run out of the .venv: a drifted one reports on versions the project doe
 
 Step 0 checks the git working tree with the same rule the firmware build uses for its
 GIT_DIRTY flag (scripts/git_utils.py): dirty is a warning by default, a failure with --strict.
+It also checks that the CI groups in gate_groups.py cover every environment exactly once.
+
+`--group NAME` runs one of those groups instead of the whole gate: CI gives each its own job.
 
 Each command's output streams through a pseudo-terminal, so a human sees exactly what a
 standalone run would print (colors included). The output is also captured: the run ends with
@@ -38,6 +41,9 @@ import sys
 import time
 from pathlib import Path
 
+import analysis_check
+from build_jobs import jobs_args
+from gate_groups import GROUPS, Group, coverage_gaps, default_envs
 from git_utils import get_git_dirty
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -92,12 +98,42 @@ class Step:
         return "\n".join(lines[-TAIL_LINES:])
 
 
+def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[str]) -> list[Step]:
+    """The steps of the whole gate, or those of one CI group, in the whole gate's order; jobs are
+    the build's --jobs arguments."""
+    def script(name: str, *args: str) -> list[str]:
+        return [sys.executable, str(PROJECT_DIR / "scripts" / name), *args]
+
+    host = group is None or group.host
+    builds = group is None or bool(group.envs)
+    tidies = group is None or bool(group.tidy)
+    envs = [] if group is None else [arg for env in group.envs for arg in ("-e", env)]
+    tidy = [] if group is None else ["--env", *group.tidy]
+    steps = [
+        (host, Step("deps", deps_cmd)),
+        (builds, Step("build", [pio, "run", *envs, *jobs])),
+        (host, Step("test",  [pio, "test", "-e", "native_test"])),
+        (builds, Step("check", [pio, "check", *envs,
+                                "--fail-on-defect", "low",
+                                "--fail-on-defect", "medium",
+                                "--fail-on-defect", "high"])),
+        (tidies, Step("tidy", script("analysis_check.py", *tidy))),
+        (host, Step("format", script("format_check.py"))),
+        (host, Step("lint", script("lint_check.py"))),
+        (host, Step("typecheck", script("typecheck_check.py"))),
+        (host, Step("pytest", script("pytest_check.py"))),
+    ]
+    return [step for wanted, step in steps if wanted]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Pre-release gate: build + test + check.")
     parser.add_argument("--strict", action="store_true",
                         help="fail on a dirty git tree instead of warning")
     parser.add_argument("--sync", action="store_true",
                         help="install the pinned tooling into .venv before checking it")
+    parser.add_argument("--group", choices=GROUPS, metavar="NAME",
+                        help=f"run one CI group of the gate: {', '.join(GROUPS)}")
     args = parser.parse_args()
 
     os.chdir(PROJECT_DIR)
@@ -112,24 +148,19 @@ def main() -> int:
         print("RELEASE CHECK: FAIL (step: git status)")
         return 1
 
+    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), analysis_check.ENVIRONMENTS)
+    if gaps:
+        for gap in gaps:
+            print(f"groups       FAIL   {gap}")
+        print("Put it in exactly one group in scripts/gate_groups.py, so a CI job runs it.")
+        print("RELEASE CHECK: FAIL (step: groups)")
+        return 1
+
     deps_cmd = [sys.executable, str(PROJECT_DIR / "scripts" / "deps_check.py")]
     if args.sync:
         deps_cmd.append("--sync")
 
-    steps = [
-        Step("deps", deps_cmd),
-        Step("build", [pio, "run"]),
-        Step("test",  [pio, "test", "-e", "native_test"]),
-        Step("check", [pio, "check",
-                       "--fail-on-defect", "low",
-                       "--fail-on-defect", "medium",
-                       "--fail-on-defect", "high"]),
-        Step("tidy", [sys.executable, str(PROJECT_DIR / "scripts" / "analysis_check.py")]),
-        Step("format", [sys.executable, str(PROJECT_DIR / "scripts" / "format_check.py")]),
-        Step("lint", [sys.executable, str(PROJECT_DIR / "scripts" / "lint_check.py")]),
-        Step("typecheck", [sys.executable, str(PROJECT_DIR / "scripts" / "typecheck_check.py")]),
-        Step("pytest", [sys.executable, str(PROJECT_DIR / "scripts" / "pytest_check.py")]),
-    ]
+    steps = gate_steps(None if args.group is None else GROUPS[args.group], pio, deps_cmd, jobs_args())
 
     failed = None
     for step in steps:
@@ -140,6 +171,8 @@ def main() -> int:
     # --- Machine-friendly epilogue: summary table, failed-step replay, final marker. ---
     print(f"\n{' RELEASE CHECK SUMMARY '.center(78, '=')}")
     print(f"  git status   {'WARN' if dirty else 'PASS':4s}   {dirty_note}")
+    print("  groups       PASS   every environment in one CI group"
+          + (f"; this run: {args.group}" if args.group else ""))
     for step in steps:
         if step is failed:
             result = "FAIL"

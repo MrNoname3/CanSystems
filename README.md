@@ -231,7 +231,11 @@ tree with the same rule the firmware uses for its `GIT_DIRTY` flag.
 python3 scripts/release_check.py            # build + test + check; dirty tree is a warning
 python3 scripts/release_check.py --strict   # release mode: a dirty tree fails immediately
 python3 scripts/release_check.py --sync     # install the pinned tooling into .venv first
+python3 scripts/release_check.py --group esp32  # one CI group of it (scripts/gate_groups.py)
 ```
+
+CI runs the gate split into those groups, one job each, so no job needs every toolchain. The
+gate fails when the groups leave an environment out or cover one twice.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
 human sees exactly what standalone runs would print. The run ends machine-friendly: a summary

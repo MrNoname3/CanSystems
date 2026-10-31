@@ -1,8 +1,8 @@
 name: CI
 
-# This is the release gate, not a copy of it: the job below runs scripts/release_check.py, which
-# owns the list of steps and the order they run in. Nothing about them is repeated here, so the
-# two cannot fall out of step with each other.
+# This is the release gate, not a copy of it: each gate job runs scripts/release_check.py for one
+# group of it. scripts/gate_groups.py owns the groups and release_check.py the steps, and the gate
+# fails when the groups miss an environment, so nothing here can fall out of step with either.
 
 on:
   push:
@@ -51,10 +51,24 @@ env:
     ~/.cache/pip
 
 jobs:
-  release-gate:
-    # Runs on both GitHub Actions and Gitea Actions (Gitea also scans .github/workflows).
+  gate:
+    # One release-gate group per job, so no job needs every toolchain and any runner can take any
+    # of them. These need nothing from another job. The esp32 group also hands on the two tools of
+    # the pioarduino platform that only that platform installs: the ESP8266 builds use its esptool,
+    # and every check_* environment its clang-tidy.
+    name: gate (${{ matrix.group }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # slow runners (laptop) peak ~35min cold here; 60 gives headroom yet catches a hang vs the 3h default
+    timeout-minutes: 60   # a cold toolchain install on a slow runner takes ~20min; 60 still catches a hang
+    strategy:
+      fail-fast: false    # every group reports, whichever fails first
+      matrix:
+        include:
+          - group: host
+          - group: avr
+            sizes: true
+          - group: esp32
+            sizes: true
+            tools: true
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,35 +84,70 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.PIO_CACHE_PATHS }}
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          key: pio-${{ runner.os }}-${{ matrix.group }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
-            pio-${{ runner.os }}-
+            pio-${{ runner.os }}-${{ matrix.group }}-
 
       - name: Install PlatformIO + tooling
-        # requirements-dev.txt is the single source of truth for the pinned gate tooling
-        # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
-        # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
-        # requirements-ci.txt adds the two that are not installed locally: pioarduino and intelhex.
+        # requirements-ci.txt holds what every group needs: pioarduino and intelhex. The host group
+        # runs the Python guards too, whose pinned tooling (clang-format/ruff/pyright/pytest/gcovr)
+        # and the OTA tool's runtime deps (-r ota/requirements.txt) come from requirements-dev.txt.
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
         # has already taken away. A virtualenv in the workspace is the job's alone.
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
+          .venv/bin/python -m pip install -r requirements-ci.txt ${{ matrix.group == 'host' && '-r requirements-dev.txt' || '' }}
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Release gate
-        run: python scripts/release_check.py
+      - name: Pack the pioarduino tools
+        # Before the gate, so a failing ESP32 build still lets the other groups run. check_esp32 is
+        # the environment whose configuration has the platform install clang-tidy, and `pio project
+        # metadata` configures it the way a build does: that turns the platform's download stubs
+        # into the two tools. The tests fail the step on a stub left in place of either.
+        if: matrix.tools
+        run: |
+          pio project metadata -e check_esp32 > /dev/null
+          test -x ~/.platformio/packages/tool-clangtidy/clang-tidy
+          test -d ~/.platformio/packages/tool-esptoolpy/esptool
+          tar -C ~/.platformio/packages -cf "$RUNNER_TEMP/pioarduino-tools.tar" tool-esptoolpy tool-clangtidy
 
-  size-diff:
-    # Firmware flash/RAM delta vs a baseline (merge-base with master, or the previous commit
-    # when pushing master). A size change never fails it; a baseline or current build that
-    # cannot be measured does.
+      - name: Hand the pioarduino tools on
+        if: matrix.tools
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pioarduino-tools
+          path: ${{ runner.temp }}/pioarduino-tools.tar
+          retention-days: 1
+
+      - name: Release gate (${{ matrix.group }})
+        run: python scripts/release_check.py --group ${{ matrix.group }}
+
+      - name: Firmware size diff
+        if: matrix.sizes
+        uses: ./.github/actions/size-diff
+        with:
+          group: ${{ matrix.group }}
+
+  gate-with-tools:
+    # The release-gate groups that take the pioarduino tools the esp32 group hands on.
+    name: gate (${{ matrix.group }})
+    needs: gate
+    if: ${{ !cancelled() }}   # the tools come from one group: another failing is no reason to skip these
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # builds the baseline AND the current tree (2 builds); ~30min on the laptop, so 60 leaves room
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: esp8266
+            sizes: true
+          - group: tidy-esp32
+          - group: tidy-esp8266
+          - group: tidy-avr
     steps:
-      - name: Checkout (full history so the baseline commit can be built)
+      - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -112,42 +161,38 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.PIO_CACHE_PATHS }}
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          key: pio-${{ runner.os }}-${{ matrix.group }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
-            pio-${{ runner.os }}-
+            pio-${{ runner.os }}-${{ matrix.group }}-
 
       - name: Install PlatformIO + intelhex
-        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
-        # job of a run shares, so a pin that has moved has all of them uninstalling the old
-        # version at the same moment, and whichever loses that race fails on a file the winner
-        # has already taken away. A virtualenv in the workspace is the job's alone.
+        # Into a virtualenv of this job's own, for the reason the gate job gives.
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -r requirements-ci.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Determine baseline commit
-        id: base
-        run: |
-          git fetch --no-tags --prune origin master
-          if [ "$GITHUB_REF_NAME" = master ]; then
-            base=$(git rev-parse HEAD^)              # delta of this push to master
-          else
-            base=$(git merge-base HEAD origin/master) # delta the branch adds vs master
-          fi
-          echo "commit=$base" >> "$GITHUB_OUTPUT"
+      - name: Take the pioarduino tools
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pioarduino-tools
+          path: ${{ runner.temp }}
 
-      - name: Firmware size diff vs baseline
-        # size_compare.py builds the baseline in a temp worktree, then the current tree, and
-        # prints a per-env flash/RAM table (native_test has no size data and is skipped).
+      - name: Install the pioarduino tools
+        # In place of any older copy the cache brought: unpacking over one would leave its files.
         run: |
-          python scripts/size_compare.py --commit "${{ steps.base.outputs.commit }}" | tee /tmp/size.log
-          {
-            echo "## Firmware size vs \`${{ steps.base.outputs.commit }}\`"
-            echo '```'
-            sed -n '/Size comparison:/,$p' /tmp/size.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p ~/.platformio/packages
+          rm -rf ~/.platformio/packages/tool-esptoolpy ~/.platformio/packages/tool-clangtidy
+          tar -C ~/.platformio/packages -xf "$RUNNER_TEMP/pioarduino-tools.tar"
+
+      - name: Release gate (${{ matrix.group }})
+        run: python scripts/release_check.py --group ${{ matrix.group }}
+
+      - name: Firmware size diff
+        if: matrix.sizes
+        uses: ./.github/actions/size-diff
+        with:
+          group: ${{ matrix.group }}
 
   coverage:
     # Native-test line coverage over lib/ (gcovr); no coverage threshold, it fails only when
@@ -160,7 +205,7 @@ jobs:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0    # same as the other two jobs; a shallow clone builds with a count of 1
+          fetch-depth: 0    # same as the gate jobs; a shallow clone builds with a count of 1
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -170,7 +215,7 @@ jobs:
       # No PlatformIO cache: the native tests build with the host compiler, and restoring the
       # toolchains the other jobs cache takes longer than installing what this job uses.
       - name: Install PlatformIO + gcovr
-        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see release-gate).
+        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see the gate job).
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
@@ -205,12 +250,12 @@ jobs:
     # The one status master's branch protection requires. always(): a failed job above
     # turns this red instead of skipping it.
     if: always()
-    needs: [release-gate, size-diff, coverage]
+    needs: [gate, gate-with-tools, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: The release gate, the size diff and the coverage run all passed
+      - name: Every release-gate group and the coverage run passed
         run: |
-          test "${{ needs.release-gate.result }}" = success
-          test "${{ needs.size-diff.result }}" = success
+          test "${{ needs.gate.result }}" = success
+          test "${{ needs.gate-with-tools.result }}" = success
           test "${{ needs.coverage.result }}" = success

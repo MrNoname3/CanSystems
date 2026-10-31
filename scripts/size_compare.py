@@ -9,18 +9,31 @@ The baseline commit is built first (in a temporary git worktree so the main work
 tree is never touched), then the current state is built — ensuring the latest firmware
 binary remains in the project's .pio directory after the script finishes.
 
+--save-sizes writes the current build's sizes to a JSON file, and --baseline-sizes reads the
+baseline's from one such file instead of building the baseline commit: CI keeps the file of each
+master commit, so the commit a branch starts from is seldom built twice. A file that cannot be
+read falls back to the build.
+
 Usage:
-  python scripts/size_compare.py --commit HASH [--env ENV [ENV ...]]
+  python scripts/size_compare.py --commit HASH [--env ENV [ENV ...] | --group NAME]
+                                 [--baseline-sizes FILE] [--save-sizes FILE]
 """
 import argparse
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import cast
+
+from build_jobs import jobs_args
+from gate_groups import GROUPS
+
+FIRMWARE_GROUPS = [name for name, group in GROUPS.items() if group.envs and not group.host]
 
 _SIZE_RE = re.compile(
     r"(Flash|RAM):\s+\[.*?\]\s+[\d.]+%\s+\(used\s+(\d+)\s+bytes\s+from\s+(\d+)\s+bytes\)",
@@ -50,7 +63,7 @@ def _find_pio() -> str:
 
 def _build_and_capture(pio: str, envs: list[str], cwd: str | None = None) -> dict[str, Sizes]:
     """Run pio run (optionally in a different directory) and parse flash/RAM sizes."""
-    cmd = [pio, "run"]
+    cmd = [pio, "run", *jobs_args()]
     for env in envs:
         cmd += ["-e", env]
     if cwd:
@@ -141,6 +154,21 @@ def _parse_lines(lines: list[str]) -> dict[str, Sizes]:
     return sizes
 
 
+def save_sizes(path: Path, sizes: dict[str, Sizes]) -> None:
+    path.write_text(json.dumps({env: asdict(size) for env, size in sizes.items()}, indent=2) + "\n",
+                    encoding="utf-8")
+
+
+def load_sizes(path: Path) -> dict[str, Sizes]:
+    """The sizes save_sizes() wrote, or nothing when the file is missing or not one of those."""
+    try:
+        data: dict[str, dict[str, int]] = json.loads(path.read_text(encoding="utf-8"))
+        return {env: Sizes(**size) for env, size in data.items()}
+    except (OSError, ValueError, TypeError, AttributeError) as error:
+        print(f" Baseline sizes in {path} unusable ({error}); building the baseline instead.")
+        return {}
+
+
 def _fmt_bytes(val: int) -> str:
     return f"{val:,}".replace(",", " ") + " B"
 
@@ -188,26 +216,45 @@ def main() -> None:
         "--commit", required=True, metavar="HASH",
         help="Baseline commit hash to compare against",
     )
-    parser.add_argument(
+    targets = parser.add_mutually_exclusive_group()
+    targets.add_argument(
         "--env", metavar="ENV", nargs="+",
         help="PlatformIO environment(s) to build (default: all default_envs)",
+    )
+    targets.add_argument(
+        "--group", choices=FIRMWARE_GROUPS, metavar="NAME",
+        help=f"the environments of one release-gate group: {', '.join(FIRMWARE_GROUPS)}",
+    )
+    parser.add_argument(
+        "--baseline-sizes", type=Path, metavar="FILE",
+        help="read the baseline's sizes from FILE, written by --save-sizes, instead of building it",
+    )
+    parser.add_argument(
+        "--save-sizes", type=Path, metavar="FILE",
+        help="write the current build's sizes to FILE",
     )
     args = parser.parse_args()
 
     pio = _find_pio()
-    envs: list[str] = args.env or []
+    envs: list[str] = list(GROUPS[args.group].envs) if args.group else args.env or []
 
-    print(f"\n Building baseline ({args.commit}) in temporary worktree...")
-    print("═" * 68)
-    baseline_sizes = _build_baseline_in_worktree(pio, envs, args.commit)
-    if not baseline_sizes:
-        sys.exit(1)
+    baseline_sizes = load_sizes(args.baseline_sizes) if args.baseline_sizes else {}
+    if baseline_sizes:
+        print(f"\n Baseline ({args.commit}) sizes read from {args.baseline_sizes}")
+    else:
+        print(f"\n Building baseline ({args.commit}) in temporary worktree...")
+        print("═" * 68)
+        baseline_sizes = _build_baseline_in_worktree(pio, envs, args.commit)
+        if not baseline_sizes:
+            sys.exit(1)
 
     print("\n Building current state...")
     print("═" * 68)
     current_sizes = _build_and_capture(pio, envs)
     if not current_sizes:
         sys.exit(1)
+    if args.save_sizes:
+        save_sizes(args.save_sizes, current_sizes)
 
     all_envs = sorted(set(current_sizes) | set(baseline_sizes))
     if not all_envs:
