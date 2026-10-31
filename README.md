@@ -234,7 +234,9 @@ python3 scripts/release_check.py --sync     # install the pinned tooling into .v
 python3 scripts/release_check.py --group esp32  # one CI group of it (scripts/gate_groups.py)
 ```
 
-CI runs the gate split into those groups, one job each, so no job needs every toolchain. The
+CI runs the gate split into those groups, one job each. The ones that build or analyse firmware
+run in a container image with every toolchain installed (`ci/toolchain.Dockerfile`), which CI
+builds and pushes whenever that recipe, `platformio.ini` or `requirements-ci.txt` changes. The
 gate fails when the groups leave an environment out or cover one twice.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a

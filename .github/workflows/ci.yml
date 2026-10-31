@@ -2,7 +2,8 @@ name: CI
 
 # This is the release gate, not a copy of it: each gate job runs scripts/release_check.py for one
 # group of it. scripts/gate_groups.py owns the groups and release_check.py the steps, and the gate
-# fails when the groups miss an environment, so nothing here can fall out of step with either.
+# fails when the groups miss an environment, so nothing here can fall out of step with either. The
+# groups that need a toolchain run in an image that has them all (ci/toolchain.Dockerfile).
 
 on:
   push:
@@ -23,52 +24,73 @@ defaults:
   run:
     shell: bash
 
-env:
-  # What the PlatformIO cache keeps. actions/cache archives a matched directory whole, so
-  # ~/.platformio is listed level by level to let the exclusions bite. Left out: the download and
-  # install staging (.cache, dist, tools), and in the Arduino libraries and the Xtensa toolchain
-  # whatever only another ESP chip or picolibc uses; a board on another chip needs its directories
-  # listed after the esp32?* lines. The list is part of the cache version, so deps-outdated.yml
-  # carries it unchanged.
-  PIO_CACHE_PATHS: |
-    ~/.platformio/*
-    !~/.platformio/.cache
-    !~/.platformio/dist
-    !~/.platformio/tools
-    !~/.platformio/packages
-    ~/.platformio/packages/*
-    !~/.platformio/packages/framework-arduinoespressif32-libs
-    ~/.platformio/packages/framework-arduinoespressif32-libs/*
-    !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
-    !~/.platformio/packages/toolchain-xtensa-esp-elf
-    ~/.platformio/packages/toolchain-xtensa-esp-elf/*
-    !~/.platformio/packages/toolchain-xtensa-esp-elf/picolibc
-    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf
-    ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/*
-    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib
-    ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/*
-    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32?*
-    ~/.cache/pip
-
 jobs:
-  gate:
-    # One release-gate group per job, so no job needs every toolchain and any runner can take any
-    # of them. These need nothing from another job. The esp32 group also hands on the two tools of
-    # the pioarduino platform that only that platform installs: the ESP8266 builds use its esptool,
-    # and every check_* environment its clang-tidy.
-    name: gate (${{ matrix.group }})
+  image:
+    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it. It is built
+    # and pushed only when the registry has no image with that tag: on the forge with the
+    # PACKAGES_TOKEN secret, on GitHub to ghcr.io with the job's own token.
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # a cold toolchain install on a slow runner takes ~20min; 60 still catches a hang
-    strategy:
-      fail-fast: false    # every group reports, whichever fails first
-      matrix:
-        include:
-          - group: host
-          - group: avr
-            sizes: true
-          - group: esp32
-            sizes: true
-            tools: true
+    timeout-minutes: 60   # a build pulls the 1.7GB base and installs every toolchain; a hang still ends
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.name.outputs.ref }}
+    env:
+      TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Name the image
+        id: name
+        run: |
+          if [ "$GITHUB_SERVER_URL" = https://github.com ]; then
+            registry=ghcr.io
+          else
+            registry=${GITHUB_SERVER_URL#*://}
+          fi
+          owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "ref=$registry/$owner/cansystems-toolchain:${{ hashFiles('ci/toolchain.Dockerfile', 'platformio.ini', 'requirements-ci.txt') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Look the image up in the registry
+        id: lookup
+        # The registry API answers a manifest request with 200 when the tag exists, after the bearer
+        # token its WWW-Authenticate header names the realm for.
+        env:
+          REF: ${{ steps.name.outputs.ref }}
+        run: |
+          registry=${REF%%/*}; path=${REF#*/}; repository=${path%:*}; tag=${path##*:}
+          challenge=$(curl -sS -o /dev/null -D - "https://$registry/v2/" | tr -d '\r' | sed -n 's/^[Ww]ww-[Aa]uthenticate: Bearer //p')
+          realm=$(echo "$challenge" | sed -E 's/.*realm="([^"]+)".*/\1/')
+          service=$(echo "$challenge" | sed -E 's/.*service="([^"]+)".*/\1/')
+          bearer=$(curl -fsS -u "$GITHUB_REPOSITORY_OWNER:$TOKEN" \
+            "$realm?service=$service&scope=repository:$repository:pull" | jq -r '.token // .access_token')
+          status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $bearer" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://$registry/v2/$repository/manifests/$tag")
+          echo "manifest: HTTP $status"
+          echo "present=$([ "$status" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the image
+        # buildah needs no daemon: in a job container it builds with chroot isolation and vfs storage.
+        if: steps.lookup.outputs.present != 'true'
+        env:
+          REF: ${{ steps.name.outputs.ref }}
+        run: |
+          if ! command -v buildah > /dev/null; then
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq buildah > /dev/null
+          fi
+          buildah --storage-driver vfs build --isolation chroot -f ci/toolchain.Dockerfile -t "$REF" .
+          echo "$TOKEN" | buildah login --username "$GITHUB_REPOSITORY_OWNER" --password-stdin "${REF%%/*}"
+          buildah --storage-driver vfs push "$REF"
+
+  host:
+    # The release gate's host group: the native tests and the Python guards, which need no toolchain.
+    name: gate (host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,110 +102,70 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Cache PlatformIO toolchains and pip
+      - name: Cache PlatformIO and pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ env.PIO_CACHE_PATHS }}
-          key: pio-${{ runner.os }}-${{ matrix.group }}-${{ hashFiles('platformio.ini') }}
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-host-${{ hashFiles('platformio.ini') }}
           restore-keys: |
-            pio-${{ runner.os }}-${{ matrix.group }}-
+            pio-${{ runner.os }}-host-
 
       - name: Install PlatformIO + tooling
-        # requirements-ci.txt holds what every group needs: pioarduino and intelhex. The host group
-        # runs the Python guards too, whose pinned tooling (clang-format/ruff/pyright/pytest/gcovr)
-        # and the OTA tool's runtime deps (-r ota/requirements.txt) come from requirements-dev.txt.
+        # requirements-dev.txt is the single source of truth for the pinned gate tooling
+        # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
+        # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
+        # requirements-ci.txt adds the two that are not installed locally: pioarduino and intelhex.
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
         # has already taken away. A virtualenv in the workspace is the job's alone.
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-ci.txt ${{ matrix.group == 'host' && '-r requirements-dev.txt' || '' }}
+          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Pack the pioarduino tools
-        # Before the gate, so a failing ESP32 build still lets the other groups run. check_esp32 is
-        # the environment whose configuration has the platform install clang-tidy, and `pio project
-        # metadata` configures it the way a build does: that turns the platform's download stubs
-        # into the two tools. The tests fail the step on a stub left in place of either.
-        if: matrix.tools
-        run: |
-          pio project metadata -e check_esp32 > /dev/null
-          test -x ~/.platformio/packages/tool-clangtidy/clang-tidy
-          test -d ~/.platformio/packages/tool-esptoolpy/esptool
-          tar -C ~/.platformio/packages -cf "$RUNNER_TEMP/pioarduino-tools.tar" tool-esptoolpy tool-clangtidy
+      - name: Release gate (host)
+        run: python scripts/release_check.py --group host
 
-      - name: Hand the pioarduino tools on
-        if: matrix.tools
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: pioarduino-tools
-          path: ${{ runner.temp }}/pioarduino-tools.tar
-          retention-days: 1
-
-      - name: Release gate (${{ matrix.group }})
-        run: python scripts/release_check.py --group ${{ matrix.group }}
-
-      - name: Firmware size diff
-        if: matrix.sizes
-        uses: ./.github/actions/size-diff
-        with:
-          group: ${{ matrix.group }}
-
-  gate-with-tools:
-    # The release-gate groups that take the pioarduino tools the esp32 group hands on.
+  gate:
+    # The release-gate groups that need a toolchain, one per job, in the toolchain image: no job
+    # restores or installs one, and any runner can take any of them.
     name: gate (${{ matrix.group }})
-    needs: gate
-    if: ${{ !cancelled() }}   # the tools come from one group: another failing is no reason to skip these
+    needs: image
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45   # tidy-esp32, the longest, takes ~10min here and twice that on a slow runner
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.image.outputs.ref }}
+      # The same token the image job pushes with; a runner refuses credentials that come out empty.
+      credentials:
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     strategy:
-      fail-fast: false
+      fail-fast: false    # every group reports, whichever fails first
       matrix:
         include:
+          - group: avr
+            sizes: true
+          - group: esp32
+            sizes: true
           - group: esp8266
             sizes: true
+          - group: tidy-avr
           - group: tidy-esp32
           - group: tidy-esp8266
-          - group: tidy-avr
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.14'
-
-      - name: Cache PlatformIO toolchains and pip
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.PIO_CACHE_PATHS }}
-          key: pio-${{ runner.os }}-${{ matrix.group }}-${{ hashFiles('platformio.ini') }}
-          restore-keys: |
-            pio-${{ runner.os }}-${{ matrix.group }}-
-
-      - name: Install PlatformIO + intelhex
-        # Into a virtualenv of this job's own, for the reason the gate job gives.
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-ci.txt
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-
-      - name: Take the pioarduino tools
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: pioarduino-tools
-          path: ${{ runner.temp }}
-
-      - name: Install the pioarduino tools
-        # In place of any older copy the cache brought: unpacking over one would leave its files.
-        run: |
-          mkdir -p ~/.platformio/packages
-          rm -rf ~/.platformio/packages/tool-esptoolpy ~/.platformio/packages/tool-clangtidy
-          tar -C ~/.platformio/packages -xf "$RUNNER_TEMP/pioarduino-tools.tar"
+      - name: Use the image's PlatformIO
+        run: echo /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Release gate (${{ matrix.group }})
         run: python scripts/release_check.py --group ${{ matrix.group }}
@@ -212,10 +194,10 @@ jobs:
         with:
           python-version: '3.14'
 
-      # No PlatformIO cache: the native tests build with the host compiler, and restoring the
-      # toolchains the other jobs cache takes longer than installing what this job uses.
+      # No PlatformIO cache: the native tests build with the host compiler, and installing what
+      # this job uses takes less than restoring it would.
       - name: Install PlatformIO + gcovr
-        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see the gate job).
+        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see the host job).
         # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
         # job of a run shares, so a pin that has moved has all of them uninstalling the old
         # version at the same moment, and whichever loses that race fails on a file the winner
@@ -250,12 +232,13 @@ jobs:
     # The one status master's branch protection requires. always(): a failed job above
     # turns this red instead of skipping it.
     if: always()
-    needs: [gate, gate-with-tools, coverage]
+    needs: [image, host, gate, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Every release-gate group and the coverage run passed
+      - name: The toolchain image, every release-gate group and the coverage run passed
         run: |
+          test "${{ needs.image.result }}" = success
+          test "${{ needs.host.result }}" = success
           test "${{ needs.gate.result }}" = success
-          test "${{ needs.gate-with-tools.result }}" = success
           test "${{ needs.coverage.result }}" = success

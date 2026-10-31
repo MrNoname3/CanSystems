@@ -34,37 +34,6 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Restore PlatformIO toolchains and pip
-        # `pio pkg outdated` resolves the project's platforms, so it installs those the cache lacks,
-        # but none of their toolchains. The esp32 gate group's entry brings the pioarduino platform,
-        # the slowest of them to install. Restore only: an entry saved here, under that group's key,
-        # would be restored by the esp32 gate job in place of its own, which would then never be saved.
-        # The paths are ci.yml's PIO_CACHE_PATHS, unchanged: they are part of the cache version.
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.platformio/*
-            !~/.platformio/.cache
-            !~/.platformio/dist
-            !~/.platformio/tools
-            !~/.platformio/packages
-            ~/.platformio/packages/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs
-            ~/.platformio/packages/framework-arduinoespressif32-libs/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
-            !~/.platformio/packages/toolchain-xtensa-esp-elf
-            ~/.platformio/packages/toolchain-xtensa-esp-elf/*
-            !~/.platformio/packages/toolchain-xtensa-esp-elf/picolibc
-            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf
-            ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/*
-            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib
-            ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/*
-            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32?*
-            ~/.cache/pip
-          key: pio-${{ runner.os }}-esp32-${{ hashFiles('platformio.ini') }}
-          restore-keys: |
-            pio-${{ runner.os }}-esp32-
-
       - name: Install PlatformIO
         run: pip install -r requirements-ci.txt
 
