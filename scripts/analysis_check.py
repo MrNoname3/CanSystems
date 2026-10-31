@@ -20,13 +20,18 @@ it; the libraries are not this project's to fix, as cppcheck's --suppress=*:*.pi
 The clang-tidy it runs is not pinned in platformio.ini: the pioarduino platform installs its own,
 and platform_packages cannot hold it (see the note there). So the version is checked here, and a
 platform bump that brings another one fails until CLANG_TIDY_VERSION follows it.
+
+`--env` narrows the run to some of the check_* environments, so CI can give each its own job; the
+checks above then apply to those alone.
 """
 
+import argparse
 import os
 import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -98,10 +103,10 @@ def find_pio() -> str:
     sys.exit("pio executable not found (PATH and ~/.platformio/penv/bin/pio checked)")
 
 
-def run_check(pio: str) -> tuple[int, str]:
+def run_check(pio: str, environments: Sequence[str]) -> tuple[int, str]:
     """Run the clang-tidy environments verbosely; return the exit code and the output."""
     command = [pio, "check", "--verbose"]
-    for environment in ENVIRONMENTS:
+    for environment in environments:
         command += ["-e", environment]
     result = subprocess.run(command, cwd=PROJECT_DIR, capture_output=True, text=True,
                             check=False, env={**os.environ, "VIRTUAL_ENV": ""})
@@ -126,9 +131,10 @@ def clang_tidy_version(binary: str) -> str | None:
     return parse_version(result.stdout + result.stderr)
 
 
-def diagnostics_per_environment(output: str) -> dict[str, list[str]]:
+def diagnostics_per_environment(output: str,
+                                 environments: Sequence[str] = ENVIRONMENTS) -> dict[str, list[str]]:
     """Split the verbose output into the diagnostic lines each environment produced."""
-    per_environment: dict[str, list[str]] = {name: [] for name in ENVIRONMENTS}
+    per_environment: dict[str, list[str]] = {name: [] for name in environments}
     current: str | None = None
     for line in output.splitlines():
         heading = ENVIRONMENT_HEADING.match(line)
@@ -201,11 +207,16 @@ def project_defects(output: str) -> tuple[list[str], int]:
     return own, outside
 
 
-def main() -> int:
-    pio = find_pio()
-    status, output = run_check(pio)
+def main(argv: Sequence[str] = ()) -> int:
+    parser = argparse.ArgumentParser(description="clang-tidy over the check_* environments.")
+    parser.add_argument("--env", nargs="+", choices=ENVIRONMENTS, default=list(ENVIRONMENTS),
+                        metavar="ENV", help=f"environments to analyse (default: {', '.join(ENVIRONMENTS)})")
+    environments: list[str] = parser.parse_args(list(argv)).env
 
-    per_environment = diagnostics_per_environment(output)
+    pio = find_pio()
+    status, output = run_check(pio, environments)
+
+    per_environment = diagnostics_per_environment(output, environments)
     silent = report(per_environment)
 
     if silent:
@@ -255,4 +266,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

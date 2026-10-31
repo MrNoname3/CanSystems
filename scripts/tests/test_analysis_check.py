@@ -43,14 +43,14 @@ def test_unrecognised_version_output_gives_none() -> None:
 
 def test_a_different_version_fails_the_gate(monkeypatch: object) -> None:
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
-    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
     monkeypatch.setattr(analysis_check, "clang_tidy_version", lambda binary: "22.1.0")   # type: ignore[attr-defined]
     assert analysis_check.main() == 1
 
 
 def test_the_expected_version_passes(monkeypatch: object) -> None:
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
-    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
     monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
     assert analysis_check.main() == 0
 
@@ -58,7 +58,7 @@ def test_the_expected_version_passes(monkeypatch: object) -> None:
 def test_output_without_the_command_fails_the_gate(monkeypatch: object) -> None:
     without_command = "\n".join(line for line in VERBOSE_OUTPUT.splitlines() if BINARY not in line)
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
-    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, without_command))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, without_command))   # type: ignore[attr-defined]
     assert analysis_check.main() == 1
 
 
@@ -74,7 +74,7 @@ PROJECT_HEADER = str(analysis_check.PROJECT_DIR / "lib" / "mqttCommon" / "src" /
 
 def _run_main(monkeypatch: object, output: str) -> int:
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
-    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (0, output))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, output))   # type: ignore[attr-defined]
     monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
     return analysis_check.main()
 
@@ -127,6 +127,52 @@ def test_defects_in_library_and_framework_code_pass(monkeypatch: object) -> None
 
 def test_a_failing_tool_still_fails_the_gate(monkeypatch: object) -> None:
     monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
-    monkeypatch.setattr(analysis_check, "run_check", lambda pio: (1, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (1, VERBOSE_OUTPUT))   # type: ignore[attr-defined]
     monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
     assert analysis_check.main() == 1
+
+
+def _output_for(environment: str) -> str:
+    """What `pio check --verbose -e <environment>` prints: VERBOSE_OUTPUT's part for that one."""
+    return (f"Checking {environment} > clangtidy (platform: example; board: example)\n"
+            f"{BINARY} --quiet --config-file=.clang-tidy lib/crc16/src/crc16.cpp -- -DPLATFORMIO=60200\n"
+            f"lib/crc16/src/crc16.cpp:3:1: warning: something [readability-something]\n")
+
+
+def test_env_runs_only_the_named_environment(monkeypatch: object) -> None:
+    ran: list[list[str]] = []
+
+    def run_check(pio: str, environments: list[str]) -> tuple[int, str]:
+        ran.append(list(environments))
+        return 0, _output_for("check_avr")
+
+    monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", run_check)   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
+    assert analysis_check.main(["--env", "check_avr"]) == 0
+    assert ran == [["check_avr"]]
+
+
+def test_an_environment_left_out_is_not_reported_silent(monkeypatch: object, capsys: object) -> None:
+    monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, _output_for("check_esp8266")))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
+    assert analysis_check.main(["--env", "check_esp8266"]) == 0
+    printed: str = capsys.readouterr().out   # type: ignore[attr-defined]
+    assert "check_avr" not in printed and "check_esp32" not in printed
+
+
+def test_a_named_environment_that_analysed_nothing_still_fails(monkeypatch: object) -> None:
+    monkeypatch.setattr(analysis_check, "find_pio", lambda: "pio")   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "run_check", lambda pio, environments: (0, _output_for("check_avr")))   # type: ignore[attr-defined]
+    monkeypatch.setattr(analysis_check, "clang_tidy_version", _reports_expected_version)   # type: ignore[attr-defined]
+    assert analysis_check.main(["--env", "check_avr", "check_esp32"]) == 1
+
+
+def test_an_unknown_environment_is_refused() -> None:
+    try:
+        analysis_check.main(["--env", "project_esp32_can"])
+    except SystemExit as stop:
+        assert stop.code == 2
+    else:
+        raise AssertionError("an environment outside ENVIRONMENTS was accepted")
