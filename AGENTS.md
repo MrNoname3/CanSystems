@@ -23,7 +23,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   pass. A source written for another target that cannot parse in an environment goes in the
   guard's `EXPECTED_ERRORS`, with the reason.
 - **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
-  `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv)
+  `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
+  `--group NAME` runs one of the CI groups in `scripts/gate_groups.py`)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
   `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
   `typecheck_check.py` and `pytest_check.py`; anything that compiles needs the whole gate. Run the
@@ -85,8 +86,10 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   done, reviewed, and CI-green, then delete the branch (local + remote) and push `master` to
   `origin` (= the self-hosted Gitea, which **push-mirrors to GitHub** automatically — no second
   remote needed).
-- CI runs the release gate, a firmware size-diff and a native-coverage job; a `check` job is
-  green only when all three are, and it is the one status master's branch protection requires.
+- CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
+  firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
+  are, and it is the one status master's branch protection requires. An environment added to
+  `platformio.ini` goes into exactly one group there - the gate fails until it does.
   A weekly PlatformIO outdated report runs separately. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
   runner-specific steps.
