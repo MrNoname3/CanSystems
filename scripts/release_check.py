@@ -42,6 +42,7 @@ import time
 from pathlib import Path
 
 import analysis_check
+from build_jobs import jobs_args
 from gate_groups import GROUPS, Group, coverage_gaps, default_envs
 from git_utils import get_git_dirty
 
@@ -97,8 +98,9 @@ class Step:
         return "\n".join(lines[-TAIL_LINES:])
 
 
-def gate_steps(group: Group | None, pio: str, deps_cmd: list[str]) -> list[Step]:
-    """The steps of the whole gate, or those of one CI group, in the whole gate's order."""
+def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[str]) -> list[Step]:
+    """The steps of the whole gate, or those of one CI group, in the whole gate's order; jobs are
+    the build's --jobs arguments."""
     def script(name: str, *args: str) -> list[str]:
         return [sys.executable, str(PROJECT_DIR / "scripts" / name), *args]
 
@@ -109,7 +111,7 @@ def gate_steps(group: Group | None, pio: str, deps_cmd: list[str]) -> list[Step]
     tidy = [] if group is None else ["--env", *group.tidy]
     steps = [
         (host, Step("deps", deps_cmd)),
-        (builds, Step("build", [pio, "run", *envs])),
+        (builds, Step("build", [pio, "run", *envs, *jobs])),
         (host, Step("test",  [pio, "test", "-e", "native_test"])),
         (builds, Step("check", [pio, "check", *envs,
                                 "--fail-on-defect", "low",
@@ -158,7 +160,7 @@ def main() -> int:
     if args.sync:
         deps_cmd.append("--sync")
 
-    steps = gate_steps(None if args.group is None else GROUPS[args.group], pio, deps_cmd)
+    steps = gate_steps(None if args.group is None else GROUPS[args.group], pio, deps_cmd, jobs_args())
 
     failed = None
     for step in steps:

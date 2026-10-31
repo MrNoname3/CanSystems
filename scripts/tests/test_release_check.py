@@ -18,7 +18,7 @@ FAIL_ON = ["--fail-on-defect", "low", "--fail-on-defect", "medium", "--fail-on-d
 
 def _steps(group: str | None) -> dict[str, list[str]]:
     selected = None if group is None else GROUPS[group]
-    return {step.name: step.argv for step in release_check.gate_steps(selected, PIO, DEPS)}
+    return {step.name: step.argv for step in release_check.gate_steps(selected, PIO, DEPS, [])}
 
 
 def test_the_whole_gate_runs_every_step_over_every_environment() -> None:
@@ -71,3 +71,9 @@ def test_the_groups_together_run_what_the_whole_gate_runs() -> None:
     assert sorted(checked) == sorted(envs)
     assert sorted(tidied) == sorted(analysis_check.ENVIRONMENTS)
     assert sorted(others) == sorted(name for name in whole if name not in ("build", "check", "tidy"))
+
+
+def test_the_build_takes_the_jobs_arguments() -> None:
+    steps = {step.name: step.argv for step in release_check.gate_steps(GROUPS["esp32"], PIO, DEPS, ["--jobs", "3"])}
+    assert steps["build"] == [PIO, "run", "-e", "project_esp32_can", "--jobs", "3"]
+    assert "--jobs" not in steps["check"]

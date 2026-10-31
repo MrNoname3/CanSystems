@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
 
+from build_jobs import jobs_args
 from gate_groups import GROUPS
 
 FIRMWARE_GROUPS = [name for name, group in GROUPS.items() if group.envs and not group.host]
@@ -62,7 +63,7 @@ def _find_pio() -> str:
 
 def _build_and_capture(pio: str, envs: list[str], cwd: str | None = None) -> dict[str, Sizes]:
     """Run pio run (optionally in a different directory) and parse flash/RAM sizes."""
-    cmd = [pio, "run"]
+    cmd = [pio, "run", *jobs_args()]
     for env in envs:
         cmd += ["-e", env]
     if cwd:
