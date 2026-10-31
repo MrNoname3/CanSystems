@@ -89,16 +89,19 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
   firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
   are, and it is the one status master's branch protection requires. An environment added to
-  `platformio.ini` goes into exactly one group there - the gate fails until it does.
+  `platformio.ini` goes into exactly one group there - the gate fails until it does. The toolchain
+  groups run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
+  with the `PACKAGES_TOKEN` secret (a token with package read/write) and to ghcr.io on GitHub.
   A weekly PlatformIO outdated report runs separately. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
   runner-specific steps.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip
-  and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), and the
-  `atmelavr` and pioarduino ESP32 platform pins through custom managers. Patch/pin/digest automerge
-  after a 3-day soak (plus minor for Actions); everything else waits on the dashboard. The urboot
-  image is excluded from automerge - the bootloader `.hex` files are committed, so a base-image
-  change wants a rebuild and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). So is the
+  and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), the CI
+  toolchain image's base (`ci/toolchain.Dockerfile`), and the `atmelavr` and pioarduino ESP32
+  platform pins through custom managers. Patch/pin/digest automerge after a 3-day soak (plus minor
+  for Actions); everything else waits on the dashboard. The urboot image is excluded from
+  automerge - the bootloader `.hex` files are committed, so a base-image change wants a rebuild
+  and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). So is the
   ESP32 platform: a release brings a new Arduino core and ESP-IDF, and possibly another clang-tidy
   (`scripts/analysis_check.py` fails until `CLANG_TIDY_VERSION` follows), so it wants the gate and
   a bench test - a serial upload to an ESP8266 among them, the ESP8266 builds flashing with that
