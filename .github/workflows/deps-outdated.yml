@@ -33,7 +33,7 @@ jobs:
         # `pio pkg outdated` resolves the project's platforms, so a cold run installs them all, but
         # none of their toolchains. Restore only: an entry saved here, under the key ci.yml shares,
         # would be restored there in place of the full one, which would then never be saved.
-        # The paths are ci.yml's, unchanged: they are part of the cache version.
+        # The paths are ci.yml's PIO_CACHE_PATHS, unchanged: they are part of the cache version.
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -46,6 +46,14 @@ jobs:
             !~/.platformio/packages/framework-arduinoespressif32-libs
             ~/.platformio/packages/framework-arduinoespressif32-libs/*
             !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
+            !~/.platformio/packages/toolchain-xtensa-esp-elf
+            ~/.platformio/packages/toolchain-xtensa-esp-elf/*
+            !~/.platformio/packages/toolchain-xtensa-esp-elf/picolibc
+            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf
+            ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/*
+            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib
+            ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/*
+            !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32?*
             ~/.cache/pip
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |

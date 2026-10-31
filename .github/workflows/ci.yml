@@ -18,6 +18,33 @@ concurrency:                # a newer push to the same ref cancels the in-flight
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # What the PlatformIO cache keeps. actions/cache archives a matched directory whole, so
+  # ~/.platformio is listed level by level to let the exclusions bite. Left out: the download and
+  # install staging (.cache, dist, tools), and in the Arduino libraries and the Xtensa toolchain
+  # whatever only another ESP chip or picolibc uses; a board on another chip needs its directories
+  # listed after the esp32?* lines. The list is part of the cache version, so deps-outdated.yml
+  # carries it unchanged.
+  PIO_CACHE_PATHS: |
+    ~/.platformio/*
+    !~/.platformio/.cache
+    !~/.platformio/dist
+    !~/.platformio/tools
+    !~/.platformio/packages
+    ~/.platformio/packages/*
+    !~/.platformio/packages/framework-arduinoespressif32-libs
+    ~/.platformio/packages/framework-arduinoespressif32-libs/*
+    !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
+    !~/.platformio/packages/toolchain-xtensa-esp-elf
+    ~/.platformio/packages/toolchain-xtensa-esp-elf/*
+    !~/.platformio/packages/toolchain-xtensa-esp-elf/picolibc
+    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf
+    ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/*
+    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib
+    ~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/*
+    !~/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32?*
+    ~/.cache/pip
+
 jobs:
   release-gate:
     # Runs on both GitHub Actions and Gitea Actions (Gitea also scans .github/workflows).
@@ -35,24 +62,9 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # actions/cache archives a matched directory whole, so ~/.platformio is listed level by
-        # level to let the exclusions bite. Left out: the download and install staging (.cache,
-        # dist, tools) and the Arduino libraries of every ESP chip but the ESP32; a board on
-        # another chip needs its libs directory listed after the esp32?* line. The path list is
-        # part of the cache version: the other two cache steps carry it unchanged.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.platformio/*
-            !~/.platformio/.cache
-            !~/.platformio/dist
-            !~/.platformio/tools
-            !~/.platformio/packages
-            ~/.platformio/packages/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs
-            ~/.platformio/packages/framework-arduinoespressif32-libs/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
-            ~/.cache/pip
+          path: ${{ env.PIO_CACHE_PATHS }}
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
             pio-${{ runner.os }}-
@@ -92,20 +104,9 @@ jobs:
           python-version: '3.14'
 
       - name: Cache PlatformIO toolchains and pip
-        # Same paths as in release-gate, which says what they leave out.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.platformio/*
-            !~/.platformio/.cache
-            !~/.platformio/dist
-            !~/.platformio/tools
-            !~/.platformio/packages
-            ~/.platformio/packages/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs
-            ~/.platformio/packages/framework-arduinoespressif32-libs/*
-            !~/.platformio/packages/framework-arduinoespressif32-libs/esp32?*
-            ~/.cache/pip
+          path: ${{ env.PIO_CACHE_PATHS }}
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
             pio-${{ runner.os }}-
