@@ -63,7 +63,14 @@
       "allowedVersions": "!/\\.post\\d+$/"
     },
     {
-      "description": "What the CI toolchain image is built from updates together, on the first of the month: any change to it rebuilds the whole image",
+      "description": "The runners' job image, which the CI toolchain image builds on, takes no soak: the runners already run every job on its newest build",
+      "matchDepNames": [
+        "ghcr.io/mrnoname3/act-ubuntu"
+      ],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "What the CI toolchain image is built from updates together, on the third of the month, the day after the job image it builds on is rebuilt: any change to it rebuilds the whole image",
       "matchFileNames": [
         "requirements-dev.txt",
         "requirements-ci.txt",
@@ -72,7 +79,7 @@
       ],
       "groupName": "CI toolchain image",
       "schedule": [
-        "* * 1 * *"
+        "* * 3 * *"
       ]
     }
   ],
