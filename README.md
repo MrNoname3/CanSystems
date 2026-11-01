@@ -199,7 +199,7 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
   interfere with it. Toolchains download on the first build (needs internet).
 - The Python tooling for the release gate (clang-format, ruff, pyright, pytest, gcovr) plus the
   OTA tool's runtime deps are pinned in `requirements-dev.txt`; installed into the **project-root
-  `.venv`**, every gate guard discovers it automatically. CI installs the same file plus
+  `.venv`**, every gate guard discovers it automatically. CI's image installs the same file plus
   `pioarduino` and `intelhex` on top.
 - **Remotes:** the canonical repo is the self-hosted Gitea, which push-mirrors to GitHub
   automatically — a single `origin` (the Gitea URL) is all a working clone needs. A clone
@@ -234,10 +234,11 @@ python3 scripts/release_check.py --sync     # install the pinned tooling into .v
 python3 scripts/release_check.py --group esp32  # one CI group of it (scripts/gate_groups.py)
 ```
 
-CI runs the gate split into those groups, one job each. The ones that build or analyse firmware
-run in a container image with every toolchain installed (`ci/toolchain.Dockerfile`), which CI
-builds and pushes whenever that recipe, `requirements-ci.txt` or a `platformio.ini` option that
-decides which packages get installed changes (`scripts/toolchain_key.py`). The gate fails when the
+CI runs the gate split into those groups, one job each, and the native coverage run beside them,
+all in a container image with every toolchain and the pinned tooling installed
+(`ci/toolchain.Dockerfile`). CI builds and pushes it whenever that recipe, one of the
+requirements files or a `platformio.ini` option that decides which packages get installed changes
+(`scripts/toolchain_key.py`). The gate fails when the
 groups leave an environment out or cover one twice.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a

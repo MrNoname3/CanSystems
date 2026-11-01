@@ -56,6 +56,16 @@
       "allowedVersions": "<3.15"
     },
     {
+      "description": "The CI toolchain image's Python stays below 3.15 too, for the same reason",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "allowedVersions": "/^3\\.14\\./"
+    },
+    {
       "description": "pioarduino post-releases stay out: PlatformIO reads 6.2.0.post1 as the semver pre-release 6.2.0-post.1, which sorts below 6.2.0, so a platform requiring core >=6.2.0 refuses to install",
       "matchDepNames": [
         "pioarduino"
