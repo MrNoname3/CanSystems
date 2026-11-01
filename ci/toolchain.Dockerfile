@@ -24,5 +24,8 @@ RUN cd /root/.platformio \
 FROM base
 COPY --from=install /opt/pio /opt/pio
 COPY --from=install /root/.platformio /root/.platformio
+# The workspace a runner hands a job container is its own user's, and git refuses, as root, to work
+# in a repository someone else owns.
+RUN git config --system --add safe.directory '*'
 # By path rather than through HOME, which a CI runner may point elsewhere in a job container.
 ENV PATH=/opt/pio/bin:$PATH PLATFORMIO_CORE_DIR=/root/.platformio
