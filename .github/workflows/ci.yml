@@ -2,8 +2,8 @@ name: CI
 
 # This is the release gate, not a copy of it: each gate job runs scripts/release_check.py for one
 # group of it. scripts/gate_groups.py owns the groups and release_check.py the steps, and the gate
-# fails when the groups miss an environment, so nothing here can fall out of step with either. The
-# groups that need a toolchain run in an image that has them all (ci/toolchain.Dockerfile).
+# fails when the groups miss an environment, so nothing here can fall out of step with either. Every
+# group runs in an image that has the toolchains and the tooling (ci/toolchain.Dockerfile).
 
 on:
   push:
@@ -26,21 +26,24 @@ defaults:
 
 jobs:
   image:
-    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it. It is built
-    # and pushed only when the registry has no image with that tag: on the forge with the
-    # PACKAGES_TOKEN secret, on GitHub to ghcr.io with the job's own token.
+    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it
+    # (scripts/toolchain_key.py) and handed on pinned by digest. It is built and pushed only when the
+    # registry has no image with that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to
+    # ghcr.io with the job's own token.
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # a build pulls the 1.7GB base and installs every toolchain; a hang still ends
+    timeout-minutes: 60   # a build installs every toolchain and pushes some 2GB; a hang still ends
     permissions:
       contents: read
       packages: write
     outputs:
-      ref: ${{ steps.name.outputs.ref }}
+      ref: ${{ steps.pin.outputs.ref }}
     env:
       TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Name the image
         id: name
@@ -51,12 +54,13 @@ jobs:
             registry=${GITHUB_SERVER_URL#*://}
           fi
           owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
-          echo "ref=$registry/$owner/cansystems-toolchain:${{ hashFiles('ci/toolchain.Dockerfile', 'platformio.ini', 'requirements-ci.txt') }}" >> "$GITHUB_OUTPUT"
+          tag=$(python3 scripts/toolchain_key.py)
+          echo "ref=$registry/$owner/cansystems-toolchain:$tag" >> "$GITHUB_OUTPUT"
 
       - name: Look the image up in the registry
         id: lookup
         # The registry API answers a manifest request with 200 when the tag exists, after the bearer
-        # token its WWW-Authenticate header names the realm for.
+        # token its WWW-Authenticate header names the realm for; the manifest's hash is its digest.
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
@@ -66,15 +70,18 @@ jobs:
           service=$(echo "$challenge" | sed -E 's/.*service="([^"]+)".*/\1/')
           bearer=$(curl -fsS -u "$GITHUB_REPOSITORY_OWNER:$TOKEN" \
             "$realm?service=$service&scope=repository:$repository:pull" | jq -r '.token // .access_token')
-          status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $bearer" \
+          status=$(curl -s -o "$RUNNER_TEMP/manifest" -w '%{http_code}' -H "Authorization: Bearer $bearer" \
             -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
             "https://$registry/v2/$repository/manifests/$tag")
           echo "manifest: HTTP $status"
-          echo "present=$([ "$status" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ "$status" = 200 ]; then
+            echo "digest=sha256:$(sha256sum < "$RUNNER_TEMP/manifest" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and push the image
         # buildah needs no daemon: in a job container it builds with chroot isolation and vfs storage.
-        if: steps.lookup.outputs.present != 'true'
+        id: build
+        if: steps.lookup.outputs.digest == ''
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
@@ -84,54 +91,22 @@ jobs:
           fi
           buildah --storage-driver vfs build --isolation chroot -f ci/toolchain.Dockerfile -t "$REF" .
           echo "$TOKEN" | buildah login --username "$GITHUB_REPOSITORY_OWNER" --password-stdin "${REF%%/*}"
-          buildah --storage-driver vfs push "$REF"
+          buildah --storage-driver vfs push --digestfile "$RUNNER_TEMP/digest" "$REF"
+          echo "digest=$(cat "$RUNNER_TEMP/digest")" >> "$GITHUB_OUTPUT"
 
-  host:
-    # The release gate's host group: the native tests and the Python guards, which need no toolchain.
-    name: gate (host)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0    # git_utils.py runs `git rev-list --count HEAD`; a shallow clone reports 1
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.14'
-
-      - name: Cache PlatformIO and pip
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.platformio
-            ~/.cache/pip
-          key: pio-${{ runner.os }}-host-${{ hashFiles('platformio.ini') }}
-          restore-keys: |
-            pio-${{ runner.os }}-host-
-
-      - name: Install PlatformIO + tooling
-        # requirements-dev.txt is the single source of truth for the pinned gate tooling
-        # (clang-format/ruff/pyright/pytest/gcovr) and pulls in the OTA tool's runtime deps
-        # (-r ota/requirements.txt: paho-mqtt/pyyaml/tqdm) that pytest/pyright need.
-        # requirements-ci.txt adds the two that are not installed locally: pioarduino and intelhex.
-        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
-        # job of a run shares, so a pin that has moved has all of them uninstalling the old
-        # version at the same moment, and whichever loses that race fails on a file the winner
-        # has already taken away. A virtualenv in the workspace is the job's alone.
+      - name: Pin the image by digest
+        id: pin
+        env:
+          REF: ${{ steps.name.outputs.ref }}
+          DIGEST: ${{ steps.lookup.outputs.digest || steps.build.outputs.digest }}
         run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-
-      - name: Release gate (host)
-        run: python scripts/release_check.py --group host
+          test -n "$DIGEST"
+          echo "$REF is $DIGEST"
+          echo "ref=${REF%:*}@$DIGEST" >> "$GITHUB_OUTPUT"
 
   gate:
-    # The release-gate groups that need a toolchain, one per job, in the toolchain image: no job
-    # restores or installs one, and any runner can take any of them.
+    # The release-gate groups, one per job, in the toolchain image: no job restores or installs a
+    # toolchain or the Python tooling, and any runner can take any of them.
     name: gate (${{ matrix.group }})
     needs: image
     runs-on: ubuntu-latest
@@ -140,7 +115,7 @@ jobs:
       contents: read
       packages: read
     container:
-      image: ${{ needs.image.outputs.ref }}
+      image: ${{ needs.image.outputs.ref }}   # zizmor: ignore[unpinned-images] a digest, from the image job
       # The same token the image job pushes with; a runner refuses credentials that come out empty.
       credentials:
         username: ${{ github.repository_owner }}
@@ -149,6 +124,7 @@ jobs:
       fail-fast: false    # every group reports, whichever fails first
       matrix:
         include:
+          - group: host
           - group: avr
             sizes: true
           - group: esp32
@@ -162,9 +138,10 @@ jobs:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 0    # git_utils.py runs `git rev-list --count HEAD`; a shallow clone reports 1
+          persist-credentials: false    # size-diff's fetch reads the repository anonymously
 
-      - name: Use the image's PlatformIO
+      - name: Use the image's PlatformIO and tooling
         run: echo /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Release gate (${{ matrix.group }})
@@ -181,31 +158,26 @@ jobs:
     # the instrumented tests or the report do.
     # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
     # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
+    needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 30   # only ~3min even on the laptop; a generous ceiling that still catches a hang
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.image.outputs.ref }}   # zizmor: ignore[unpinned-images] a digest, from the image job
+      credentials:
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0    # same as the gate jobs; a shallow clone builds with a count of 1
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.14'
-
-      # No PlatformIO cache: the native tests build with the host compiler, and installing what
-      # this job uses takes less than restoring it would.
-      - name: Install PlatformIO + gcovr
-        # gcovr comes from requirements-dev.txt, pioarduino from requirements-ci.txt (see the host job).
-        # Into a virtualenv of this job's own. The runner's Python lives in a tool cache every
-        # job of a run shares, so a pin that has moved has all of them uninstalling the old
-        # version at the same moment, and whichever loses that race fails on a file the winner
-        # has already taken away. A virtualenv in the workspace is the job's alone.
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-ci.txt -r requirements-dev.txt
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Use the image's PlatformIO and gcovr
+        run: echo /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Native tests with coverage instrumentation
         run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test
@@ -232,13 +204,12 @@ jobs:
     # The one status master's branch protection requires. always(): a failed job above
     # turns this red instead of skipping it.
     if: always()
-    needs: [image, host, gate, coverage]
+    needs: [image, gate, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: The toolchain image, every release-gate group and the coverage run passed
         run: |
           test "${{ needs.image.result }}" = success
-          test "${{ needs.host.result }}" = success
           test "${{ needs.gate.result }}" = success
           test "${{ needs.coverage.result }}" = success

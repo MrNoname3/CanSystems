@@ -22,20 +22,24 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   analysed nothing, and a clang error in project code, both of which `pio check` reports as a
   pass. A source written for another target that cannot parse in an environment goes in the
   guard's `EXPECTED_ERRORS`, with the reason.
-- **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
+- **Release gate** (build + test + check + tidy + format + lint + workflows + typecheck + pytest,
+  fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
   `--group NAME` runs one of the CI groups in `scripts/gate_groups.py`)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
   `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
-  `typecheck_check.py` and `pytest_check.py`; anything that compiles needs the whole gate. Run the
-  whole gate before a merge whatever the changes were, and say which guard ran.
+  `typecheck_check.py` and `pytest_check.py`; one confined to `.github/` needs `workflow_check.py`;
+  anything that compiles needs the whole gate. Run the whole gate before a merge whatever the
+  changes were, and say which guard ran.
 - Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
   there is none - matches the pins; `--sync` installs them),
   `scripts/analysis_check.py` (clang-tidy over the check_* environments; `test/` is cppcheck's
   alone, there being no clang headers for the native platform to borrow),
   `scripts/format_check.py` (clang-format + final newline + the executable bit git recorded,
   which is not the one on disk: `core.fileMode` is off here),
-  `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
+  `scripts/lint_check.py` (ruff), `scripts/workflow_check.py` (actionlint + shellcheck + zizmor over
+  `.github/`, configured in `.github/zizmor.yml`), `scripts/typecheck_check.py` (pyright strict),
+  `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
   -r requirements-dev.txt`) — every gate guard finds it there. pio is unaffected by the root
@@ -89,15 +93,15 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
 - CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
   firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
   are, and it is the one status master's branch protection requires. An environment added to
-  `platformio.ini` goes into exactly one group there - the gate fails until it does. The toolchain
-  groups run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
+  `platformio.ini` goes into exactly one group there - the gate fails until it does. These jobs
+  all run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
   with the `PACKAGES_TOKEN` secret (a token with package read/write) and to ghcr.io on GitHub.
   A weekly PlatformIO outdated report runs separately. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no
   runner-specific steps.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip
   and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), the CI
-  toolchain image's base (`ci/toolchain.Dockerfile`), and the `atmelavr` and pioarduino ESP32
+  toolchain image's Python and Node bases (`ci/toolchain.Dockerfile`), and the `atmelavr` and pioarduino ESP32
   platform pins through custom managers. Patch/pin/digest automerge after a 3-day soak (plus minor
   for Actions); everything else waits on the dashboard. The urboot image is excluded from
   automerge - the bootloader `.hex` files are committed, so a base-image change wants a rebuild

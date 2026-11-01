@@ -33,6 +33,9 @@ runs:
 
     - name: Firmware size diff vs baseline
       shell: bash
+      env:
+        BASE: ${{ steps.base.outputs.commit }}
+        GROUP: ${{ inputs.group }}
       run: |
         baseline=()
         if [ -f ~/.cache/firmware-sizes.json ]; then
@@ -40,10 +43,10 @@ runs:
           baseline=(--baseline-sizes "$RUNNER_TEMP/baseline-sizes.json")
         fi
         mkdir -p ~/.cache
-        python scripts/size_compare.py --commit "${{ steps.base.outputs.commit }}" --group "${{ inputs.group }}" \
+        python scripts/size_compare.py --commit "$BASE" --group "$GROUP" \
           "${baseline[@]}" --save-sizes ~/.cache/firmware-sizes.json | tee "$RUNNER_TEMP/size.log"
         {
-          echo "## Firmware size of ${{ inputs.group }} vs \`${{ steps.base.outputs.commit }}\`"
+          echo "## Firmware size of $GROUP vs \`$BASE\`"
           echo '```'
           sed -n '/Size comparison:/,$p' "$RUNNER_TEMP/size.log"
           echo '```'
