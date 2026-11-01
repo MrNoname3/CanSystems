@@ -3,19 +3,16 @@
 # besides. CI tags the image with a hash of what decides its contents (scripts/toolchain_key.py),
 # and builds it only when the registry has no such tag.
 
-FROM node:24.21.0-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66 AS node
-
-FROM python:3.14.8-slim-trixie@sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a
-# git for the checkout and the version stamp, g++ for the native tests, zstd for actions/cache. The
-# workspace a runner hands a job container is its own user's, and git refuses, as root, to work in a
-# repository someone else owns.
+# The runners' job image (gitea-act-runner): Ubuntu with git, zstd, node for pyright and the JavaScript
+# actions, and Python 3.14, the newest the pioarduino platform runs on. Its gitea-act-runner.job-image
+# label comes along, and is what the runners' cleanup finds superseded copies of this image by.
+FROM ghcr.io/mrnoname3/act-ubuntu:26.04@sha256:6254bc0e6d8940104bbc033f00c6e08af76cf2c7a2d0e3dc7551edd0fb5e895f
+# g++ for the native tests. The workspace a runner hands a job container is its own user's, and git
+# refuses, as root, to work in a repository someone else owns.
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates g++ git zstd \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends g++ \
  && rm -rf /var/lib/apt/lists/* \
  && git config --system --add safe.directory '*'
-# Node for pyright, and for the JavaScript actions: a Gitea runner runs them with the job
-# container's node, where GitHub brings its own.
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # By path rather than through HOME, which a CI runner may point elsewhere in a job container.
 ENV PATH=/opt/pio/bin:$PATH PLATFORMIO_CORE_DIR=/root/.platformio
 
@@ -25,7 +22,7 @@ COPY . /tmp/project
 # the ESP8266 ones that name its esptool, and check_esp32, whose configuration has the pioarduino
 # platform install clang-tidy. Left out afterwards: the download and install staging, and what only
 # another ESP chip or picolibc uses.
-RUN python -m venv /opt/pio \
+RUN python3 -m venv /opt/pio \
  && /opt/pio/bin/pip install --no-cache-dir -r /tmp/project/requirements-ci.txt -r /tmp/project/requirements-dev.txt \
  && cd /tmp/project \
  && pio project metadata > /dev/null \

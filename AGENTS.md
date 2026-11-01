@@ -101,7 +101,7 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   runner-specific steps.
 - Dependency bumps come from **Renovate on the Gitea side** (`renovate.json`), which covers the pip
   and GitHub Actions ecosystems, the urboot build image (`bootloader/urboot.Dockerfile`), the CI
-  toolchain image's Python and Node bases (`ci/toolchain.Dockerfile`), and the `atmelavr` and pioarduino ESP32
+  toolchain image's base, the runners' job image (`ci/toolchain.Dockerfile`), and the `atmelavr` and pioarduino ESP32
   platform pins through custom managers. Patch/pin/digest automerge after a 3-day soak (plus minor
   for Actions); everything else waits on the dashboard. The urboot image is excluded from
   automerge - the bootloader `.hex` files are committed, so a base-image change wants a rebuild
