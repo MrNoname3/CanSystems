@@ -22,20 +22,24 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   analysed nothing, and a clang error in project code, both of which `pio check` reports as a
   pass. A source written for another target that cannot parse in an environment goes in the
   guard's `EXPECTED_ERRORS`, with the reason.
-- **Release gate** (build + test + check + tidy + format + lint + typecheck + pytest, fail-fast):
+- **Release gate** (build + test + check + tidy + format + lint + workflows + typecheck + pytest,
+  fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
   `--group NAME` runs one of the CI groups in `scripts/gate_groups.py`)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
   `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
-  `typecheck_check.py` and `pytest_check.py`; anything that compiles needs the whole gate. Run the
-  whole gate before a merge whatever the changes were, and say which guard ran.
+  `typecheck_check.py` and `pytest_check.py`; one confined to `.github/` needs `workflow_check.py`;
+  anything that compiles needs the whole gate. Run the whole gate before a merge whatever the
+  changes were, and say which guard ran.
 - Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
   there is none - matches the pins; `--sync` installs them),
   `scripts/analysis_check.py` (clang-tidy over the check_* environments; `test/` is cppcheck's
   alone, there being no clang headers for the native platform to borrow),
   `scripts/format_check.py` (clang-format + final newline + the executable bit git recorded,
   which is not the one on disk: `core.fileMode` is off here),
-  `scripts/lint_check.py` (ruff), `scripts/typecheck_check.py` (pyright strict), `scripts/pytest_check.py`
+  `scripts/lint_check.py` (ruff), `scripts/workflow_check.py` (actionlint + shellcheck + zizmor over
+  `.github/`, configured in `.github/zizmor.yml`), `scripts/typecheck_check.py` (pyright strict),
+  `scripts/pytest_check.py`
 - Python tooling (clang-format/ruff/pyright/pytest/gcovr) is pinned in `requirements-dev.txt`;
   install it into a **project-root `.venv`** (`python -m venv .venv && .venv/bin/pip install
   -r requirements-dev.txt`) — every gate guard finds it there. pio is unaffected by the root

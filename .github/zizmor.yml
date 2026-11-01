@@ -1,0 +1,4 @@
+# Configuration of the zizmor audit scripts/workflow_check.py runs.
+rules:
+  self-repository:
+    disable: true   # its `$/` syntax is GitHub's alone, and Gitea runs these same workflow files
