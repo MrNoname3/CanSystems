@@ -27,15 +27,16 @@ defaults:
 jobs:
   image:
     # The toolchain image the gate jobs run in, tagged with a hash of what goes into it
-    # (scripts/toolchain_key.py). It is built and pushed only when the registry has no image with
-    # that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to ghcr.io with the job's own token.
+    # (scripts/toolchain_key.py) and handed on pinned by digest. It is built and pushed only when the
+    # registry has no image with that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to
+    # ghcr.io with the job's own token.
     runs-on: ubuntu-latest
     timeout-minutes: 60   # a build pulls the 1.7GB base and installs every toolchain; a hang still ends
     permissions:
       contents: read
       packages: write
     outputs:
-      ref: ${{ steps.name.outputs.ref }}
+      ref: ${{ steps.pin.outputs.ref }}
     env:
       TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
@@ -59,7 +60,7 @@ jobs:
       - name: Look the image up in the registry
         id: lookup
         # The registry API answers a manifest request with 200 when the tag exists, after the bearer
-        # token its WWW-Authenticate header names the realm for.
+        # token its WWW-Authenticate header names the realm for; the manifest's hash is its digest.
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
@@ -69,15 +70,18 @@ jobs:
           service=$(echo "$challenge" | sed -E 's/.*service="([^"]+)".*/\1/')
           bearer=$(curl -fsS -u "$GITHUB_REPOSITORY_OWNER:$TOKEN" \
             "$realm?service=$service&scope=repository:$repository:pull" | jq -r '.token // .access_token')
-          status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $bearer" \
+          status=$(curl -s -o "$RUNNER_TEMP/manifest" -w '%{http_code}' -H "Authorization: Bearer $bearer" \
             -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
             "https://$registry/v2/$repository/manifests/$tag")
           echo "manifest: HTTP $status"
-          echo "present=$([ "$status" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ "$status" = 200 ]; then
+            echo "digest=sha256:$(sha256sum < "$RUNNER_TEMP/manifest" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and push the image
         # buildah needs no daemon: in a job container it builds with chroot isolation and vfs storage.
-        if: steps.lookup.outputs.present != 'true'
+        id: build
+        if: steps.lookup.outputs.digest == ''
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
@@ -87,7 +91,18 @@ jobs:
           fi
           buildah --storage-driver vfs build --isolation chroot -f ci/toolchain.Dockerfile -t "$REF" .
           echo "$TOKEN" | buildah login --username "$GITHUB_REPOSITORY_OWNER" --password-stdin "${REF%%/*}"
-          buildah --storage-driver vfs push "$REF"
+          buildah --storage-driver vfs push --digestfile "$RUNNER_TEMP/digest" "$REF"
+          echo "digest=$(cat "$RUNNER_TEMP/digest")" >> "$GITHUB_OUTPUT"
+
+      - name: Pin the image by digest
+        id: pin
+        env:
+          REF: ${{ steps.name.outputs.ref }}
+          DIGEST: ${{ steps.lookup.outputs.digest || steps.build.outputs.digest }}
+        run: |
+          test -n "$DIGEST"
+          echo "$REF is $DIGEST"
+          echo "ref=${REF%:*}@$DIGEST" >> "$GITHUB_OUTPUT"
 
   host:
     # The release gate's host group: the native tests and the Python guards, which need no toolchain.
@@ -144,7 +159,7 @@ jobs:
       contents: read
       packages: read
     container:
-      image: ${{ needs.image.outputs.ref }}
+      image: ${{ needs.image.outputs.ref }}   # zizmor: ignore[unpinned-images] a digest, from the image job
       # The same token the image job pushes with; a runner refuses credentials that come out empty.
       credentials:
         username: ${{ github.repository_owner }}
