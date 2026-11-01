@@ -71,6 +71,19 @@
         "pioarduino"
       ],
       "allowedVersions": "!/\\.post\\d+$/"
+    },
+    {
+      "description": "What the CI toolchain image is built from updates together, on the first of the month: any change to it rebuilds the whole image",
+      "matchFileNames": [
+        "requirements-dev.txt",
+        "requirements-ci.txt",
+        "ota/requirements.txt",
+        "ci/toolchain.Dockerfile"
+      ],
+      "groupName": "CI toolchain image",
+      "schedule": [
+        "* * 1 * *"
+      ]
     }
   ],
   "customManagers": [
