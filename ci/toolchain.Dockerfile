@@ -1,6 +1,6 @@
 # The PlatformIO toolchains the release-gate groups build and analyse with, installed the way a build
-# installs them, so a CI job starts with them in place. CI tags the image with a hash of this file,
-# platformio.ini and requirements-ci.txt, and builds it only when the registry has no such tag.
+# installs them, so a CI job starts with them in place. CI tags the image with a hash of what decides
+# its contents (scripts/toolchain_key.py), and builds it only when the registry has no such tag.
 
 FROM ghcr.io/catthehacker/ubuntu:act-24.04@sha256:dff4ec57d90046a7283aafc314298380be82bfeccb9ad0f1b36c4ebe74aabe78 AS base
 

@@ -26,9 +26,9 @@ defaults:
 
 jobs:
   image:
-    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it. It is built
-    # and pushed only when the registry has no image with that tag: on the forge with the
-    # PACKAGES_TOKEN secret, on GitHub to ghcr.io with the job's own token.
+    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it
+    # (scripts/toolchain_key.py). It is built and pushed only when the registry has no image with
+    # that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to ghcr.io with the job's own token.
     runs-on: ubuntu-latest
     timeout-minutes: 60   # a build pulls the 1.7GB base and installs every toolchain; a hang still ends
     permissions:
@@ -51,7 +51,8 @@ jobs:
             registry=${GITHUB_SERVER_URL#*://}
           fi
           owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
-          echo "ref=$registry/$owner/cansystems-toolchain:${{ hashFiles('ci/toolchain.Dockerfile', 'platformio.ini', 'requirements-ci.txt') }}" >> "$GITHUB_OUTPUT"
+          tag=$(python3 scripts/toolchain_key.py)
+          echo "ref=$registry/$owner/cansystems-toolchain:$tag" >> "$GITHUB_OUTPUT"
 
       - name: Look the image up in the registry
         id: lookup

@@ -236,8 +236,9 @@ python3 scripts/release_check.py --group esp32  # one CI group of it (scripts/ga
 
 CI runs the gate split into those groups, one job each. The ones that build or analyse firmware
 run in a container image with every toolchain installed (`ci/toolchain.Dockerfile`), which CI
-builds and pushes whenever that recipe, `platformio.ini` or `requirements-ci.txt` changes. The
-gate fails when the groups leave an environment out or cover one twice.
+builds and pushes whenever that recipe, `requirements-ci.txt` or a `platformio.ini` option that
+decides which packages get installed changes (`scripts/toolchain_key.py`). The gate fails when the
+groups leave an environment out or cover one twice.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
 human sees exactly what standalone runs would print. The run ends machine-friendly: a summary
