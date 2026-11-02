@@ -95,7 +95,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   remote needed).
 - CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
   firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
-  are, and it is the one status master's branch protection requires. An environment added to
+  are, and it is the one status master's branch protection requires. A push that changes nothing
+  but Markdown runs the host group alone, and `check` accepts the skipped jobs. An environment added to
   `platformio.ini` goes into exactly one group there - the gate fails until it does. These jobs
   all run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
   with the `PACKAGES_TOKEN` secret (a token with package read/write) and to ghcr.io on GitHub.

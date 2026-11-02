@@ -239,7 +239,9 @@ all in a container image with every toolchain and the pinned tooling installed
 (`ci/toolchain.Dockerfile`). CI builds and pushes it whenever that recipe, one of the
 requirements files or a `platformio.ini` option that decides which packages get installed changes
 (`scripts/toolchain_key.py`). The gate fails when the
-groups leave an environment out or cover one twice.
+groups leave an environment out or cover one twice. A push that changes nothing but Markdown runs
+the host group alone, which checks the format of the Markdown and scans it for secrets: no firmware
+can differ.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
 human sees exactly what standalone runs would print. The run ends machine-friendly: a summary
