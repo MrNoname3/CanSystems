@@ -212,7 +212,7 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 
 ### Release gate
 
-`scripts/release_check.py` chains ten steps fail-fast: check that the pinned tooling is the
+`scripts/release_check.py` chains eleven steps fail-fast: check that the pinned tooling is the
 tooling installed (`deps_check.py` — in the project `.venv`, or in the interpreter it runs under
 when there is none), build all environments, run the native test suite, static
 analysis (`pio check` — where a **single defect of any severity** via
@@ -220,7 +220,7 @@ analysis (`pio check` — where a **single defect of any severity** via
 SUCCESS even with findings) in two steps — cppcheck over every environment, then clang-tidy over
 the `check_*` ones, which are the same builds with the framework include paths clang-tidy needs
 to parse anything — then the Python guards — clang-format + final-newline
-(`format_check.py`), ruff lint (`lint_check.py`), actionlint + zizmor over the CI workflows
+(`format_check.py`), no key, address or private host in a tracked file (`secret_check.py`), ruff lint (`lint_check.py`), actionlint + zizmor over the CI workflows
 (`workflow_check.py`), pyright strict (`typecheck_check.py`), and pytest (`pytest_check.py`). Every guard is **required**: a missing tool fails the gate rather
 than skipping, so set up the dev venv (above) before running it. The dependency check comes
 first because every guard after it runs out of the `.venv`: one that has drifted from the pins
@@ -239,7 +239,9 @@ all in a container image with every toolchain and the pinned tooling installed
 (`ci/toolchain.Dockerfile`). CI builds and pushes it whenever that recipe, one of the
 requirements files or a `platformio.ini` option that decides which packages get installed changes
 (`scripts/toolchain_key.py`). The gate fails when the
-groups leave an environment out or cover one twice.
+groups leave an environment out or cover one twice. A push that changes nothing but Markdown runs
+the host group alone, which checks the format of the Markdown and scans it for secrets: no firmware
+can differ.
 
 Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
 human sees exactly what standalone runs would print. The run ends machine-friendly: a summary

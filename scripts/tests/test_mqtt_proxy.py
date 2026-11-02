@@ -131,7 +131,7 @@ def test_only_the_packets_that_carry_nothing_may_be_injected() -> None:
 
 
 def test_a_target_is_split_at_its_last_colon() -> None:
-    assert mqtt_proxy.parse_target("192.168.1.10:1883") == ("192.168.1.10", 1883)
+    assert mqtt_proxy.parse_target("192.0.2.10:1883") == ("192.0.2.10", 1883)
 
 
 @pytest.mark.parametrize("spec", ["1883", ":1883", "host:port"])
@@ -176,10 +176,10 @@ def test_occurrences_are_counted_per_sender_and_type() -> None:
 
 
 def test_the_command_line_becomes_the_configuration_it_describes() -> None:
-    config = mqtt_proxy.parse_args(["--listen", "1885", "--target", "10.0.0.2:8883",
+    config = mqtt_proxy.parse_args(["--listen", "1885", "--target", "198.51.100.2:8883",
                                     "--drop", "client:PINGREQ:3", "--inject", "broker:PINGREQ:12",
                                     "--after", "30", "--cut", "45"])
-    assert (config.listen_port, config.target_host, config.target_port) == (1885, "10.0.0.2", 8883)
+    assert (config.listen_port, config.target_host, config.target_port) == (1885, "198.51.100.2", 8883)
     assert config.drops == (mqtt_proxy.DropRule(sender="client", packet="PINGREQ", occurrences=frozenset({3})),)
     assert config.injects == (mqtt_proxy.InjectRule(sender="broker", packet="PINGREQ", delay_s=12.0),)
     assert (config.drop_after_s, config.cut_after_s) == (30.0, 45.0)

@@ -22,12 +22,12 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   analysed nothing, and a clang error in project code, both of which `pio check` reports as a
   pass. A source written for another target that cannot parse in an environment goes in the
   guard's `EXPECTED_ERRORS`, with the reason.
-- **Release gate** (build + test + check + tidy + format + lint + workflows + typecheck + pytest,
-  fail-fast):
+- **Release gate** (build + test + check + tidy + format + secrets + lint + workflows + typecheck +
+  pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
   `--group NAME` runs one of the CI groups in `scripts/gate_groups.py`)
 - Which guard a change needs: a comment, a Doxygen block or a Markdown file needs
-  `format_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
+  `format_check.py` and `secret_check.py` alone; a change confined to the Python tooling needs `lint_check.py`,
   `typecheck_check.py` and `pytest_check.py`; one confined to `.github/` needs `workflow_check.py`;
   anything that compiles needs the whole gate. Run the whole gate before a merge whatever the
   changes were, and say which guard ran.
@@ -37,6 +37,9 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   alone, there being no clang headers for the native platform to borrow),
   `scripts/format_check.py` (clang-format + final newline + the executable bit git recorded,
   which is not the one on disk: `core.fileMode` is off here),
+  `scripts/secret_check.py` (no key, address, UUID or private forge host in a tracked file; the
+  forge's name comes from the git remotes, anything else private from the untracked
+  `.secret-patterns.local`, one regex per line),
   `scripts/lint_check.py` (ruff), `scripts/workflow_check.py` (actionlint + shellcheck + zizmor over
   `.github/`, configured in `.github/zizmor.yml`), `scripts/typecheck_check.py` (pyright strict),
   `scripts/pytest_check.py`
@@ -92,7 +95,8 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   remote needed).
 - CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
   firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
-  are, and it is the one status master's branch protection requires. An environment added to
+  are, and it is the one status master's branch protection requires. A push that changes nothing
+  but Markdown runs the host group alone, and `check` accepts the skipped jobs. An environment added to
   `platformio.ini` goes into exactly one group there - the gate fails until it does. These jobs
   all run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
   with the `PACKAGES_TOKEN` secret (a token with package read/write) and to ghcr.io on GitHub.

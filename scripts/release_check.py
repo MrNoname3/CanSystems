@@ -8,16 +8,17 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   4. pio check --fail-on-defect (cppcheck over every environment; ANY defect fails)
   5. analysis_check.py          (clang-tidy over the check_* environments; ANY project defect fails)
   6. format_check.py            (clang-format + final-newline check; ANY violation fails)
-  7. lint_check.py              (ruff check over the Python; ANY finding fails)
-  8. workflow_check.py          (actionlint + zizmor over .github; ANY finding fails)
-  9. typecheck_check.py         (pyright strict over the Python; ANY error fails)
- 10. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+  7. secret_check.py            (keys, addresses, private hosts in tracked files; ANY hit fails)
+  8. lint_check.py              (ruff check over the Python; ANY finding fails)
+  9. workflow_check.py          (actionlint + zizmor over .github; ANY finding fails)
+ 10. typecheck_check.py         (pyright strict over the Python; ANY error fails)
+ 11. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
 
 The analysers are separate steps because they need opposite check_skip_packages settings; the
 check_* environments in platformio.ini say why.
 
 Every guard is required: a missing tool fails the gate rather than skipping its step, so a
-green run means all ten actually ran. The dependency step comes first because the guards
+green run means all eleven actually ran. The dependency step comes first because the guards
 after it run out of the .venv: a drifted one reports on versions the project does not pin.
 `--sync` installs the pinned set instead of only reporting the drift.
 
@@ -120,6 +121,7 @@ def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[st
                                 "--fail-on-defect", "high"])),
         (tidies, Step("tidy", script("analysis_check.py", *tidy))),
         (host, Step("format", script("format_check.py"))),
+        (host, Step("secrets", script("secret_check.py"))),
         (host, Step("lint", script("lint_check.py"))),
         (host, Step("workflows", script("workflow_check.py"))),
         (host, Step("typecheck", script("typecheck_check.py"))),

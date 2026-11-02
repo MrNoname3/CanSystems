@@ -1,9 +1,11 @@
 name: Firmware size diff
 description: >-
   Flash and RAM of one release-gate group's environments against a baseline: the merge-base with
-  master, or the previous commit when pushing master. A size change never fails it; a baseline or
-  current build that cannot be measured does. Every master commit's sizes are cached, so a later
-  run reads its baseline rather than building it whenever the same runner kept them.
+  master, or the previous commit when pushing master, and from there back along master to the
+  newest commit that changed more than Markdown, which CI skips the firmware jobs for. A size change
+  never fails it; a baseline or current build that cannot be measured does. Every master commit's
+  sizes are cached, so a later run reads its baseline rather than building it whenever the same
+  runner kept them.
 
 inputs:
   group:
@@ -23,6 +25,8 @@ runs:
         else
           base=$(git merge-base HEAD origin/master) # delta the branch adds vs master
         fi
+        # Same firmware as the commit itself, and the one whose sizes a master run saved.
+        base=$(git rev-list -1 --first-parent "$base" -- . ':(exclude)*.md')
         echo "commit=$base" >> "$GITHUB_OUTPUT"
 
     - name: Restore the baseline's sizes

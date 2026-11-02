@@ -18,7 +18,7 @@ enough to test what a peer does with a packet it should never receive.
 
 Usage:
   python scripts/mqtt_proxy.py                                  # trace, forward everything
-  python scripts/mqtt_proxy.py --target 192.168.1.10:1883
+  python scripts/mqtt_proxy.py --target 192.0.2.10:1883
   python scripts/mqtt_proxy.py --drop client:PINGREQ:3          # lose the third ping
   python scripts/mqtt_proxy.py --drop client:PINGREQ --after 30 # lose every ping from 30 s on
   python scripts/mqtt_proxy.py --drop broker:PINGRESP:1,2       # lose the first two answers
