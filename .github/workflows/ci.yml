@@ -107,7 +107,9 @@ jobs:
   gate:
     # The release-gate groups, one per job, in the toolchain image: no job restores or installs a
     # toolchain or the Python tooling, and any runner can take any of them.
-    name: gate (${{ matrix.group }})
+    # No space in the name: a runner hands it to the job container as a network alias, and an older
+    # netavark writes that unchecked into aardvark-dns's space-separated config, killing its DNS.
+    name: gate-${{ matrix.group }}
     needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 45   # tidy-esp32, the longest, takes ~10min here and twice that on a slow runner
