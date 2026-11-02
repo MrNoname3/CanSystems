@@ -88,7 +88,7 @@ Minimal anonymous, non-TLS example (no devices yet):
 
 ```yaml
 broker:
-  host: 192.168.1.10
+  host: 192.0.2.10
   tls_enabled: false
 ```
 
