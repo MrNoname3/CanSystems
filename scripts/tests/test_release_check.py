@@ -23,8 +23,8 @@ def _steps(group: str | None) -> dict[str, list[str]]:
 
 def test_the_whole_gate_runs_every_step_over_every_environment() -> None:
     steps = _steps(None)
-    assert list(steps) == ["deps", "build", "test", "check", "tidy", "format", "lint", "workflows", "typecheck",
-                           "pytest"]
+    assert list(steps) == ["deps", "build", "test", "check", "tidy", "format", "secrets", "lint", "workflows",
+                           "typecheck", "pytest"]
     assert steps["build"] == [PIO, "run"]
     assert steps["check"] == [PIO, "check", *FAIL_ON]
     assert steps["tidy"][-1].endswith("analysis_check.py")
@@ -46,7 +46,8 @@ def test_a_tidy_group_runs_clang_tidy_over_its_environment() -> None:
 
 def test_the_host_group_runs_the_native_tests_and_the_python_guards() -> None:
     steps = _steps("host")
-    assert list(steps) == ["deps", "build", "test", "check", "format", "lint", "workflows", "typecheck", "pytest"]
+    assert list(steps) == ["deps", "build", "test", "check", "format", "secrets", "lint", "workflows", "typecheck",
+                           "pytest"]
     assert steps["build"] == [PIO, "run", "-e", "native_test"]
 
 
