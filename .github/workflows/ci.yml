@@ -112,7 +112,7 @@ jobs:
     name: gate-${{ matrix.group }}
     needs: image
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # tidy-esp32, the longest, takes ~10min here and twice that on a slow runner
+    timeout-minutes: 60   # tidy-esp32, the longest, takes ~12min on a fast runner and three times that on the slowest
     permissions:
       contents: read
       packages: read
