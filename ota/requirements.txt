@@ -2,6 +2,6 @@
 # dependency in this repo: requirements-dev.txt pulls this file in, so pytest and pyright run
 # against these versions too. paho-mqtt especially - its 1.x -> 2.x jump broke the API, and the
 # tool already uses CallbackAPIVersion.VERSION2.
-paho-mqtt==2.1.0
+paho-mqtt==2.2.0
 pyyaml==6.0.3
 tqdm==4.70.1

@@ -6,7 +6,7 @@
 # The runners' job image (gitea-act-runner): Ubuntu with git, zstd, node for pyright and the JavaScript
 # actions, and Python 3.14, the newest the pioarduino platform runs on. Its gitea-act-runner.job-image
 # label comes along, and is what the runners' cleanup finds superseded copies of this image by.
-FROM ghcr.io/mrnoname3/act-ubuntu:26.04@sha256:d3d7dff8432d944a24a7c75354273571762f9735faf8f8798921424f9e0194f4
+FROM ghcr.io/mrnoname3/act-ubuntu:26.04@sha256:bdb1dce00dfa9911095b46370cdede6e859c454e81b7d45725b01e0b7a409db8
 # g++ for the native tests. The workspace a runner hands a job container is its own user's, and git
 # refuses, as root, to work in a repository someone else owns.
 RUN apt-get update \
