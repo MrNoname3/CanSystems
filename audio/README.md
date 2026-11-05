@@ -26,12 +26,11 @@ keep the numeric order, and drive them by `Sound`.
 Mono **MP3** in the card's root directory. The speech here is 24 kHz / 64 kbps and the tone
 32 kHz / 192 kbps; both play on the module, so a new track built like either needs no thought.
 
-Worth knowing before changing any synthesis setting: the node never reads the module's serial
-replies, although the protocol has queries for exactly this. Its one piece of feedback is the
-BUSY line, watched for the rising edge that means playback ended, and it stops waiting for that
-edge after `playTimeoutTime`. A file the DFPlayer will not play therefore costs that whole wait
-and is otherwise indistinguishable from one that played — nothing goes back over CAN either way.
-Try a new track on the hardware before relying on it.
+The node uses BUSY to detect playback start and completion. If a track does not start,
+it retries and power-cycles the module, then reports `MP3_PLAY_ERROR` with the track number
+over CAN if recovery fails; the gateway logs it on serial. Once started, playback is stopped
+after `playTimeoutTime` if no completion arrives, without that error. Try new tracks on the
+hardware before relying on them.
 
 ## Regenerating the speech
 
