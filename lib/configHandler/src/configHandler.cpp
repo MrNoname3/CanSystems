@@ -50,17 +50,19 @@ ConfigHandler::WifiConfigErrorType ConfigHandler::getWifiConfig(char (&ssid)[max
   if(!passwordKeyOk) { wifiConfErrState.setError(WifiConfigError::MISSING_PWD_KEY); }
   if(!ssidKeyOk || !passwordKeyOk) { return wifiConfErrState.getRawErrorState(); }
 
-  const char* ssidJsonPtr = ssidJsonVar.as<const char*>();
-  const char* passJsonPtr = passwordJsonVar.as<const char*>();
-  const uint8_t ssidLength = static_cast<uint8_t>(strnlen(ssidJsonPtr, maxWifiSsidSize));
-  const uint8_t passLength = static_cast<uint8_t>(strnlen(passJsonPtr, maxWifiPasswordSize));
-  const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize);
-  const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize);
+  const JsonString ssidValue = ssidJsonVar.as<JsonString>();
+  const JsonString passwordValue = passwordJsonVar.as<JsonString>();
+  const size_t ssidLength = ssidValue.size();
+  const size_t passLength = passwordValue.size();
+  // JSON strings retain embedded NULs. Comparing their stored length with the C-string length
+  // rejects those instead of silently connecting with only the prefix before the NUL.
+  const bool ssidLengthValid = (ssidLength > 0U) && (ssidLength < maxWifiSsidSize) && (strnlen(ssidValue.c_str(), ssidLength) == ssidLength);
+  const bool passLengthValid = (passLength > 0U) && (passLength < maxWifiPasswordSize) && (strnlen(passwordValue.c_str(), passLength) == passLength);
   if(!ssidLengthValid) { wifiConfErrState.setError(WifiConfigError::SSID_LENGTH_ERR); }
   if(!passLengthValid) { wifiConfErrState.setError(WifiConfigError::PWD_LENGTH_ERR); }
   if(ssidLengthValid && passLengthValid) {
-    strlcpy(ssid, ssidJsonPtr, maxWifiSsidSize);
-    strlcpy(password, passJsonPtr, maxWifiPasswordSize);
+    strlcpy(ssid, ssidValue.c_str(), maxWifiSsidSize);
+    strlcpy(password, passwordValue.c_str(), maxWifiPasswordSize);
   }
   return wifiConfErrState.getRawErrorState();
 }

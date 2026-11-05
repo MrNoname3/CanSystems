@@ -261,6 +261,37 @@ def test_render_server_json_optional_fields_omitted() -> None:
     assert set(parsed) == set(_SECRET_FIELDS)  # no haDiscovery / ssid / password key emitted
 
 
+@pytest.mark.parametrize(("ssid", "password"), [
+    ("s" * 32, "p" * 63),
+    ("é" * 16, "é" * 31 + "p"),
+])
+def test_render_server_json_accepts_full_wifi_lengths(ssid: str, password: str) -> None:
+    parsed = json.loads(ota.render_server_json({**_SECRET_FIELDS, "ssid": ssid, "password": password}, {}))
+    assert parsed["ssid"] == ssid
+    assert parsed["password"] == password
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("ssid", ""),
+    ("ssid", "s" * 33),
+    ("ssid", "é" * 17),
+    ("ssid", "wifi\0hidden"),
+    ("ssid", None),
+    ("ssid", 123),
+    ("password", ""),
+    ("password", "p" * 64),
+    ("password", "aB09" * 16),
+    ("password", "é" * 32),
+    ("password", "secretpw\0hidden"),
+    ("password", None),
+    ("password", 123),
+])
+def test_render_server_json_rejects_invalid_wifi_fields(field: str, value: object) -> None:
+    fields = {**_SECRET_FIELDS, "ssid": "wifi", "password": "secretpw", field: value}
+    with pytest.raises(ValueError, match=field):
+        ota.render_server_json(fields, {})
+
+
 def test_render_server_json_missing_required_raises() -> None:
     incomplete = {k: v for k, v in _SECRET_FIELDS.items() if k != "mqttPassword"}
     with pytest.raises(ValueError, match="mqttPassword"):

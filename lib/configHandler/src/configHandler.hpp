@@ -12,8 +12,8 @@ private:
   using WifiConfigErrorType = uint8_t;                                // Underlying type for Wi-Fi config error states.
   using ServerCertErrorType = uint8_t;                                // Underlying type for server certificate error states.
   using ServerCredErrorType = uint16_t;                               // Underlying type for server credentials error states.
-  static constexpr uint8_t maxWifiSsidSize = 24U;                     // Maximum size of the Wi-Fi SSID string.
-  static constexpr uint8_t maxWifiPasswordSize = 24U;                 // Maximum size of the Wi-Fi password string.
+  static constexpr uint8_t maxWifiSsidSize = 33U;                     // 32 SSID bytes plus the terminating NUL.
+  static constexpr uint8_t maxWifiPasswordSize = 64U;                 // 63 password bytes plus the terminating NUL.
   static constexpr uint8_t maxMqttUserNameSize = 24U;                 // Maximum size of the MQTT user name string.
   static constexpr uint8_t maxMqttPasswordSize = 24U;                 // Maximum size of the MQTT password string.
   static constexpr uint8_t maxMqttServerUrlSize = 32U;                // Maximum size of the MQTT server URL string.
@@ -57,15 +57,18 @@ public:
     return typeOk;
   }
 
-  /// @brief Gets the maximum allowed size for the Wi-Fi SSID.
-  /// @return Maximum size of the SSID string.
+  /// @brief Gets the buffer size for the Wi-Fi SSID.
+  /// @return Buffer size including the terminating NUL.
   [[nodiscard]] static constexpr uint8_t getMaxWifiSsidSize() { return maxWifiSsidSize; }
 
-  /// @brief Gets the maximum allowed size for the Wi-Fi password.
-  /// @return Maximum size of the password string.
+  /// @brief Gets the buffer size for the Wi-Fi password.
+  /// @return Buffer size including the terminating NUL.
   [[nodiscard]] static constexpr uint8_t getMaxWifiPasswordSize() { return maxWifiPasswordSize; }
 
   /// @brief Retrieves Wi-Fi configuration (SSID and password) from a file.
+  /// @details Accepts a 1-32 byte SSID and a nonempty password of up to 63 bytes.
+  /// Neither field may contain an embedded NUL. Output buffers include the terminator
+  /// and are only changed when both fields are valid.
   /// @param ssid Buffer to store the retrieved SSID.
   /// @param password Buffer to store the retrieved password.
   /// @return Error state, where `0` means success.
@@ -131,8 +134,8 @@ private:
     JSON_PARSING_ERROR    = 1U << 1U,             // JSON parsing failed.
     MISSING_SSID_KEY      = 1U << 2U,             // SSID key is missing in the JSON.
     MISSING_PWD_KEY       = 1U << 3U,             // Password key is missing in the JSON.
-    SSID_LENGTH_ERR       = 1U << 4U,             // SSID length is invalid.
-    PWD_LENGTH_ERR        = 1U << 5U              // Password length is invalid.
+    SSID_LENGTH_ERR       = 1U << 4U,             // SSID length is invalid or contains an embedded NUL.
+    PWD_LENGTH_ERR        = 1U << 5U              // Password length or embedded NUL is invalid.
     // clang-format on
   };
 

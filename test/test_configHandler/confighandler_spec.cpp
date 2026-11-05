@@ -17,6 +17,7 @@ namespace WifiErr {
   constexpr uint8_t NO_SSID     = 1U << 2U;
   constexpr uint8_t NO_PWD      = 1U << 3U;
   constexpr uint8_t SSID_LEN    = 1U << 4U;
+  constexpr uint8_t PWD_LEN     = 1U << 5U;
   // clang-format on
 }  // namespace WifiErr
 namespace CredErr {
@@ -184,10 +185,66 @@ bool test_wifi_config_missing_keys() {
 bool test_wifi_config_ssid_too_long() {
   IT("getWifiConfig reports SSID_LENGTH_ERR when the ssid does not fit the buffer");
   LittleFS.reset();
-  LittleFS.setFile(credPath(), R"({"ssid":"0123456789012345678901234567890","password":"ok"})");  // 31 chars > 23 usable
+  LittleFS.setFile(credPath(), R"({"ssid":"0123456789abcdef0123456789abcdef0","password":"secretpw"})");
   char ssid[ConfigHandler::getMaxWifiSsidSize()] = { '\0' };
   char password[ConfigHandler::getMaxWifiPasswordSize()] = { '\0' };
   IS_EQUAL(ConfigHandler::getWifiConfig(ssid, password), WifiErr::SSID_LEN);
+  END_IT
+}
+
+bool test_wifi_config_maximum_passphrase() {
+  IT("getWifiConfig preserves a 32-byte SSID and 63-byte passphrase with their terminators");
+  LittleFS.reset();
+  LittleFS.setFile(credPath(), R"({"ssid":"0123456789abcdef0123456789abcdef","password":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!"})");
+  char ssid[ConfigHandler::getMaxWifiSsidSize()];
+  char password[ConfigHandler::getMaxWifiPasswordSize()];
+  memset(ssid, '!', sizeof(ssid));
+  memset(password, '!', sizeof(password));
+  IS_EQUAL(ConfigHandler::getWifiConfig(ssid, password), 0U);
+  IS_TRUE(strcmp(ssid, "0123456789abcdef0123456789abcdef") == 0);
+  IS_TRUE(strcmp(password, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!") == 0);
+  IS_EQUAL(ssid[sizeof(ssid) - 1U], '\0');
+  IS_EQUAL(password[sizeof(password) - 1U], '\0');
+  END_IT
+}
+
+bool test_wifi_config_utf8_ssid() {
+  IT("getWifiConfig accepts a 32-byte UTF-8 SSID without splitting a character");
+  LittleFS.reset();
+  LittleFS.setFile(credPath(), R"({"ssid":"éééééééééééééééé","password":"secretpw"})");
+  char ssid[ConfigHandler::getMaxWifiSsidSize()] = { '\0' };
+  char password[ConfigHandler::getMaxWifiPasswordSize()] = { '\0' };
+  IS_EQUAL(ConfigHandler::getWifiConfig(ssid, password), 0U);
+  IS_TRUE(strcmp(ssid, "éééééééééééééééé") == 0);
+  END_IT
+}
+
+bool test_wifi_config_rejects_invalid_strings() {
+  IT("getWifiConfig rejects overlong strings and embedded NULs without changing outputs");
+  struct InvalidConfig {
+    const char* json;
+    uint8_t error;
+  };
+  const InvalidConfig cases[] = {
+    { R"({"ssid":"ééééééééééééééééé","password":"secretpw"})", WifiErr::SSID_LEN },
+    { R"({"ssid":"wifi","password":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"})", WifiErr::PWD_LEN },
+    { R"({"ssid":"wifi","password":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg"})", WifiErr::PWD_LEN },
+    { R"({"ssid":"wifi\u0000hidden","password":"secretpw"})", WifiErr::SSID_LEN },
+    { R"({"ssid":"wifi","password":"secretpw\u0000hidden"})", WifiErr::PWD_LEN },
+    { R"({"ssid":"","password":"secretpw"})", WifiErr::SSID_LEN },
+    { R"({"ssid":"wifi","password":""})", WifiErr::PWD_LEN }
+  };
+  for(const InvalidConfig& config : cases) {
+    LittleFS.reset();
+    LittleFS.setFile(credPath(), config.json);
+    char ssid[ConfigHandler::getMaxWifiSsidSize()];
+    char password[ConfigHandler::getMaxWifiPasswordSize()];
+    memset(ssid, '!', sizeof(ssid));
+    memset(password, '!', sizeof(password));
+    IS_EQUAL(ConfigHandler::getWifiConfig(ssid, password), config.error);
+    IS_EQUAL(ssid[0], '!');
+    IS_EQUAL(password[0], '!');
+  }
   END_IT
 }
 
@@ -311,6 +368,9 @@ int main() {
   test_wifi_config_parse_failed();
   test_wifi_config_missing_keys();
   test_wifi_config_ssid_too_long();
+  test_wifi_config_maximum_passphrase();
+  test_wifi_config_utf8_ssid();
+  test_wifi_config_rejects_invalid_strings();
   test_server_creds_ok();
   test_server_creds_port_wrong_type();
   test_server_creds_port_zero();

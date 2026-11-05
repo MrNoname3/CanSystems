@@ -958,6 +958,21 @@ _SERVER_JSON_KEY_PORT = "mqttServerPort"
 _SERVER_JSON_REQUIRED = (_SERVER_JSON_KEY_USERNAME, _SERVER_JSON_KEY_PASSWORD,
                          _SERVER_JSON_KEY_URL, _SERVER_JSON_KEY_PORT)
 _SERVER_JSON_FIELDS = (*_SERVER_JSON_REQUIRED, "haDiscovery", "ssid", "password")
+_WIFI_SSID_MAX_BYTES = 32
+_WIFI_PASSWORD_MAX_BYTES = 63
+
+
+def _validate_wifi_fields(fields: Dict[str, Any]) -> None:
+    """Match the firmware's byte limits and C-string requirements."""
+    for key, maximum in (("ssid", _WIFI_SSID_MAX_BYTES), ("password", _WIFI_PASSWORD_MAX_BYTES)):
+        if key not in fields:
+            continue  # Ethernet devices need neither Wi-Fi field.
+        value = fields[key]
+        if not isinstance(value, str):
+            raise ValueError(f"{key} must be a string")
+        length = len(value.encode('utf-8'))
+        if not 1 <= length <= maximum or '\0' in value:
+            raise ValueError(f"{key} must contain 1-{maximum} UTF-8 bytes without embedded NULs")
 
 
 def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
@@ -976,6 +991,7 @@ def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, A
     if missing:
         raise ValueError(f"Missing required server.json field(s): {', '.join(missing)}")
 
+    _validate_wifi_fields(merged)
     ordered = {k: merged[k] for k in _SERVER_JSON_FIELDS if k in merged}
     return json.dumps(ordered, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
