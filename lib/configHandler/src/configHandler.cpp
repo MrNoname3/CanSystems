@@ -98,16 +98,17 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
     return serverCredErrState.getRawErrorState();
   }
 
-  const char* mqttUserNamePtr = mqttUserNameVar.as<const char*>();
-  const char* mqttPasswordPtr = mqttPasswordVar.as<const char*>();
-  const char* mqttServerUrlPtr = mqttServerUrlVar.as<const char*>();
+  const JsonString mqttUserNameValue = mqttUserNameVar.as<JsonString>();
+  const JsonString mqttPasswordValue = mqttPasswordVar.as<JsonString>();
+  const JsonString mqttServerUrlValue = mqttServerUrlVar.as<JsonString>();
   const uint16_t mqttServerPortNum = mqttServerPortVar.as<uint16_t>();
-  const uint8_t mqttUserNameLength = static_cast<uint8_t>(strnlen(mqttUserNamePtr, maxMqttUserNameSize));
-  const uint8_t mqttPasswordLength = static_cast<uint8_t>(strnlen(mqttPasswordPtr, maxMqttPasswordSize));
-  const uint8_t mqttServerUrlLength = static_cast<uint8_t>(strnlen(mqttServerUrlPtr, maxMqttServerUrlSize));
-  const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize);
-  const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize);
-  const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize);
+  const size_t mqttUserNameLength = mqttUserNameValue.size();
+  const size_t mqttPasswordLength = mqttPasswordValue.size();
+  const size_t mqttServerUrlLength = mqttServerUrlValue.size();
+  // Compare stored JSON lengths with C-string lengths so embedded NULs cannot shorten credentials.
+  const bool mqttUserNameLengthValid = (mqttUserNameLength > 0U) && (mqttUserNameLength < maxMqttUserNameSize) && (strnlen(mqttUserNameValue.c_str(), mqttUserNameLength) == mqttUserNameLength);
+  const bool mqttPasswordLengthValid = (mqttPasswordLength > 0U) && (mqttPasswordLength < maxMqttPasswordSize) && (strnlen(mqttPasswordValue.c_str(), mqttPasswordLength) == mqttPasswordLength);
+  const bool mqttServerUrlLengthValid = (mqttServerUrlLength > 0U) && (mqttServerUrlLength < maxMqttServerUrlSize) && (strnlen(mqttServerUrlValue.c_str(), mqttServerUrlLength) == mqttServerUrlLength);
   const bool mqttServerPortNumValid = (mqttServerPortNum > 0U);
   if(!mqttUserNameLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_USER_LENGTH_ERR); }
   if(!mqttPasswordLengthValid) { serverCredErrState.setError(ServerCredError::MQTT_PASS_LENGTH_ERR); }
@@ -117,9 +118,9 @@ ConfigHandler::ServerCredErrorType ConfigHandler::getServerCredentials(char (&mq
     return serverCredErrState.getRawErrorState();
   }
 
-  strlcpy(mqttUserName, mqttUserNamePtr, maxMqttUserNameSize);
-  strlcpy(mqttPassword, mqttPasswordPtr, maxMqttPasswordSize);
-  strlcpy(mqttServerUrl, mqttServerUrlPtr, maxMqttServerUrlSize);
+  strlcpy(mqttUserName, mqttUserNameValue.c_str(), maxMqttUserNameSize);
+  strlcpy(mqttPassword, mqttPasswordValue.c_str(), maxMqttPasswordSize);
+  strlcpy(mqttServerUrl, mqttServerUrlValue.c_str(), maxMqttServerUrlSize);
   mqttServerPort = mqttServerPortNum;
   return serverCredErrState.getRawErrorState();
 }

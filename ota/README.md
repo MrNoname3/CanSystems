@@ -109,8 +109,9 @@ It is **not stored anywhere** — the tool renders it on the fly from `secrets.y
 `server_config` mapping in `devices.yaml` (currently just `haDiscovery`, the optional
 Home Assistant auto-discovery toggle, default false). A `devices.yaml` file entry selects
 the rendered content with `render: server_json` instead of a `local_path`.
-Wi-Fi fields are checked in UTF-8 bytes: SSID up to 32, password up to 63.
-Empty values and embedded NULs are refused; Ethernet devices can omit both fields.
+String limits are checked in UTF-8 bytes: Wi-Fi SSID/password 32/63, MQTT username/password
+48/48, broker hostname 64. Empty values and embedded NULs are refused; Ethernet devices
+can omit the Wi-Fi fields. The port must be an integer in 1–65535.
 
 **`tube.json`** — radiation node only; selects the Geiger tube type (1 = J305, 2 = M4011).
 Non-secret and tiny, so it lives **inline** in the device's `devices.yaml` file entry as a

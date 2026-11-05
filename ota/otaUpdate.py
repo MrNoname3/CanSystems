@@ -954,17 +954,28 @@ _SERVER_JSON_KEY_PASSWORD = "mqttPassword"
 _SERVER_JSON_KEY_URL = "mqttServerUrl"
 _SERVER_JSON_KEY_PORT = "mqttServerPort"
 
+# Optional settings; Ethernet devices omit the Wi-Fi fields.
+_SERVER_JSON_KEY_WIFI_SSID = "ssid"
+_SERVER_JSON_KEY_WIFI_PASSWORD = "password"
+_SERVER_JSON_KEY_HA_DISCOVERY = "haDiscovery"
+
 # Every field server.json may carry, in the order the rendered content emits them.
 _SERVER_JSON_REQUIRED = (_SERVER_JSON_KEY_USERNAME, _SERVER_JSON_KEY_PASSWORD,
                          _SERVER_JSON_KEY_URL, _SERVER_JSON_KEY_PORT)
-_SERVER_JSON_FIELDS = (*_SERVER_JSON_REQUIRED, "haDiscovery", "ssid", "password")
-_WIFI_SSID_MAX_BYTES = 32
-_WIFI_PASSWORD_MAX_BYTES = 63
+_SERVER_JSON_FIELDS = (*_SERVER_JSON_REQUIRED, _SERVER_JSON_KEY_HA_DISCOVERY,
+                       _SERVER_JSON_KEY_WIFI_SSID, _SERVER_JSON_KEY_WIFI_PASSWORD)
+_SERVER_JSON_STRING_MAX_BYTES = {
+    _SERVER_JSON_KEY_USERNAME: 48,
+    _SERVER_JSON_KEY_PASSWORD: 48,
+    _SERVER_JSON_KEY_URL: 64,
+    _SERVER_JSON_KEY_WIFI_SSID: 32,
+    _SERVER_JSON_KEY_WIFI_PASSWORD: 63,
+}
 
 
-def _validate_wifi_fields(fields: Dict[str, Any]) -> None:
-    """Match the firmware's byte limits and C-string requirements."""
-    for key, maximum in (("ssid", _WIFI_SSID_MAX_BYTES), ("password", _WIFI_PASSWORD_MAX_BYTES)):
+def _validate_server_fields(fields: Dict[str, Any]) -> None:
+    """Match the firmware's string and port constraints."""
+    for key, maximum in _SERVER_JSON_STRING_MAX_BYTES.items():
         if key not in fields:
             continue  # Ethernet devices need neither Wi-Fi field.
         value = fields[key]
@@ -973,6 +984,9 @@ def _validate_wifi_fields(fields: Dict[str, Any]) -> None:
         length = len(value.encode('utf-8'))
         if not 1 <= length <= maximum or '\0' in value:
             raise ValueError(f"{key} must contain 1-{maximum} UTF-8 bytes without embedded NULs")
+    port = fields[_SERVER_JSON_KEY_PORT]
+    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+        raise ValueError(f"{_SERVER_JSON_KEY_PORT} must be an integer in 1-65535")
 
 
 def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
@@ -991,7 +1005,7 @@ def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, A
     if missing:
         raise ValueError(f"Missing required server.json field(s): {', '.join(missing)}")
 
-    _validate_wifi_fields(merged)
+    _validate_server_fields(merged)
     ordered = {k: merged[k] for k in _SERVER_JSON_FIELDS if k in merged}
     return json.dumps(ordered, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 

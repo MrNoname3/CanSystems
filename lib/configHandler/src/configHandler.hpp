@@ -14,9 +14,9 @@ private:
   using ServerCredErrorType = uint16_t;                               // Underlying type for server credentials error states.
   static constexpr uint8_t maxWifiSsidSize = 33U;                     // 32 SSID bytes plus the terminating NUL.
   static constexpr uint8_t maxWifiPasswordSize = 64U;                 // 63 password bytes plus the terminating NUL.
-  static constexpr uint8_t maxMqttUserNameSize = 24U;                 // Maximum size of the MQTT user name string.
-  static constexpr uint8_t maxMqttPasswordSize = 24U;                 // Maximum size of the MQTT password string.
-  static constexpr uint8_t maxMqttServerUrlSize = 32U;                // Maximum size of the MQTT server URL string.
+  static constexpr uint8_t maxMqttUserNameSize = 49U;                 // 48 username bytes plus the terminating NUL.
+  static constexpr uint8_t maxMqttPasswordSize = 49U;                 // 48 password bytes plus the terminating NUL.
+  static constexpr uint8_t maxMqttServerUrlSize = 65U;                // 64 hostname bytes plus the terminating NUL.
 
 public:
   /// @brief Result of a `loadJsonFile` call.
@@ -98,19 +98,21 @@ public:
     return serverCertErrState.getRawErrorState();
   }
 
-  /// @brief Gets the maximum allowed size for the MQTT user name.
-  /// @return Maximum size of the MQTT user name string.
+  /// @brief Gets the buffer size for the MQTT user name.
+  /// @return Buffer size including the terminating NUL.
   [[nodiscard]] static constexpr uint8_t getMaxMqttUserNameSize() { return maxMqttUserNameSize; }
 
-  /// @brief Gets the maximum allowed size for the MQTT password.
-  /// @return Maximum size of the MQTT password string.
+  /// @brief Gets the buffer size for the MQTT password.
+  /// @return Buffer size including the terminating NUL.
   [[nodiscard]] static constexpr uint8_t getMaxMqttPasswordSize() { return maxMqttPasswordSize; }
 
-  /// @brief Gets the maximum allowed size for the MQTT server URL.
-  /// @return Maximum size of the MQTT server URL string.
+  /// @brief Gets the buffer size for the MQTT server hostname.
+  /// @return Buffer size including the terminating NUL.
   [[nodiscard]] static constexpr uint8_t getMaxMqttServerUrlSize() { return maxMqttServerUrlSize; }
 
   /// @brief Retrieves server credentials (MQTT username, password, URL, and port) from a file.
+  /// @details Requires nonempty strings without embedded NULs and a nonzero port.
+  /// Buffer sizes include the terminator; outputs change only when all fields are valid.
   /// @param mqttUserName Buffer to store the MQTT user name.
   /// @param mqttPassword Buffer to store the MQTT password.
   /// @param mqttServerUrl Buffer to store the MQTT server URL.
@@ -159,9 +161,9 @@ private:
     MISSING_MQTT_PASS     = 1U << 3U,             // MQTT password is missing.
     MISSING_MQTT_URL      = 1U << 4U,             // MQTT server URL is missing.
     MISSING_MQTT_PORT     = 1U << 5U,             // MQTT server port number is missing.
-    MQTT_USER_LENGTH_ERR  = 1U << 6U,             // MQTT user name length is invalid.
-    MQTT_PASS_LENGTH_ERR  = 1U << 7U,             // MQTT password length is invalid.
-    MQTT_URL_LENGTH_ERR   = 1U << 8U,             // MQTT server URL length is invalid.
+    MQTT_USER_LENGTH_ERR  = 1U << 6U,             // MQTT user name length or embedded NUL is invalid.
+    MQTT_PASS_LENGTH_ERR  = 1U << 7U,             // MQTT password length or embedded NUL is invalid.
+    MQTT_URL_LENGTH_ERR   = 1U << 8U,             // MQTT server URL length or embedded NUL is invalid.
     MQTT_PORT_NUM_ERR     = 1U << 9U              // MQTT server port number is invalid.
     // clang-format on
   };

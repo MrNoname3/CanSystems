@@ -292,6 +292,55 @@ def test_render_server_json_rejects_invalid_wifi_fields(field: str, value: objec
         ota.render_server_json(fields, {})
 
 
+@pytest.mark.parametrize(("field", "value"), [
+    ("mqttUserName", "u" * 48),
+    ("mqttUserName", "é" * 24),
+    ("mqttPassword", "p" * 48),
+    ("mqttPassword", "é" * 24),
+    ("mqttServerUrl", "h" * 56 + ".example"),
+])
+def test_render_server_json_accepts_full_mqtt_lengths(field: str, value: str) -> None:
+    parsed = json.loads(ota.render_server_json({**_SECRET_FIELDS, field: value}, {}))
+    assert parsed[field] == value
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("mqttUserName", ""),
+    ("mqttUserName", "u" * 49),
+    ("mqttUserName", "é" * 25),
+    ("mqttUserName", "user\0hidden"),
+    ("mqttUserName", None),
+    ("mqttUserName", 123),
+    ("mqttPassword", ""),
+    ("mqttPassword", "p" * 49),
+    ("mqttPassword", "é" * 25),
+    ("mqttPassword", "pass\0hidden"),
+    ("mqttPassword", None),
+    ("mqttPassword", 123),
+    ("mqttServerUrl", ""),
+    ("mqttServerUrl", "h" * 65),
+    ("mqttServerUrl", "é" * 33),
+    ("mqttServerUrl", "broker.example.com\0hidden"),
+    ("mqttServerUrl", None),
+    ("mqttServerUrl", 123),
+])
+def test_render_server_json_rejects_invalid_mqtt_fields(field: str, value: object) -> None:
+    with pytest.raises(ValueError, match=field):
+        ota.render_server_json({**_SECRET_FIELDS, field: value}, {})
+
+
+@pytest.mark.parametrize("port", [1, 65535])
+def test_render_server_json_accepts_port_bounds(port: int) -> None:
+    parsed = json.loads(ota.render_server_json({**_SECRET_FIELDS, "mqttServerPort": port}, {}))
+    assert parsed["mqttServerPort"] == port
+
+
+@pytest.mark.parametrize("port", [0, 65536, -1, True, False, "8883", 8883.0, None])
+def test_render_server_json_rejects_invalid_port(port: object) -> None:
+    with pytest.raises(ValueError, match="mqttServerPort"):
+        ota.render_server_json({**_SECRET_FIELDS, "mqttServerPort": port}, {})
+
+
 def test_render_server_json_missing_required_raises() -> None:
     incomplete = {k: v for k, v in _SECRET_FIELDS.items() if k != "mqttPassword"}
     with pytest.raises(ValueError, match="mqttPassword"):

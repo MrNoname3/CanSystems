@@ -2,6 +2,9 @@
 #include "Arduino.h"
 #include "LittleFS.h"
 #include "BDDTest.h"
+#include "PubSubClient.h"
+#include "ShimClient.h"
+#include <string>
 #include <string.h>
 
 // configHandler reads Wi-Fi + server credentials from the same server.json, and the CA cert from
@@ -23,6 +26,8 @@ namespace WifiErr {
 namespace CredErr {
   // clang-format off
   constexpr uint16_t NO_PORT    = 1U << 5U;
+  constexpr uint16_t USER_LEN   = 1U << 6U;
+  constexpr uint16_t PASS_LEN   = 1U << 7U;
   constexpr uint16_t URL_LEN    = 1U << 8U;
   constexpr uint16_t PORT_NUM   = 1U << 9U;
   // clang-format on
@@ -250,6 +255,17 @@ bool test_wifi_config_rejects_invalid_strings() {
 
 // ---- getServerCredentials ----
 
+static std::string serverJson(const std::string& user, const std::string& pass, const std::string& host) {
+  JsonDocument doc;
+  doc["mqttUserName"] = user;
+  doc["mqttPassword"] = pass;
+  doc["mqttServerUrl"] = host;
+  doc["mqttServerPort"] = 8883U;
+  std::string json;
+  serializeJson(doc, json);
+  return json;
+}
+
 bool test_server_creds_ok() {
   IT("getServerCredentials returns 0 and fills every field from valid JSON");
   LittleFS.reset();
@@ -293,14 +309,86 @@ bool test_server_creds_port_zero() {
 bool test_server_creds_url_too_long() {
   IT("getServerCredentials reports MQTT_URL_LENGTH_ERR when the url does not fit");
   LittleFS.reset();
-  LittleFS.setFile(credPath(),
-                   R"({"mqttUserName":"u","mqttPassword":"p",)"
-                   R"("mqttServerUrl":"this-hostname-is-definitely-way-too-long.example.com","mqttServerPort":1})");
+  LittleFS.setFile(credPath(), serverJson("u", "p", std::string(65U, 'h')));
   char user[ConfigHandler::getMaxMqttUserNameSize()] = { '\0' };
   char pass[ConfigHandler::getMaxMqttPasswordSize()] = { '\0' };
   char url[ConfigHandler::getMaxMqttServerUrlSize()] = { '\0' };
   uint16_t port = 0U;
   IS_EQUAL(ConfigHandler::getServerCredentials(user, pass, url, port), CredErr::URL_LEN);
+  END_IT
+}
+
+bool test_server_creds_maximum_lengths() {
+  IT("getServerCredentials preserves full-length values and fits them in a CONNECT with a will");
+  LittleFS.reset();
+  std::string userValue;
+  for(size_t i = 0U; i < 24U; i++) { userValue += "é"; }
+  const std::string passValue(48U, 'p');
+  const std::string hostValue = std::string(56U, 'h') + ".example";
+  LittleFS.setFile(credPath(), serverJson(userValue, passValue, hostValue));
+  char user[ConfigHandler::getMaxMqttUserNameSize()];
+  char pass[ConfigHandler::getMaxMqttPasswordSize()];
+  char url[ConfigHandler::getMaxMqttServerUrlSize()];
+  memset(user, '!', sizeof(user));
+  memset(pass, '!', sizeof(pass));
+  memset(url, '!', sizeof(url));
+  uint16_t port = 0U;
+  IS_EQUAL(ConfigHandler::getServerCredentials(user, pass, url, port), 0U);
+  IS_EQUAL(user[sizeof(user) - 1U], '\0');
+  IS_EQUAL(pass[sizeof(pass) - 1U], '\0');
+  IS_EQUAL(url[sizeof(url) - 1U], '\0');
+  IS_TRUE(userValue == user);
+  IS_TRUE(passValue == pass);
+  IS_TRUE(hostValue == url);
+  IS_EQUAL(port, 8883U);
+
+  ShimClient shimClient;
+  shimClient.setAllowConnect(true);
+  shimClient.expectConnect(url, port);
+  const uint8_t connack[] = { 0x20U, 0x02U, 0x00U, 0x00U };
+  shimClient.respond(connack, sizeof(connack));
+  PubSubClient client(shimClient);
+  client.setServer(url, port);
+  const std::string clientId(31U, 'c');
+  IS_TRUE(client.connect(clientId.c_str(), user, pass, "iot/dtos/a1b2c3d4e5f6/availability", 1U, true, R"({"state":"offline"})"));
+  IS_FALSE(shimClient.error());
+  IS_EQUAL(shimClient.received(), 203U);
+  END_IT
+}
+
+bool test_server_creds_rejects_invalid_strings() {
+  IT("getServerCredentials rejects invalid strings without changing any output");
+  struct InvalidField {
+    uint8_t index;
+    size_t maximum;
+    uint16_t error;
+  };
+  const InvalidField fields[] = {
+    { 0U, 48U, CredErr::USER_LEN },
+    { 1U, 48U, CredErr::PASS_LEN },
+    { 2U, 64U, CredErr::URL_LEN }
+  };
+  for(const InvalidField& field : fields) {
+    const std::string invalidValues[] = { std::string(field.maximum + 1U, 'x'), std::string("valid\0hidden", 12U), "" };
+    for(const std::string& value : invalidValues) {
+      std::string values[] = { "user", "pass", "broker.example.com" };
+      values[field.index] = value;
+      LittleFS.reset();
+      LittleFS.setFile(credPath(), serverJson(values[0], values[1], values[2]));
+      char user[ConfigHandler::getMaxMqttUserNameSize()];
+      char pass[ConfigHandler::getMaxMqttPasswordSize()];
+      char url[ConfigHandler::getMaxMqttServerUrlSize()];
+      memset(user, '!', sizeof(user));
+      memset(pass, '!', sizeof(pass));
+      memset(url, '!', sizeof(url));
+      uint16_t port = 1234U;
+      IS_EQUAL(ConfigHandler::getServerCredentials(user, pass, url, port), field.error);
+      IS_TRUE(std::string(user, sizeof(user)) == std::string(sizeof(user), '!'));
+      IS_TRUE(std::string(pass, sizeof(pass)) == std::string(sizeof(pass), '!'));
+      IS_TRUE(std::string(url, sizeof(url)) == std::string(sizeof(url), '!'));
+      IS_EQUAL(port, 1234U);
+    }
+  }
   END_IT
 }
 
@@ -375,6 +463,8 @@ int main() {
   test_server_creds_port_wrong_type();
   test_server_creds_port_zero();
   test_server_creds_url_too_long();
+  test_server_creds_maximum_lengths();
+  test_server_creds_rejects_invalid_strings();
   test_server_cert_ok();
   test_server_cert_file_missing();
   test_server_cert_empty();
