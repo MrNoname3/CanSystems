@@ -11,7 +11,7 @@ It reads two files from this directory:
   connection and the devices' `server.json` fields (you create this; template below). When
   cloning the repo on another machine, this is the **only** file to carry over manually.
 - **`devices.yaml`** — the device list, per-device file mappings and non-secret device config
-  (tracked; see the existing file for the structure).
+  plus the fleet rollout order (tracked; see the existing file for the structure).
 
 The CA bundle uploaded to the devices as `mosq-ca.crt` is git-ignored but needs no manual
 transfer: when `ota/mosq-ca.crt` is missing, the tool generates it from the **system trust
@@ -139,15 +139,16 @@ Pick a project, then a device, then an action. Firmware actions expect the build
 ### Without the menu
 
 The same actions are reachable from arguments, for scripting and CI. `--list` prints every
-device with the arguments that select its actions, and needs no `secrets.yaml`:
+device with the arguments that select its actions, and needs no `secrets.yaml`. The examples
+below use placeholder MACs; use `--list` to find configured devices and file entry names:
 
 ```sh
 .venv/bin/python ota/otaUpdate.py --list
-.venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --firmware
-.venv/bin/python ota/otaUpdate.py --device fcf5c401bd83 --file "CAN alert firmware upload"
-.venv/bin/python ota/otaUpdate.py --device 40f52033765d --command reboot
-.venv/bin/python ota/otaUpdate.py --device 40f52033765d --provision --upload-port /dev/ttyUSB0
-.venv/bin/python ota/otaUpdate.py --device 40f52033765d --serial-flash --upload-port /dev/ttyUSB0
+.venv/bin/python ota/otaUpdate.py --device a1b2c3d4e5f7 --firmware
+.venv/bin/python ota/otaUpdate.py --device a1b2c3d4e5f7 --file "CAN alert firmware upload"
+.venv/bin/python ota/otaUpdate.py --device a1b2c3d4e5f6 --command reboot
+.venv/bin/python ota/otaUpdate.py --device a1b2c3d4e5f6 --provision --upload-port /dev/ttyUSB0
+.venv/bin/python ota/otaUpdate.py --device a1b2c3d4e5f6 --serial-flash --upload-port /dev/ttyUSB0
 ```
 
 `--upload-port` applies to the two USB actions and works in the menu too (pass it with no other
@@ -161,6 +162,31 @@ is about to happen before it happens, and this path has no such moment, so an un
 missing action or a name no entry matches is refused (exit 1) rather than resolved to
 something plausible. The identity preflight, the transfers and the USB actions are the same
 code either way. Exit status: 0 success, 1 refused or failed, 2 bad arguments.
+
+Firmware uploads require an online device, then verify its restart and reported git hash
+against this checkout. A dirty build produces a warning. Use `--ota-timeout SECONDS` to
+change the default 60-second reboot timeout.
+
+### Fleet status and rollout
+
+```sh
+.venv/bin/python ota/otaUpdate.py --status
+.venv/bin/python ota/otaUpdate.py --rollout --dry-run
+.venv/bin/python ota/otaUpdate.py --rollout
+```
+
+These actions are also available in the menu. `--status` lists MQTT-reported availability
+and builds, including CAN nodes, and compares them with this checkout.
+
+`--rollout` follows the `rollout.steps` order in `devices.yaml`, skipping offline or already
+current devices. Build the required images first. Each step can name `before_firmware` file
+entries to send before its own firmware. `soak_seconds` sets the observation period after
+updates and `reboot_timeout` the restart budget; both accept section defaults and per-step
+overrides (300 and 60 seconds if omitted). A gateway also checks its online CAN nodes.
+
+The plan is shown before confirmation (`--yes` skips the prompt). `--dry-run` only queries
+the broker and prints the plan; both need `secrets.yaml`. A failed update or a disconnect or
+restart during observation stops the rollout. There is no automatic rollback.
 
 ### Bench setup of a fresh device (USB)
 
