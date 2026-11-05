@@ -581,12 +581,12 @@ def _fake_verify_client(monkeypatch: pytest.MonkeyPatch) -> "type[_FakeVerifyCli
 def test_identity_check_accepts(tmp_path: Path,
                                 _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     cafile = _write(tmp_path, "ca.crt", b"PEM")
-    assert ota.verify_device_connection(_DEVICE_SECRETS, cafile, "40f52033765d") is True
+    assert ota.verify_device_connection(_DEVICE_SECRETS, cafile, "a1b2c3d4e5f6") is True
     client = _FakeVerifyClient.last
     assert client is not None
     assert client.username == "dev"
     assert client.ca_certs == str(cafile)              # TLS validated with the shipped bundle
-    assert client.client_id == "verify_40f52033765d"   # identifies the device in broker logs,
+    assert client.client_id == "verify_a1b2c3d4e5f6"   # identifies the device in broker logs,
     assert client.transport == "tcp"                   # but never equals its real client id
     assert client.disconnected
 
@@ -595,27 +595,27 @@ def test_identity_check_rejected_credentials(tmp_path: Path,
                                              _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "reject"
     assert ota.verify_device_connection(
-        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "a1b2c3d4e5f6") is False
 
 
 def test_identity_check_unreachable_broker(tmp_path: Path,
                                            _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "raise"
     assert ota.verify_device_connection(
-        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d") is False
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "a1b2c3d4e5f6") is False
 
 
 def test_identity_check_connack_timeout(tmp_path: Path,
                                         _fake_verify_client: "type[_FakeVerifyClient]") -> None:
     _fake_verify_client.behavior = "silent"
     assert ota.verify_device_connection(
-        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d", timeout=0.3) is False
+        _DEVICE_SECRETS, _write(tmp_path, "ca.crt", b"PEM"), "a1b2c3d4e5f6", timeout=0.3) is False
 
 
 def test_identity_check_incomplete_secrets_raises(tmp_path: Path) -> None:
     incomplete = {k: v for k, v in _DEVICE_SECRETS.items() if k != "mqttServerPort"}
     with pytest.raises(ValueError):
-        ota.verify_device_connection(incomplete, _write(tmp_path, "ca.crt", b"PEM"), "40f52033765d")
+        ota.verify_device_connection(incomplete, _write(tmp_path, "ca.crt", b"PEM"), "a1b2c3d4e5f6")
 
 
 def test_run_identity_check_generates_bundle_and_passes_device_secrets(
@@ -1282,7 +1282,7 @@ def test_real_devices_yaml_rollout_covers_every_device() -> None:
 def _cli_projects() -> "list[ota.ProjectEntry]":
     """Two projects whose devices differ in the files and commands they accept."""
     thermo = ota.DeviceEntry(
-        mac="40f52033765d", friendly_name="Test2",
+        mac="a1b2c3d4e5f6", friendly_name="Sample sensor",
         files=[
             ota.FileEntry(name="CA certificate upload", device_path="/config/mosq-ca.crt",
                           local_path=Path("ca.crt")),
@@ -1290,7 +1290,7 @@ def _cli_projects() -> "list[ota.ProjectEntry]":
                           render="server_json"),
         ])
     gateway = ota.DeviceEntry(
-        mac="fcf5c401bd83", friendly_name="Living room",
+        mac="a1b2c3d4e5f7", friendly_name="Sample gateway",
         files=[ota.FileEntry(name="CAN alert firmware upload", device_path="/canAlertFw.bin",
                              local_path=Path("firmware.bin"))])
     reboot = ota.CommandEntry(name="Reboot", cmd="reboot", description="Restarts the device")
@@ -1303,28 +1303,28 @@ def _cli_projects() -> "list[ota.ProjectEntry]":
 
 
 def test_resolve_firmware_action() -> None:
-    result = ota.resolve_target(_cli_projects(), "fcf5c401bd83", firmware=True)
+    result = ota.resolve_target(_cli_projects(), "a1b2c3d4e5f7", firmware=True)
     assert result.project.pio_project == "project_esp32_can"
-    assert result.device.mac == "fcf5c401bd83"
+    assert result.device.mac == "a1b2c3d4e5f7"
     assert result.file is None and result.command is None
     assert result.provision is False and result.serial_flash is False
 
 
 def test_resolve_usb_actions() -> None:
     projects = _cli_projects()
-    assert ota.resolve_target(projects, "40f52033765d", provision=True).provision is True
-    assert ota.resolve_target(projects, "40f52033765d", serial_flash=True).serial_flash is True
+    assert ota.resolve_target(projects, "a1b2c3d4e5f6", provision=True).provision is True
+    assert ota.resolve_target(projects, "a1b2c3d4e5f6", serial_flash=True).serial_flash is True
 
 
 def test_resolve_file_action_picks_the_named_entry() -> None:
-    result = ota.resolve_target(_cli_projects(), "40f52033765d", file_name="Server configuration upload")
+    result = ota.resolve_target(_cli_projects(), "a1b2c3d4e5f6", file_name="Server configuration upload")
     assert result.file is not None
     assert result.file.render == "server_json"
     assert result.file.device_path == "/config/server.json"
 
 
 def test_resolve_command_action_matches_the_wire_string() -> None:
-    result = ota.resolve_target(_cli_projects(), "fcf5c401bd83", command_name="reboot")
+    result = ota.resolve_target(_cli_projects(), "a1b2c3d4e5f7", command_name="reboot")
     assert result.command is not None
     assert result.command.cmd == "reboot"
 
@@ -1338,36 +1338,36 @@ def test_resolve_needs_exactly_one_action() -> None:
     projects = _cli_projects()
     # Nothing named: the menu would have shown a list here, so guessing is not an option.
     with pytest.raises(ValueError, match="exactly one action"):
-        ota.resolve_target(projects, "40f52033765d")
+        ota.resolve_target(projects, "a1b2c3d4e5f6")
     with pytest.raises(ValueError, match="exactly one action"):
-        ota.resolve_target(projects, "40f52033765d", firmware=True, provision=True)
+        ota.resolve_target(projects, "a1b2c3d4e5f6", firmware=True, provision=True)
 
 
 def test_resolve_rejects_a_file_the_device_does_not_accept() -> None:
     # The gateway's firmware file is not the thermometer's, and a near miss must not be rounded up.
     with pytest.raises(ValueError, match="no file entry named"):
-        ota.resolve_target(_cli_projects(), "40f52033765d", file_name="CAN alert firmware upload")
+        ota.resolve_target(_cli_projects(), "a1b2c3d4e5f6", file_name="CAN alert firmware upload")
 
 
 def test_resolve_rejects_an_unknown_command() -> None:
     with pytest.raises(ValueError, match="no command 'restart'"):
-        ota.resolve_target(_cli_projects(), "40f52033765d", command_name="restart")
+        ota.resolve_target(_cli_projects(), "a1b2c3d4e5f6", command_name="restart")
 
 
 def test_resolve_rejects_a_mac_listed_twice() -> None:
     projects = _cli_projects()
     projects[1].devices[0].mac = projects[0].devices[0].mac
     with pytest.raises(ValueError, match="more than one project"):
-        ota.resolve_target(projects, "40f52033765d", firmware=True)
+        ota.resolve_target(projects, "a1b2c3d4e5f6", firmware=True)
 
 
 def test_target_list_names_every_action_of_every_device() -> None:
     listing = ota.format_target_list(_cli_projects())
-    assert "  --device 40f52033765d  # Test2" in listing
+    assert "  --device a1b2c3d4e5f6  # Sample sensor" in listing
     assert '      --file "Server configuration upload"' in listing
     assert "      --command reboot" in listing
     # The gateway's file belongs to the gateway only.
-    gateway_block = listing.split("--device fcf5c401bd83", 1)[1]
+    gateway_block = listing.split("--device a1b2c3d4e5f7", 1)[1]
     assert '--file "CAN alert firmware upload"' in gateway_block
     assert '--file "Server configuration upload"' not in gateway_block
 
@@ -1381,7 +1381,7 @@ def test_arg_parser_defaults_to_the_menu() -> None:
 
 def test_arg_parser_refuses_two_actions() -> None:
     with pytest.raises(SystemExit):
-        ota.build_arg_parser().parse_args(["--device", "40f52033765d", "--firmware", "--command", "reboot"])
+        ota.build_arg_parser().parse_args(["--device", "a1b2c3d4e5f6", "--firmware", "--command", "reboot"])
 
 
 # --- Provisioner: which serial port the USB actions talk to -----------------
@@ -1462,7 +1462,7 @@ def test_an_unlistable_port_set_does_not_stop_the_flash(
 
 def test_upload_port_is_refused_for_the_mqtt_actions() -> None:
     parser = ota.build_arg_parser()
-    args = parser.parse_args(["--device", "40f52033765d", "--provision", "--upload-port", "/dev/ttyUSB0"])
+    args = parser.parse_args(["--device", "a1b2c3d4e5f6", "--provision", "--upload-port", "/dev/ttyUSB0"])
     assert args.upload_port == "/dev/ttyUSB0"
     # The menu path may name a port too, since it can reach the USB actions.
     assert parser.parse_args(["--upload-port", "/dev/ttyUSB0"]).device is None
@@ -1703,7 +1703,7 @@ def test_base_transfer_hooks_are_no_ops(tmp_path: Path) -> None:
 
 def test_ota_timeout_flag_parses_and_defaults_to_none() -> None:
     parser = ota.build_arg_parser()
-    args = parser.parse_args(["--device", "40f52033765d", "--firmware", "--ota-timeout", "120"])
+    args = parser.parse_args(["--device", "a1b2c3d4e5f6", "--firmware", "--ota-timeout", "120"])
     assert args.ota_timeout == 120.0
     assert ota.build_arg_parser().parse_args([]).ota_timeout is None
 
@@ -1713,7 +1713,7 @@ def test_ota_timeout_flag_parses_and_defaults_to_none() -> None:
 # the file says nothing about the CAN nodes it then reflashes on their own, over the bus. Node
 # count and role both come from what is actually on the wire (no devices.yaml list to maintain).
 
-GATEWAY_MAC = "fcf5c401bd83"
+GATEWAY_MAC = "a1b2c3d4e5f7"
 
 
 def test_match_can_node_topic() -> None:
@@ -1926,11 +1926,11 @@ def test_fleet_status_on_message_survives_malformed_json() -> None:
 def test_format_fleet_status_flags_current_and_outdated_builds(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42}},
-        ("fcf5c401bd83", "alert1"): {"availability": "online", "info": {"git": "deadbeef", "fw": 7}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42}},
+        ("a1b2c3d4e5f7", "alert1"): {"availability": "online", "info": {"git": "deadbeef", "fw": 7}},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
-    assert "Test2  (40f52033765d)" in report    # named as the menu names it: friendly name and MAC
+    assert "Sample sensor  (a1b2c3d4e5f6)" in report    # named as the menu names it: friendly name and MAC
     assert "online" in report and "1234abcd (current)" in report
     assert "deadbeef (outdated, expected 1234abcd)" in report
 
@@ -1938,7 +1938,7 @@ def test_format_fleet_status_flags_current_and_outdated_builds(monkeypatch: pyte
 def test_format_fleet_status_flags_dirty_builds_and_missing_info(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42, "dirty": 1}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd", "fw": 42, "dirty": 1}},
         ("deadbeefcafe", None): {"availability": "offline", "info": None},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
@@ -1949,21 +1949,21 @@ def test_format_fleet_status_flags_dirty_builds_and_missing_info(monkeypatch: py
 def test_format_fleet_status_groups_by_project(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd"}},
         (GATEWAY_MAC, None): {"availability": "online", "info": {"git": "1234abcd"}},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
     thermo, gateway = report.split("CAN gateway", 1)
     assert "Thermometer  (project_esp8266_thermo)" in thermo
-    assert "Test2" in thermo and "Living room" not in thermo
-    assert "Living room" in gateway
+    assert "Sample sensor" in thermo and "Sample gateway" not in thermo
+    assert "Sample gateway" in gateway
 
 
 def test_format_fleet_status_leaves_out_a_project_nothing_answered_from(
         monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd"}},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
     assert "Thermometer" in report
@@ -1977,14 +1977,14 @@ def test_format_fleet_status_tells_two_devices_of_the_same_name_apart(
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     projects = _cli_projects()
     for project in projects:
-        project.devices[0].friendly_name = "Home BP"
+        project.devices[0].friendly_name = "Sample device"
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd"}},
         (GATEWAY_MAC, None): {"availability": "offline", "info": {"git": "1234abcd"}},
     }
     report = ota.format_fleet_status(entries, projects)
-    assert "Home BP  (40f52033765d)" in report
-    assert f"Home BP  ({GATEWAY_MAC})" in report
+    assert "Sample device  (a1b2c3d4e5f6)" in report
+    assert f"Sample device  ({GATEWAY_MAC})" in report
 
 
 def test_format_fleet_status_indents_a_gateways_nodes_under_it(
@@ -1996,7 +1996,7 @@ def test_format_fleet_status_indents_a_gateways_nodes_under_it(
         (GATEWAY_MAC, "alert1"): {"availability": "online", "info": {"git": "1234abcd"}},
     }
     device, node1, node2 = ota.format_fleet_status(entries, _cli_projects()).splitlines()[1:]
-    assert device.startswith("  Living room") and GATEWAY_MAC in device
+    assert device.startswith("  Sample gateway") and GATEWAY_MAC in device
     assert node1.startswith("    alert1") and node2.startswith("    alert2")
 
 
@@ -2009,7 +2009,7 @@ def test_format_fleet_status_keeps_nodes_of_a_gateway_that_did_not_answer(
         (GATEWAY_MAC, "alert1"): {"availability": "online", "info": {"git": "1234abcd"}},
     }
     report = ota.format_fleet_status(entries, _cli_projects()).splitlines()
-    assert report[1].strip() == f"Living room  ({GATEWAY_MAC})"      # named, but no columns
+    assert report[1].strip() == f"Sample gateway  ({GATEWAY_MAC})"      # named, but no columns
     assert report[2].startswith("    alert1") and "online" in report[2]
 
 
@@ -2017,13 +2017,13 @@ def test_format_fleet_status_files_an_unlisted_mac_under_its_own_heading(
         monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ota.git_utils, "get_git_hash", lambda: 0x1234ABCD)
     entries: Dict[tuple[str, Optional[str]], Dict[str, Any]] = {
-        ("40f52033765d", None): {"availability": "online", "info": {"git": "1234abcd"}},
+        ("a1b2c3d4e5f6", None): {"availability": "online", "info": {"git": "1234abcd"}},
         ("aabbccddeeff", None): {"availability": "online", "info": {"git": "1234abcd"}},
         ("ddeeff001122", "alert9"): {"availability": "online", "info": {"git": "1234abcd"}},
     }
     report = ota.format_fleet_status(entries, _cli_projects())
     known, unlisted = report.split(ota._FLEET_STATUS_UNLISTED_HEADING, 1)
-    assert "Test2" in known and "aabbccddeeff" not in known
+    assert "Sample sensor" in known and "aabbccddeeff" not in known
     assert "aabbccddeeff" in unlisted                    # an unknown device
     assert "ddeeff001122" in unlisted and "alert9" in unlisted   # and an unknown gateway's node
 
@@ -2039,13 +2039,13 @@ projects:
   - name: Thermometer
     pio_project: project_esp8266_thermo
     devices:
-      - mac: 40f52033765d
-        friendly_name: Test2
+      - mac: a1b2c3d4e5f6
+        friendly_name: Sample sensor
   - name: CAN gateway
     pio_project: project_esp32_can
     devices:
-      - mac: fcf5c401bd83
-        friendly_name: Living room
+      - mac: a1b2c3d4e5f7
+        friendly_name: Sample gateway
         files:
           - name: "CAN alert firmware upload"
             local_path: fw.bin
@@ -2065,11 +2065,11 @@ def test_parse_rollout_keeps_the_order_given(tmp_path: Path) -> None:
     manager, projects = _rollout_manager(tmp_path, """
 rollout:
   steps:
-    - mac: fcf5c401bd83
-    - mac: 40f52033765d
+    - mac: a1b2c3d4e5f7
+    - mac: a1b2c3d4e5f6
 """)
     steps = manager.parse_rollout(projects)
-    assert [s.device.mac for s in steps] == ["fcf5c401bd83", "40f52033765d"]
+    assert [s.device.mac for s in steps] == ["a1b2c3d4e5f7", "a1b2c3d4e5f6"]
     assert steps[0].project.pio_project == "project_esp32_can"
 
 
@@ -2078,9 +2078,9 @@ def test_parse_rollout_inherits_the_section_default_and_takes_an_override(tmp_pa
 rollout:
   soak_seconds: 120
   steps:
-    - mac: 40f52033765d
+    - mac: a1b2c3d4e5f6
       soak_seconds: 900
-    - mac: fcf5c401bd83
+    - mac: a1b2c3d4e5f7
 """)
     steps = manager.parse_rollout(projects)
     assert steps[0].soak_seconds == 900.0        # the step's own
@@ -2097,7 +2097,7 @@ def test_parse_rollout_resolves_before_firmware_to_the_devices_file_entries(tmp_
     manager, projects = _rollout_manager(tmp_path, """
 rollout:
   steps:
-    - mac: fcf5c401bd83
+    - mac: a1b2c3d4e5f7
       before_firmware:
         - "CAN alert firmware upload"
 """)
@@ -2122,8 +2122,8 @@ def test_parse_rollout_repeated_mac_raises(tmp_path: Path) -> None:
     manager, projects = _rollout_manager(tmp_path, """
 rollout:
   steps:
-    - mac: 40f52033765d
-    - mac: 40f52033765d
+    - mac: a1b2c3d4e5f6
+    - mac: a1b2c3d4e5f6
 """)
     with pytest.raises(ValueError, match="more than once"):
         manager.parse_rollout(projects)
@@ -2133,7 +2133,7 @@ def test_parse_rollout_before_firmware_the_device_does_not_accept_raises(tmp_pat
     manager, projects = _rollout_manager(tmp_path, """
 rollout:
   steps:
-    - mac: 40f52033765d
+    - mac: a1b2c3d4e5f6
       before_firmware:
         - "CAN alert firmware upload"
 """)
@@ -2153,7 +2153,7 @@ rollout:
 
 # --- SoakWatcher: proving an updated device stayed up ------------------------
 
-MAC = "40f52033765d"
+MAC = "a1b2c3d4e5f6"
 
 
 def _watcher(**kwargs: Any) -> "ota.SoakWatcher":
@@ -2313,13 +2313,13 @@ def _entry(git: str, state: str = "online", dirty: int = 0) -> "Dict[str, Any]":
 
 
 def test_rollout_plan_marks_an_outdated_device_pending() -> None:
-    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(OLD)}, CURRENT)
+    planned = ota.build_rollout_plan(_rollout_steps(), {("a1b2c3d4e5f6", None): _entry(OLD)}, CURRENT)
     assert planned[0].status is ota.StepStatus.PENDING
     assert planned[0].reported == OLD
 
 
 def test_rollout_plan_skips_a_device_already_on_this_build() -> None:
-    planned = ota.build_rollout_plan(_rollout_steps(), {("40f52033765d", None): _entry(CURRENT)}, CURRENT)
+    planned = ota.build_rollout_plan(_rollout_steps(), {("a1b2c3d4e5f6", None): _entry(CURRENT)}, CURRENT)
     assert planned[0].status is ota.StepStatus.SKIPPED_CURRENT
 
 
@@ -2327,20 +2327,20 @@ def test_rollout_plan_updates_a_device_whose_build_is_dirty() -> None:
     # The hash matches but the tree it came from did not, so what is on the device is not this
     # build and saying "current" would be a lie.
     planned = ota.build_rollout_plan(_rollout_steps(),
-                                     {("40f52033765d", None): _entry(CURRENT, dirty=1)}, CURRENT)
+                                     {("a1b2c3d4e5f6", None): _entry(CURRENT, dirty=1)}, CURRENT)
     assert planned[0].status is ota.StepStatus.PENDING
 
 
 def test_rollout_plan_skips_a_device_that_did_not_answer() -> None:
     # Nothing came back for the thermometer at all: it is off, and the rest of the fleet carries on.
-    planned = ota.build_rollout_plan(_rollout_steps(), {("fcf5c401bd83", None): _entry(OLD)}, CURRENT)
+    planned = ota.build_rollout_plan(_rollout_steps(), {("a1b2c3d4e5f7", None): _entry(OLD)}, CURRENT)
     assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
     assert planned[1].status is ota.StepStatus.PENDING
 
 
 def test_rollout_plan_skips_a_device_that_answered_offline() -> None:
     planned = ota.build_rollout_plan(
-        _rollout_steps(), {("40f52033765d", None): _entry(OLD, state="offline")}, CURRENT)
+        _rollout_steps(), {("a1b2c3d4e5f6", None): _entry(OLD, state="offline")}, CURRENT)
     assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
 
 
@@ -2348,36 +2348,36 @@ def test_rollout_plan_picks_up_a_gateway_whose_nodes_were_left_behind() -> None:
     # The ESP32 is on this build but alert1 is not. Skipping here would leave the node on the old
     # image with nothing in the order that would ever return to it.
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(CURRENT),
-        ("fcf5c401bd83", "alert1"): _entry(OLD),
+        ("a1b2c3d4e5f7", None): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert1"): _entry(OLD),
     }, CURRENT)
     assert planned[1].status is ota.StepStatus.PENDING
 
 
 def test_rollout_plan_skips_a_gateway_whose_nodes_are_current_too() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(CURRENT),
-        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
-        ("fcf5c401bd83", "alert2"): _entry(CURRENT),
+        ("a1b2c3d4e5f7", None): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert1"): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert2"): _entry(CURRENT),
     }, CURRENT)
     assert planned[1].status is ota.StepStatus.SKIPPED_CURRENT
 
 
 def test_rollout_plan_keeps_the_order_the_steps_came_in() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {}, CURRENT)
-    assert [p.step.device.mac for p in planned] == ["40f52033765d", "fcf5c401bd83"]
+    assert [p.step.device.mac for p in planned] == ["a1b2c3d4e5f6", "a1b2c3d4e5f7"]
 
 
 def test_format_rollout_plan_lists_each_step_with_its_soak_and_extras() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("40f52033765d", None): _entry(OLD),
-        ("fcf5c401bd83", None): _entry(OLD),
+        ("a1b2c3d4e5f6", None): _entry(OLD),
+        ("a1b2c3d4e5f7", None): _entry(OLD),
     }, CURRENT)
     lines = ota.format_rollout_plan(planned, CURRENT).splitlines()
     assert CURRENT in lines[0]
-    assert lines[2].startswith("  1. Thermometer") and "Test2" in lines[2]
+    assert lines[2].startswith("  1. Thermometer") and "Sample sensor" in lines[2]
     assert "pending" in lines[2] and "soak 900s" in lines[2]
-    assert lines[3].startswith("  2. CAN gateway") and "Living room" in lines[3]
+    assert lines[3].startswith("  2. CAN gateway") and "Sample gateway" in lines[3]
     assert "soak 300s" in lines[3]
     # The gateway's pre-firmware transfer is listed under it, so the order inside a step is visible.
     assert lines[4].strip() == "+ CAN alert firmware upload"
@@ -2387,8 +2387,8 @@ def test_format_rollout_plan_names_the_project_on_every_line() -> None:
     # The order runs across projects, so the heading --status groups under is no help here; two
     # devices of the same friendly name are only told apart by the project beside them.
     thermo, gateway = _cli_projects()
-    thermo.devices[0].friendly_name = "Home BP"
-    gateway.devices[0].friendly_name = "Home BP"
+    thermo.devices[0].friendly_name = "Sample device"
+    gateway.devices[0].friendly_name = "Sample device"
     planned = [ota.PlannedStep(ota.RolloutStep(project=thermo, device=thermo.devices[0]),
                                ota.StepStatus.PENDING),
                ota.PlannedStep(ota.RolloutStep(project=gateway, device=gateway.devices[0]),
@@ -2403,12 +2403,12 @@ def test_format_rollout_plan_says_so_when_there_is_no_order() -> None:
 
 def test_format_rollout_summary_shows_what_became_of_each_step() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("40f52033765d", None): _entry(OLD),
-        ("fcf5c401bd83", None): _entry(OLD),
+        ("a1b2c3d4e5f6", None): _entry(OLD),
+        ("a1b2c3d4e5f7", None): _entry(OLD),
     }, CURRENT)
     planned[0].status = ota.StepStatus.DONE
     planned[1].status = ota.StepStatus.FAILED
-    planned[1].detail = "fcf5c401bd83 went offline during the soak"
+    planned[1].detail = "a1b2c3d4e5f7 went offline during the soak"
     summary = ota.format_rollout_summary(planned, CURRENT)
     assert "done" in summary and "failed" in summary
     assert "went offline during the soak" in summary
@@ -2441,7 +2441,7 @@ def test_run_rollout_sends_every_pending_step_in_order(monkeypatch: pytest.Monke
     monkeypatch.setattr(ota, "_run_rollout_step", runner)
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
     assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
-    assert runner.seen == ["40f52033765d", "fcf5c401bd83"]
+    assert runner.seen == ["a1b2c3d4e5f6", "a1b2c3d4e5f7"]
     assert [p.status for p in planned] == [ota.StepStatus.DONE, ota.StepStatus.DONE]
 
 
@@ -2450,25 +2450,25 @@ def test_run_rollout_leaves_a_skipped_step_alone(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(ota, "_run_rollout_step", runner)
     planned = _planned(ota.StepStatus.SKIPPED_OFFLINE, ota.StepStatus.PENDING)
     assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is True
-    assert runner.seen == ["fcf5c401bd83"]
+    assert runner.seen == ["a1b2c3d4e5f7"]
     assert planned[0].status is ota.StepStatus.SKIPPED_OFFLINE
 
 
 def test_run_rollout_stops_at_the_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     # No board here can roll back, so a build that fails one device must not reach the next: every
     # device it is sent to afterwards is another one needing a cable.
-    runner = _RecordingRun(fail_on="40f52033765d")
+    runner = _RecordingRun(fail_on="a1b2c3d4e5f6")
     monkeypatch.setattr(ota, "_run_rollout_step", runner)
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
     assert ota.run_rollout(planned, cast(Any, None), cast(Any, None)) is False
-    assert runner.seen == ["40f52033765d"]                      # the gateway was never touched
+    assert runner.seen == ["a1b2c3d4e5f6"]                      # the gateway was never touched
     assert planned[0].status is ota.StepStatus.FAILED
     assert planned[0].detail == "went offline during the soak"
     assert planned[1].status is ota.StepStatus.NOT_REACHED
 
 
 def test_run_rollout_summary_names_the_step_that_stopped_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="40f52033765d"))
+    monkeypatch.setattr(ota, "_run_rollout_step", _RecordingRun(fail_on="a1b2c3d4e5f6"))
     planned = _planned(ota.StepStatus.PENDING, ota.StepStatus.PENDING)
     ota.run_rollout(planned, cast(Any, None), cast(Any, None))
     summary = ota.format_rollout_summary(planned, CURRENT)
@@ -2490,8 +2490,8 @@ def test_rollout_alone_is_accepted() -> None:
 
 def test_rollout_refuses_a_target_or_an_action() -> None:
     # It has its own order to walk, so a device or an action beside it names a second intention.
-    assert _complaint("--rollout", "--device", "40f52033765d") is not None
-    assert _complaint("--rollout", "--device", "40f52033765d", "--firmware") is not None
+    assert _complaint("--rollout", "--device", "a1b2c3d4e5f6") is not None
+    assert _complaint("--rollout", "--device", "a1b2c3d4e5f6", "--firmware") is not None
     assert _complaint("--rollout", "--ota-timeout", "30") is not None
     assert _complaint("--rollout", "--upload-port", "/dev/ttyUSB0") is not None
 
@@ -2504,19 +2504,19 @@ def test_answers_that_stand_alone_refuse_the_rollout() -> None:
 def test_rollout_companions_need_the_rollout() -> None:
     assert _complaint("--dry-run") is not None
     assert _complaint("--yes") is not None
-    assert _complaint("--device", "40f52033765d", "--firmware", "--yes") is not None
+    assert _complaint("--device", "a1b2c3d4e5f6", "--firmware", "--yes") is not None
 
 
 def test_existing_combinations_still_judged_the_same_way() -> None:
-    assert _complaint("--device", "40f52033765d", "--firmware") is None
+    assert _complaint("--device", "a1b2c3d4e5f6", "--firmware") is None
     assert _complaint("--firmware") is not None                     # an action with no device
-    assert _complaint("--list", "--device", "40f52033765d") is not None
-    assert _complaint("--device", "40f52033765d", "--firmware", "--upload-port", "/dev/x") is not None
+    assert _complaint("--list", "--device", "a1b2c3d4e5f6") is not None
+    assert _complaint("--device", "a1b2c3d4e5f6", "--firmware", "--upload-port", "/dev/x") is not None
 
 
 # --- CanNodePresence: the nodes behind a gateway that has just restarted -----
 
-GW = "fcf5c401bd83"
+GW = "a1b2c3d4e5f7"
 
 
 class _PresenceMQTT:
@@ -2588,15 +2588,15 @@ def test_can_node_presence_ignores_another_gateways_nodes() -> None:
 
 def test_can_node_presence_has_nothing_to_wait_for_without_nodes() -> None:
     # A device with no CAN nodes behind it: the check is not something to skip at the call site.
-    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), "40f52033765d", [])
+    checker = ota.CanNodePresence(ota.MQTTConfig(host="broker"), "a1b2c3d4e5f6", [])
     assert checker.run() is None
 
 
 def test_rollout_plan_records_the_live_nodes_of_a_step() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(OLD),
-        ("fcf5c401bd83", "alert1"): _entry(OLD),
-        ("fcf5c401bd83", "alert2"): _entry(OLD, state="offline"),
+        ("a1b2c3d4e5f7", None): _entry(OLD),
+        ("a1b2c3d4e5f7", "alert1"): _entry(OLD),
+        ("a1b2c3d4e5f7", "alert2"): _entry(OLD, state="offline"),
     }, CURRENT)
     # Only the one that answered online is expected back: the other was never going to be reached.
     assert planned[1].nodes == ["alert1"]
@@ -2727,9 +2727,9 @@ def test_rollout_plan_does_not_hold_a_step_pending_for_a_node_that_is_off() -> N
     # Holding the step would re-send the gateway's firmware on every rollout and still not update
     # the node; the run that finds alert2 back on the bus is the one that picks it up.
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(CURRENT),
-        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
-        ("fcf5c401bd83", "alert2"): _entry(OLD, state="offline"),
+        ("a1b2c3d4e5f7", None): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert1"): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert2"): _entry(OLD, state="offline"),
     }, CURRENT)
     assert planned[1].status is ota.StepStatus.SKIPPED_CURRENT
     assert planned[1].nodes == ["alert1"]
@@ -2737,9 +2737,9 @@ def test_rollout_plan_does_not_hold_a_step_pending_for_a_node_that_is_off() -> N
 
 def test_rollout_plan_picks_a_gateway_up_once_its_node_is_back_on_the_bus() -> None:
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(CURRENT),
-        ("fcf5c401bd83", "alert1"): _entry(CURRENT),
-        ("fcf5c401bd83", "alert2"): _entry(OLD),
+        ("a1b2c3d4e5f7", None): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert1"): _entry(CURRENT),
+        ("a1b2c3d4e5f7", "alert2"): _entry(OLD),
     }, CURRENT)
     assert planned[1].status is ota.StepStatus.PENDING
     assert planned[1].nodes == ["alert1", "alert2"]
@@ -2748,9 +2748,9 @@ def test_rollout_plan_picks_a_gateway_up_once_its_node_is_back_on_the_bus() -> N
 def test_rollout_plan_counts_every_node_role_behind_a_gateway() -> None:
     # A second kind of node on the same bus is no different to the first: the plan waits for both.
     planned = ota.build_rollout_plan(_rollout_steps(), {
-        ("fcf5c401bd83", None): _entry(OLD),
-        ("fcf5c401bd83", "alert1"): _entry(OLD),
-        ("fcf5c401bd83", "irrigation1"): _entry(OLD),
+        ("a1b2c3d4e5f7", None): _entry(OLD),
+        ("a1b2c3d4e5f7", "alert1"): _entry(OLD),
+        ("a1b2c3d4e5f7", "irrigation1"): _entry(OLD),
     }, CURRENT)
     assert planned[1].nodes == ["alert1", "irrigation1"]
 
