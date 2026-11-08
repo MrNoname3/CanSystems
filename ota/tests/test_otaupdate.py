@@ -259,6 +259,19 @@ def test_render_server_json_compact_and_ordered() -> None:
     )
 
 
+def test_server_json_rules_describe_what_the_renderer_accepts() -> None:
+    rules = ota.server_json_rules()
+    full = {**_SECRET_FIELDS, "ssid": "wifi", "password": "wpa", "haDiscovery": True}
+    assert list(json.loads(ota.render_server_json(full, {}))) == rules["fields"]
+    for key in rules["required"]:
+        with pytest.raises(ValueError, match=key):
+            ota.render_server_json({k: v for k, v in full.items() if k != key}, {})
+    for key, maximum in rules["maxBytes"].items():
+        ota.render_server_json({**full, key: "ő" * (maximum // 2)}, {})
+        with pytest.raises(ValueError, match=key):
+            ota.render_server_json({**full, key: "x" * (maximum + 1)}, {})
+
+
 def test_render_server_json_optional_fields_omitted() -> None:
     parsed = json.loads(ota.render_server_json(_SECRET_FIELDS, {}))
     assert set(parsed) == set(_SECRET_FIELDS)  # no haDiscovery / ssid / password key emitted
