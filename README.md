@@ -142,6 +142,7 @@ skipped rather than queued, and the image's checksum is computed once for the wh
 | `src/main_*.cpp` | One entry point per environment (selected via `build_src_filter`) |
 | `lib/`           | Feature libraries (task scheduler, MQTT/CAN stacks, drivers, OTA, …) |
 | `test/`          | Native test suites + `test/_shims/` (Arduino/LittleFS/Update/PubSubClient fakes) |
+| `web/`           | Browser firmware installer for the ESP boards, published with each release — see [`web/README.md`](web/README.md) |
 | `ota/`           | Server-side OTA/file-transfer tool + its own [README](ota/README.md) (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |
@@ -162,6 +163,11 @@ A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmwar
 action serial-flashes the firmware, and **Initial provisioning** flashes the first LittleFS
 config image (it generates `data/` and runs `uploadfs` itself — see
 [`ota/README.md`](ota/README.md)).
+
+A release is a `v<commit count>` tag on a pushed `master`, created by
+`python scripts/release_tag.py`. CI then publishes the ESP firmware as a release on both forges,
+keeping only the newest one, and puts the [browser installer](web/README.md) around it on GitHub
+Pages, from where a board can be updated over USB without a local toolchain.
 
 Watching a board on the bench goes through `scripts/board_console.py`, which restarts it over the
 USB-serial adapter's control lines and prints what it says next:

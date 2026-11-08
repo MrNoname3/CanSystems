@@ -12,7 +12,7 @@ Runs the commands a release would need anyway, fail-fast, in this order:
   8. lint_check.py              (ruff check over the Python; ANY finding fails)
   9. workflow_check.py          (actionlint + zizmor over .github; ANY finding fails)
  10. typecheck_check.py         (pyright strict over the Python; ANY error fails)
- 11. pytest_check.py            (pytest over ota/tests + scripts/tests; ANY failure fails)
+ 11. pytest_check.py            (pytest over ota/, scripts/ and web/ tests; ANY failure fails)
 
 The analysers are separate steps because they need opposite check_skip_packages settings; the
 check_* environments in platformio.ini say why.

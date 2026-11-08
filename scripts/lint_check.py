@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lint guard for the release gate: `ruff check` over the project's Python.
 
-Runs ruff (using the config in pyproject.toml) over ota/, scripts/ and test/. ruff is
+Runs ruff (using the config in pyproject.toml) over ota/, scripts/, test/ and web/. ruff is
 required: if it is not found the gate fails (install requirements-dev.txt into .venv).
 Only linting is run; `ruff format` is deliberately not used (see pyproject.toml).
 
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-TARGETS = ["ota", "scripts", "test"]
+TARGETS = ["ota", "scripts", "test", "web"]
 
 
 def find_ruff() -> str:
