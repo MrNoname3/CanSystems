@@ -8,7 +8,9 @@
           pins, checked against its integrity hash
 
 The manifests in web/manifests name the files, so they decide which environments are released:
-an ESP32 is flashed from the merged factory image at offset 0, an ESP8266 from firmware.bin.
+an ESP8266 is flashed from firmware.bin at offset 0, an ESP32 from its merged factory image in two
+parts around the NVS partition, cansystems-<env>.boot.bin at 0 and cansystems-<env>.bin where NVS
+ends: the Arduino EEPROM, which holds the CAN ids, lives in NVS, and the factory image blanks it.
 
 A configuration template is the environment's LittleFS image as `pio run -t buildfs` builds it,
 holding a placeholder for each /config file devices.yaml gives the environment's devices. Every
@@ -25,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -35,7 +38,7 @@ from typing import IO, Any, Protocol, cast
 
 WEB_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = WEB_DIR.parent
-ASSET = re.compile(r"\.\./firmware/cansystems-(\w+)\.bin")
+ASSET = re.compile(r"\.\./firmware/cansystems-(\w+)(\.boot)?\.bin")
 RUNTIME = "package/dist/web/"
 CONFIG = "cansystems-config.json"
 PAGE_FILES = ("index.html", "config.js", "fspatch.mjs")
@@ -44,6 +47,10 @@ FILLABLE = ("/config/mosq-ca.crt", "/config/server.json", "/config/tube.json")
 ESP8266_FLASH_BASE = 0x40200000              # where the ESP8266 maps flash offset 0
 ESP32_FS_BLOCK = 0x1000                      # the pioarduino builder's LittleFS block size
 ESP32_FS_SUBTYPES = ("spiffs", "littlefs", "fat")
+ESP32_PARTITION_TABLE = 0x8000                # where a factory image carries its partition table
+ESP32_PARTITION_ENTRY = struct.Struct("<HBBII16sI")
+ESP32_PARTITION_MAGIC = 0x50AA
+ESP32_NVS = (0x01, 0x02)                      # type data, subtype nvs
 
 
 def manifests() -> dict[str, dict[str, Any]]:
@@ -51,15 +58,23 @@ def manifests() -> dict[str, dict[str, Any]]:
             for path in sorted((WEB_DIR / "manifests").glob("*.json"))}
 
 
-def release_files() -> dict[str, str]:
-    """Each release file name with the chip family it is built for."""
-    files: dict[str, str] = {}
+def release_files() -> dict[str, tuple[str, int]]:
+    """Each release file name with the chip family it is built for and the offset it is flashed at."""
+    files: dict[str, tuple[str, int]] = {}
     for name, manifest in manifests().items():
         for build in cast(list[dict[str, Any]], manifest["builds"]):
-            for part in cast(list[dict[str, Any]], build["parts"]):
-                if not ASSET.fullmatch(part["path"]) or part["offset"] != 0:
-                    raise ValueError(f"{name}: a part must be ../firmware/cansystems-<env>.bin at offset 0")
-                files[part["path"].removeprefix("../firmware/")] = build["chipFamily"]
+            chip = cast(str, build["chipFamily"])
+            parts = cast(list[dict[str, Any]], build["parts"])
+            paths = [str(part["path"]) for part in parts]
+            matches = [ASSET.fullmatch(path) for path in paths]
+            envs = {match[1] for match in matches if match}
+            layout = [[f"../firmware/cansystems-{env}.boot.bin", f"../firmware/cansystems-{env}.bin"] if chip == "ESP32"
+                      else [f"../firmware/cansystems-{env}.bin"] for env in envs]
+            if not all(matches) or len(envs) != 1 or paths not in layout or parts[0]["offset"] != 0:
+                raise ValueError(f"{name}: an ESP32 build is cansystems-<env>.boot.bin at offset 0 and "
+                                 "cansystems-<env>.bin, any other one cansystems-<env>.bin at offset 0")
+            for path, part in zip(paths, parts, strict=True):
+                files[path.removeprefix("../firmware/")] = (chip, int(part["offset"]))
     return files
 
 
@@ -67,13 +82,39 @@ def environment(name: str) -> str:
     return cast(re.Match[str], ASSET.fullmatch("../firmware/" + name))[1]
 
 
+def environments() -> list[str]:
+    return list(dict.fromkeys(environment(name) for name in release_files()))
+
+
+def esp32_nvs_area(factory: bytes) -> tuple[int, int]:
+    """Start and end of the NVS partition in the table a factory image carries."""
+    at = ESP32_PARTITION_TABLE
+    while at + ESP32_PARTITION_ENTRY.size <= len(factory):
+        magic, kind, subtype, offset, size, _, _ = ESP32_PARTITION_ENTRY.unpack_from(factory, at)
+        if magic != ESP32_PARTITION_MAGIC:
+            break
+        if (kind, subtype) == ESP32_NVS:
+            return offset, offset + size
+        at += ESP32_PARTITION_ENTRY.size
+    raise ValueError("installer: the factory image's partition table has no NVS partition")
+
+
 def collect_assets(build_dir: Path, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
-    for name, chip in release_files().items():
+    for name, (chip, offset) in release_files().items():
         env = environment(name)
-        image = build_dir / env / ("firmware.factory.bin" if chip == "ESP32" else "firmware.bin")
-        shutil.copyfile(image, target / name)
-        print(f"installer: {image.relative_to(build_dir)} -> {name}")
+        source = build_dir / env / ("firmware.factory.bin" if chip == "ESP32" else "firmware.bin")
+        data = source.read_bytes()
+        if chip == "ESP32":
+            nvs_start, nvs_end = esp32_nvs_area(data)
+            if name.endswith(".boot.bin"):
+                data = data[:nvs_start]
+            elif offset == nvs_end:
+                data = data[nvs_end:]
+            else:
+                raise ValueError(f"installer: {name} has to go where NVS ends, {nvs_end:#x}, not {offset:#x}")
+        (target / name).write_bytes(data)
+        print(f"installer: {source.relative_to(build_dir)} -> {name} at {offset:#x}")
 
 
 def template_name(env: str) -> str:
@@ -82,8 +123,7 @@ def template_name(env: str) -> str:
 
 def published_files() -> list[str]:
     """Every file a release carries besides SHA256SUMS."""
-    envs = [environment(name) for name in release_files()]
-    return [*release_files(), *(template_name(env) for env in envs), CONFIG]
+    return [*release_files(), *(template_name(env) for env in environments()), CONFIG]
 
 
 def placeholder(path: str, block_size: int) -> bytes:
@@ -176,8 +216,7 @@ def build_templates(target: Path, pio: str) -> None:
                              capture_output=True, text=True, env={**os.environ, "VIRTUAL_ENV": ""}).stdout
     sections = {section: dict(options) for section, options in json.loads(listing)}
     devices: dict[str, Any] = {}
-    for name in release_files():
-        env = environment(name)
+    for env in environments():
         paths = config_paths(projects, env)
         offset, size, block_size = fs_area(sections[f"env:{env}"])
         with tempfile.TemporaryDirectory() as data:
@@ -245,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     site.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "envs":
-        print("\n".join(environment(name) for name in release_files()))
+        print("\n".join(environments()))
     elif args.command == "assets":
         collect_assets(args.build_dir, args.into)
         build_templates(args.into, args.pio)

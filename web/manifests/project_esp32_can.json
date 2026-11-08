@@ -5,7 +5,10 @@
   "builds": [
     {
       "chipFamily": "ESP32",
-      "parts": [{ "path": "../firmware/cansystems-project_esp32_can.bin", "offset": 0 }]
+      "parts": [
+        { "path": "../firmware/cansystems-project_esp32_can.boot.bin", "offset": 0 },
+        { "path": "../firmware/cansystems-project_esp32_can.bin", "offset": 57344 }
+      ]
     }
   ]
 }

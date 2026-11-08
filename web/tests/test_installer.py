@@ -4,6 +4,7 @@ import base64
 import hashlib
 import io
 import shutil
+import struct
 import sys
 import tarfile
 from pathlib import Path
@@ -16,36 +17,75 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import installer
 
 
-def _manifest(path: str, chip: str = "ESP8266", offset: int = 0) -> dict[str, Any]:
-    return {"name": "x", "builds": [{"chipFamily": chip, "parts": [{"path": path, "offset": offset}]}]}
+def _manifest(path: str, chip: str = "ESP8266", offset: int = 0, *more: tuple[str, int]) -> dict[str, Any]:
+    parts = [{"path": part, "offset": at} for part, at in ((path, offset), *more)]
+    return {"name": "x", "builds": [{"chipFamily": chip, "parts": parts}]}
+
+
+def _esp32(env: str, app_offset: int = 0xE000) -> dict[str, Any]:
+    return _manifest(f"../firmware/cansystems-{env}.boot.bin", "ESP32", 0,
+                     (f"../firmware/cansystems-{env}.bin", app_offset))
 
 
 def test_the_manifests_release_each_esp_environment_once() -> None:
     assert installer.release_files() == {
-        "cansystems-project_esp32_can.bin": "ESP32",
-        "cansystems-project_esp8266_rad.bin": "ESP8266",
-        "cansystems-project_esp8266_thermo.bin": "ESP8266",
+        "cansystems-project_esp32_can.boot.bin": ("ESP32", 0),
+        "cansystems-project_esp32_can.bin": ("ESP32", 0xE000),
+        "cansystems-project_esp8266_rad.bin": ("ESP8266", 0),
+        "cansystems-project_esp8266_thermo.bin": ("ESP8266", 0),
     }
+    assert installer.environments() == ["project_esp32_can", "project_esp8266_rad", "project_esp8266_thermo"]
 
 
 @pytest.mark.parametrize("manifest", [_manifest("../firmware/other.bin"), _manifest("firmware/cansystems-x.bin"),
-                                      _manifest("../firmware/cansystems-x.bin", offset=0x10000)])
+                                      _manifest("../firmware/cansystems-x.bin", offset=0x10000),
+                                      _manifest("../firmware/cansystems-x.bin", "ESP32"),
+                                      _manifest("../firmware/cansystems-x.boot.bin", "ESP8266"),
+                                      _manifest("../firmware/cansystems-x.boot.bin", "ESP32", 0,
+                                                ("../firmware/cansystems-y.bin", 0xE000))])
 def test_a_part_outside_the_release_layout_is_refused(monkeypatch: pytest.MonkeyPatch, manifest: dict[str, Any]) -> None:
     monkeypatch.setattr(installer, "manifests", lambda: {"bad.json": manifest})
     with pytest.raises(ValueError, match="bad.json"):
         installer.release_files()
 
 
-def test_esp32_releases_the_factory_image_and_esp8266_the_application(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(installer, "manifests", lambda: {
-        "a.json": _manifest("../firmware/cansystems-gateway.bin", "ESP32"),
-        "b.json": _manifest("../firmware/cansystems-sensor.bin", "ESP8266")})
-    for env, name in (("gateway", "firmware.factory.bin"), ("gateway", "firmware.bin"), ("sensor", "firmware.bin")):
-        (tmp_path / "build" / env).mkdir(parents=True, exist_ok=True)
-        (tmp_path / "build" / env / name).write_bytes(f"{env}/{name}".encode())
-    installer.collect_assets(tmp_path / "build", tmp_path / "release")
-    assert (tmp_path / "release" / "cansystems-gateway.bin").read_bytes() == b"gateway/firmware.factory.bin"
+def _factory() -> bytes:
+    """A factory image whose partition table puts NVS at 0x9000-0xE000, each region marked."""
+    image = bytearray(b"B" * 0x9000 + b"N" * 0x5000 + b"A" * 0x3000)
+    for index, (kind, subtype, offset, size) in enumerate(((0x01, 0x02, 0x9000, 0x5000), (0x01, 0x00, 0xE000, 0x2000))):
+        struct.pack_into("<HBBII16sI", image, 0x8000 + 32 * index, 0x50AA, kind, subtype, offset, size, b"p", 0)
+    image[0x8000 + 64:0x8000 + 96] = b"\xff" * 32
+    return bytes(image)
+
+
+def _build(root: Path) -> Path:
+    for env, name, data in (("gateway", "firmware.factory.bin", _factory()), ("gateway", "firmware.bin", b"app"),
+                            ("sensor", "firmware.bin", b"sensor/firmware.bin")):
+        (root / env).mkdir(parents=True, exist_ok=True)
+        (root / env / name).write_bytes(data)
+    return root
+
+
+def test_esp32_releases_its_factory_image_around_nvs_and_esp8266_the_application(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(installer, "manifests", lambda: {"a.json": _esp32("gateway"),
+                                                         "b.json": _manifest("../firmware/cansystems-sensor.bin")})
+    installer.collect_assets(_build(tmp_path / "build"), tmp_path / "release")
+    factory = _factory()
+    assert (tmp_path / "release" / "cansystems-gateway.boot.bin").read_bytes() == factory[:0x9000]
+    assert (tmp_path / "release" / "cansystems-gateway.bin").read_bytes() == factory[0xE000:]
     assert (tmp_path / "release" / "cansystems-sensor.bin").read_bytes() == b"sensor/firmware.bin"
+
+
+def test_an_esp32_application_not_placed_where_nvs_ends_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(installer, "manifests", lambda: {"a.json": _esp32("gateway", 0x10000)})
+    with pytest.raises(ValueError, match="0xe000"):
+        installer.collect_assets(_build(tmp_path / "build"), tmp_path / "release")
+
+
+def test_a_factory_image_without_nvs_is_refused() -> None:
+    with pytest.raises(ValueError, match="no NVS"):
+        installer.esp32_nvs_area(b"\xff" * 0x9000)
 
 
 def _tarball() -> bytes:

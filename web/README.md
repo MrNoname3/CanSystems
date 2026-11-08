@@ -47,9 +47,12 @@ GitHub Pages has to be set to **Settings → Pages → Source: GitHub Actions** 
 - `index.html` - the page; `@VERSION@` becomes the release tag.
 - `config.js`, `fspatch.mjs` - the configuration form and the template filling; the tests run
   `fspatch.mjs` under node, and skip it where there is none.
-- `manifests/` - one ESP Web Tools manifest per firmware. Each names one release file,
-  `cansystems-<environment>.bin` at offset 0, and so decides what a release contains: an ESP32 is
-  released as its merged factory image, an ESP8266 as `firmware.bin`.
+- `manifests/` - one ESP Web Tools manifest per firmware, naming the release files and so deciding
+  what a release contains. An ESP8266 is released as `firmware.bin`, `cansystems-<environment>.bin`
+  at offset 0. An ESP32 is released as its merged factory image cut around the NVS partition its
+  own partition table names: `cansystems-<environment>.boot.bin` at 0 and `cansystems-<environment>.bin`
+  where NVS ends. NVS holds the Arduino EEPROM, the CAN ids among it, which the factory image would
+  blank.
 - `package.json`, `package-lock.json` - the pinned ESP Web Tools version, which Renovate updates;
   `installer.py` copies its browser bundle from the locked tarball after checking its integrity.
 - `installer.py` - `envs`, `assets` and `build`, which CI runs and which build the page locally
