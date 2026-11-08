@@ -23,6 +23,7 @@ zizmor==1.32.0              # workflow_check.py: security audit of the workflows
 pyright==1.1.414            # typecheck_check.py (strict)
 pytest==9.2.0               # pytest_check.py
 gcovr==8.8                  # CI coverage job (native_test line coverage over lib/)
+littlefs-python==0.19.0      # web/installer.py reads the configuration templates back (the ESP32 builder's own LittleFS)
 packaging==26.3             # deps_check.py parses the requirement lines with it (also a pytest dep)
 pyserial==3.5               # board_console.py drives the boards' DTR/RTS reset lines
 types-pyserial==3.5.0.20261030  # pyserial ships no py.typed, and pyright runs strict over scripts/

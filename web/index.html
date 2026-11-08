@@ -4,16 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
   <title>CanSystems firmware installer</title>
   <script type="module" src="esp-web-tools/install-button.js"></script>
+  <script type="module" src="config.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1f2933; }
     h1 { margin-bottom: .25rem; }
     .version { color: #616e7c; margin-top: 0; }
     .device { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem;
               padding: 1rem 0; border-top: 1px solid #e4e7eb; }
+    [hidden] { display: none !important; }
     .notice { background: #fff8e1; padding: .75rem 1rem; border-radius: .5rem; }
+    fieldset { border: 1px solid #e4e7eb; border-radius: .5rem; display: grid; gap: .6rem; }
+    fieldset label { display: grid; gap: .2rem; }
+    fieldset label.inline { display: flex; align-items: center; gap: .5rem; }
+    input, select, textarea { font: inherit; padding: .3rem; }
+    textarea { min-height: 6rem; font-family: ui-monospace, monospace; font-size: .8rem; }
   </style>
 </head>
 <body>
@@ -23,7 +30,7 @@
      After the upload, <strong>Logs &amp; Console</strong> shows the serial output at 115200 baud.</p>
   <p class="notice">When asked whether to erase the device, leave it unchecked: the update then keeps the
      configuration stored on the board (network, MQTT and certificates). Erasing removes it, and the
-     board needs the OTA tool's initial provisioning again.</p>
+     board then needs configuring again, below or with the OTA tool's initial provisioning.</p>
 
   <div class="device">
     <span>ESP8266 thermometer</span>
@@ -46,5 +53,44 @@
       <span slot="not-allowed">Needs HTTPS</span>
     </esp-web-install-button>
   </div>
+
+  <h2>Firmware and configuration</h2>
+  <p>For a new or erased board: installs the firmware together with a configuration filesystem
+     built from this form, which <strong>replaces everything</strong> stored on the board.
+     What you type stays in this browser; the image is put together here.</p>
+  <form id="config-form" autocomplete="off">
+    <fieldset disabled>
+      <label>Board
+        <select name="device">
+          <option value="project_esp8266_thermo">ESP8266 thermometer</option>
+          <option value="project_esp8266_rad">ESP8266 radiation meter</option>
+          <option value="project_esp32_can">ESP32 CAN gateway</option>
+        </select>
+      </label>
+      <label>Wi-Fi SSID (not for Ethernet boards) <input name="ssid"></label>
+      <label>Wi-Fi password <input name="password" type="password"></label>
+      <label>MQTT broker host <input name="mqttServerUrl" required></label>
+      <label>MQTT broker port <input name="mqttServerPort" type="number" min="1" max="65535" value="8883" required></label>
+      <label>MQTT username <input name="mqttUserName" required></label>
+      <label>MQTT password <input name="mqttPassword" type="password" required></label>
+      <label class="inline"><input name="haDiscovery" type="checkbox"> Home Assistant discovery</label>
+      <label>Geiger tube
+        <select name="tube">
+          <option value="1">J305</option>
+          <option value="2">M4011</option>
+        </select>
+      </label>
+      <label class="inline"><input name="ca" type="radio" value="default" checked> Let's Encrypt ISRG Root X1 + X2</label>
+      <label class="inline"><input name="ca" type="radio" value="custom"> Own CA bundle (PEM)</label>
+      <textarea name="caCustom" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+      <input name="caFile" type="file" accept=".crt,.pem,.cer">
+      <button type="submit">Prepare</button>
+    </fieldset>
+  </form>
+  <p id="config-status" role="status"></p>
+  <esp-web-install-button id="config-install" hidden>
+    <span slot="unsupported">Needs desktop Chrome or Edge</span>
+    <span slot="not-allowed">Needs HTTPS</span>
+  </esp-web-install-button>
 </body>
 </html>

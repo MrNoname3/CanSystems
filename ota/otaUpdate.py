@@ -981,6 +981,12 @@ _SERVER_JSON_STRING_MAX_BYTES = {
 }
 
 
+def server_json_rules() -> Dict[str, Any]:
+    """server.json's fields in emitted order, the required ones and the string limits in UTF-8 bytes."""
+    return {"fields": list(_SERVER_JSON_FIELDS), "required": list(_SERVER_JSON_REQUIRED),
+            "maxBytes": dict(_SERVER_JSON_STRING_MAX_BYTES)}
+
+
 def _validate_server_fields(fields: Dict[str, Any]) -> None:
     """Match the firmware's string and port constraints."""
     for key, maximum in _SERVER_JSON_STRING_MAX_BYTES.items():
