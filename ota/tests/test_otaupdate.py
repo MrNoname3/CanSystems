@@ -33,6 +33,9 @@ def _write(tmp_path: Path, name: str, data: bytes) -> Path:
     return path
 
 
+_CERTIFICATE = b"-----BEGIN CERTIFICATE-----\nMAA=\n-----END CERTIFICATE-----\n"
+
+
 @pytest.fixture(autouse=True)
 def _stub_tqdm(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]  # pytest autouse fixture
     """Replace tqdm with a no-op so the state-machine tests draw no progress bars."""
@@ -462,6 +465,38 @@ def test_provider_reads_local_file(tmp_path: Path) -> None:
     assert ota.build_file_provider(entry, device, manager).data == b"\x00\x01"
 
 
+def test_certificate_provider_normalizes_custom_source_without_rewriting_it(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    raw = b'\xef\xbb\xbf' + _CERTIFICATE.replace(b'\n', b'\r\n') + _CERTIFICATE
+    source = _write(tmp_path, "custom-source.bin", raw)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt", local_path=source)
+    provider = ota.build_file_provider(entry, device, manager)
+    assert provider.data == _CERTIFICATE
+    assert provider.size == len(_CERTIFICATE)
+    assert provider.md5 == hashlib.md5(_CERTIFICATE).hexdigest()
+    assert source.read_bytes() == raw
+    assert _transferred_payload(entry, device, manager) == _CERTIFICATE
+
+
+def test_default_certificate_transfer_uses_shared_normalization(tmp_path: Path) -> None:
+    source = _write(tmp_path, "custom-source.bin", _CERTIFICATE.replace(b'\n', b'\r\n'))
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt", local_path=source)
+    transfer = ota.FileTransfer(
+        ota.DeviceConfig(mac_address="a1b2c3d4e5f6", project_name="x"), ota.MQTTConfig(host="broker"), entry)
+    assert transfer.data == _CERTIFICATE
+
+
+@pytest.mark.parametrize("raw", [b"invalid-private-input", b"\xff\xfe"])
+def test_invalid_certificate_payload_is_rejected_without_echoing_contents(tmp_path: Path, raw: bytes) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    source = _write(tmp_path, "custom-source.bin", raw)
+    entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt", local_path=source)
+    provider = ota.build_file_provider(entry, device, manager)
+    with pytest.raises(ValueError, match="certificate") as error:
+        _ = provider.data
+    assert "invalid-private-input" not in str(error.value)
+
+
 def test_provider_serializes_inline_content(tmp_path: Path) -> None:
     device, manager = _device_with_secrets(tmp_path)
     entry = ota.FileEntry(name="Tube config", device_path="/config/tube.json",
@@ -547,6 +582,15 @@ def test_extract_default_roots_from_real_system_store() -> None:
     assert bundle.decode("ascii").strip().endswith("END CERTIFICATE-----")
 
 
+def test_normalization_preserves_real_x509_roots() -> None:
+    bundle = ota.extract_system_ca_roots(ota.ConfigManager.DEFAULT_CA_ROOTS)
+    normalized = ota.normalize_certificate_bundle(bundle.replace(b'\n', b'\r\n') + bundle)
+    assert normalized == bundle
+    context = ota.ssl.SSLContext(ota.ssl.PROTOCOL_TLS_CLIENT)
+    context.load_verify_locations(cadata=normalized.decode('ascii'))
+    assert len(context.get_ca_certs(binary_form=True)) == 2
+
+
 def test_ca_roots_default_and_override(tmp_path: Path) -> None:
     manager = _write_secrets(tmp_path, "broker: {host: b}\n")
     assert manager.ca_roots() == ["ISRG Root X1", "ISRG Root X2"]
@@ -567,15 +611,15 @@ def test_missing_ca_bundle_is_generated_once(tmp_path: Path,
 
     def fake_extract(names: list[str]) -> bytes:
         calls.append(names)
-        return b"PEMPEM"
+        return _CERTIFICATE
 
     monkeypatch.setattr(ota, "extract_system_ca_roots", fake_extract)
     entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
                           local_path=manager.ca_bundle_path)
 
     provider = ota.build_file_provider(entry, device, manager)
-    assert provider.data == b"PEMPEM"
-    assert manager.ca_bundle_path.read_bytes() == b"PEMPEM"
+    assert provider.data == _CERTIFICATE
+    assert manager.ca_bundle_path.read_bytes() == _CERTIFICATE
     assert calls == [["ISRG Root X1", "ISRG Root X2"]]
 
     # Second build reuses the file - no second extraction.
@@ -586,7 +630,8 @@ def test_missing_ca_bundle_is_generated_once(tmp_path: Path,
 def test_existing_ca_bundle_never_overwritten(tmp_path: Path,
                                               monkeypatch: pytest.MonkeyPatch) -> None:
     device, manager = _device_with_secrets(tmp_path)
-    manager.ca_bundle_path.write_bytes(b"MANUAL")
+    raw = _CERTIFICATE.replace(b'\n', b'\r\n')
+    manager.ca_bundle_path.write_bytes(raw)
 
     def fail_extract(names: list[str]) -> bytes:
         pytest.fail("must not extract")
@@ -594,7 +639,8 @@ def test_existing_ca_bundle_never_overwritten(tmp_path: Path,
     monkeypatch.setattr(ota, "extract_system_ca_roots", fail_extract)
     entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
                           local_path=manager.ca_bundle_path)
-    assert ota.build_file_provider(entry, device, manager).data == b"MANUAL"
+    assert ota.build_file_provider(entry, device, manager).data == _CERTIFICATE
+    assert manager.ca_bundle_path.read_bytes() == raw
 
 
 def test_missing_non_ca_file_still_raises(tmp_path: Path) -> None:
@@ -775,7 +821,7 @@ devices:
     mqttUserName: dev
     mqttPassword: secret
 """, encoding="utf-8")
-    (ota_dir / "ca.crt").write_bytes(b"CERTBYTES")
+    (ota_dir / "ca.crt").write_bytes(_CERTIFICATE.replace(b'\n', b'\r\n'))
 
     device = ota.DeviceEntry(
         mac="aabbccddeeff",
@@ -807,7 +853,8 @@ def test_provision_materializes_config_files_and_runs_uploadfs(
     assert fake_run.commands == [["pio", "run", "-e", "project_esp8266_thermo", "-t", "uploadfs"]]
     # At upload time data/ held exactly the /config/* files (the CAN fw entry is skipped).
     assert set(fake_run.data_snapshot) == {"config/mosq-ca.crt", "config/server.json"}
-    assert fake_run.data_snapshot["config/mosq-ca.crt"] == b"CERTBYTES"
+    assert fake_run.data_snapshot["config/mosq-ca.crt"] == _CERTIFICATE
+    assert (repo_root / "ota" / "ca.crt").read_bytes() == _CERTIFICATE.replace(b'\n', b'\r\n')
     assert json.loads(fake_run.data_snapshot["config/server.json"])["mqttUserName"] == "dev"
     # data/ is cleared again afterwards.
     assert list((repo_root / "data").iterdir()) == []
@@ -1277,10 +1324,19 @@ def _transferred_payload(entry: "ota.FileEntry", device: "ota.DeviceEntry",
 
 def test_e2e_local_file_arrives_byte_identical(tmp_path: Path) -> None:
     device, manager = _device_with_secrets(tmp_path)
-    cert = bytes(range(256)) * 11  # 2816 bytes, binary, multi-piece like the real CA cert
+    blob = bytes(range(256)) * 11
+    entry = ota.FileEntry(name="Binary file", device_path="/sample.bin",
+                          local_path=_write(tmp_path, "sample.bin", blob))
+    assert _transferred_payload(entry, device, manager) == blob
+
+
+def test_e2e_certificate_normalization_preserves_multi_piece_transfer(tmp_path: Path) -> None:
+    device, manager = _device_with_secrets(tmp_path)
+    expected = ota.ssl.DER_cert_to_PEM_cert(bytes(range(256)) * 11).encode('ascii')
+    raw = expected.replace(b'\n', b'\r\n') + expected
     entry = ota.FileEntry(name="CA cert", device_path="/config/mosq-ca.crt",
-                          local_path=_write(tmp_path, "ca.crt", cert))
-    assert _transferred_payload(entry, device, manager) == cert
+                          local_path=_write(tmp_path, "ca.crt", raw))
+    assert _transferred_payload(entry, device, manager) == expected
 
 
 def test_e2e_rendered_server_json_arrives_valid(tmp_path: Path) -> None:
@@ -2912,3 +2968,38 @@ def test_the_diagnosis_window_is_not_entered_when_the_device_never_went_offline(
     started = time.time()
     assert updater._verify_after_transfer() is False
     assert time.time() - started < 5.0
+
+
+def test_normalization_deduplicates_decoded_certificates_in_first_occurrence_order() -> None:
+    second = _CERTIFICATE.replace(b"MAA=", b"MDE=")
+    # Alternate unused padding bits decode to the same DER bytes.
+    duplicate = _CERTIFICATE.replace(b"MAA=", b"MAB=")
+    assert ota.normalize_certificate_bundle(_CERTIFICATE + second + duplicate) == _CERTIFICATE + second
+
+
+@pytest.mark.parametrize("as_bytes", [False, True])
+def test_normalization_accepts_utf8_bom_and_rewraps_base64(as_bytes: bool) -> None:
+    encoded = base64.b64encode(bytes(range(100))).decode("ascii")
+    bundle = '\ufeff' + _CERTIFICATE.decode().replace("MAA=", encoded).replace('\n', '\r\n')
+    expected_lines = '\n'.join(encoded[i:i + 64] for i in range(0, len(encoded), 64))
+    expected = _CERTIFICATE.decode().replace("MAA=", expected_lines).encode("ascii")
+    assert ota.normalize_certificate_bundle(bundle.encode('utf-8') if as_bytes else bundle) == expected
+
+
+@pytest.mark.parametrize("certificate", [b"", b"not PEM", _CERTIFICATE.replace(b"MAA=", b"!!!"),
+                                         _CERTIFICATE.replace(b"CERTIFICATE", b"PRIVATE KEY"),
+                                         _CERTIFICATE.replace(b"MAA=", b""), _CERTIFICATE + b"trailing data"])
+def test_normalization_rejects_anything_but_certificate_blocks(certificate: bytes) -> None:
+    with pytest.raises(ValueError, match="certificate") as error:
+        ota.normalize_certificate_bundle(certificate)
+    assert "trailing data" not in str(error.value)
+
+
+@pytest.mark.parametrize("value", ["yes", 1, None])
+def test_render_server_json_rejects_a_non_boolean_ha_discovery(value: object) -> None:
+    with pytest.raises(ValueError, match="haDiscovery"):
+        ota.render_server_json(_SECRET_FIELDS, {"haDiscovery": value})
+
+
+def test_render_server_json_keeps_a_boolean_ha_discovery() -> None:
+    assert json.loads(ota.render_server_json(_SECRET_FIELDS, {"haDiscovery": False}))["haDiscovery"] is False

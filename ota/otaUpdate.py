@@ -10,6 +10,7 @@ Uses a YAML secrets file (secrets.yaml, git-ignored) and device list (devices.ya
 
 import argparse
 import base64
+import binascii
 import curses
 import enum
 import hashlib
@@ -885,22 +886,29 @@ class FileDataProvider:
     For .json files, automatically serializes the content (removes whitespace)
     before transfer, unless the file is already serialized. This ensures the
     device always receives compact JSON regardless of how it is stored locally.
-    The size and MD5 are both computed from the serialized bytes."""
+    A CA bundle passes through normalize_certificate_bundle() instead. The size
+    and MD5 are both computed from the bytes that are actually transferred."""
 
-    def __init__(self, file_path: Path):
+    def __init__(self, file_path: Path, *, certificate: bool = False):
         self.file_path = file_path
+        self._certificate = certificate
         self._data: Optional[bytes] = None
         self._md5: Optional[str] = None
 
     @property
     def data(self) -> bytes:
-        """Lazy loading of file data. JSON files are serialized automatically."""
+        """Lazy loading of file data. JSON files and CA bundles are normalized; the source stays untouched."""
         if self._data is None:
             try:
                 raw = self.file_path.read_bytes()
             except OSError as e:
                 raise OSError(f"Failed to read file: {e}") from e
-            self._data = self._serialize_json(raw) if self.file_path.suffix.lower() == '.json' else raw
+            if self._certificate:
+                self._data = normalize_certificate_bundle(raw)
+            elif self.file_path.suffix.lower() == '.json':
+                self._data = self._serialize_json(raw)
+            else:
+                self._data = raw
         return self._data
 
     @staticmethod
@@ -987,6 +995,8 @@ def _validate_server_fields(fields: Dict[str, Any]) -> None:
     port = fields[_SERVER_JSON_KEY_PORT]
     if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
         raise ValueError(f"{_SERVER_JSON_KEY_PORT} must be an integer in 1-65535")
+    if _SERVER_JSON_KEY_HA_DISCOVERY in fields and not isinstance(fields[_SERVER_JSON_KEY_HA_DISCOVERY], bool):
+        raise ValueError(f"{_SERVER_JSON_KEY_HA_DISCOVERY} must be a boolean")
 
 
 def render_server_json(secret_fields: Dict[str, Any], server_config: Dict[str, Any]) -> bytes:
@@ -1033,6 +1043,45 @@ class RenderedDataProvider:
         return self._md5
 
 
+# Where the device reads its broker CA bundle; uploads to it are normalized PEM.
+CA_BUNDLE_DEVICE_PATH = "/config/mosq-ca.crt"
+_PEM_CERTIFICATE = re.compile(r"-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]*?)\s*-----END CERTIFICATE-----")
+
+
+def normalize_certificate_bundle(certificate: bytes | str) -> bytes:
+    """Rewrite a PEM bundle with LF line endings and 64-column Base64, each certificate once, in
+    first-occurrence order. Only the PEM container is checked; the device's TLS library parses
+    the X.509 contents. Raises ValueError, without quoting the input, on anything else."""
+    if isinstance(certificate, bytes):
+        try:
+            certificate = certificate.decode('utf-8-sig')
+        except UnicodeDecodeError as error:
+            raise ValueError("certificate must contain UTF-8 PEM certificate blocks") from error
+    certificate = certificate.removeprefix('\ufeff')
+    blocks: list[bytes] = []
+    position = 0
+    for match in _PEM_CERTIFICATE.finditer(certificate):
+        if certificate[position:match.start()].strip():
+            raise ValueError("certificate must contain only PEM certificate blocks")
+        try:
+            decoded = base64.b64decode(''.join(match.group(1).split()), validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("certificate contains invalid PEM base64") from error
+        if not decoded:
+            raise ValueError("certificate contains an empty PEM block")
+        if decoded not in blocks:
+            blocks.append(decoded)
+        position = match.end()
+    if not blocks or certificate[position:].strip():
+        raise ValueError("certificate must contain only PEM certificate blocks")
+    pem: list[str] = []
+    for block in blocks:
+        encoded = base64.b64encode(block).decode('ascii')
+        lines = '\n'.join(encoded[i:i + 64] for i in range(0, len(encoded), 64))
+        pem.append(f"-----BEGIN CERTIFICATE-----\n{lines}\n-----END CERTIFICATE-----\n")
+    return ''.join(pem).encode('ascii')
+
+
 def extract_system_ca_roots(root_names: List[str]) -> bytes:
     """Extract the named root certificates (matched by subject commonName)
     from the system trust store as a concatenated PEM bundle, in the order
@@ -1054,7 +1103,7 @@ def extract_system_ca_roots(root_names: List[str]) -> bytes:
         raise ValueError(
             f"Root certificate(s) not found in the system trust store: {', '.join(missing)}")
 
-    return ''.join(ssl.DER_cert_to_PEM_cert(der_by_name[n]) for n in root_names).encode('ascii')
+    return normalize_certificate_bundle(''.join(ssl.DER_cert_to_PEM_cert(der_by_name[n]) for n in root_names))
 
 
 def ensure_ca_bundle(config_manager: "ConfigManager") -> Path:
@@ -1086,7 +1135,7 @@ def build_file_provider(file_entry: FileEntry, device: DeviceEntry,
         ensure_ca_bundle(config_manager)
     if not file_entry.local_path.exists():
         raise FileNotFoundError(f"Local file not found: {file_entry.local_path}")
-    provider = FileDataProvider(file_entry.local_path)
+    provider = FileDataProvider(file_entry.local_path, certificate=file_entry.device_path == CA_BUNDLE_DEVICE_PATH)
     if file_entry.pio_env is not None:
         verify_image_environment(provider.data, file_entry.pio_env, str(file_entry.local_path))
     return provider
@@ -1809,7 +1858,8 @@ class FileTransfer(_BaseTransfer):
         if provider is None:
             if file_entry.local_path is None:
                 raise ValueError(f"File entry '{file_entry.name}' needs an explicit provider (rendered content)")
-            provider = FileDataProvider(file_entry.local_path)
+            provider = FileDataProvider(file_entry.local_path,
+                                        certificate=file_entry.device_path == CA_BUNDLE_DEVICE_PATH)
         self.file_provider = provider
         # Keyed by CAN node subtopic (e.g. "alert1"); only populated when file_entry.pio_env is set.
         self._can_node_state: Dict[str, Dict[str, Any]] = {}

@@ -18,6 +18,8 @@ transfer: when `ota/mosq-ca.crt` is missing, the tool generates it from the **sy
 store** (by default the Let's Encrypt ISRG Root X1 + X2 roots; override the subject CNs with
 the `ca_roots` list in `secrets.yaml`). A hand-placed file is never overwritten, so a
 self-signed CA can simply be dropped there.
+Uploads and initial provisioning send the bundle normalized (LF line endings, 64-column Base64,
+each certificate once); the file itself is left as it is.
 
 **Identity preflight.** Before every action that ships connection config to a device —
 the CA certificate and server.json uploads over MQTT and the USB Initial provisioning —
