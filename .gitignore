@@ -32,3 +32,6 @@ ota/secrets.yaml
 # What scripts/secret_check.py must find but no tracked file may name
 .secret-patterns.local
 ota/mosq-ca.crt*
+
+# Locally built web installer
+/.web-cache/

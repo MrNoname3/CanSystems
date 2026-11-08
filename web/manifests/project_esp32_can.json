@@ -1,0 +1,11 @@
+{
+  "name": "CanSystems ESP32 CAN gateway",
+  "new_install_prompt_erase": true,
+  "new_install_improv_wait_time": 0,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "../firmware/cansystems-project_esp32_can.bin", "offset": 0 }]
+    }
+  ]
+}

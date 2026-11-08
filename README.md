@@ -142,6 +142,7 @@ skipped rather than queued, and the image's checksum is computed once for the wh
 | `src/main_*.cpp` | One entry point per environment (selected via `build_src_filter`) |
 | `lib/`           | Feature libraries (task scheduler, MQTT/CAN stacks, drivers, OTA, …) |
 | `test/`          | Native test suites + `test/_shims/` (Arduino/LittleFS/Update/PubSubClient fakes) |
+| `web/`           | Browser firmware installer for the ESP boards — see [`web/README.md`](web/README.md) |
 | `ota/`           | Server-side OTA/file-transfer tool + its own [README](ota/README.md) (runtime deps in `ota/requirements.txt`: `paho-mqtt`, `pyyaml`, `tqdm`) |
 | `scripts/`       | Build helpers (git version injection, ELF→BIN, library patching, size compare) and the release gate (`release_check.py`) |
 | `bootloader/`    | Prebuilt urboot images for the ATmega nodes |

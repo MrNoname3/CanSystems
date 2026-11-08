@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Runtime of the browser firmware installer; web/installer.py copies it from the locked tarball.",
+  "dependencies": {
+    "esp-web-tools": "10.4.0"
+  }
+}

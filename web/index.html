@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <title>CanSystems firmware installer</title>
+  <script type="module" src="esp-web-tools/install-button.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1f2933; }
+    h1 { margin-bottom: .25rem; }
+    .version { color: #616e7c; margin-top: 0; }
+    .device { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem;
+              padding: 1rem 0; border-top: 1px solid #e4e7eb; }
+    .notice { background: #fff8e1; padding: .75rem 1rem; border-radius: .5rem; }
+  </style>
+</head>
+<body>
+  <h1>CanSystems firmware installer</h1>
+  <p class="version">Release @VERSION@</p>
+  <p>Connect the board over USB, close any other serial monitor, then choose its firmware.
+     After the upload, <strong>Logs &amp; Console</strong> shows the serial output at 115200 baud.</p>
+  <p class="notice">When asked whether to erase the device, leave it unchecked: the update then keeps the
+     configuration stored on the board (network, MQTT and certificates). Erasing removes it, and the
+     board needs the OTA tool's initial provisioning again.</p>
+
+  <div class="device">
+    <span>ESP8266 thermometer</span>
+    <esp-web-install-button manifest="manifests/project_esp8266_thermo.json">
+      <span slot="unsupported">Needs desktop Chrome or Edge</span>
+      <span slot="not-allowed">Needs HTTPS</span>
+    </esp-web-install-button>
+  </div>
+  <div class="device">
+    <span>ESP8266 radiation meter</span>
+    <esp-web-install-button manifest="manifests/project_esp8266_rad.json">
+      <span slot="unsupported">Needs desktop Chrome or Edge</span>
+      <span slot="not-allowed">Needs HTTPS</span>
+    </esp-web-install-button>
+  </div>
+  <div class="device">
+    <span>ESP32 CAN gateway</span>
+    <esp-web-install-button manifest="manifests/project_esp32_can.json">
+      <span slot="unsupported">Needs desktop Chrome or Edge</span>
+      <span slot="not-allowed">Needs HTTPS</span>
+    </esp-web-install-button>
+  </div>
+</body>
+</html>

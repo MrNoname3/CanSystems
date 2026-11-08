@@ -1,5 +1,5 @@
 # Python tooling configuration. The project is firmware-first; these settings cover the
-# auxiliary Python (ota/, scripts/, the custom test runner).
+# auxiliary Python (ota/, scripts/, web/, the custom test runner).
 #
 # ruff is used for LINTING only, enforced by the release gate (scripts/lint_check.py, run by
 # release_check.py and in CI). `ruff format` is intentionally NOT run: it collapses the
@@ -49,10 +49,11 @@ select = [
 # third-party deps are resolved via the interpreter the runner passes with --pythonpath
 # (the project-root .venv locally, the CI interpreter in CI).
 [tool.pyright]
-include = ["ota", "scripts", "test"]
+include = ["ota", "scripts", "test", "web"]
 # ota/ on the import path so the tests resolve `import otaUpdate` (as they do at runtime);
-# scripts/ so otaUpdate.py itself resolves `import git_utils` (also at runtime, via sys.path).
-extraPaths = ["ota", "scripts"]
+# scripts/ so otaUpdate.py itself resolves `import git_utils` (also at runtime, via sys.path);
+# web/ for the installer's tests.
+extraPaths = ["ota", "scripts", "web"]
 exclude = [
     "**/.venv",
     "**/__pycache__",
@@ -77,7 +78,7 @@ root = "ota/tests"
 reportPrivateUsage = false
 
 
-# pytest unit tests for the OTA tool and the build helpers (run by scripts/pytest_check.py,
+# pytest unit tests for the OTA tool, the build helpers and the web installer (run by scripts/pytest_check.py,
 # enforced in CI).
 [tool.pytest.ini_options]
-testpaths = ["ota/tests", "scripts/tests"]
+testpaths = ["ota/tests", "scripts/tests", "web/tests"]
