@@ -183,3 +183,8 @@ def test_empty_input_and_duplicate_completions_fail() -> None:
 
 def test_exit_one_without_compiler_errors_fails(monkeypatch: object) -> None:
     assert _run_main(monkeypatch, VERBOSE_OUTPUT.replace("TIDY_COMPLETE check_avr 0", "TIDY_COMPLETE check_avr 1")) == 1
+
+
+def test_a_stale_exclusion_fails_the_gate(monkeypatch: object, capsys: object) -> None:
+    assert _run_main(monkeypatch, VERBOSE_OUTPUT + "TIDY_STALE check_avr lib/configHandler/*\n") == 1
+    assert "check_avr: lib/configHandler/*" in capsys.readouterr().out   # type: ignore[attr-defined]

@@ -91,3 +91,18 @@ def test_source_filters_cannot_drop_assigned_inputs() -> None:
     assigned = analysis_check.target_inputs("check_avr", inputs)
     with pytest.raises(ValueError, match="missing analysis inputs"):
         analysis_check.validate_inputs("check_avr", [source for source in inputs if source != assigned[0]])
+
+
+def test_an_exclusion_is_stale_once_none_of_its_files_fails_to_parse() -> None:
+    excluded = {"lib/a/*": ["a.cpp", "a.hpp"], "lib/b/*": ["b.cpp"], "lib/gone/*": []}
+    assert analysis_check.stale_exclusions(excluded, {"a.hpp"}) == ["lib/b/*", "lib/gone/*"]
+
+
+def test_exclusions_name_only_the_inputs_they_leave_out() -> None:
+    inputs = analysis_check.project_inputs()
+    excluded = analysis_check.excluded_inputs("check_avr", inputs)
+    assert set(excluded) == {pattern for pattern, _ in analysis_check.PLATFORM_EXCLUSIONS["check_avr"]}
+    left_out = {source for sources in excluded.values() for source in sources}
+    assert left_out.isdisjoint(analysis_check.target_inputs("check_avr", inputs))
+    assert left_out | set(analysis_check.target_inputs("check_avr", inputs)) == {
+        source for source in inputs if analysis_check.candidate("check_avr", source) is not None}

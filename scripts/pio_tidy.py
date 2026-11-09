@@ -8,11 +8,22 @@ import sys
 from pathlib import Path
 
 import platformio.check.tools
-from analysis_check import CLANG_TIDY_VERSION, PROJECT_DIR, clang_tidy_version, target_inputs, validate_inputs
+from analysis_check import (
+    CLANG_TIDY_VERSION,
+    PROJECT_DIR,
+    clang_tidy_version,
+    excluded_inputs,
+    stale_exclusions,
+    target_inputs,
+    validate_inputs,
+)
 from build_jobs import analysis_jobs
 from platformio.__main__ import main
 from platformio.check.tools.clangtidy import ClangtidyCheckTool
 from tidy_runner import run_units
+
+# One cheap check, as clang-tidy refuses to run none: the left-out files are only parsed.
+PARSE_ONLY = "--checks=-*,misc-unused-alias-decls"
 
 
 class CheckedClangTidy(ClangtidyCheckTool):
@@ -46,6 +57,25 @@ class CheckedClangTidy(ClangtidyCheckTool):
 
         status, count = run_units(command, selected, PROJECT_DIR / ".pio" / "analysis" / self.envname,
                                   jobs, report)
+
+        excluded = excluded_inputs(self.envname, inputs)
+        left_out = sorted({source for sources in excluded.values() for source in sources})
+        unparsed: set[str] = set()
+
+        def probe(result):
+            if result.status == 1:
+                unparsed.add(result.source)
+            print(f"analysis: {self.envname} left out {Path(result.source).relative_to(PROJECT_DIR)} "
+                  f"{'does not parse' if result.status == 1 else f'exit={result.status}'}", flush=True)
+
+        if left_out:
+            # Their logs stay out of on_tool_output: these errors are the expected ones.
+            probed, _ = run_units([cmd[0], *options, PARSE_ONLY, *left_out, *cmd[separator:]], left_out,
+                                  PROJECT_DIR / ".pio" / "analysis" / self.envname / "left-out", jobs, probe)
+            if probed not in (0, 1):
+                status = 2
+        for pattern in stale_exclusions(excluded, unparsed):
+            print(f"TIDY_STALE {self.envname} {pattern}", flush=True)
         if status not in (0, 1):
             self._bad_input = True
         print(f"TIDY_COMPLETE {self.envname} {status} {count}", flush=True)

@@ -12,6 +12,8 @@ complete without any.
 A clang error in a project file is a blind spot as well: clang-tidy skips whatever depends on
 the declaration it could not parse. So every one fails the gate. A file written for another target,
 which cannot parse in an environment, is left out of it by PLATFORM_EXCLUSIONS, with the reason.
+The files left out are still parsed, and an entry none of whose files fails to any more fails the
+gate as stale, so a file cannot stay unanalysed once it builds there.
 
 The defects are counted here too, those in project files only. clang-tidy reports a finding in a
 library header whenever the path leading to it starts in project code, and no header filter drops
@@ -95,18 +97,36 @@ ENTRYPOINTS = {
 }
 
 
+def candidate(environment: str, source: str) -> str | None:
+    """The project path of a library file or of this target's entrypoint, None for anything else."""
+    path = project_file(source)
+    if path is None or (path.startswith("src/")
+                        and Path(path).name not in (*ENTRYPOINTS[environment], "main.cpp")):
+        return None
+    return path
+
+
 def target_inputs(environment: str, inputs: Sequence[str]) -> list[str]:
     """All compatible library files, including unused ones, and this target's entrypoints."""
     selected: list[str] = []
     for source in inputs:
-        path = project_file(source)
-        if path is None:
-            continue
-        if path.startswith("src/") and Path(path).name not in (*ENTRYPOINTS[environment], "main.cpp"):
-            continue
-        if not any(fnmatch(path, pattern) for pattern, _ in PLATFORM_EXCLUSIONS[environment]):
+        path = candidate(environment, source)
+        if path is not None and not any(fnmatch(path, pattern)
+                                        for pattern, _ in PLATFORM_EXCLUSIONS[environment]):
             selected.append(source)
     return selected
+
+
+def excluded_inputs(environment: str, inputs: Sequence[str]) -> dict[str, list[str]]:
+    """Each PLATFORM_EXCLUSIONS pattern of the environment, with the inputs it leaves out."""
+    paths = {source: candidate(environment, source) for source in inputs}
+    return {pattern: [source for source, path in paths.items() if path is not None and fnmatch(path, pattern)]
+            for pattern, _ in PLATFORM_EXCLUSIONS[environment]}
+
+
+def stale_exclusions(excluded: dict[str, list[str]], unparsed: set[str]) -> list[str]:
+    """The patterns none of whose files clang failed to parse."""
+    return [pattern for pattern, sources in excluded.items() if not unparsed.intersection(sources)]
 
 
 def project_inputs() -> list[str]:
@@ -137,6 +157,7 @@ CLANG_ERROR = re.compile(r"^(\S+?):(\d+):\d+: error: (.*) \[clang-diagnostic-err
 DEFECT = re.compile(r"^(\S+?):\d+: \[(?:low|medium|high):\w+\] ")
 DIAGNOSTIC = re.compile(r": (?:error|warning|note): ")
 NOT_FOUND = re.compile(r"'([^']+)' file not found")
+STALE = re.compile(r"^TIDY_STALE (\S+) (\S+)$", re.MULTILINE)
 TOOL_COMMAND = re.compile(r"^(\S*clang-tidy) ", re.MULTILINE)
 LLVM_VERSION = re.compile(r"LLVM version (\S+)")
 
@@ -310,6 +331,11 @@ def main(argv: Sequence[str] = ()) -> int:
         for defect in defects:
             print(f"  {defect}")
 
+    stale = [f"{environment}: {pattern}" for environment, pattern in STALE.findall(output)]
+    if stale:
+        print(f"\nanalysis: PLATFORM_EXCLUSIONS entries whose files clang parses now, to take out: "
+              f"{', '.join(stale)}")
+        return 1
     errors = check_errors(per_environment)
     if errors:
         print("\nanalysis: clang could not parse project code, so clang-tidy skipped what depends on it:")
