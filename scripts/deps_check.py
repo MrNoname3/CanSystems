@@ -54,6 +54,11 @@ def target_python() -> Path:
     return VENV_PYTHON if VENV_PYTHON.exists() else Path(sys.executable)
 
 
+def needs_reexec(python: Path) -> bool:
+    """A venv and its base Python can resolve to the same binary but have different sys.prefix."""
+    return python == VENV_PYTHON and Path(sys.prefix).resolve() != python.parent.parent.resolve()
+
+
 def sync(python: Path) -> int:
     print(f"deps: installing {REQUIREMENTS.name} into {python}", flush=True)
     return subprocess.run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS)],
@@ -69,7 +74,7 @@ def main() -> int:
     # Re-run under that interpreter, so both `packaging` and the metadata lookup below answer for
     # the environment the other guards actually use.
     python = target_python()
-    if Path(sys.executable).resolve() != python.resolve():
+    if needs_reexec(python):
         return subprocess.run([str(python), __file__, *sys.argv[1:]], check=False).returncode
 
     from importlib.metadata import PackageNotFoundError, version

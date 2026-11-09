@@ -13,7 +13,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 ENVS = ["alpha", "beta", "native_test"]
 TIDY = ("check_alpha",)
 GROUPS = {
-    "host": Group(envs=("native_test",), host=True),
+    "host": Group(envs=("native_test",), host=True, native=True),
     "firmware": Group(envs=("alpha", "beta")),
     "tidy": Group(tidy=("check_alpha",)),
 }
@@ -52,7 +52,7 @@ def test_a_check_environment_in_no_group_is_named() -> None:
 def test_the_host_steps_belong_to_one_group() -> None:
     groups = {**GROUPS, "tidy": Group(tidy=("check_alpha",), host=True)}
     assert gate_groups.coverage_gaps(ENVS, TIDY, groups) == [
-        "2 groups run the native tests and the Python guards, not one"]
+        "2 groups run the Python guards, not one"]
 
 
 def test_default_envs_reads_lists_split_by_lines_or_commas(tmp_path: Path) -> None:
@@ -60,3 +60,17 @@ def test_default_envs_reads_lists_split_by_lines_or_commas(tmp_path: Path) -> No
     ini.write_text("[platformio]\ndefault_envs =\n  alpha, beta   ; the boards\n  native_test\n\n"
                    "[env:alpha]\nplatform = example\n", encoding="utf-8")
     assert gate_groups.default_envs(ini) == ENVS
+
+
+def test_every_declared_check_environment_must_belong_to_a_group(tmp_path: Path) -> None:
+    ini = tmp_path / "platformio.ini"
+    ini.write_text("[env:check_alpha]\n[env:check_new]\n[env:ordinary]\n", encoding="utf-8")
+    assert gate_groups.coverage_gaps(ENVS, gate_groups.check_envs(ini), GROUPS) == [
+        "check_* environment check_new is in no group"]
+
+
+def test_ci_matrix_follows_groups_including_new_ones() -> None:
+    groups = {**GROUPS, "new": Group(tidy=("check_new",))}
+    assert gate_groups.ci_matrix(groups) == {"include": [
+        {"group": "firmware", "sizes": True}, {"group": "tidy", "sizes": False},
+        {"group": "new", "sizes": False}]}

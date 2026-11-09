@@ -18,10 +18,12 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 - Native tests: `… pio test -e native_test` (under a minute)
 - Static analysis: `… pio check` (cppcheck) and
   `python scripts/analysis_check.py` (clang-tidy; checks live in `.clang-tidy`). Split because
-  they need opposite `check_skip_packages` settings; the guard also fails a clang-tidy that
-  analysed nothing, and a clang error in project code, both of which `pio check` reports as a
-  pass. A source written for another target that cannot parse in an environment goes in the
-  guard's `EXPECTED_ERRORS`, with the reason.
+  they need opposite `check_skip_packages` settings. The guard runs each input as its own
+  clang-tidy process under PlatformIO's compiler configuration, and fails one that crashed, timed
+  out or parsed nothing, and a clang error in project code - all of which a bare `pio check`
+  reports as a pass. A file written for another target that cannot parse in an environment goes
+  in the guard's `PLATFORM_EXCLUSIONS`, with the reason; an entry whose files parse again fails
+  as stale. Per-file logs live in `.pio/analysis/`.
 - **Release gate** (build + test + check + tidy + format + secrets + lint + workflows + typecheck +
   pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
@@ -95,12 +97,12 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   done, reviewed, and CI-green, then delete the branch (local + remote) and push `master` to
   `origin` (= the self-hosted Gitea, which **push-mirrors to GitHub** automatically — no second
   remote needed).
-- CI runs the release gate one group per job (`scripts/gate_groups.py`; the build groups diff the
-  firmware sizes too) and a native-coverage job; a `check` job is green only when all of them
+- CI runs the release gate one group per job, its matrix generated from `scripts/gate_groups.py`
+  (the build groups diff their firmware sizes too), and a native-coverage job with a floor; a `check` job is green only when all of them
   are, and it is the one status master's branch protection requires. A push that changes nothing
   but Markdown runs the host group alone, and `check` accepts the skipped jobs. An environment added to
   `platformio.ini` goes into exactly one group there - the gate fails until it does. These jobs
-  all run in the image `ci/toolchain.Dockerfile` describes; CI pushes it to the forge's registry
+  use the image `ci/toolchain.Dockerfile` builds; CI pushes it to the forge's registry
   with the `PACKAGES_TOKEN` secret (a token with package read/write) and to ghcr.io on GitHub.
   A weekly PlatformIO outdated report runs separately. **Gitea Actions and GitHub Actions both run the same
   workflow files** - Gitea scans `.github/workflows` too - and they must stay that way: no

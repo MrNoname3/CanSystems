@@ -68,6 +68,7 @@ exclude = [
     "scripts/patch_elf2bin.py",
     "scripts/relax_core_warnings.py",
     "test/test_custom_runner.py",
+    "scripts/pio_tidy.py",             # runs under PlatformIO, whose Python API is not in .venv
 ]
 typeCheckingMode = "strict"
 

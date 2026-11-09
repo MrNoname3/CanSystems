@@ -1,24 +1,15 @@
 #!/usr/bin/env python3
 """Release gate: build all environments, run the native test suite, then static analysis.
 
-Runs the commands a release would need anyway, fail-fast, in this order:
-  1. deps_check.py              (the .venv matches requirements-dev.txt; ANY drift fails)
-  2. pio run                    (build every default environment)
-  3. pio test -e native_test    (native unit-test suite)
-  4. pio check --fail-on-defect (cppcheck over every environment; ANY defect fails)
-  5. analysis_check.py          (clang-tidy over the check_* environments; ANY project defect fails)
-  6. format_check.py            (clang-format + final-newline check; ANY violation fails)
-  7. secret_check.py            (keys, addresses, private hosts in tracked files; ANY hit fails)
-  8. lint_check.py              (ruff check over the Python; ANY finding fails)
-  9. workflow_check.py          (actionlint + zizmor over .github; ANY finding fails)
- 10. typecheck_check.py         (pyright strict over the Python; ANY error fails)
- 11. pytest_check.py            (pytest over ota/, scripts/ and web/ tests; ANY failure fails)
+Runs dependency verification first, then the inexpensive Python/format/workflow guards, the
+build and native tests, cppcheck, and clang-tidy. Every step is fail-fast; --group selects the
+same subset CI runs. Every group checks dependencies, so --sync works for any group.
 
 The analysers are separate steps because they need opposite check_skip_packages settings; the
 check_* environments in platformio.ini say why.
 
 Every guard is required: a missing tool fails the gate rather than skipping its step, so a
-green run means all eleven actually ran. The dependency step comes first because the guards
+green run means all required steps actually ran. The dependency step comes first because the guards
 after it run out of the .venv: a drifted one reports on versions the project does not pin.
 `--sync` installs the pinned set instead of only reporting the drift.
 
@@ -29,7 +20,7 @@ It also checks that the CI groups in gate_groups.py cover every environment exac
 `--group NAME` runs one of those groups instead of the whole gate: CI gives each its own job.
 
 Each command's output streams through a pseudo-terminal, so a human sees exactly what a
-standalone run would print (colors included). The output is also captured: the run ends with
+standalone run would print (colors included). Full logs are written under .pio/gate-logs/ with a bounded in-memory replay buffer: the run ends with
 a summary table, a replay of the failed step's last lines, and a single machine-friendly
 "RELEASE CHECK: PASS|FAIL" marker line — tail-ing the output is enough to know everything.
 """
@@ -44,11 +35,13 @@ import time
 from pathlib import Path
 
 import analysis_check
-from build_jobs import jobs_args
-from gate_groups import GROUPS, Group, coverage_gaps, default_envs
+from build_jobs import jobs_args, jobs_env
+from gate_groups import GROUPS, Group, check_envs, coverage_gaps, default_envs
 from git_utils import get_git_dirty
+from size_compare import FIRMWARE_GROUPS, read_build_sizes, save_sizes
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+TAIL_BYTES = 64 * 1024                               # Bounded replay buffer; full output stays on disk.
 TAIL_LINES = 50                                       # Replayed lines of a failed step.
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\r")    # ANSI escape sequences and bare CRs.
 
@@ -77,6 +70,7 @@ class Step:
         self.passed = False
         self.duration = 0.0
         self.output = bytearray()
+        self.log_path = PROJECT_DIR / ".pio" / "gate-logs" / f"{name}.log"
 
     def run(self) -> bool:
         print(f"\n{f' {self.name} '.center(78, '=')}")
@@ -85,10 +79,14 @@ class Step:
         def master_read(fd: int) -> bytes:
             data = os.read(fd, 4096)
             self.output.extend(data)
+            del self.output[:-TAIL_BYTES]
+            log.write(data)
             return data                               # pty.spawn() relays this to stdout.
 
         start = time.monotonic()
-        status = pty.spawn(self.argv, master_read)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.log_path.open("wb") as log:
+            status = pty.spawn(self.argv, master_read)
         self.duration = time.monotonic() - start
         self.passed = (os.waitstatus_to_exitcode(status) == 0)
         return self.passed
@@ -107,25 +105,26 @@ def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[st
         return [sys.executable, str(PROJECT_DIR / "scripts" / name), *args]
 
     host = group is None or group.host
+    native = group is None or group.native
     builds = group is None or bool(group.envs)
     tidies = group is None or bool(group.tidy)
     envs = [] if group is None else [arg for env in group.envs for arg in ("-e", env)]
     tidy = [] if group is None else ["--env", *group.tidy]
     steps = [
-        (host, Step("deps", deps_cmd)),
-        (builds, Step("build", [pio, "run", *envs, *jobs])),
-        (host, Step("test",  [pio, "test", "-e", "native_test"])),
-        (builds, Step("check", [pio, "check", *envs,
-                                "--fail-on-defect", "low",
-                                "--fail-on-defect", "medium",
-                                "--fail-on-defect", "high"])),
-        (tidies, Step("tidy", script("analysis_check.py", *tidy))),
+        (True, Step("deps", deps_cmd)),
         (host, Step("format", script("format_check.py"))),
         (host, Step("secrets", script("secret_check.py"))),
         (host, Step("lint", script("lint_check.py"))),
         (host, Step("workflows", script("workflow_check.py"))),
         (host, Step("typecheck", script("typecheck_check.py"))),
         (host, Step("pytest", script("pytest_check.py"))),
+        (builds, Step("build", [pio, "run", *envs, *jobs])),
+        (native, Step("test", [pio, "test", "-e", "native_test"])),
+        (builds, Step("check", [pio, "check", *envs,
+                                "--fail-on-defect", "low",
+                                "--fail-on-defect", "medium",
+                                "--fail-on-defect", "high"])),
+        (tidies, Step("tidy", script("analysis_check.py", *tidy))),
     ]
     return [step for wanted, step in steps if wanted]
 
@@ -138,11 +137,17 @@ def main() -> int:
                         help="install the pinned tooling into .venv before checking it")
     parser.add_argument("--group", choices=GROUPS, metavar="NAME",
                         help=f"run one CI group of the gate: {', '.join(GROUPS)}")
+    parser.add_argument("--sizes", type=Path, help="write this firmware group's build sizes for CI")
     args = parser.parse_args()
+    if args.sizes and args.group not in FIRMWARE_GROUPS:
+        parser.error("--sizes requires a firmware --group")
 
     os.chdir(PROJECT_DIR)
     os.environ.pop("VIRTUAL_ENV", None)               # a project .venv breaks pio's venv detection.
-    pio = find_pio()
+    group = None if args.group is None else GROUPS[args.group]
+    for name, value in jobs_env().items():
+        os.environ.setdefault(name, value)
+    pio = find_pio() if group is None or group.envs or group.tidy or group.native else ""
 
     # Step 0: same dirty rule as the firmware's GIT_DIRTY build flag.
     dirty = bool(get_git_dirty())
@@ -152,7 +157,10 @@ def main() -> int:
         print("RELEASE CHECK: FAIL (step: git status)")
         return 1
 
-    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), analysis_check.ENVIRONMENTS)
+    declared_tidy = check_envs(PROJECT_DIR / "platformio.ini")
+    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), declared_tidy)
+    if set(declared_tidy) != set(analysis_check.ENVIRONMENTS):
+        gaps.append("analysis_check.ENVIRONMENTS differs from platformio.ini check_* environments")
     if gaps:
         for gap in gaps:
             print(f"groups       FAIL   {gap}")
@@ -164,13 +172,21 @@ def main() -> int:
     if args.sync:
         deps_cmd.append("--sync")
 
-    steps = gate_steps(None if args.group is None else GROUPS[args.group], pio, deps_cmd, jobs_args())
+    steps = gate_steps(group, pio, deps_cmd, jobs_args())
 
     failed = None
     for step in steps:
         if not step.run():
             failed = step
             break
+        if step.name == "build" and args.sizes and group is not None:
+            try:
+                save_sizes(args.sizes, read_build_sizes(step.log_path, list(group.envs)))
+            except (OSError, ValueError) as error:
+                print(f"sizes: {error}")
+                step.passed = False
+                failed = step
+                break
 
     # --- Machine-friendly epilogue: summary table, failed-step replay, final marker. ---
     print(f"\n{' RELEASE CHECK SUMMARY '.center(78, '=')}")
@@ -191,6 +207,7 @@ def main() -> int:
     if failed is not None:
         print(f"FAILED STEP: {failed.name} — last {TAIL_LINES} lines:\n")
         print(failed.tail())
+        print(f"Full log: {failed.log_path}")
         print(f"\nRELEASE CHECK: FAIL (step: {failed.name})")
         return 1
 

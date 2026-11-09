@@ -1,0 +1,21 @@
+# Only inputs used by the image recipe and PlatformIO metadata belong in the build context.
+**
+!ci/
+!ci/toolchain.Dockerfile
+!requirements-dev.txt
+!requirements-ci.txt
+!ota/
+!ota/requirements.txt
+!platformio.ini
+!.clang-tidy
+!partitions_*.csv
+!scripts/
+!scripts/*.py
+!src/
+!src/**
+!lib/
+!lib/**
+!include/
+!include/**
+!bootloader/
+!bootloader/*.hex

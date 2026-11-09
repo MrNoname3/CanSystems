@@ -17,44 +17,24 @@
 Exits 1 (listing offenders) on any violation, 0 if the whole tree is clean.
 Usable standalone, as a git pre-commit hook, or as a step in release_check.py.
 
-clang-format lookup order: $CLANG_FORMAT, then `clang-format` on PATH (CI installs the pin
-from requirements-dev.txt), then the VS Code cpptools-bundled binary (the one the editor
-formats with locally). Keep that pin equal to the cpptools version so the gate never
-disagrees with format-on-save.
+The executable comes from the environment checked by deps_check.py: the project .venv
+when present, otherwise the running interpreter's bin directory.
 """
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from tooling import find_tool
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 EXECUTABLE_MODE = "100755"
 NOT_A_FILE_MODES = frozenset({"120000", "160000"})   # symlinks and submodule pointers
 CPP_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".tpp", ".ino", ".inl", ".ipp")
 
-# Bases under which the cpptools extension bundles its clang-format (local fallback).
-CPPTOOLS_BASES = [
-    Path.home() / ".var/app/com.visualstudio.code/data/vscode/extensions",  # VS Code Flatpak
-    Path.home() / ".vscode/extensions",
-    Path.home() / ".vscode-server/extensions",
-]
-
-
 def find_clang_format() -> str:
-    """Locate clang-format: explicit override, then PATH, then the cpptools bundle."""
-    override = os.environ.get("CLANG_FORMAT")
-    if override and Path(override).exists():
-        return override
-    on_path = shutil.which("clang-format")
-    if on_path is not None:
-        return on_path
-    for base in CPPTOOLS_BASES:
-        hits = sorted(base.glob("ms-vscode.cpptools-*/LLVM/bin/clang-format")) if base.is_dir() else []
-        if hits:
-            return str(hits[-1])
-    sys.exit("clang-format not found (set $CLANG_FORMAT, put it on PATH, or install the cpptools extension)")
+    return find_tool("clang-format")
 
 
 def git_ls_files(*patterns: str) -> list[str]:

@@ -11,6 +11,9 @@ inputs:
   group:
     description: The release-gate group whose environments to compare (scripts/gate_groups.py)
     required: true
+  current-sizes:
+    description: Sizes already measured by the release gate
+    required: true
 
 runs:
   using: composite
@@ -40,6 +43,7 @@ runs:
       env:
         BASE: ${{ steps.base.outputs.commit }}
         GROUP: ${{ inputs.group }}
+        CURRENT: ${{ inputs.current-sizes }}
       run: |
         baseline=()
         if [ -f ~/.cache/firmware-sizes.json ]; then
@@ -48,7 +52,7 @@ runs:
         fi
         mkdir -p ~/.cache
         python scripts/size_compare.py --commit "$BASE" --group "$GROUP" \
-          "${baseline[@]}" --save-sizes ~/.cache/firmware-sizes.json | tee "$RUNNER_TEMP/size.log"
+          "${baseline[@]}" --current-sizes "$CURRENT" --save-sizes ~/.cache/firmware-sizes.json | tee "$RUNNER_TEMP/size.log"
         {
           echo "## Firmware size of $GROUP vs \`$BASE\`"
           echo '```'

@@ -7,7 +7,7 @@
 #
 # The gate guards (format/lint/workflows/typecheck/pytest) find these in .venv automatically; PlatformIO
 # itself is NOT here - it runs from its own penv (`VIRTUAL_ENV="" ~/.platformio/penv/bin/pio`),
-# and CI installs platformio/intelhex on top of this file.
+# and CI installs pioarduino/intelhex in a separate /opt/platformio environment.
 #
 # Includes the OTA tool's runtime deps so pytest (which imports otaUpdate) and pyright can
 # resolve paho-mqtt/pyyaml/tqdm.

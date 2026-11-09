@@ -74,3 +74,11 @@ def test_a_group_builds_its_environments(monkeypatch: object) -> None:
     builds = _run(monkeypatch, "--group", "esp8266")
     assert builds.baseline == [["project_esp8266_rad", "project_esp8266_thermo"]]
     assert builds.current == [["project_esp8266_rad", "project_esp8266_thermo"]]
+
+
+def test_gate_sizes_avoid_rebuilding_current_firmware(monkeypatch: object, tmp_path: Path) -> None:
+    current, baseline = tmp_path / "current.json", tmp_path / "baseline.json"
+    size_compare.save_sizes(current, CURRENT)
+    size_compare.save_sizes(baseline, BASELINE)
+    builds = _run(monkeypatch, "--group", "esp32", "--current-sizes", str(current), "--baseline-sizes", str(baseline))
+    assert builds.current == [] and builds.baseline == []

@@ -33,7 +33,7 @@ from typing import cast
 from build_jobs import jobs_args
 from gate_groups import GROUPS
 
-FIRMWARE_GROUPS = [name for name, group in GROUPS.items() if group.envs and not group.host]
+FIRMWARE_GROUPS = [name for name, group in GROUPS.items() if group.envs and not group.host and not group.native]
 
 _SIZE_RE = re.compile(
     r"(Flash|RAM):\s+\[.*?\]\s+[\d.]+%\s+\(used\s+(\d+)\s+bytes\s+from\s+(\d+)\s+bytes\)",
@@ -69,7 +69,8 @@ def _build_and_capture(pio: str, envs: list[str], cwd: str | None = None) -> dic
     if cwd:
         cmd += ["-d", cwd]
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            env={**os.environ, "VIRTUAL_ENV": ""})
     lines: list[str] = []
     if proc.stdout is None:
         raise RuntimeError("subprocess stdout is None — Popen(..., stdout=PIPE) failed unexpectedly")
@@ -154,6 +155,16 @@ def _parse_lines(lines: list[str]) -> dict[str, Sizes]:
     return sizes
 
 
+def read_build_sizes(log: Path, envs: list[str]) -> dict[str, Sizes]:
+    """Read sizes from an already successful gate build; every requested environment is required."""
+    text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", log.read_text(encoding="utf-8", errors="replace"))
+    sizes = _parse_lines(text.splitlines())
+    missing = set(envs) - sizes.keys()
+    if missing:
+        raise ValueError(f"Missing firmware sizes in {log}: {', '.join(sorted(missing))}")
+    return {env: sizes[env] for env in envs}
+
+
 def save_sizes(path: Path, sizes: dict[str, Sizes]) -> None:
     path.write_text(json.dumps({env: asdict(size) for env, size in sizes.items()}, indent=2) + "\n",
                     encoding="utf-8")
@@ -229,6 +240,7 @@ def main() -> None:
         "--baseline-sizes", type=Path, metavar="FILE",
         help="read the baseline's sizes from FILE, written by --save-sizes, instead of building it",
     )
+    parser.add_argument("--current-sizes", type=Path, help="reuse the release gate build sizes without rebuilding")
     parser.add_argument(
         "--save-sizes", type=Path, metavar="FILE",
         help="write the current build's sizes to FILE",
@@ -239,7 +251,7 @@ def main() -> None:
     envs: list[str] = list(GROUPS[args.group].envs) if args.group else args.env or []
 
     baseline_sizes = load_sizes(args.baseline_sizes) if args.baseline_sizes else {}
-    if baseline_sizes:
+    if baseline_sizes and set(envs) <= baseline_sizes.keys():
         print(f"\n Baseline ({args.commit}) sizes read from {args.baseline_sizes}")
     else:
         print(f"\n Building baseline ({args.commit}) in temporary worktree...")
@@ -248,9 +260,14 @@ def main() -> None:
         if not baseline_sizes:
             sys.exit(1)
 
-    print("\n Building current state...")
-    print("═" * 68)
-    current_sizes = _build_and_capture(pio, envs)
+    if args.current_sizes:
+        current_sizes = load_sizes(args.current_sizes)
+        if not set(envs) <= current_sizes.keys():
+            sys.exit("Current gate sizes are incomplete; refusing an implicit rebuild")
+    else:
+        print("\n Building current state...")
+        print("═" * 68)
+        current_sizes = _build_and_capture(pio, envs)
     if not current_sizes:
         sys.exit(1)
     if args.save_sizes:
