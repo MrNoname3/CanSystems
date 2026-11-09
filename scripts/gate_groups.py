@@ -7,6 +7,7 @@ fails on it, so an environment added to platformio.ini cannot drop out of CI unn
 """
 
 import configparser
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,3 +56,20 @@ def coverage_gaps(envs: list[str], tidy: tuple[str, ...], groups: dict[str, Grou
     if len(hosts) != 1:
         gaps.append(f"{len(hosts)} groups run the native tests and the Python guards, not one")
     return gaps
+
+
+def check_envs(ini: Path) -> tuple[str, ...]:
+    """Every declared analysis environment, including ones not yet assigned to a group."""
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.read(ini, encoding="utf-8")
+    return tuple(section.removeprefix("env:") for section in parser.sections() if section.startswith("env:check_"))
+
+
+def ci_matrix(groups: dict[str, Group] = GROUPS) -> dict[str, list[dict[str, str | bool]]]:
+    """Firmware/analysis jobs; the host group has its own workflow job."""
+    return {"include": [{"group": name, "sizes": bool(group.envs)}
+                        for name, group in groups.items() if not group.host]}
+
+
+if __name__ == "__main__":
+    print(json.dumps(ci_matrix(), separators=(",", ":")))

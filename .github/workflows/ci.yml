@@ -42,6 +42,7 @@ jobs:
     outputs:
       ref: ${{ steps.pin.outputs.ref }}
       firmware: ${{ steps.changes.outputs.firmware }}
+      matrix: ${{ steps.groups.outputs.matrix }}
     env:
       TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
@@ -64,6 +65,10 @@ jobs:
             firmware=false
           fi
           echo "firmware=$firmware" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Generate the gate matrix
+        id: groups
+        run: echo "matrix=$(python3 scripts/gate_groups.py)" >> "$GITHUB_OUTPUT"
 
       - name: Name the image
         id: name
@@ -173,17 +178,7 @@ jobs:
         password: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     strategy:
       fail-fast: false    # every group reports, whichever fails first
-      matrix:
-        include:
-          - group: avr
-            sizes: true
-          - group: esp32
-            sizes: true
-          - group: esp8266
-            sizes: true
-          - group: tidy-avr
-          - group: tidy-esp32
-          - group: tidy-esp8266
+      matrix: ${{ fromJSON(needs.image.outputs.matrix) }}
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -195,7 +190,9 @@ jobs:
         run: echo /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Release gate (${{ matrix.group }})
-        run: python scripts/release_check.py --group ${{ matrix.group }}
+        env:
+          GROUP: ${{ matrix.group }}
+        run: python scripts/release_check.py --group "$GROUP"
 
       - name: Firmware size diff
         if: matrix.sizes

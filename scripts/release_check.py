@@ -45,7 +45,7 @@ from pathlib import Path
 
 import analysis_check
 from build_jobs import jobs_args
-from gate_groups import GROUPS, Group, coverage_gaps, default_envs
+from gate_groups import GROUPS, Group, check_envs, coverage_gaps, default_envs
 from git_utils import get_git_dirty
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -152,7 +152,10 @@ def main() -> int:
         print("RELEASE CHECK: FAIL (step: git status)")
         return 1
 
-    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), analysis_check.ENVIRONMENTS)
+    declared_tidy = check_envs(PROJECT_DIR / "platformio.ini")
+    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), declared_tidy)
+    if set(declared_tidy) != set(analysis_check.ENVIRONMENTS):
+        gaps.append("analysis_check.ENVIRONMENTS differs from platformio.ini check_* environments")
     if gaps:
         for gap in gaps:
             print(f"groups       FAIL   {gap}")
