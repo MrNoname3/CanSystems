@@ -98,6 +98,7 @@ NetworkHandler::NetworkErrorType NetworkHandler::connectWifi(void (*resetWdt)())
     networkErrState.setError(NetworkError::WIFI_CONFIG_ERROR);
     return networkErrState.getRawErrorState();
   }
+  Logger::get()->printf_P(PSTR("  SSID: %s\r\n"), ssid);
 #ifdef ESP8266
   WiFi.hostname(hostnameBuffer);
 #elif defined ESP32

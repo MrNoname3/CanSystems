@@ -251,11 +251,12 @@ bool Connectivity::publishStartupInfo() {
 bool Connectivity::connectToMqttServer() {
   LockGuard guard(mqttMutex);                                       // Exclusive PubSubClient access.
   BootProgress::set(BootStage::BrokerConnect);
+  // Printed before connect(): an unreachable broker hangs it into the watchdog, which leaves nothing printed after it.
+  Logger::get()->printf_P(PSTR("[MQTT] Connecting to: %s:%hu\r\n"), mqttCredentials.serverName, mqttCredentials.serverPort);
   const bool mqttConResult = mqttClient.connect(
       mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
       mqttCredentials.availabilityTopic, 1U, true, MqttTopics::getAvailOfflinePayload());
-  Logger::get()->printf_P(PSTR("[MQTT] Connecting to: %s:%hu %s\r\n  State: %s\r\n"),
-                          mqttCredentials.serverName, mqttCredentials.serverPort, Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+  Logger::get()->printf_P(PSTR("[MQTT] Connection: %s\r\n  State: %s\r\n"), Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) {
 #ifdef ESP8266
     char sslErr[64] = { '\0' };
