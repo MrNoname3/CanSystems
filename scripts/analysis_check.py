@@ -10,8 +10,8 @@ has exited. A diagnostic is no such evidence: a tool can crash after its first w
 complete without any.
 
 A clang error in a project file is a blind spot as well: clang-tidy skips whatever depends on
-the declaration it could not parse. So every one fails the gate, unless EXPECTED_ERRORS names the
-file for that environment and says why it cannot parse there.
+the declaration it could not parse. So every one fails the gate. A file written for another target,
+which cannot parse in an environment, is left out of it by PLATFORM_EXCLUSIONS, with the reason.
 
 The defects are counted here too, those in project files only. clang-tidy reports a finding in a
 library header whenever the path leading to it starts in project code, and no header filter drops
@@ -40,15 +40,18 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 ENVIRONMENTS = ("check_avr", "check_esp8266", "check_esp32")
 CLANG_TIDY_VERSION = "21.1.0"
 
-# Per environment, the project files clang is expected to fail on, as (glob, reason) pairs: sources
-# written for another target, whose headers or libraries this one does not have.
+# Per environment, the project files left out of it, as (glob, reason) pairs: files written for
+# another target, whose headers or libraries this one does not have. Another target's main is left
+# out by ENTRYPOINTS instead.
 ESP_NETWORK = "the ESP network and MQTT stack: no connectivity, <pgmspace.h> or C++ library on AVR"
 ESP_STORAGE = "the ESP configuration store: no LittleFS or C++ library on AVR"
 AVR_WIRE = "an ATmega328P sensor: Wire.setWireTimeout() is the AVR core's"
 AVR_OTA = "the ATmega328P's OTA, sized by PROGRAM_MEMORY_SIZE"
 AVR_LED = "the ATmega328P nodes' LED, on NeoPixelBus"
-EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
+PLATFORM_EXCLUSIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "check_avr": (
+        ("lib/canAlertDriver/*", ESP_NETWORK),
+        ("lib/messageRoute/*", ESP_NETWORK),
         ("lib/canMqttGateway/*", ESP_NETWORK),
         ("lib/connectivity/*", ESP_NETWORK),
         ("lib/haDiscovery/*", ESP_NETWORK),
@@ -59,7 +62,6 @@ EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/otaRegistry/*", ESP_NETWORK),
         ("lib/pubSubClient/*", ESP_NETWORK),
         ("lib/rfHandler/*", ESP_NETWORK),
-        ("src/main_esp*.cpp", ESP_NETWORK),
         ("lib/configHandler/*", ESP_STORAGE),
         ("lib/dataTransfer/*", ESP_STORAGE),
     ),
@@ -67,7 +69,6 @@ EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/CANDriver/*", "CAN: the ESP8266 core's SPI has no usingInterrupt()"),
         ("lib/canAlertDriver/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
         ("lib/canMqttGateway/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
-        ("src/main_esp32_can.cpp", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
         ("lib/ambientSensor/*", AVR_WIRE),
         ("lib/pcf8574/*", AVR_WIRE),
         ("lib/ota/*", AVR_OTA),
@@ -79,10 +80,38 @@ EXPECTED_ERRORS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/ota/*", AVR_OTA),
         ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
         ("lib/dfPlayer/*", "the ATmega328P's DFPlayer, on the AVR core's SoftwareSerial"),
-        ("src/main_esp8266_*.cpp", "the ESP8266 board's pin names and Connectivity constructor"),
-        ("src/main_atmega328_*.cpp", "the ATmega328P nodes' pins, watchdog and CAN handler"),
     ),
 }
+
+ENTRYPOINTS = {
+    "check_avr": ("main_atmega328_alert.cpp", "main_atmega328_irrigation.cpp"),
+    "check_esp32": ("main_esp32_can.cpp",),
+    "check_esp8266": ("main_esp8266_rad.cpp", "main_esp8266_thermo.cpp"),
+}
+
+
+def target_inputs(environment: str, inputs: Sequence[str]) -> list[str]:
+    """All compatible library files, including unused ones, and this target's entrypoints."""
+    selected: list[str] = []
+    for source in inputs:
+        path = project_file(source)
+        if path is None:
+            continue
+        if path.startswith("src/") and Path(path).name not in (*ENTRYPOINTS[environment], "main.cpp"):
+            continue
+        if not any(fnmatch(path, pattern) for pattern, _ in PLATFORM_EXCLUSIONS[environment]):
+            selected.append(source)
+    return selected
+
+
+def uncovered_inputs() -> list[str]:
+    """No own library/source may disappear from every target when exclusions change."""
+    inputs = [str(path) for folder in ("lib", "src") for path in (PROJECT_DIR / folder).rglob("*")
+              if path.suffix in (".c", ".cc", ".cpp", ".cxx", ".ino", ".h", ".hh", ".hpp", ".hxx")
+              and path.name != "main_native.cpp"]
+    covered = {source for env in ENVIRONMENTS for source in target_inputs(env, inputs)}
+    return sorted(str(Path(source).relative_to(PROJECT_DIR)) for source in inputs if source not in covered)
+
 
 ENVIRONMENT_HEADING = re.compile(r"^Checking (\S+) > clangtidy ")
 CLANG_ERROR = re.compile(r"^(\S+?):(\d+):\d+: error: (.*) \[clang-diagnostic-error\]$")
@@ -110,9 +139,18 @@ def run_check(pio: str, environments: Sequence[str]) -> tuple[int, str]:
                "check", "--verbose"]
     for environment in environments:
         command += ["-e", environment]
-    result = subprocess.run(command, cwd=PROJECT_DIR, capture_output=True, text=True,
-                            check=False, env={**os.environ, "VIRTUAL_ENV": ""})
-    return result.returncode, result.stdout + result.stderr
+    log_path = PROJECT_DIR / ".pio" / "analysis" / "driver.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as log:
+        with subprocess.Popen(command, cwd=PROJECT_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, env={**os.environ, "VIRTUAL_ENV": ""}) as process:
+            assert process.stdout is not None
+            for line in process.stdout:
+                log.write(line)
+                if line.startswith("analysis:"):
+                    print(line, end="", flush=True)
+            status = process.wait()
+    return status, log_path.read_text(encoding="utf-8")
 
 
 def clang_tidy_binary(output: str) -> str | None:
@@ -178,28 +216,16 @@ def project_file(path: str) -> str | None:
     return None if relative.parts[0] == ".pio" else relative.as_posix()
 
 
-def check_errors(per_environment: dict[str, list[str]]) -> tuple[list[str], list[str]]:
-    """The clang errors in project files that EXPECTED_ERRORS does not account for, and the
-    EXPECTED_ERRORS entries no error matched any more."""
-    unexpected: list[str] = []
-    unused: list[str] = []
+def check_errors(per_environment: dict[str, list[str]]) -> list[str]:
+    """The clang errors in project files."""
+    errors: list[str] = []
     for environment, lines in per_environment.items():
-        expected = EXPECTED_ERRORS.get(environment, ())
-        matched: set[str] = set()
         for line in lines:
             match = CLANG_ERROR.match(line)
-            if match is None:
-                continue
-            path = project_file(match.group(1))
-            if path is None:
-                continue
-            patterns = [pattern for pattern, _ in expected if fnmatch(path, pattern)]
-            if patterns:
-                matched.update(patterns)
-            else:
-                unexpected.append(f"{environment}: {path}:{match.group(2)}: {match.group(3)}")
-        unused += [f"{environment}: {pattern}" for pattern, _ in expected if pattern not in matched]
-    return unexpected, unused
+            path = None if match is None else project_file(match.group(1))
+            if match is not None and path is not None:
+                errors.append(f"{environment}: {path}:{match.group(2)}: {match.group(3)}")
+    return errors
 
 
 def project_defects(output: str) -> tuple[list[str], int]:
@@ -223,6 +249,10 @@ def main(argv: Sequence[str] = ()) -> int:
                         metavar="ENV", help=f"environments to analyse (default: {', '.join(ENVIRONMENTS)})")
     environments: list[str] = parser.parse_args(list(argv)).env
 
+    uncovered = uncovered_inputs()
+    if uncovered:
+        print(f"analysis: files excluded from every target: {uncovered}")
+        return 1
     pio = find_pio()
     status, output = run_check(pio, environments)
 
@@ -261,15 +291,13 @@ def main(argv: Sequence[str] = ()) -> int:
         for defect in defects:
             print(f"  {defect}")
 
-    unexpected, unused = check_errors(per_environment)
-    if unused:
-        print(f"analysis: EXPECTED_ERRORS entries nothing matched, to take out: {', '.join(unused)}")
-    if unexpected:
+    errors = check_errors(per_environment)
+    if errors:
         print("\nanalysis: clang could not parse project code, so clang-tidy skipped what depends on it:")
-        for error in unexpected:
+        for error in errors:
             print(f"  {error}")
-        print("Fix the include paths or flags of the check_* environment, or, for a source written for "
-              f"another target, add it to EXPECTED_ERRORS in {Path(__file__).name} with the reason.")
+        print("Fix the include paths or flags of the check_* environment, or, for a file written for "
+              f"another target, add it to PLATFORM_EXCLUSIONS in {Path(__file__).name} with the reason.")
         return 1
     return 1 if defects else status
 
