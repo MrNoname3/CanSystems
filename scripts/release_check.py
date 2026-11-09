@@ -38,6 +38,7 @@ import analysis_check
 from build_jobs import jobs_args
 from gate_groups import GROUPS, Group, check_envs, coverage_gaps, default_envs
 from git_utils import get_git_dirty
+from size_compare import FIRMWARE_GROUPS, read_build_sizes, save_sizes
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 TAIL_BYTES = 64 * 1024                               # Bounded replay buffer; full output stays on disk.
@@ -136,7 +137,10 @@ def main() -> int:
                         help="install the pinned tooling into .venv before checking it")
     parser.add_argument("--group", choices=GROUPS, metavar="NAME",
                         help=f"run one CI group of the gate: {', '.join(GROUPS)}")
+    parser.add_argument("--sizes", type=Path, help="write this firmware group's build sizes for CI")
     args = parser.parse_args()
+    if args.sizes and args.group not in FIRMWARE_GROUPS:
+        parser.error("--sizes requires a firmware --group")
 
     os.chdir(PROJECT_DIR)
     os.environ.pop("VIRTUAL_ENV", None)               # a project .venv breaks pio's venv detection.
@@ -173,6 +177,14 @@ def main() -> int:
         if not step.run():
             failed = step
             break
+        if step.name == "build" and args.sizes and group is not None:
+            try:
+                save_sizes(args.sizes, read_build_sizes(step.log_path, list(group.envs)))
+            except (OSError, ValueError) as error:
+                print(f"sizes: {error}")
+                step.passed = False
+                failed = step
+                break
 
     # --- Machine-friendly epilogue: summary table, failed-step replay, final marker. ---
     print(f"\n{' RELEASE CHECK SUMMARY '.center(78, '=')}")

@@ -200,13 +200,18 @@ jobs:
       - name: Release gate (${{ matrix.group }})
         env:
           GROUP: ${{ matrix.group }}
-        run: python scripts/release_check.py --group "$GROUP"
+          SIZES: ${{ matrix.sizes }}
+        run: |
+          sizes=()
+          if [ "$SIZES" = true ]; then sizes=(--sizes "$RUNNER_TEMP/current-sizes.json"); fi
+          python scripts/release_check.py --group "$GROUP" "${sizes[@]}"
 
       - name: Firmware size diff
         if: matrix.sizes
         uses: ./.github/actions/size-diff
         with:
           group: ${{ matrix.group }}
+          current-sizes: ${{ runner.temp }}/current-sizes.json
 
   coverage:
     # Native-test line coverage over lib/ (gcovr); no coverage threshold, it fails only when
