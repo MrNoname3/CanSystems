@@ -29,6 +29,12 @@ def jobs_args(cpu_max: Path = CPU_MAX) -> list[str]:
     return [] if jobs is None else ["--jobs", str(jobs)]
 
 
+def jobs_env(cpu_max: Path = CPU_MAX) -> dict[str, str]:
+    """The same limit for the commands that take no --jobs, such as `pio test`, which read it here."""
+    jobs = quota_jobs(cpu_max)
+    return {} if jobs is None else {"PLATFORMIO_RUN_JOBS": str(jobs)}
+
+
 def analysis_jobs(cpu_max: Path = CPU_MAX, memory_max: Path = MEMORY_MAX,
                   memory_current: Path = MEMORY_CURRENT) -> int:
     """At most four tidy processes, one per whole CPU and per GiB of available memory.

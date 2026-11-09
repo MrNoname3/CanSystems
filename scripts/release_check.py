@@ -35,7 +35,7 @@ import time
 from pathlib import Path
 
 import analysis_check
-from build_jobs import jobs_args
+from build_jobs import jobs_args, jobs_env
 from gate_groups import GROUPS, Group, check_envs, coverage_gaps, default_envs
 from git_utils import get_git_dirty
 from size_compare import FIRMWARE_GROUPS, read_build_sizes, save_sizes
@@ -145,6 +145,8 @@ def main() -> int:
     os.chdir(PROJECT_DIR)
     os.environ.pop("VIRTUAL_ENV", None)               # a project .venv breaks pio's venv detection.
     group = None if args.group is None else GROUPS[args.group]
+    for name, value in jobs_env().items():
+        os.environ.setdefault(name, value)
     pio = find_pio() if group is None or group.envs or group.tidy or group.native else ""
 
     # Step 0: same dirty rule as the firmware's GIT_DIRTY build flag.

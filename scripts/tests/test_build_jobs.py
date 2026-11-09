@@ -32,3 +32,11 @@ def test_no_cgroup_file_keeps_the_default(tmp_path: Path) -> None:
 
 def test_an_unreadable_quota_keeps_the_default(tmp_path: Path) -> None:
     assert build_jobs.jobs_args(_cpu_max(tmp_path, "garbage\n")) == []
+
+
+def test_the_environment_carries_the_quota_for_commands_without_jobs(tmp_path: Path) -> None:
+    assert build_jobs.jobs_env(_cpu_max(tmp_path, "150000 100000\n")) == {"PLATFORMIO_RUN_JOBS": "2"}
+
+
+def test_without_a_quota_the_environment_leaves_pio_its_default(tmp_path: Path) -> None:
+    assert build_jobs.jobs_env(_cpu_max(tmp_path, "max 100000\n")) == {}
