@@ -75,7 +75,9 @@ def run_units(command: list[str], inputs: Sequence[str], directory: Path, jobs: 
     def batch(paths: list[str]) -> None:
         nonlocal count
         with ThreadPoolExecutor(max_workers=jobs) as pool:
-            pending = {pool.submit(run_one, [command[0], *options, source, *flags], source,
+            pending = {pool.submit(run_one, [command[0], *options,
+                                   "--extra-arg-before=-x" + ("c++-header" if source in headers else "c++"),
+                                   source, *flags], source,
                                    directory / f"unit-{count + i:04d}", timeout): source
                        for i, source in enumerate(paths)}
             for future in as_completed(pending):

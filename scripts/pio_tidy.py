@@ -29,7 +29,6 @@ class CheckedClangTidy(ClangtidyCheckTool):
         if not selected:
             raise RuntimeError("clang-tidy has no input files")
         options = [arg for arg in cmd[1:separator] if arg not in inputs]
-        options.append("--extra-arg=-xc++")
         command = [cmd[0], *options, *selected, *cmd[separator:]]
         jobs = analysis_jobs()
         print(f"analysis: {self.envname}: {len(selected)} inputs, {jobs} worker(s)", flush=True)

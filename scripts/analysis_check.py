@@ -48,6 +48,7 @@ ESP_STORAGE = "the ESP configuration store: no LittleFS or C++ library on AVR"
 AVR_WIRE = "an ATmega328P sensor: Wire.setWireTimeout() is the AVR core's"
 AVR_OTA = "the ATmega328P's OTA, sized by PROGRAM_MEMORY_SIZE"
 AVR_LED = "the ATmega328P nodes' LED, on NeoPixelBus"
+AVR_DFPLAYER = "the ATmega328P's DFPlayer, on the AVR core's SoftwareSerial"
 PLATFORM_EXCLUSIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "check_avr": (
         ("lib/canAlertDriver/*", ESP_NETWORK),
@@ -66,6 +67,10 @@ PLATFORM_EXCLUSIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/dataTransfer/*", ESP_STORAGE),
     ),
     "check_esp8266": (
+        ("lib/dfPlayer/*", AVR_DFPLAYER),
+        ("lib/pumpControl/*", AVR_LED),
+        ("lib/moistureReader/*", AVR_LED),
+        ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
         ("lib/CANDriver/*", "CAN: the ESP8266 core's SPI has no usingInterrupt()"),
         ("lib/canAlertDriver/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
         ("lib/canMqttGateway/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
@@ -79,7 +84,7 @@ PLATFORM_EXCLUSIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("lib/pcf8574/*", AVR_WIRE),
         ("lib/ota/*", AVR_OTA),
         ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
-        ("lib/dfPlayer/*", "the ATmega328P's DFPlayer, on the AVR core's SoftwareSerial"),
+        ("lib/dfPlayer/*", AVR_DFPLAYER),
     ),
 }
 
