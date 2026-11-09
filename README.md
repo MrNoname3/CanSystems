@@ -218,42 +218,66 @@ python -m venv .venv                    # release-gate Python tooling + OTA runt
 
 ### Release gate
 
-`scripts/release_check.py` chains eleven steps fail-fast: check that the pinned tooling is the
-tooling installed (`deps_check.py` — in the project `.venv`, or in the interpreter it runs under
-when there is none), build all environments, run the native test suite, static
-analysis (`pio check` — where a **single defect of any severity** via
-`--fail-on-defect low/medium/high` fails the gate, unlike a bare `pio check`, which reports
-SUCCESS even with findings) in two steps — cppcheck over every environment, then clang-tidy over
-the `check_*` ones, which are the same builds with the framework include paths clang-tidy needs
-to parse anything — then the Python guards — clang-format + final-newline
-(`format_check.py`), no key, address or private host in a tracked file (`secret_check.py`), ruff lint (`lint_check.py`), actionlint + zizmor over the CI workflows
-(`workflow_check.py`), pyright strict (`typecheck_check.py`), and pytest (`pytest_check.py`). Every guard is **required**: a missing tool fails the gate rather
-than skipping, so set up the dev venv (above) before running it. The dependency check comes
-first because every guard after it runs out of the `.venv`: one that has drifted from the pins
-reports on versions the project does not pin, and the run still passes. Step 0 checks the git
-tree with the same rule the firmware uses for its `GIT_DIRTY` flag.
+`scripts/release_check.py` chains its steps fail-fast: check that the pinned tooling is the tooling
+installed (`deps_check.py`), then the quick guards - clang-format + final-newline
+(`format_check.py`), no key, address or private host in a tracked file (`secret_check.py`), ruff
+lint (`lint_check.py`), actionlint + zizmor over the CI workflows (`workflow_check.py`), pyright
+strict (`typecheck_check.py`) and pytest (`pytest_check.py`) - then the builds, the native test
+suite, and static analysis in two steps: cppcheck over every environment, then clang-tidy over the
+`check_*` ones, which are the same builds with the framework include paths clang-tidy needs to parse
+anything. cppcheck runs with `--fail-on-defect low/medium/high`, so a **single defect of any
+severity** fails the gate, unlike a bare `pio check`, which reports SUCCESS even with findings.
+Every guard is **required**: a missing tool fails the gate rather than skipping, so set up the dev
+venv (above) before running it. The guards run their tools out of the environment `deps_check.py`
+checked - the project `.venv`, or the interpreter the gate runs under when there is none - and an
+unrelated copy earlier on `PATH` cannot stand in for one. Step 0 checks the git tree with the same
+rule the firmware uses for its `GIT_DIRTY` flag.
 
 ```sh
-python3 scripts/release_check.py            # build + test + check; dirty tree is a warning
-python3 scripts/release_check.py --strict   # release mode: a dirty tree fails immediately
-python3 scripts/release_check.py --sync     # install the pinned tooling into .venv first
-python3 scripts/release_check.py --group esp32  # one CI group of it (scripts/gate_groups.py)
+python3 scripts/release_check.py                  # whole gate; a dirty tree is a warning
+python3 scripts/release_check.py --strict         # release mode: a dirty tree fails immediately
+python3 scripts/release_check.py --sync           # install the pinned tooling into .venv first
+python3 scripts/release_check.py --group host     # the quick guards alone, without PlatformIO
+python3 scripts/release_check.py --group esp32    # one CI group of it (scripts/gate_groups.py)
 ```
 
-CI runs the gate split into those groups, one job each, and the native coverage run beside them,
-all in a container image with every toolchain and the pinned tooling installed
-(`ci/toolchain.Dockerfile`). CI builds and pushes it whenever that recipe, one of the
-requirements files or a `platformio.ini` option that decides which packages get installed changes
-(`scripts/toolchain_key.py`). The gate fails when the
-groups leave an environment out or cover one twice. A push that changes nothing but Markdown runs
-the host group alone, which checks the format of the Markdown and scans it for secrets: no firmware
-can differ.
+Every group checks the dependencies first, so `--sync` works with any of them. Each step streams
+its output unchanged (through a pseudo-terminal, colors included) and keeps a full log under
+`.pio/gate-logs/`. The run ends machine-friendly: a summary table, the last lines of the failed
+step, and a final `RELEASE CHECK: PASS|FAIL (step: <name>)` marker line - `tail` is enough to know
+everything. Exit code is 0 only on a fully clean run.
 
-Each command streams its output unchanged (through a pseudo-terminal, colors included), so a
-human sees exactly what standalone runs would print. The run ends machine-friendly: a summary
-table, the last 50 lines of the failed step (ANSI-stripped), and a final
-`RELEASE CHECK: PASS|FAIL (step: <name>)` marker line — `tail` is enough to know everything.
-Exit code is 0 only on a fully clean run (~5 minutes).
+`scripts/analysis_check.py` does not trust `pio check` to tell whether clang-tidy ran: that passes
+a crashed tool and drops clang's own errors. So `scripts/pio_tidy.py` keeps PlatformIO's compiler
+configuration but replaces its clang-tidy driver. Each input runs as its own process, with a timeout
+and a log under `.pio/analysis/`, and passes only on an exit status and dependency output that show
+it parsed its input; every library header gets a pass of its own. A clang error in project code
+fails the gate, as clang-tidy skips whatever depends on it. A file written for another target is
+left out of an environment by `PLATFORM_EXCLUSIONS`, with the reason; the files left out are still
+parsed, an entry none of whose files fails to parse any more fails as stale, and so does a file left
+out of every environment. The number of tidy processes follows the CPUs and the memory the gate may
+use (`build_jobs.analysis_jobs()`).
+
+CI runs the gate split into the groups of `scripts/gate_groups.py`, one job each, and generates its
+matrix from them; the gate fails when the groups leave a default or `check_*` environment out or
+cover one twice. A push that changes nothing but Markdown runs the host group alone, which checks
+the format of the Markdown and scans it for secrets: no firmware can differ. When the push's base
+cannot be fetched and compared, everything runs. The jobs run in the image `ci/toolchain.Dockerfile`
+builds: the pinned Python tooling, and PlatformIO with every toolchain in a venv of its own. CI
+builds and pushes it whenever what decides its contents changes (`scripts/toolchain_key.py`). A
+registry that answers the lookup with an error other than a missing or refused image fails the job
+instead of starting a rebuild.
+
+A firmware group's job hands the sizes its build measured to the size comparison (`--sizes FILE`),
+which then builds only the baseline. On a release tag, the ESP groups also pass the firmware they
+checked to the release job through the cache both forges provide, with a manifest naming the commit,
+the group and each binary's SHA-256; the release job refuses a bundle that does not match, and
+builds through the gate when there is none.
+
+CI also runs `scripts/coverage_check.py`: the native tests, instrumented, and a gcovr report over
+`lib/` under `.pio/coverage/`, leaving out the upstream `DFPlayerMiniFast` driver. It fails when
+the line coverage falls below the floor in `ci/coverage-baseline.json`, which only a reviewed
+commit changes; `--record-baseline` writes a floor from a local measurement for that review.
 
 ## Gotchas
 
