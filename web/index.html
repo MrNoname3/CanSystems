@@ -70,7 +70,8 @@
       <label>Wi-Fi SSID (not for Ethernet boards) <input name="ssid"></label>
       <label>Wi-Fi password <input name="password" type="password"></label>
       <label>MQTT broker host <input name="mqttServerUrl" required></label>
-      <label>MQTT broker port <input name="mqttServerPort" type="number" min="1" max="65535" value="8883" required></label>
+      <!-- Text, not type="number": a focused number field steps its value when the page is scrolled over it. -->
+      <label>MQTT broker port <input name="mqttServerPort" type="text" inputmode="numeric" pattern="[0-9]+" value="8883" required></label>
       <label>MQTT username <input name="mqttUserName" required></label>
       <label>MQTT password <input name="mqttPassword" type="password" required></label>
       <label class="inline"><input name="haDiscovery" type="checkbox"> Home Assistant discovery</label>
