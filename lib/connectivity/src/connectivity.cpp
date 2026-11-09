@@ -256,7 +256,7 @@ bool Connectivity::connectToMqttServer() {
   const bool mqttConResult = mqttClient.connect(
       mqttCredentials.clientName, mqttCredentials.userName, mqttCredentials.password,
       mqttCredentials.availabilityTopic, 1U, true, MqttTopics::getAvailOfflinePayload());
-  Logger::get()->printf_P(PSTR("[MQTT] Connection: %s\r\n  State: %s\r\n"), Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
+  Logger::get()->printf_P(PSTR("  Connection: %s\r\n  State: %s\r\n"), Str::getStateStr(mqttConResult), getMqttStatusStr(mqttClient.state()));
   if(!mqttConResult) {
 #ifdef ESP8266
     char sslErr[64] = { '\0' };
