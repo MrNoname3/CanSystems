@@ -109,11 +109,25 @@ def target_inputs(environment: str, inputs: Sequence[str]) -> list[str]:
     return selected
 
 
+def project_inputs() -> list[str]:
+    """All own C/C++ inputs; the native smoke main belongs to the native group."""
+    return [str(path) for folder in ("lib", "src") for path in (PROJECT_DIR / folder).rglob("*")
+            if path.suffix in (".c", ".cc", ".cpp", ".cxx", ".ino", ".h", ".hh", ".hpp", ".hxx")
+            and path.name != "main_native.cpp"]
+
+
+def validate_inputs(environment: str, inputs: Sequence[str]) -> None:
+    """Source filters may not silently remove an assigned file from a successful analysis."""
+    actual = {str(Path(source).resolve()) for source in inputs}
+    expected = set(target_inputs(environment, project_inputs()))
+    missing = expected - actual
+    if missing:
+        raise ValueError(f"{environment}: missing analysis inputs: {sorted(missing)}")
+
+
 def uncovered_inputs() -> list[str]:
     """No own library/source may disappear from every target when exclusions change."""
-    inputs = [str(path) for folder in ("lib", "src") for path in (PROJECT_DIR / folder).rglob("*")
-              if path.suffix in (".c", ".cc", ".cpp", ".cxx", ".ino", ".h", ".hh", ".hpp", ".hxx")
-              and path.name != "main_native.cpp"]
+    inputs = project_inputs()
     covered = {source for env in ENVIRONMENTS for source in target_inputs(env, inputs)}
     return sorted(str(Path(source).relative_to(PROJECT_DIR)) for source in inputs if source not in covered)
 

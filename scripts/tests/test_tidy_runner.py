@@ -57,6 +57,8 @@ def test_headers_are_checked_independently_even_when_sources_include_them(tmp_pa
     seen: list[str] = []
 
     def run_one(command: list[str], path: str, prefix: Path, timeout: float) -> tidy_runner.Result:
+        expected_language = "c++" if path == source else "c++-header"
+        assert f"--extra-arg-before=-x{expected_language}" in command
         seen.append(path)
         return tidy_runner.Result(path, 0, 0.1, prefix, frozenset({source, header}))
 
@@ -79,3 +81,13 @@ def test_a_parse_failure_keeps_header_checks(tmp_path: Path, monkeypatch: object
     assert tidy_runner.run_units(["clang-tidy", source, header, "--"], [source, header], tmp_path, 1,
                                  lambda result: None) == (1, 2)
     assert seen == [source, header]
+
+
+def test_source_filters_cannot_drop_assigned_inputs() -> None:
+    import pytest
+
+    inputs = analysis_check.project_inputs()
+    analysis_check.validate_inputs("check_avr", inputs)
+    assigned = analysis_check.target_inputs("check_avr", inputs)
+    with pytest.raises(ValueError, match="missing analysis inputs"):
+        analysis_check.validate_inputs("check_avr", [source for source in inputs if source != assigned[0]])

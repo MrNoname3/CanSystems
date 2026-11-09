@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import platformio.check.tools
-from analysis_check import CLANG_TIDY_VERSION, PROJECT_DIR, clang_tidy_version, target_inputs
+from analysis_check import CLANG_TIDY_VERSION, PROJECT_DIR, clang_tidy_version, target_inputs, validate_inputs
 from build_jobs import analysis_jobs
 from platformio.__main__ import main
 from platformio.check.tools.clangtidy import ClangtidyCheckTool
@@ -25,6 +25,7 @@ class CheckedClangTidy(ClangtidyCheckTool):
             raise RuntimeError(f"Expected clang-tidy {CLANG_TIDY_VERSION}: {cmd[0]}")
         separator = cmd.index("--")
         inputs = [arg for arg in cmd[1:separator] if not arg.startswith("-") and Path(arg).is_file()]
+        validate_inputs(self.envname, inputs)
         selected = target_inputs(self.envname, inputs)
         if not selected:
             raise RuntimeError("clang-tidy has no input files")
