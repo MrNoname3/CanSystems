@@ -13,7 +13,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 ENVS = ["alpha", "beta", "native_test"]
 TIDY = ("check_alpha",)
 GROUPS = {
-    "host": Group(envs=("native_test",), host=True),
+    "host": Group(envs=("native_test",), host=True, native=True),
     "firmware": Group(envs=("alpha", "beta")),
     "tidy": Group(tidy=("check_alpha",)),
 }
@@ -52,7 +52,7 @@ def test_a_check_environment_in_no_group_is_named() -> None:
 def test_the_host_steps_belong_to_one_group() -> None:
     groups = {**GROUPS, "tidy": Group(tidy=("check_alpha",), host=True)}
     assert gate_groups.coverage_gaps(ENVS, TIDY, groups) == [
-        "2 groups run the native tests and the Python guards, not one"]
+        "2 groups run the Python guards, not one"]
 
 
 def test_default_envs_reads_lists_split_by_lines_or_commas(tmp_path: Path) -> None:

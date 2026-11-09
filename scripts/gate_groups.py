@@ -1,7 +1,7 @@
 """The parts the release gate splits into for CI, one job each.
 
 A group names the default environments it builds and cppchecks, the check_* environments it
-clang-tidies, and whether it runs the native tests and the Python guards. Together the groups do
+clang-tidies, and whether it runs the native tests or the Python guards. Together the groups do
 what the whole gate does: coverage_gaps() lists what they would miss or do twice, and the gate
 fails on it, so an environment added to platformio.ini cannot drop out of CI unnoticed.
 """
@@ -17,11 +17,13 @@ from pathlib import Path
 class Group:
     envs: tuple[str, ...] = ()      # default environments it builds and cppchecks
     tidy: tuple[str, ...] = ()      # check_* environments it runs clang-tidy over
-    host: bool = False              # the native tests and the Python guards
+    host: bool = False              # the Python guards
+    native: bool = False            # the native test suite
 
 
 GROUPS: dict[str, Group] = {
-    "host": Group(envs=("native_test",), host=True),
+    "host": Group(host=True),
+    "native": Group(envs=("native_test",), native=True),
     "avr": Group(envs=("nanoatmega328_alert", "nanoatmega328_irrigation")),
     "esp32": Group(envs=("project_esp32_can",)),
     "esp8266": Group(envs=("project_esp8266_rad", "project_esp8266_thermo")),
@@ -54,7 +56,10 @@ def coverage_gaps(envs: list[str], tidy: tuple[str, ...], groups: dict[str, Grou
                  if env not in wanted]
     hosts = [name for name, group in groups.items() if group.host]
     if len(hosts) != 1:
-        gaps.append(f"{len(hosts)} groups run the native tests and the Python guards, not one")
+        gaps.append(f"{len(hosts)} groups run the Python guards, not one")
+    natives = [name for name, group in groups.items() if group.native]
+    if len(natives) != 1:
+        gaps.append(f"{len(natives)} groups run the native tests, not one")
     return gaps
 
 
@@ -67,7 +72,7 @@ def check_envs(ini: Path) -> tuple[str, ...]:
 
 def ci_matrix(groups: dict[str, Group] = GROUPS) -> dict[str, list[dict[str, str | bool]]]:
     """Firmware/analysis jobs; the host group has its own workflow job."""
-    return {"include": [{"group": name, "sizes": bool(group.envs)}
+    return {"include": [{"group": name, "sizes": bool(group.envs) and not group.native}
                         for name, group in groups.items() if not group.host]}
 
 
