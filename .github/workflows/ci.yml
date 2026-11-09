@@ -89,18 +89,9 @@ jobs:
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
-          registry=${REF%%/*}; path=${REF#*/}; repository=${path%:*}; tag=${path##*:}
-          challenge=$(curl -sS -o /dev/null -D - "https://$registry/v2/" | tr -d '\r' | sed -n 's/^[Ww]ww-[Aa]uthenticate: Bearer //p')
-          realm=$(echo "$challenge" | sed -E 's/.*realm="([^"]+)".*/\1/')
-          service=$(echo "$challenge" | sed -E 's/.*service="([^"]+)".*/\1/')
-          bearer=$(curl -fsS -u "$GITHUB_REPOSITORY_OWNER:$TOKEN" \
-            "$realm?service=$service&scope=repository:$repository:pull" | jq -r '.token // .access_token')
-          status=$(curl -s -o "$RUNNER_TEMP/manifest" -w '%{http_code}' -H "Authorization: Bearer $bearer" \
-            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
-            "https://$registry/v2/$repository/manifests/$tag")
-          echo "manifest: HTTP $status"
-          if [ "$status" = 200 ]; then
-            echo "digest=sha256:$(sha256sum < "$RUNNER_TEMP/manifest" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          digest=$(python3 scripts/registry_image.py "$REF")
+          if [ -n "$digest" ]; then
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push the image
@@ -110,13 +101,15 @@ jobs:
         env:
           REF: ${{ steps.name.outputs.ref }}
         run: |
+          as_root=()
+          if [ "$(id -u)" != 0 ]; then as_root=(sudo); fi
           if ! command -v buildah > /dev/null; then
-            apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq buildah > /dev/null
+            "${as_root[@]}" apt-get update -qq
+            "${as_root[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq buildah > /dev/null
           fi
-          buildah --storage-driver vfs build --isolation chroot -f ci/toolchain.Dockerfile -t "$REF" .
-          echo "$TOKEN" | buildah login --username "$GITHUB_REPOSITORY_OWNER" --password-stdin "${REF%%/*}"
-          buildah --storage-driver vfs push --digestfile "$RUNNER_TEMP/digest" "$REF"
+          "${as_root[@]}" buildah --storage-driver vfs build --isolation chroot -f ci/toolchain.Dockerfile -t "$REF" .
+          echo "$TOKEN" | "${as_root[@]}" buildah login --username "$GITHUB_REPOSITORY_OWNER" --password-stdin "${REF%%/*}"
+          "${as_root[@]}" buildah --storage-driver vfs push --digestfile "$RUNNER_TEMP/digest" "$REF"
           echo "digest=$(cat "$RUNNER_TEMP/digest")" >> "$GITHUB_OUTPUT"
 
       - name: Pin the image by digest
