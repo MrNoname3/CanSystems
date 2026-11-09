@@ -59,3 +59,14 @@ def test_the_projects_own_requirements_parse(tmp_path: Path) -> None:
     assert lines, "requirements-dev.txt yielded no requirements"
     names = {Requirement(line).name for line in lines}          # raises on anything unparseable
     assert {"ruff", "pytest", "packaging"} <= names
+
+
+def test_interpreters_sharing_a_binary_are_distinct_environments(tmp_path: Path, monkeypatch: object) -> None:
+    venv = tmp_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    python = venv / "bin" / "python"
+    python.symlink_to(sys.executable)
+    monkeypatch.setattr(deps_check, "VENV_PYTHON", python)   # type: ignore[attr-defined]
+    assert deps_check.needs_reexec(python)
+    monkeypatch.setattr(sys, "prefix", str(venv))   # type: ignore[attr-defined]
+    assert not deps_check.needs_reexec(python)

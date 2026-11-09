@@ -10,29 +10,21 @@ when what they need is absent - the OTA deps (paho-mqtt, tqdm, pyyaml) via
 pytest.importorskip in ota/tests, git via a skipif in scripts/tests - so an incomplete
 environment still does not hard-fail mid-run.
 
-pytest lookup order: $PYTEST, then `pytest` on PATH, then the project-root .venv.
+The executable comes from the environment checked by deps_check.py: the project .venv
+when present, otherwise the running interpreter's bin directory.
 """
 
-import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from tooling import find_tool
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 
 def find_pytest() -> str:
-    override = os.environ.get("PYTEST")
-    if override and Path(override).exists():
-        return override
-    on_path = shutil.which("pytest")
-    if on_path is not None:
-        return on_path
-    local = PROJECT_DIR / ".venv" / "bin" / "pytest"
-    if local.exists():
-        return str(local)
-    sys.exit("pytest not found (set $PYTEST, put it on PATH, or install requirements-dev.txt into .venv)")
+    return find_tool("pytest")
 
 
 def main() -> int:

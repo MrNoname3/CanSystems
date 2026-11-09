@@ -5,30 +5,22 @@ Runs ruff (using the config in pyproject.toml) over ota/, scripts/, test/ and we
 required: if it is not found the gate fails (install requirements-dev.txt into .venv).
 Only linting is run; `ruff format` is deliberately not used (see pyproject.toml).
 
-ruff lookup order: $RUFF, then `ruff` on PATH, then the project-root .venv.
+The executable comes from the environment checked by deps_check.py: the project .venv
+when present, otherwise the running interpreter's bin directory.
 """
 
-import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from tooling import find_tool
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 TARGETS = ["ota", "scripts", "test", "web"]
 
 
 def find_ruff() -> str:
-    override = os.environ.get("RUFF")
-    if override and Path(override).exists():
-        return override
-    on_path = shutil.which("ruff")
-    if on_path is not None:
-        return on_path
-    local = PROJECT_DIR / ".venv" / "bin" / "ruff"
-    if local.exists():
-        return str(local)
-    sys.exit("ruff not found (set $RUFF, put it on PATH, or install requirements-dev.txt into .venv)")
+    return find_tool("ruff")
 
 
 def main() -> int:

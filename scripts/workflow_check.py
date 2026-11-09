@@ -6,29 +6,16 @@ shellcheck over every `run:` script. zizmor audits the workflows and the composi
 security mistakes (configured in .github/zizmor.yml), offline: the audits that would ask GitHub's
 API about the actions referenced stay out. All three tools are required, from requirements-dev.txt.
 
-Lookup order for each: $ACTIONLINT / $ZIZMOR / $SHELLCHECK, then PATH, then the project-root .venv.
+Every executable comes from the environment checked by deps_check.py (.venv locally).
 """
 
-import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from tooling import find_tool
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-
-
-def find_tool(name: str) -> str:
-    override = os.environ.get(name.upper())
-    if override and Path(override).exists():
-        return override
-    on_path = shutil.which(name)
-    if on_path is not None:
-        return on_path
-    local = PROJECT_DIR / ".venv" / "bin" / name
-    if local.exists():
-        return str(local)
-    sys.exit(f"{name} not found (set ${name.upper()}, put it on PATH, or install requirements-dev.txt into .venv)")
 
 
 def version(tool: str) -> str:
