@@ -29,22 +29,14 @@ defaults:
     shell: bash
 
 jobs:
-  image:
-    # The toolchain image the gate jobs run in, tagged with a hash of what goes into it
-    # (scripts/toolchain_key.py) and handed on pinned by digest. It is built and pushed only when the
-    # registry has no image with that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to
-    # ghcr.io with the job's own token.
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # a build installs every toolchain and pushes some 2GB; a hang still ends
+    timeout-minutes: 5
     permissions:
       contents: read
-      packages: write
     outputs:
-      ref: ${{ steps.pin.outputs.ref }}
       firmware: ${{ steps.changes.outputs.firmware }}
       matrix: ${{ steps.groups.outputs.matrix }}
-    env:
-      TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,6 +61,27 @@ jobs:
       - name: Generate the gate matrix
         id: groups
         run: echo "matrix=$(python3 scripts/gate_groups.py)" >> "$GITHUB_OUTPUT"
+
+  image:
+    # The image every job below runs in, tagged with a hash of what goes into it
+    # (scripts/toolchain_key.py) and handed on pinned by digest. It is built and pushed only when the
+    # registry has no image with that tag: on the forge with the PACKAGES_TOKEN secret, on GitHub to
+    # ghcr.io with the job's own token.
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # a build installs every toolchain and pushes some 2GB; a hang still ends
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.pin.outputs.ref }}
+    env:
+      TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Name the image
         id: name
@@ -123,7 +136,7 @@ jobs:
           echo "ref=${REF%:*}@$DIGEST" >> "$GITHUB_OUTPUT"
 
   host:
-    # The release-gate group every push runs: the native tests and the Python guards, the format and
+    # The release-gate group every push runs: the Python guards, the format and
     # secret checks a change to Markdown needs among them.
     name: gate-host   # no space in a job name: see the gate job
     needs: image
@@ -144,20 +157,20 @@ jobs:
           fetch-depth: 0    # same as the gate jobs; a shallow clone builds with a count of 1
           persist-credentials: false
 
-      - name: Use the image's PlatformIO and tooling
+      - name: Use the image's Python tooling
         run: echo /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Release gate (host)
         run: python scripts/release_check.py --group host
 
   gate:
-    # The firmware groups of the release gate, one per job, in the toolchain image: no job restores
+    # The native, firmware and analysis groups of the release gate, one per job, in the image: no job restores
     # or installs a toolchain or the Python tooling, and any runner can take any of them.
     # No space in the name: a runner hands it to the job container as a network alias, and an older
     # netavark writes that unchecked into aardvark-dns's space-separated config, killing its DNS.
     name: gate-${{ matrix.group }}
-    needs: image
-    if: needs.image.outputs.firmware == 'true'
+    needs: [prepare, image]
+    if: needs.prepare.outputs.firmware == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60   # tidy-esp32, the longest, takes ~12min on a fast runner and three times that on the slowest
     permissions:
@@ -171,7 +184,7 @@ jobs:
         password: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
     strategy:
       fail-fast: false    # every group reports, whichever fails first
-      matrix: ${{ fromJSON(needs.image.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout (full history so GIT_COMMIT_COUNT is correct)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -180,7 +193,9 @@ jobs:
           persist-credentials: false    # size-diff's fetch reads the repository anonymously
 
       - name: Use the image's PlatformIO and tooling
-        run: echo /opt/pio/bin >> "$GITHUB_PATH"
+        # Each GITHUB_PATH line goes in front of PATH, so the later one wins: `python` is the
+        # tooling's, and `pio` comes from /opt/platformio, the only one of the two that has it.
+        run: printf '%s\n' /opt/platformio/bin /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Release gate (${{ matrix.group }})
         env:
@@ -198,8 +213,8 @@ jobs:
     # the instrumented tests or the report do.
     # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
     # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
-    needs: image
-    if: needs.image.outputs.firmware == 'true'
+    needs: [prepare, image]
+    if: needs.prepare.outputs.firmware == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30   # only ~3min even on the laptop; a generous ceiling that still catches a hang
     permissions:
@@ -218,7 +233,7 @@ jobs:
           persist-credentials: false
 
       - name: Use the image's PlatformIO and gcovr
-        run: echo /opt/pio/bin >> "$GITHUB_PATH"
+        run: printf '%s\n' /opt/platformio/bin /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: Native tests with coverage instrumentation
         run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test
@@ -245,20 +260,22 @@ jobs:
     # The one status master's branch protection requires. always(): a failed job above
     # turns this red instead of skipping it.
     if: always()
-    needs: [image, host, gate, coverage]
+    needs: [prepare, image, host, gate, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: The toolchain image, every release-gate group and the coverage run passed
-        # The firmware groups and the coverage run may be skipped only for a push the image job found
+      - name: The image, every release-gate group and the coverage run passed
+        # The firmware groups and the coverage run may be skipped only for a push the prepare job found
         # to change nothing but Markdown.
         env:
+          PREPARE: ${{ needs.prepare.result }}
           IMAGE: ${{ needs.image.result }}
           HOST: ${{ needs.host.result }}
           GATE: ${{ needs.gate.result }}
           COVERAGE: ${{ needs.coverage.result }}
-          FIRMWARE: ${{ needs.image.outputs.firmware }}
+          FIRMWARE: ${{ needs.prepare.outputs.firmware }}
         run: |
+          test "$PREPARE" = success
           test "$IMAGE" = success
           test "$HOST" = success
           if [ "$FIRMWARE" = true ]; then expected=success; else expected=skipped; fi
@@ -287,7 +304,7 @@ jobs:
           persist-credentials: false
 
       - name: Use the image's PlatformIO
-        run: echo /opt/pio/bin >> "$GITHUB_PATH"
+        run: printf '%s\n' /opt/platformio/bin /opt/pio/bin >> "$GITHUB_PATH"
 
       - name: The tag names a master commit and the version its firmware reports
         run: |

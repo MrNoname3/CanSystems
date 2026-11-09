@@ -19,7 +19,7 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 # What the image is built from besides platformio.ini, which counts through toolchain_config().
-IMAGE_INPUTS = ("ci/toolchain.Dockerfile", "requirements-ci.txt", "requirements-dev.txt", "ota/requirements.txt")
+IMAGE_INPUTS = (".dockerignore", "ci/toolchain.Dockerfile", "requirements-ci.txt", "requirements-dev.txt", "ota/requirements.txt")
 # Options that never change which packages PlatformIO installs.
 IGNORED = (
     "build_*", "lib_*", "monitor_*", "extends", "extra_scripts",
