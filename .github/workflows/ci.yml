@@ -60,7 +60,7 @@ jobs:
           firmware=true
           if [ "$GITHUB_EVENT_NAME" = push ] && [ -n "${BEFORE//0/}" ] \
              && git fetch -q --no-tags --depth=1 origin "$BEFORE" \
-             && ! git diff --name-only "$BEFORE" HEAD | grep -qv '\.md$'; then
+             && git diff --quiet "$BEFORE" HEAD -- . ':(exclude)*.md'; then
             firmware=false
           fi
           echo "firmware=$firmware" | tee -a "$GITHUB_OUTPUT"
