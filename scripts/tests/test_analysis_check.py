@@ -16,6 +16,7 @@ VERBOSE_OUTPUT = "".join(
     f"Checking {environment} > clangtidy (platform: example; board: example)\n"
     f"{BINARY} --quiet --config-file=.clang-tidy lib/crc16/src/crc16.cpp -- -DPLATFORMIO=60200\n"
     f"lib/crc16/src/crc16.cpp:3:1: warning: something [readability-something]\n"
+    f"TIDY_COMPLETE {environment} 0 1\n"
     for environment in analysis_check.ENVIRONMENTS)
 
 VERSION_OUTPUT = "LLVM (http://llvm.org/):\n  LLVM version 21.1.0\n  Optimized build.\n"
@@ -136,7 +137,8 @@ def _output_for(environment: str) -> str:
     """What `pio check --verbose -e <environment>` prints: VERBOSE_OUTPUT's part for that one."""
     return (f"Checking {environment} > clangtidy (platform: example; board: example)\n"
             f"{BINARY} --quiet --config-file=.clang-tidy lib/crc16/src/crc16.cpp -- -DPLATFORMIO=60200\n"
-            f"lib/crc16/src/crc16.cpp:3:1: warning: something [readability-something]\n")
+            f"lib/crc16/src/crc16.cpp:3:1: warning: something [readability-something]\n"
+            f"TIDY_COMPLETE {environment} 0 1\n")
 
 
 def test_env_runs_only_the_named_environment(monkeypatch: object) -> None:
@@ -176,3 +178,28 @@ def test_an_unknown_environment_is_refused() -> None:
         assert stop.code == 2
     else:
         raise AssertionError("an environment outside ENVIRONMENTS was accepted")
+
+
+def test_partial_output_after_a_diagnostic_fails(monkeypatch: object) -> None:
+    assert _run_main(monkeypatch, "\n".join(line for line in VERBOSE_OUTPUT.splitlines()
+                                           if not line.startswith("TIDY_COMPLETE "))) == 1
+
+
+def test_a_clean_completed_analysis_needs_no_diagnostics(monkeypatch: object) -> None:
+    output = "".join(
+        f"Checking {env} > clangtidy (platform: example)\n{BINARY} --quiet input.cpp --\n"
+        f"TIDY_COMPLETE {env} 0 1\n" for env in analysis_check.ENVIRONMENTS)
+    assert _run_main(monkeypatch, output) == 0
+
+
+def test_a_crash_after_diagnostics_fails(monkeypatch: object) -> None:
+    assert _run_main(monkeypatch, VERBOSE_OUTPUT.replace("TIDY_COMPLETE check_avr 0", "TIDY_COMPLETE check_avr -11")) == 1
+
+
+def test_empty_input_and_duplicate_completions_fail() -> None:
+    assert analysis_check.incomplete_environments("TIDY_COMPLETE check_avr 0 0\n", ["check_avr"]) == ["check_avr"]
+    assert analysis_check.incomplete_environments("TIDY_COMPLETE check_avr 0 1\n" * 2, ["check_avr"]) == ["check_avr"]
+
+
+def test_exit_one_without_compiler_errors_fails(monkeypatch: object) -> None:
+    assert _run_main(monkeypatch, VERBOSE_OUTPUT.replace("TIDY_COMPLETE check_avr 0", "TIDY_COMPLETE check_avr 1")) == 1

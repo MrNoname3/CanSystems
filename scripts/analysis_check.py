@@ -4,9 +4,10 @@
 `pio check` cannot fail on a clang-tidy that never analysed anything. It drops every
 [clang-diagnostic-error] line instead of counting it as a defect, and it treats the tool's exit
 code as a success unless it is 2 or more - so a segfault, which reports a negative code, comes
-back as PASSED with no output at all. Both failures have happened here: one from missing include
-paths, one from a predefined macro PlatformIO passes through. This guard runs the same
-`pio check` and looks for what each of them leaves behind.
+back as PASSED with no output at all. So pio_tidy.py replaces PlatformIO's clang-tidy driver: it
+checks the tool's actual exit status, and prints a TIDY_COMPLETE record only after the process
+has exited. A diagnostic is no such evidence: a tool can crash after its first warning, or
+complete without any.
 
 A clang error in a project file is a blind spot as well: clang-tidy skips whatever depends on
 the declaration it could not parse. So every one fails the gate, unless EXPECTED_ERRORS names the
@@ -105,7 +106,8 @@ def find_pio() -> str:
 
 def run_check(pio: str, environments: Sequence[str]) -> tuple[int, str]:
     """Run the clang-tidy environments verbosely; return the exit code and the output."""
-    command = [pio, "check", "--verbose"]
+    command = [str(Path(pio).parent / "python"), str(PROJECT_DIR / "scripts" / "pio_tidy.py"),
+               "check", "--verbose"]
     for environment in environments:
         command += ["-e", environment]
     result = subprocess.run(command, cwd=PROJECT_DIR, capture_output=True, text=True,
@@ -146,17 +148,25 @@ def diagnostics_per_environment(output: str,
     return per_environment
 
 
-def report(per_environment: dict[str, list[str]]) -> list[str]:
-    """Print what clang-tidy could not parse; return the environments that did not run."""
-    silent: list[str] = []
+def report(per_environment: dict[str, list[str]]) -> None:
+    """Summarize diagnostics; silence is valid when completion is independently verified."""
     for environment, lines in per_environment.items():
         unresolved = sorted({match.group(1) for line in lines
                              for match in [NOT_FOUND.search(line)] if match is not None})
         print(f"analysis: {environment} - {len(lines)} diagnostic(s)"
               + (f", headers it could not find: {', '.join(unresolved)}" if unresolved else ""))
-        if not lines:
-            silent.append(environment)
-    return silent
+
+
+def incomplete_environments(output: str, environments: Sequence[str]) -> list[str]:
+    """Require exactly one successful completion with nonempty input for each environment."""
+    records = re.findall(r"^TIDY_COMPLETE (\S+) (-?\d+) (\d+)$", output, re.MULTILINE)
+    diagnostics = diagnostics_per_environment(output, environments)
+    return [env for env in environments
+            if len([record for record in records if record[0] == env]) != 1
+            or not any(name == env and int(count) > 0
+                       and (int(status) == 0 or (int(status) == 1
+                            and any(CLANG_ERROR.match(line) for line in diagnostics[env])))
+                       for name, status, count in records)]
 
 
 def project_file(path: str) -> str | None:
@@ -217,13 +227,12 @@ def main(argv: Sequence[str] = ()) -> int:
     status, output = run_check(pio, environments)
 
     per_environment = diagnostics_per_environment(output, environments)
-    silent = report(per_environment)
+    report(per_environment)
+    incomplete = incomplete_environments(output, environments)
 
-    if silent:
-        print(f"\nanalysis: clang-tidy analysed nothing in {', '.join(silent)} - `pio check` "
-              f"reports that as a pass, so the gate has to catch it here.")
-        print("Run `pio check --verbose -e <environment>` and check the include paths and the "
-              "--target in platformio.ini's check_* environments.")
+    if incomplete:
+        print(f"analysis: missing or failed clang-tidy completion: {', '.join(incomplete)}")
+        print(output)
         return 1
 
     binary = clang_tidy_binary(output)
