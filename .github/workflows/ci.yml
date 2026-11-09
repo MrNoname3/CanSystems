@@ -213,6 +213,19 @@ jobs:
           group: ${{ matrix.group }}
           current-sizes: ${{ runner.temp }}/current-sizes.json
 
+      - name: Bundle the checked release firmware
+        if: startsWith(github.ref, 'refs/tags/v') && (matrix.group == 'esp32' || matrix.group == 'esp8266')
+        env:
+          GROUP: ${{ matrix.group }}
+        run: python scripts/firmware_bundle.py export --group "$GROUP" --bundle ".pio/firmware-$GROUP"
+
+      - name: Transfer the checked firmware to the release job
+        if: startsWith(github.ref, 'refs/tags/v') && (matrix.group == 'esp32' || matrix.group == 'esp8266')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .pio/firmware-${{ matrix.group }}
+          key: firmware-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.group }}
+
   coverage:
     # Native-test line coverage over lib/ (gcovr); no coverage threshold, it fails only when
     # the instrumented tests or the report do.
@@ -316,10 +329,33 @@ jobs:
           test "$GITHUB_REF_NAME" = "v$(git rev-list --count HEAD)"
           git merge-base --is-ancestor HEAD origin/master
 
-      - name: Build the released firmware and its configuration templates
+      - name: Receive the checked ESP32 firmware
+        id: esp32
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .pio/firmware-esp32
+          key: firmware-${{ github.run_id }}-${{ github.run_attempt }}-esp32
+
+      - name: Receive the checked ESP8266 firmware
+        id: esp8266
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .pio/firmware-esp8266
+          key: firmware-${{ github.run_id }}-${{ github.run_attempt }}-esp8266
+
+      - name: Verify the received firmware or rebuild a missing bundle through the gate
+        env:
+          ESP32_HIT: ${{ steps.esp32.outputs.cache-hit }}
+          ESP8266_HIT: ${{ steps.esp8266.outputs.cache-hit }}
         run: |
-          mapfile -t envs < <(python web/installer.py envs)
-          pio run "${envs[@]/#/-e}"
+          for group in esp32 esp8266; do
+            if [ "$group" = esp32 ]; then hit=$ESP32_HIT; else hit=$ESP8266_HIT; fi
+            if [ "$hit" = true ]; then
+              python scripts/firmware_bundle.py restore --group "$group" --bundle ".pio/firmware-$group"
+            else
+              python scripts/release_check.py --group "$group"
+            fi
+          done
           python web/installer.py assets --into release
 
       - name: Publish the release
