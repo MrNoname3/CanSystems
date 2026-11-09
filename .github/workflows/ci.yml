@@ -227,10 +227,7 @@ jobs:
           key: firmware-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.group }}
 
   coverage:
-    # Native-test line coverage over lib/ (gcovr); no coverage threshold, it fails only when
-    # the instrumented tests or the report do.
-    # Reports all of lib/ — the headline is pulled down by vendored third-party code (notably
-    # lib/dfPlayer/.../DFPlayerMiniFast.cpp); add a gcovr --exclude for a cleaner own-code number.
+    # Native line coverage, excluding upstream DFPlayer code, with a reviewed regression floor.
     needs: [prepare, image]
     if: needs.prepare.outputs.firmware == 'true'
     runs-on: ubuntu-latest
@@ -253,22 +250,21 @@ jobs:
       - name: Use the image's PlatformIO and gcovr
         run: printf '%s\n' /opt/platformio/bin /opt/pio/bin >> "$GITHUB_PATH"
 
-      - name: Native tests with coverage instrumentation
-        run: PLATFORMIO_BUILD_FLAGS="-lgcov --coverage" pio test -e native_test
+      - name: Instrumented native tests and coverage regression guard
+        run: python scripts/coverage_check.py
 
-      - name: Coverage report (lib/)
-        # Pretty markdown table in the summary, plus a collapsible plain-text report whose
-        # "Missing" column lists the uncovered line ranges per file (the markdown format omits
-        # those). gcovr's INFO logs go to stderr, so only the report bodies reach the summary.
+      - name: Coverage report
+        if: always()
         run: |
-          gcovr --root . --filter 'lib/' --markdown | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ ! -f .pio/coverage/report.md ]; then exit 0; fi
+          cat .pio/coverage/report.md >> "$GITHUB_STEP_SUMMARY"
           {
             echo ""
             echo "<details>"
             echo "<summary>Uncovered lines (per file)</summary>"
             echo ""
             echo '```text'
-            gcovr --root . --filter 'lib/'
+            cat .pio/coverage/report.txt
             echo '```'
             echo ""
             echo "</details>"
