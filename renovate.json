@@ -1,36 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests"
+    "local>MrNoname3/renovate-config"
   ],
-  "dependencyDashboard": true,
   "rebaseWhen": "behind-base-branch",
-  "labels": [
-    "dependencies"
-  ],
   "packageRules": [
-    {
-      "description": "Conservative automerge: patch/pin/digest across managers, after a 3-day soak",
-      "matchUpdateTypes": [
-        "patch",
-        "pin",
-        "digest"
-      ],
-      "automerge": true,
-      "minimumReleaseAge": "3 days"
-    },
-    {
-      "description": "Also automerge GitHub Actions minor updates (same 3-day soak)",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "minor"
-      ],
-      "automerge": true,
-      "minimumReleaseAge": "3 days"
-    },
     {
       "description": "The urboot build image stays manual: the bootloader .hex files are committed, so a base-image change wants a rebuild and a diff against them",
       "matchFileNames": [
