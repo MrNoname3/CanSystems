@@ -147,3 +147,11 @@ See README.md "Gotchas" (cross-project `binId` reflash, CAN IDs in EEPROM). Also
 per-deployment secrets live in the git-ignored `ota/secrets.yaml` — never
 commit or print its contents (the git-ignored `ota/mosq-ca.crt` is just the public CA bundle,
 regenerated from the system trust store when missing).
+
+## Files the template manages
+
+`.editorconfig`, `CLAUDE.md`, the `.gitea/` merge messages and the shared
+first part of `.gitignore` come from repo-template, whose next update
+overwrites them: change them there. This repository's own ignore lines sit
+below the shared part. The release gate is this repository's own; the
+template provides none of it here.

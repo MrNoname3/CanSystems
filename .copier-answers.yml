@@ -1,0 +1,10 @@
+_commit: v0.1.7
+_src_path: https://forge.invalid/MrNoname3/repo-template.git
+copyright_year: '2026'
+description: ESP8266/ESP32 + ATmega328P home-IoT firmware monorepo. Nodes talk MQTT/TLS
+    (with Home Assistant auto-discovery); an ESP32 gateway bridges a CAN bus of AVR
+    devices onto MQTT. Firmware, config, even the AVR CAN nodes update over the air.
+    Native host tests + a one-command release gate, mirrored in CI.
+repo_name: CanSystems
+shared_gate: false
+visibility: public

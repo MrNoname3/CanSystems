@@ -1,3 +1,26 @@
+# Secrets — never commit these, encrypted or not.
+*.key
+*.keyfile
+*.pem
+id_rsa*
+id_ed25519*
+*.kdbx
+
+# Repo-local toolchain, built by scripts/ensure-venv.sh.
+.venv/
+
+# Python bytecode: it records the absolute path of its source, a home directory included.
+__pycache__/
+
+# Private secret-scan patterns for scripts/check.sh — never commit.
+.secret-patterns.local
+
+# Working files: an agent's own temp directory is not on the host's filesystem,
+# so anything the user has to see or delete lands here instead.
+work/*
+!work/.gitkeep
+
+# --- This repository's own ---
 # Build output
 .pio
 
@@ -15,7 +38,6 @@ platformio-device-monitor-*
 logs/device-monitor-*
 
 # Scripts
-**/__pycache__/
 
 # Python tool caches (pytest/ruff drop a self-ignoring .gitignore inside too; listed
 # here explicitly so it does not depend on the tool version writing it).
@@ -24,13 +46,11 @@ logs/device-monitor-*
 
 # Python tooling venv (project-root, from requirements-dev.txt); the bare pattern also
 # catches any stray ota/.venv from before the consolidation.
-.venv/
 
 # OTA
 ota/secrets.yaml
 
 # What scripts/secret_check.py must find but no tracked file may name
-.secret-patterns.local
 ota/mosq-ca.crt*
 
 # Locally built web installer
