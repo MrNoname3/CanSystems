@@ -2,7 +2,7 @@
 
 CANController::CANController() = default;
 
-uint8_t CANController::begin(uint32_t /*baudRate*/) {
+void CANController::resetPacketState() {
   packetBegun = false;
   txId = noId;
   txExtended = false;
@@ -11,11 +11,7 @@ uint8_t CANController::begin(uint32_t /*baudRate*/) {
   txLength = 0U;
 
   clearRxState();
-
-  return 1U;
 }
-
-void CANController::end() {}
 
 void CANController::clearRxState() {
   rxId = noId;
@@ -58,13 +54,13 @@ uint8_t CANController::beginExtendedPacket(uint32_t id, uint8_t dlc, bool rtr) {
   return 1U;
 }
 
-uint8_t CANController::endPacket() {
-  if(!packetBegun) { return 0U; }
+bool CANController::closePacket() {
+  if(!packetBegun) { return false; }
   packetBegun = false;
 
   txLength = txDlc;
 
-  return 1U;
+  return true;
 }
 
 uint32_t CANController::packetId() const { return rxId; }
@@ -111,6 +107,6 @@ size_t CANController::readBytes(uint8_t* buffer, size_t length) {
   return count;
 }
 
-void CANController::onReceive(void (*callback)(int)) {
+void CANController::setReceiveCallback(void (*callback)(int)) {
   onReceiveCb = callback;
 }

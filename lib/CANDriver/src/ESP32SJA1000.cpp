@@ -49,7 +49,7 @@ namespace {
 } // namespace
 
 uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
-  if(CANController::begin(baudRate) != 1) { return 0U; }
+  resetPacketState();
 
   loopbackEnabled = false;
 
@@ -157,8 +157,6 @@ void ESP32SJA1000::end() {
 
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
-
-  CANController::end();
 }
 
 bool ESP32SJA1000::txReady() {
@@ -178,7 +176,7 @@ bool ESP32SJA1000::txReady() {
 }
 
 uint8_t ESP32SJA1000::endPacket() {
-  if(CANController::endPacket() == 0U) { return 0U; }
+  if(!closePacket()) { return 0U; }
 
   uint8_t dataReg;
 
@@ -263,7 +261,7 @@ uint8_t ESP32SJA1000::parsePacket() {
 }
 
 void ESP32SJA1000::onReceive(void (*callback)(int)) {
-  CANController::onReceive(callback);
+  setReceiveCallback(callback);
 
   if(intrHandle != nullptr) {
     esp_intr_free(intrHandle);

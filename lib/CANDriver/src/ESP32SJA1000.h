@@ -40,6 +40,7 @@ public:
   [[nodiscard]] uint8_t parsePacket();
 
   /// @brief Set the receive interrupt callback.
+  /// @param callback Called with the unread payload length in bytes of the frame just parsed.
   /// @note The callback runs in interrupt context.
   void onReceive(void (*callback)(int));
 

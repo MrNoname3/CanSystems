@@ -9,13 +9,6 @@
 /// the linker cannot drop the ones a firmware never calls.
 class CANController {
 public:
-  /// @brief Initialize the CAN controller at the given baud rate.
-  /// @return 1 on success, 0 on failure.
-  [[nodiscard]] uint8_t begin(uint32_t baudRate);
-
-  /// @brief Deinitialize the CAN controller.
-  void end();
-
   /// @brief Begin a standard 11-bit CAN packet.
   /// @return 1 on success, 0 on failure.
   [[nodiscard]] uint8_t beginPacket(uint16_t id, uint8_t dlc, bool rtr = false);
@@ -23,10 +16,6 @@ public:
   /// @brief Begin an extended 29-bit CAN packet.
   /// @return 1 on success, 0 on failure.
   [[nodiscard]] uint8_t beginExtendedPacket(uint32_t id, uint8_t dlc, bool rtr = false);
-
-  /// @brief Finalize and transmit the current CAN packet.
-  /// @return 1 on success, 0 on failure.
-  [[nodiscard]] uint8_t endPacket();
 
   /// @brief Identifier reported by packetId() when no packet was received.
   static constexpr uint32_t noId = UINT32_MAX;
@@ -66,14 +55,20 @@ public:
   /// interrupt.
   size_t readBytes(uint8_t* buffer, size_t length);
 
-  /// @brief Set the receive interrupt callback.
-  /// @param callback Called with what available() reports for the frame just parsed, which is
-  /// its unread payload length in bytes - not a count of frames waiting.
-  void onReceive(void (*callback)(int));
-
 protected:
   CANController();
   ~CANController() = default;
+
+  /// @brief Puts the packet state back to "nothing being built, nothing received".
+  void resetPacketState();
+
+  /// @brief Closes the packet being built, fixing its length at the DLC it was begun with.
+  /// @return Whether a packet was being built.
+  [[nodiscard]] bool closePacket();
+
+  /// @brief Stores the receive callback, which a driver calls with what available() reports for
+  /// the frame just parsed: its unread payload length in bytes, not a count of frames waiting.
+  void setReceiveCallback(void (*callback)(int));
 
   /// @brief Puts the receive state back to "no frame": packetId() reads `noId`, packetDlc() and
   /// available() read 0.

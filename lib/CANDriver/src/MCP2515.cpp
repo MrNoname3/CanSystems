@@ -53,7 +53,7 @@ namespace {
 } // namespace
 
 uint8_t MCP2515::begin(uint32_t baudRate) {
-  if(CANController::begin(baudRate) != 1) { return 0U; }
+  resetPacketState();
 
   pinMode(csPin, OUTPUT);
 
@@ -132,11 +132,10 @@ uint8_t MCP2515::begin(uint32_t baudRate) {
 
 void MCP2515::end() {
   SPI.end();
-  CANController::end();
 }
 
 uint8_t MCP2515::endPacket() {
-  if(CANController::endPacket() == 0U) { return 0U; }
+  if(!closePacket()) { return 0U; }
 
   const uint8_t n = takeTxBuffer();
   if(n >= txBufferCount) { return 0U; }
@@ -261,7 +260,7 @@ uint8_t MCP2515::parsePacket() {
 }
 
 void MCP2515::onReceive(void (*callback)(int)) {
-  CANController::onReceive(callback);
+  setReceiveCallback(callback);
 
   // No line to attach to, so nothing is wired up and the stored callback stays unreachable. A
   // host that shares the SPI bus between this controller and something else cannot afford an ISR
