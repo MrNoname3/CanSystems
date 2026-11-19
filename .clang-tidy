@@ -18,6 +18,8 @@
 #   readability-redundant-casting - a cast one target needs looks redundant on another: uint16_t is
 #     unsigned int on AVR and unsigned short on the ESPs, and analogRead() and resetWatchdog()
 #     return different types per platform.
+#   bugprone-throwing-static-initialization - the drivers and services are file-scope objects by
+#     design, and an allocation that fails before setup() has nothing to recover to.
 Checks: >
   clang-analyzer-*,
   readability-*,
@@ -38,7 +40,8 @@ Checks: >
   -readability-use-std-min-max,
   -clang-analyzer-core.FixedAddressDereference,
   -readability-math-missing-parentheses,
-  -readability-redundant-casting
+  -readability-redundant-casting,
+  -bugprone-throwing-static-initialization
 # avr-libc's PSTR() declares a __pstr__ at every use. The CAN command enums are as wide as the
 # command field they travel in, whatever values they hold today.
 CheckOptions:
