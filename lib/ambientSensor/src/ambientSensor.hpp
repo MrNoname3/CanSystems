@@ -45,7 +45,7 @@ private:
     READ_HUMIDITY,                    // Read humidity from the SI7021 sensor.
     CHECK_SEND,                       // Decide whether to send based on threshold or elapsed time.
     SEND_VALUES,                      // Transmit the collected data.
-    SENSOR_ERROR                      // Handle sensor errors.
+    SENSOR_ERROR,                     // Handle sensor errors.
   };
 
   SI7021 si7021;                                                            // I2C humidity and temperature sensor driver.

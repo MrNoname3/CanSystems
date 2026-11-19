@@ -20,7 +20,7 @@ public:
     LEN             = 0x6U,         // Number of bytes after LEN (excluding checksum and end byte).
     FEEDBACK        = 1U,           // Feedback requested.
     NO_FEEDBACK     = 0U,           // No feedback requested.
-    EB              = 0xEFU         // End byte.
+    EB              = 0xEFU,        // End byte.
     // clang-format on
   };
 
@@ -51,7 +51,7 @@ public:
     REPEAT_FOLDER   = 0x17U,
     RANDOM_ALL      = 0x18U,
     REPEAT_CURRENT  = 0x19U,
-    SET_DAC         = 0x1AU
+    SET_DAC         = 0x1AU,
     // clang-format on
   };
 
@@ -73,7 +73,7 @@ public:
     GET_U_TRACK      = 0x4CU,
     GET_FLASH_TRACK  = 0x4DU,
     GET_FOLDER_FILES = 0x4EU,
-    GET_FOLDERS      = 0x4FU
+    GET_FOLDERS      = 0x4FU,
     // clang-format on
   };
 
@@ -84,7 +84,7 @@ public:
     EQ_ROCK         = 2U,
     EQ_JAZZ         = 3U,
     EQ_CLASSIC      = 4U,
-    EQ_BASE         = 5U
+    EQ_BASE         = 5U,
     // clang-format on
   };
 
@@ -93,7 +93,7 @@ public:
     REPEAT          = 0U,
     FOLDER_REPEAT   = 1U,
     SINGLE_REPEAT   = 2U,
-    RANDOM          = 3U
+    RANDOM          = 3U,
     // clang-format on
   };
 
@@ -103,17 +103,17 @@ public:
     TF              = 2U,
     AUX             = 3U,
     SLEEP           = 4U,
-    FLASH           = 5U
+    FLASH           = 5U,
     // clang-format on
   };
 
   enum class BaseVolumeAdjustValue : uint8_t {
-    VOL_ADJUST = 0x10U
+    VOL_ADJUST = 0x10U,
   };
 
   enum class RepeatPlayValues : uint8_t {
     STOP_REPEAT = 0U,
-    START_REPEAT = 1U
+    START_REPEAT = 1U,
   };
 
   /// @brief Configure the class.
@@ -301,7 +301,7 @@ private:
   enum class ParseResult : uint8_t {
     CONTINUE,
     SUCCESS,
-    FAILURE
+    FAILURE,
   };
 
   /// @brief MP3 response packet parsing states.
@@ -315,7 +315,7 @@ private:
     find_param_LSB,
     find_checksum_MSB,
     find_checksum_LSB,
-    find_end_byte
+    find_end_byte,
   };
 
   /// @brief Serial data packet used for MP3 config/control.

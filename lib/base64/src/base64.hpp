@@ -16,7 +16,7 @@ private:
   static constexpr const char PROGMEM base64AlphabetTable[] = {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/"
+    "0123456789+/",
   };
 
 public:

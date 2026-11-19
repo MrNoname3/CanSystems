@@ -44,7 +44,7 @@ public:
     STORE,              // Storing firmware chunks.
     CHECK,              // Validating firmware CRC.
     VALID,              // Firmware is valid.
-    INVALID             // Firmware is invalid.
+    INVALID,            // Firmware is invalid.
   };
 
   /// @brief Constructs the OTA handler with the specified SPI Flash reference.

@@ -48,7 +48,7 @@ private:
     Idle,
     Converting,
     Reading,
-    Waiting
+    Waiting,
   };
 
 public:

@@ -61,7 +61,7 @@ bool AmbientSensor::run() {
         static_cast<uint8_t>(lightValue & 0xFF),
         static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
         0U,
-        0U
+        0U,
       };
       (void)canHandler.send(AlertCmd::READ_HUM_TEMP_LDR, payload);
       lastSentTemperature = temperature;

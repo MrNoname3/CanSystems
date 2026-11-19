@@ -292,7 +292,7 @@ public:
   /// @brief Enumeration for MQTT response types.
   enum class Response : uint8_t {
     NACK = 0U,        // Negative acknowledgment.
-    ACK = 1U          // Positive acknowledgment.
+    ACK = 1U,         // Positive acknowledgment.
   };
 
   /// @brief Initializes the MQTT base instance.

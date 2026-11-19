@@ -17,7 +17,7 @@ bool CanAlertDriver::publishDiscovery() {
     getCanSwVersion(),
     getCanAvailTopic(),
     MqttBase::getSubtopic(),
-    canHwVersionStr
+    canHwVersionStr,
   };
 
   const HA::EntityConfig tempConfig = HA::EntityConfig::sensor(

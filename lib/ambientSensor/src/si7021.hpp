@@ -11,7 +11,7 @@ public:
     T14RH12 = 0x00,                             // 14-bit temperature, 12-bit humidity (default).
     T12RH8 = 0x01,                              // 12-bit temperature, 8-bit humidity.
     T13RH10 = 0x80,                             // 13-bit temperature, 10-bit humidity.
-    T11RH11 = 0x81                              // 11-bit temperature, 11-bit humidity.
+    T11RH11 = 0x81,                             // 11-bit temperature, 11-bit humidity.
   };
 
   /// @brief Constructs a SI7021 instance with the specified I2C address and bus.
@@ -60,7 +60,7 @@ private:
     TEMP_READ   = 0xE3,                         // Command to read temperature
     RESET       = 0xFE,                         // Command to reset the sensor.
     USER1_READ  = 0xE7,                         // Command to read the user configuration register.
-    USER1_WRITE = 0xE6                          // Command to write to the user configuration register.
+    USER1_WRITE = 0xE6,                         // Command to write to the user configuration register.
     // clang-format on
   };
 

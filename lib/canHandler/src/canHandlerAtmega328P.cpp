@@ -225,7 +225,7 @@ bool CanHandlerAtmega328P::sendFwVersion() const {
     static_cast<uint8_t>((Build::getGitHash() >> 16U) & 0xFF),
     static_cast<uint8_t>((Build::getGitHash() >> 24U) & 0xFF),
     Build::getGitDirty(),
-    ResetHandler::getResetReason()
+    ResetHandler::getResetReason(),
   };
   return CanHandlerBase::send(CanCmd::FW_VERSION, versionInfo);
 }

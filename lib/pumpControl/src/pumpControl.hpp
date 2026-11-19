@@ -159,7 +159,7 @@ private:
     RUN,                                    // Irrigation is currently active.
     STOP,                                   // Irrigation is stopped.
     ERROR,                                  // The system runs into an error.
-    CALIBRATION                             // System is in calibration mode.
+    CALIBRATION,                            // System is in calibration mode.
   };
 
   /// @brief Represents error states in the pump control system.
@@ -172,7 +172,7 @@ private:
     PUMP_OVERRUN  = 1 << 3U,                // Pump takes current, when it should not.
     PUMP_OC       = 1 << 4U,                // Pump overcurrent error.
     PUMP_UC       = 1 << 5U,                // Pump undercurrent error.
-    QUEUE_FULL    = 1 << 6U                 // Irrigation queue is full.
+    QUEUE_FULL    = 1 << 6U,                // Irrigation queue is full.
     // clang-format on
   };
 

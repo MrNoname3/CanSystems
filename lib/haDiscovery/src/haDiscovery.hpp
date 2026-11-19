@@ -19,13 +19,13 @@ public:
   enum class EntityType : uint8_t {
     sensor,
     binary_sensor,
-    button
+    button,
   };
   /// @brief Supported HA `state_class` values.
   enum class StateClass : uint8_t {
     none,
     measurement,
-    total_increasing
+    total_increasing,
   };
   /// @brief Supported HA `device_class` values.
   enum class DeviceClass : uint8_t {
@@ -34,7 +34,7 @@ public:
     restart,
     temperature,
     humidity,
-    illuminance
+    illuminance,
   };
 
   /// @brief Typed discovery configuration for a single entity.

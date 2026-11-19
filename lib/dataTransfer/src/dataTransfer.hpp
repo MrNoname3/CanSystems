@@ -48,7 +48,7 @@ private:
     FW_UPGRADE_END_FAILED     = 1UL << 23U,             // Firmware upgrade finalization failed.
     RECEIVED_DATA_OVERRUN     = 1UL << 24U,             // More data received than the declared file size.
     TEMP_FILE_READING_ERROR   = 1UL << 25U,             // The temporary file returned fewer bytes than it holds.
-    FILE_IN_USE               = 1UL << 26U              // Something is still reading the file this transfer would replace.
+    FILE_IN_USE               = 1UL << 26U,             // Something is still reading the file this transfer would replace.
     // clang-format on
   };
 
@@ -58,7 +58,7 @@ public:
     IDLE = 0U,                // No transfer is in progress.
     STORING,                  // Currently receiving and storing file pieces.
     CHECK,                    // Validating the received file (e.g., via MD5).
-    CLEANUP                   // Cleaning up resources after the transfer or in case of an error.
+    CLEANUP,                  // Cleaning up resources after the transfer or in case of an error.
   };
 
   /// @brief Constructor.

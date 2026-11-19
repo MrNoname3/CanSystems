@@ -63,7 +63,7 @@ bool FileName::isValidFileName(const char* fileName) {
     mqttServerCertLocation,
     mqttServerCredLocation,
     canAlertFwLocation,
-    tubeConfigLocation
+    tubeConfigLocation,
   };
   // The fixed allow-list is clearer as a raw loop; any_of would not shrink it. (strcmp_P keeps
   // clang-tidy quiet on ESP, but the host build sees plain strcmp, hence the explicit suppressions.)

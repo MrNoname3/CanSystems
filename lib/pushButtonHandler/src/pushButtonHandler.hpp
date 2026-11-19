@@ -20,7 +20,7 @@ public:
     THREE_PRESS,              // Triple press detected.
     FOUR_PRESS,               // Quadruple press detected.
     FIVE_PRESS,               // Quintuple press detected.
-    LAST_ELEMENT              // Sentinel value for event enumeration.
+    LAST_ELEMENT,             // Sentinel value for event enumeration.
   };
 
   /// @brief Constructs a `PushButtonHandler` object.

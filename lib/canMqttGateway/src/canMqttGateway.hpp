@@ -32,7 +32,7 @@ private:
     FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location (must start with '/').
     FILE_OPEN_FAILED      = 1 << 2U,              // Unable to open the file.
     FILE_EMPTY            = 1 << 3U,              // File is empty.
-    ALREADY_IN_PROGRESS   = 1 << 4U               // Another OTA transfer is still running.
+    ALREADY_IN_PROGRESS   = 1 << 4U,              // Another OTA transfer is still running.
     // clang-format on
   };
 
@@ -92,7 +92,7 @@ private:
     START,                  // Starting the OTA process.
     STORE,                  // Storing file data to the CAN device.
     VALID,                  // OTA process completed successfully.
-    INVALID                 // OTA process encountered an error.
+    INVALID,                // OTA process encountered an error.
   };
 
   CanMqttGateway& canMqttGateway;                       // Reference to the CanMqttGateway for communication.

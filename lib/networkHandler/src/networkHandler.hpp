@@ -57,7 +57,7 @@ public:
     UNKNOWN = 0U,                                 // No interface specified.
     WIFI,                                         // Wi-Fi interface.
     ENC28J60,                                     // ENC28J60 Ethernet interface.
-    LAN8720                                       // LAN8720 Ethernet interface.
+    LAN8720,                                      // LAN8720 Ethernet interface.
   };
 
   /// @brief Constructs a NetworkHandler instance.
@@ -137,7 +137,7 @@ private:
     MAC_ADDRESS_INVALID      = 1 << 6U,           // Invalid MAC address.
     WIFI_CONNECT_TIMEOUT     = 1 << 7U,           // Wi-Fi connect timed out waiting for DHCP.
     ENC28J60_CONNECT_TIMEOUT = 1 << 8U,           // ENC28J60 connect timed out waiting for DHCP.
-    LAN8720_CONNECT_TIMEOUT  = 1 << 9U            // LAN8720 connect timed out waiting for DHCP.
+    LAN8720_CONNECT_TIMEOUT  = 1 << 9U,           // LAN8720 connect timed out waiting for DHCP.
     // clang-format on
   };
 
