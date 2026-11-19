@@ -244,8 +244,8 @@ void RCSwitch::send(uint64_t code, uint32_t length) {
  * Transmit a single high-low pulse.
  */
 void RCSwitch::transmit(HighLow pulses) const {
-  uint8_t firstLogicLevel = (this->protocol.invertedSignal) ? LOW : HIGH;
-  uint8_t secondLogicLevel = (this->protocol.invertedSignal) ? HIGH : LOW;
+  uint8_t firstLogicLevel = this->protocol.invertedSignal ? LOW : HIGH;
+  uint8_t secondLogicLevel = this->protocol.invertedSignal ? HIGH : LOW;
 
   if(pulses.high > 0) {
     digitalWrite(this->nTransmitterPin, firstLogicLevel);
@@ -348,7 +348,7 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   }
   uint32_t BeginData = 0;
   if(pro.HeaderFactor > 0) {
-    BeginData = (pro.invertedSignal) ? (2) : (1);
+    BeginData = pro.invertedSignal ? 2 : 1;
     // Header pulse count correction for more than one
     if(pro.HeaderFactor > 1) {
       BeginData += (static_cast<uint32_t>(pro.HeaderFactor) - 1U) * 2U;
@@ -356,7 +356,7 @@ bool RCSwitch::receiveProtocol(const int32_t p, uint32_t changeCount) {
   }
   // Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
   // Take the larger of the two Header values.
-  const uint32_t syncLengthInPulses = ((pro.Header.low) > (pro.Header.high)) ? (pro.Header.low) : (pro.Header.high);
+  const uint32_t syncLengthInPulses = (pro.Header.low > pro.Header.high) ? pro.Header.low : pro.Header.high;
   // Te is the first header pulse divided by the number of pulses it contains,
   // or the preamble pulse divided by the number of Te it contains.
   uint32_t sdelay = 0;

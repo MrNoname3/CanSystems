@@ -126,14 +126,10 @@ void mp3PlayFailed(uint16_t track) {
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   Logger::get()->print(F("Btn: "));
   Logger::get()->println(static_cast<uint8_t>(btnEvent));
-  switch(btnEvent) {
-    case PushButtonHandler::BtnEvent::LONG_PRESS: {
-      static bool rgbLedState = false;
-      rgbLedState = !rgbLedState;
-      rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
-    } break;
-    default: {
-    } break;
+  if(btnEvent == PushButtonHandler::BtnEvent::LONG_PRESS) {
+    static bool rgbLedState = false;
+    rgbLedState = !rgbLedState;
+    rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
   }
 }
 

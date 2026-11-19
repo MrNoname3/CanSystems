@@ -95,9 +95,7 @@ uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
       i = 0U;
     }
   }
-  if(i > 0U) {
-    if(!processPartialBlock(A4, i, output, decodedLength_)) { return 0U; }
-  }
+  if((i > 0U) && !processPartialBlock(A4, i, output, decodedLength_)) { return 0U; }
   if(decodedLength_ >= outputLength) {
     return 0U; // Prevent overflow
   }
