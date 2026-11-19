@@ -3,8 +3,7 @@
 SI7021::SI7021(uint32_t timeoutUs, uint8_t address, TwoWire& wire) :
   timeoutUs(timeoutUs),
   address(address),
-  wire(wire),
-  deviceExists(false) {}
+  wire(wire) {}
 
 bool SI7021::init() { // NOLINT(readability-make-member-function-const)
   wire.begin();

@@ -158,11 +158,11 @@ private:
   const uint8_t txPin;                                                      // TX pin for software serial.
   const uint8_t enPin;                                                      // Power control pin.
   const uint8_t intPin;                                                     // Interrupt pin (LOW when playing).
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
-  PlayingStates playingState;                                               // Current state of the playback state machine.
+  uint32_t eventTimer = 0U;                                                 // Class wide variable for universal timings.
+  PlayingStates playingState = PlayingStates::IDLE;                         // Current state of the playback state machine.
   PlayQueueItem currentItem;                                                // The item being played, kept across retries.
-  void (*playFailedCallback)(uint16_t track);                               // Reports an abandoned track.
-  uint8_t playRetries;                                                      // Play commands re-sent for currentItem.
-  uint8_t moduleRestarts;                                                   // Power-cycles spent on currentItem.
+  void (*playFailedCallback)(uint16_t track) = nullptr;                     // Reports an abandoned track.
+  uint8_t playRetries = 0U;                                                 // Play commands re-sent for currentItem.
+  uint8_t moduleRestarts = 0U;                                              // Power-cycles spent on currentItem.
   CircularBuffer<PlayQueueItem, 5U> playingQueue;                           // Playback queue for tracks.
 };

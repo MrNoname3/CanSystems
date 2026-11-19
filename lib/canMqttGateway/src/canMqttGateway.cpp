@@ -4,16 +4,7 @@
 #include <ctype.h>
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
-  canMqttGateway(canMqttGateway),
-  frameNumber(0U),
-  storageNumber(0U),
-  fileSize(0U),
-  transferState(TransferState::IDLE),
-  otaTimeoutTimer(0U),
-  fileNamePtr(nullptr),
-  imageCrc(0U),
-  imageCrcKnown(false),
-  sharedImage(nullptr) {}
+  canMqttGateway(canMqttGateway) {}
 
 CanOta::~CanOta() {
   if(receivedFile) {
@@ -184,10 +175,7 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   CanBase(canHandler, clientCanId),
   MqttBase(connectivity, subTopic),
   canOta(*this),
-  clientPingTimer(0U),
-  clientOfflineTimer(0U),
-  clientOnline(true),
-  clientEverSeen(false),
+
   fwFileNamePtr(fwFileName),
   batchImage() {
   if(fwFileNamePtr != nullptr) {

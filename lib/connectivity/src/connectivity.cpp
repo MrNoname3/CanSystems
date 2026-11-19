@@ -13,14 +13,10 @@ uint8_t MqttBase::unregisteredHandlers = 0U;
 Connectivity::Connectivity(NetworkHandler& networkHandler, void (*debugLedFunc)(bool state), void (*resetWdtFunc)()) :
   networkHandler(networkHandler),
   mqttClient(tcpClient),
-  networkState(true),
-  mqttState(PubSubClient::State::CONNECTED),
-  onlineState(true),
-  deviceResetTimer(0U),
+
   debugLed(debugLedFunc),
   resetWdt(resetWdtFunc),
-  reconnectTimer(0U),
-  onlineSinceTimer(0U),
+
   haDiscovery([](void* ctx, const char* topic, const char* payload, bool retained) -> bool {
     return static_cast<Connectivity*>(ctx)->publishRaw(topic, payload, retained);
   },

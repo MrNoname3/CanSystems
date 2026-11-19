@@ -5,16 +5,7 @@ AmbientSensor::AmbientSensor(CanHandlerBase& canHandler, uint8_t lightPin, uint3
   si7021(Time::msToUs(10U)),
   canHandler(canHandler),
   lightPin(lightPin),
-  measurePeriod(measurePeriod),
-  lightValue(0U),
-  temperature(0),
-  humidity(0U),
-  lastSentTemperature(INT16_MIN),
-  lastSentHumidity(UINT16_MAX),
-  lastSentLight(UINT16_MAX),
-  eventTimer(0U),
-  sendThrottleTimer(0U),
-  event(Event::IDLE) {}
+  measurePeriod(measurePeriod) {}
 
 bool AmbientSensor::init() {
   const bool si7021BeginResult = si7021.init();

@@ -60,5 +60,5 @@ private:
   const CanHandlerBase& canHandler;                     // Reference to the CAN handler object.
   bool (*readButtonValue)();                            // Function pointer for reading the button state.
   PushButton button;                                    // Instance of the `PushButton` class to handle button press events.
-  void (*btnCallback)(BtnEvent btnEvent);               // Function pointer for the button event callback (if set).
+  void (*btnCallback)(BtnEvent btnEvent) = nullptr;     // Function pointer for the button event callback (if set).
 };

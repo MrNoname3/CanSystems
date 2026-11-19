@@ -24,14 +24,7 @@ namespace {
 DataTransfer::DataTransfer(void (*checkOkCallback)(bool isValid), bool (*fileInUseCallback)(const char* fileName)) :
   checkOkCallback(checkOkCallback),
   fileInUseCallback(fileInUseCallback),
-  fileSizeLocal(0U),
-  fileMd5Local{ '\0' },
-  nextFilePieceNumberLocal(invalidFilePieceNumber),
-  remainingFileSizeLocal(0U),
-  fileNameLocal{ '\0' },
-  isFwTransfer(false),
-  transferState(TransferState::IDLE),
-  transferTimeoutTimer(0U),
+
   md5() {}
 
 DataTransfer::~DataTransfer() {

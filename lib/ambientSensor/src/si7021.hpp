@@ -85,5 +85,5 @@ private:
   const uint32_t timeoutUs;                       // I2C timeout in microseconds, applied in init().
   const uint8_t address;                          // I2C address of the device.
   TwoWire& wire;                                  // Reference to the I2C bus used for communication.
-  bool deviceExists;                              // Indicates if the device is present on the I2C bus.
+  bool deviceExists = false;                      // Indicates if the device is present on the I2C bus.
 };

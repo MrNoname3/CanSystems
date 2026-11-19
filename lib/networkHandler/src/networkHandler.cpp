@@ -17,10 +17,7 @@ namespace {
 volatile bool NetworkHandler::ethConnected = false;
 #endif
 
-NetworkHandler::NetworkHandler(Interface interface, uint8_t ethernetShieldCsPin) :
-  networkInterface(Interface::UNKNOWN),
-  interfaceStatus(WL_DISCONNECTED),
-  mac{ 0U } {
+NetworkHandler::NetworkHandler(Interface interface, uint8_t ethernetShieldCsPin) {
   setNetworkInterface(interface, ethernetShieldCsPin);
 }
 

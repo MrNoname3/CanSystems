@@ -14,8 +14,7 @@ bool RfHandler::publishDiscovery() {
 RfHandler::RfHandler(Connectivity& connectivity, const char* subtopic, uint8_t rfRxPin, uint8_t rfTxPin) :
   MqttBase(connectivity, subtopic),
   rfRxPin(rfRxPin),
-  rfTxPin(rfTxPin),
-  dataCheckTimer(0U) {
+  rfTxPin(rfTxPin) {
   pinMode(this->rfRxPin, INPUT_PULLUP);
   rfTransceiver.enableReceive(digitalPinToInterrupt(this->rfRxPin));
   rfTransceiver.enableTransmit(this->rfTxPin);

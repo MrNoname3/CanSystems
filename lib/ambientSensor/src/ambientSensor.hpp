@@ -52,13 +52,13 @@ private:
   CanHandlerBase& canHandler;                                               // Reference to a CAN handler object.
   const uint8_t lightPin;                                                   // Analog pin for light intensity readings.
   const uint32_t measurePeriod;                                             // Measurement interval in milliseconds.
-  uint16_t lightValue;                                                      // Filtered light intensity value.
-  int16_t temperature;                                                      // Current temperature reading in hundredths of a degree Celsius.
-  uint16_t humidity;                                                        // Current relative humidity reading in percentage.
-  int16_t lastSentTemperature;                                              // Temperature value at the last send (sentinel INT16_MIN forces first send).
-  uint16_t lastSentHumidity;                                                // Humidity value at the last send (sentinel UINT16_MAX forces first send).
-  uint16_t lastSentLight;                                                   // Light value at the last send (sentinel UINT16_MAX forces first send).
-  uint32_t eventTimer;                                                      // Timer for measurement period.
-  uint32_t sendThrottleTimer;                                               // Timer for the 30-minute forced-send period.
-  Event event;                                                              // Current state of the sensor task.
+  uint16_t lightValue = 0U;                                                 // Filtered light intensity value.
+  int16_t temperature = 0;                                                  // Current temperature reading in hundredths of a degree Celsius.
+  uint16_t humidity = 0U;                                                   // Current relative humidity reading in percentage.
+  int16_t lastSentTemperature = INT16_MIN;                                  // Temperature value at the last send (sentinel INT16_MIN forces first send).
+  uint16_t lastSentHumidity = UINT16_MAX;                                   // Humidity value at the last send (sentinel UINT16_MAX forces first send).
+  uint16_t lastSentLight = UINT16_MAX;                                      // Light value at the last send (sentinel UINT16_MAX forces first send).
+  uint32_t eventTimer = 0U;                                                 // Timer for measurement period.
+  uint32_t sendThrottleTimer = 0U;                                          // Timer for the 30-minute forced-send period.
+  Event event = Event::IDLE;                                                // Current state of the sensor task.
 };

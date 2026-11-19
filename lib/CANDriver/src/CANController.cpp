@@ -1,21 +1,6 @@
 #include "CANController.h"
 
-CANController::CANController() :
-  onReceiveCb(nullptr),
-  packetBegun(false),
-  txId(noId),
-  txExtended(false),
-  txRtr(false),
-  txDlc(0U),
-  txLength(0U),
-  txData{},
-  rxId(noId),
-  rxExtended(false),
-  rxRtr(false),
-  rxDlc(0U),
-  rxLength(0U),
-  rxIndex(0U),
-  rxData{} {}
+CANController::CANController() = default;
 
 uint8_t CANController::begin(uint32_t /*baudRate*/) {
   packetBegun = false;

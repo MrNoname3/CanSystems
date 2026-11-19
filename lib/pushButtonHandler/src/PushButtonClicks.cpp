@@ -4,13 +4,7 @@ PushButton::PushButton(uint8_t deadTime, uint16_t longPressTime, uint8_t debounc
   deadTime(deadTime),
   longPressTime(longPressTime),
   debounceTime(debounceTime),
-  buttonPolarity(buttonPolarity),
-  lastCheckedTime(0U),
-  pressedDuration(0U),
-  lastEventTime(0U),
-  baselineTaken(false),
-  longPressflag(false),
-  shortPressedCnt(2U) {}
+  buttonPolarity(buttonPolarity) {}
 
 uint8_t PushButton::buttonCheck(const uint32_t currentMillis, bool currentPinStatus) {
   uint8_t output = 0U;

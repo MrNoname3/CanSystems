@@ -3,9 +3,7 @@
 PCF8574::PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire& wire) :
   timeoutUs(timeoutUs),
   address(address),
-  wire(wire),
-  registerValue(0xFFU),
-  deviceExists(false) {}
+  wire(wire) {}
 
 bool PCF8574::init() {
   wire.begin();

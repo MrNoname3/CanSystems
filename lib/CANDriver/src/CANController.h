@@ -81,22 +81,22 @@ protected:
   /// packetId() keeps answering with the previous frame's identifier.
   void clearRxState();
 
-  void (*onReceiveCb)(int);
+  void (*onReceiveCb)(int) = nullptr;
 
-  bool packetBegun;
+  bool packetBegun = false;
 
-  uint32_t txId;
-  bool txExtended;
-  bool txRtr;
-  uint8_t txDlc;
-  uint8_t txLength;
-  uint8_t txData[8];
+  uint32_t txId = noId;
+  bool txExtended = false;
+  bool txRtr = false;
+  uint8_t txDlc = 0U;
+  uint8_t txLength = 0U;
+  uint8_t txData[8] = {};
 
-  uint32_t rxId;
-  bool rxExtended;
-  bool rxRtr;
-  uint8_t rxDlc;
-  uint8_t rxLength;
-  uint8_t rxIndex;
-  uint8_t rxData[8];
+  uint32_t rxId = noId;
+  bool rxExtended = false;
+  bool rxRtr = false;
+  uint8_t rxDlc = 0U;
+  uint8_t rxLength = 0U;
+  uint8_t rxIndex = 0U;
+  uint8_t rxData[8] = {};
 };

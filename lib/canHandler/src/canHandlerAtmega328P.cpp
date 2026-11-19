@@ -19,10 +19,8 @@ CanHandlerAtmega328P::CanHandlerAtmega328P(DebugLedHandler& debugLed, uint8_t ca
   debugLed(debugLed),
   flash(flashCsPin, flashJedecId),
   ota(flash),
-  canCallback(nullptr),
-  eventTimer(0U),
-  canIntPin(canIntPin),
-  lastOtaState(OTA::OtaState::IDLE) {
+
+  canIntPin(canIntPin) {
   // MCP2515::noIntPin keeps the driver from attaching its own handler: that one reads the
   // controller over SPI from inside the ISR, and the same bus carries the W25Q64 the OTA writes.
   // This handler polls the line in run() instead, which is why it is read as a plain input.

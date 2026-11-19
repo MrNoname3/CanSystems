@@ -9,12 +9,7 @@ DFPlayer::DFPlayer(RgbLedWrapper& rgbLed, uint8_t rxPin, uint8_t txPin, uint8_t 
   rxPin(rxPin),
   txPin(txPin),
   enPin(enPin),
-  intPin(intPin),
-  eventTimer(0U),
-  playingState(PlayingStates::IDLE),
-  playFailedCallback(nullptr),
-  playRetries(0U),
-  moduleRestarts(0U) {
+  intPin(intPin) {
   swSerial.begin(9600);                                           // Open software serial port.
   pinMode(this->enPin, OUTPUT);                                   // Set pin modes.
   pinMode(this->intPin, INPUT_PULLUP);

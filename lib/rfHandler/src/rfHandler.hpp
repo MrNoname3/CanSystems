@@ -96,6 +96,6 @@ private:
   const uint8_t rfRxPin;                                      // GPIO pin connected to the RF receiver.
   const uint8_t rfTxPin;                                      // GPIO pin connected to the RF transmitter.
   RfData lastRfData;                                          // Last received RF data for duplicate filtering.
-  uint32_t dataCheckTimer;                                    // Timer for filtering out repeated RF data.
+  uint32_t dataCheckTimer = 0U;                               // Timer for filtering out repeated RF data.
   CircularBuffer<RfData, pendingTxQueueSize> pendingTx;       // Commands waiting to be transmitted from run().
 };
