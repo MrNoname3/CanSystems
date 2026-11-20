@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 #include "crc16.hpp"                                                /// Folds the unique id into a provisional address.
 
 /// @brief Wire format and admission rules for the SET_CAN_ID frame.
@@ -57,12 +58,8 @@ namespace CanIdAssign {
   /// @brief Parses the 8 CAN data bytes of a request back into its fields.
   [[nodiscard]] inline Request unpack(const uint8_t (&canData)[8]) {
     Request fields;
-    fields.expectedLocal = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[0]) |
-        (static_cast<uint16_t>(canData[1]) << 8U));
-    fields.newLocal = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[2]) |
-        (static_cast<uint16_t>(canData[3]) << 8U));
+    fields.expectedLocal = le16(canData[0], canData[1]);
+    fields.newLocal = le16(canData[2], canData[3]);
     fields.reservedClear = (canData[4] == 0U) && (canData[5] == 0U) && (canData[6] == 0U) && (canData[7] == 0U);
     return fields;
   }

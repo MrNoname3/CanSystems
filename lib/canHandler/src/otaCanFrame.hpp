@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 
 /// @brief Wire format for the OTA frames exchanged over CAN between the gateway (the sender,
 /// canMqttGateway) and the CAN device (the receiver, canHandlerAtmega328P).
@@ -46,17 +47,13 @@ namespace OtaCanFrame {
   /// @brief Parses the 8 CAN data bytes of an OTA_START frame back into its fields.
   [[nodiscard]] inline StartFrame unpackStart(const uint8_t (&canData)[8]) {
     StartFrame fields;
-    fields.storageNumber = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[0]) |
-        (static_cast<uint16_t>(canData[1]) << 8U));
+    fields.storageNumber = le16(canData[0], canData[1]);
     fields.fwSize =
         static_cast<uint32_t>(canData[2]) |
         (static_cast<uint32_t>(canData[3]) << 8U) |
         (static_cast<uint32_t>(canData[4]) << 16U) |
         (static_cast<uint32_t>(canData[5]) << 24U);
-    fields.fwCrc = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[6]) |
-        (static_cast<uint16_t>(canData[7]) << 8U));
+    fields.fwCrc = le16(canData[6], canData[7]);
     return fields;
   }
 

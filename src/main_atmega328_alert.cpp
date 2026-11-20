@@ -8,6 +8,7 @@
 #include "pushButtonHandler.hpp"  /// Pushbutton events library.
 #include "taskHandler.hpp"        /// Class for task scheduling.
 #include "common.hpp"             /// Common definitions and functions.
+#include "byteOrder.hpp"          /// Two bytes to a 16-bit value.
 #include "performance.hpp"        /// Performance measurement class.
 #include "dfPlayer.hpp"           /// MP3 player driver library.
 #include "ambientSensor.hpp"      /// Sensor handelr library.
@@ -100,7 +101,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(AlertCmd::PLAY_MP3): {
-      const uint16_t songNum = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8U) | data[0]);
+      const uint16_t songNum = le16(data[0], data[1]);
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       (void)canHandler.send(command);
     } break;
