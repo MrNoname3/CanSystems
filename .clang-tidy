@@ -1,13 +1,11 @@
 # clang-tidy configuration — single source of truth for the check list.
 #
 # Shared by:
-#   - `pio check` / the release gate: the check_* environments in platformio.ini point here with
-#     `clangtidy: --config-file=.clang-tidy` (cppcheck stays configured in platformio.ini;
-#     nothing in the editor runs cppcheck, so there is no parity reason to extract it).
+#   - the release gate: scripts/analysis_check.py passes it with --config-file.
 #   - the editor's live clang-tidy (VS Code cpptools), which auto-discovers this file.
 #
-# Compiler args (-std, -I, -D) are intentionally NOT here: the gate passes
-# `--extra-arg=-std=c++17`, the editor uses its own compile settings.
+# Compiler args (-std, -I, -D) are intentionally NOT here: the gate takes each environment's from
+# its compilation database, the editor uses its own compile settings.
 #
 # Exclusions that need a reason:
 #   readability-use-std-min-max - the AVR toolchain has no C++ standard library, and much of lib/

@@ -1,165 +1,91 @@
 #!/usr/bin/env python3
-"""Static-analysis guard for the release gate: runs clang-tidy and checks that it ran.
+"""Static analysis for the release gate: cppcheck or clang-tidy over each environment's own build.
 
-`pio check` cannot fail on a clang-tidy that never analysed anything. It drops every
-[clang-diagnostic-error] line instead of counting it as a defect, and it treats the tool's exit
-code as a success unless it is 2 or more - so a segfault, which reports a negative code, comes
-back as PASSED with no output at all. So pio_tidy.py replaces PlatformIO's clang-tidy driver: it
-checks the tool's actual exit status, and prints a TIDY_COMPLETE record only after the process
-has exited. A diagnostic is no such evidence: a tool can crash after its first warning, or
-complete without any.
+`pio run -t compiledb` writes an environment's compilation database (scripts/compiledb_path.py
+puts it in the build directory), and the analysers run on exactly the translation units it lists
+that are the project's own, with the flags they are compiled with. A file is analysed by every
+environment that builds it, and by no other: what a target never compiles is no defect of it. So
+that no file drops out unseen, a library file no default environment builds fails the gate.
 
-A clang error in a project file is a blind spot as well: clang-tidy skips whatever depends on
-the declaration it could not parse. So every one fails the gate. A file written for another target,
-which cannot parse in an environment, is left out of it by PLATFORM_EXCLUSIONS, with the reason.
-The files left out are still parsed, and an entry none of whose files fails to any more fails the
-gate as stale, so a file cannot stay unanalysed once it builds there.
+clang-tidy is the one requirements-dev.txt pins in the .venv, one version for every target. It
+reads each GCC command translated for clang: the target named by the compiler, the toolchain's own
+include directories and predefined macros asked from that compiler, and the GNU dialect of the
+standard, GCC accepting its extensions under either. Every project header a unit includes is
+analysed on its own as well, as its diagnostics differ from those in an including source.
+tidy_runner.py fails a unit that crashed, timed out or parsed nothing, and a clang error in project
+code fails the gate too, as clang-tidy skips whatever depends on what it could not parse.
 
-The defects are counted here too, those in project files only. clang-tidy reports a finding in a
-library header whenever the path leading to it starts in project code, and no header filter drops
-it; the libraries are not this project's to fix, as cppcheck's --suppress=*:*.pio/* says as well.
-`pio check`'s exit code then speaks for the tool alone.
+cppcheck is the one platform_packages pins in platformio.ini. It is given the project's own
+include directories alone, the frameworks' headers being no part of what it reports on, and the
+test environment's database is extended by the test suites. It has to name every file it was
+given, or the gate fails.
 
-The clang-tidy it runs is not pinned in platformio.ini: the pioarduino platform installs its own,
-and platform_packages cannot hold it (see the note there). So the version is checked here, and a
-platform bump that brings another one fails until CLANG_TIDY_VERSION follows it.
-
-`--env` narrows the run to some of the check_* environments, so CI can give each its own job; the
-checks above then apply to those alone.
+Findings count in project files only; one of any severity fails the gate.
 """
 
 import argparse
+import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
-from collections.abc import Sequence
-from fnmatch import fnmatch
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
+from build_jobs import analysis_jobs
+from gate_groups import default_envs
+from tidy_runner import Result, Unit, failed, run_units
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-ENVIRONMENTS = ("check_avr", "check_esp8266", "check_esp32")
-CLANG_TIDY_VERSION = "21.1.0"
+INI = PROJECT_DIR / "platformio.ini"
+TEST_ENVIRONMENT = "native_test"                     # the environment `pio test` runs the suites in
+SOURCES = (".c", ".cc", ".cpp", ".cxx", ".ino")
+HEADERS = (".h", ".hh", ".hpp", ".hxx", ".tpp")
 
-# Per environment, the project files left out of it, as (glob, reason) pairs: files written for
-# another target, whose headers or libraries this one does not have. Another target's main is left
-# out by ENTRYPOINTS instead.
-ESP_NETWORK = "the ESP network and MQTT stack: no connectivity, <pgmspace.h> or C++ library on AVR"
-ESP_STORAGE = "the ESP configuration store: no LittleFS or C++ library on AVR"
-AVR_WIRE = "an ATmega328P sensor: Wire.setWireTimeout() is the AVR core's"
-AVR_OTA = "the ATmega328P's OTA, sized by PROGRAM_MEMORY_SIZE"
-AVR_LED = "the ATmega328P nodes' LED, on NeoPixelBus"
-AVR_DFPLAYER = "the ATmega328P's DFPlayer, on the AVR core's SoftwareSerial"
-PLATFORM_EXCLUSIONS: dict[str, tuple[tuple[str, str], ...]] = {
-    "check_avr": (
-        ("lib/canAlertDriver/*", ESP_NETWORK),
-        ("lib/messageRoute/*", ESP_NETWORK),
-        ("lib/canMqttGateway/*", ESP_NETWORK),
-        ("lib/connectivity/*", ESP_NETWORK),
-        ("lib/haDiscovery/*", ESP_NETWORK),
-        ("lib/mqttCommon/*", ESP_NETWORK),
-        ("lib/mqttThermometer/*", ESP_NETWORK),
-        ("lib/mqttTopics/*", ESP_NETWORK),
-        ("lib/networkHandler/*", ESP_NETWORK),
-        ("lib/otaRegistry/*", ESP_NETWORK),
-        ("lib/pubSubClient/*", ESP_NETWORK),
-        ("lib/rfHandler/*", ESP_NETWORK),
-        ("lib/configHandler/*", ESP_STORAGE),
-        ("lib/dataTransfer/*", ESP_STORAGE),
-    ),
-    "check_esp8266": (
-        ("lib/dfPlayer/*", AVR_DFPLAYER),
-        ("lib/pumpControl/*", AVR_LED),
-        ("lib/moistureReader/*", AVR_LED),
-        ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
-        ("lib/CANDriver/*", "CAN: the ESP8266 core's SPI has no usingInterrupt()"),
-        ("lib/canAlertDriver/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
-        ("lib/canMqttGateway/*", "CAN: canHandler declares CanBase for the ATmega328P and the ESP32"),
-        ("lib/ambientSensor/*", AVR_WIRE),
-        ("lib/pcf8574/*", AVR_WIRE),
-        ("lib/ota/*", AVR_OTA),
-        ("lib/rgbLedWrapper/*", AVR_LED),
-    ),
-    "check_esp32": (
-        ("lib/ambientSensor/*", AVR_WIRE),
-        ("lib/pcf8574/*", AVR_WIRE),
-        ("lib/ota/*", AVR_OTA),
-        ("lib/canHandler/src/otaCanResponse.hpp", AVR_OTA),
-        ("lib/dfPlayer/*", AVR_DFPLAYER),
-    ),
-}
+# The target triple clang parses a toolchain's code for, by the compiler's name; a host compiler
+# needs none. Espressif's GCC names the ESP32 xtensa-esp32-elf or xtensa-esp-elf.
+TARGETS = (("avr-", "avr"), ("xtensa-lx106-elf-", "xtensa"),
+           ("xtensa-esp32-elf-", "xtensa-esp-elf"), ("xtensa-esp-elf-", "xtensa-esp-elf"))
 
-ENTRYPOINTS = {
-    "check_avr": ("main_atmega328_alert.cpp", "main_atmega328_irrigation.cpp"),
-    "check_esp32": ("main_esp32_can.cpp",),
-    "check_esp8266": ("main_esp8266_rad.cpp", "main_esp8266_thermo.cpp"),
-}
+# -ferror-limit=0: the framework headers clang cannot parse would otherwise use up its 20 errors
+# before the project code in a file is reached. GCC's predefined macros are passed as -D, and clang
+# has its own, hence the two macro warnings off.
+TIDY_FLAGS = ("-ferror-limit=0", "-Wno-macro-redefined", "-Wno-builtin-macro-redefined",
+              "-Wno-unknown-attributes", "-Wno-register", "-Wno-format-security")
+# After GCC's macros: its __FLT32_DIG__ and __FLT64_DIG__ have libstdc++ declare limits for
+# _Float32 and _Float64, which clang has no C++ support for.
+TIDY_UNDEFINES = ("-U__FLT32_DIG__", "-U__FLT64_DIG__")
+
+# cstyleCast only ever fires inside avr-libc's register macros (_SFR_MEM8 and the like).
+CPPCHECK_FLAGS = ("--enable=warning,style,performance,portability", "--inline-suppr",
+                  "--suppress=*:*.pio/*", "--suppress=cstyleCast", "--platform=unspecified")
+CPPCHECK_REPORTED = ("error", "warning", "style", "performance", "portability")
+
+TIDY_DIAGNOSTIC = re.compile(r"^(\S+?):(\d+):\d+: (warning|error): (.*) \[([\w.,-]+)\]$")
+CPPCHECK_DIAGNOSTIC = re.compile(r"^(\S+?):(\d+):\d+: \[(\w+):(\w+)\] (.*)$")
+CPPCHECK_CHECKING = re.compile(r"^Checking (\S+) \.\.\.")
+INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 
 
-def candidate(environment: str, source: str) -> str | None:
-    """The project path of a library file or of this target's entrypoint, None for anything else."""
-    path = project_file(source)
-    if path is None or (path.startswith("src/")
-                        and Path(path).name not in (*ENTRYPOINTS[environment], "main.cpp")):
+@dataclass(frozen=True)
+class Entry:
+    """One translation unit of a compilation database, its command split into arguments."""
+    file: str
+    directory: str
+    arguments: tuple[str, ...]
+
+
+def project_file(path: str) -> str | None:
+    """The path relative to the project, if it is one of the project's own files."""
+    try:
+        relative = (PROJECT_DIR / path).resolve().relative_to(PROJECT_DIR.resolve())
+    except ValueError:
         return None
-    return path
-
-
-def target_inputs(environment: str, inputs: Sequence[str]) -> list[str]:
-    """All compatible library files, including unused ones, and this target's entrypoints."""
-    selected: list[str] = []
-    for source in inputs:
-        path = candidate(environment, source)
-        if path is not None and not any(fnmatch(path, pattern)
-                                        for pattern, _ in PLATFORM_EXCLUSIONS[environment]):
-            selected.append(source)
-    return selected
-
-
-def excluded_inputs(environment: str, inputs: Sequence[str]) -> dict[str, list[str]]:
-    """Each PLATFORM_EXCLUSIONS pattern of the environment, with the inputs it leaves out."""
-    paths = {source: candidate(environment, source) for source in inputs}
-    return {pattern: [source for source, path in paths.items() if path is not None and fnmatch(path, pattern)]
-            for pattern, _ in PLATFORM_EXCLUSIONS[environment]}
-
-
-def stale_exclusions(excluded: dict[str, list[str]], unparsed: set[str]) -> list[str]:
-    """The patterns none of whose files clang failed to parse."""
-    return [pattern for pattern, sources in excluded.items() if not unparsed.intersection(sources)]
-
-
-def project_inputs() -> list[str]:
-    """All own C/C++ inputs; the native smoke main belongs to the native group."""
-    return [str(path) for folder in ("lib", "src") for path in (PROJECT_DIR / folder).rglob("*")
-            if path.suffix in (".c", ".cc", ".cpp", ".cxx", ".ino", ".h", ".hh", ".hpp", ".hxx")
-            and path.name != "main_native.cpp"]
-
-
-def validate_inputs(environment: str, inputs: Sequence[str]) -> None:
-    """Source filters may not silently remove an assigned file from a successful analysis."""
-    actual = {str(Path(source).resolve()) for source in inputs}
-    expected = set(target_inputs(environment, project_inputs()))
-    missing = expected - actual
-    if missing:
-        raise ValueError(f"{environment}: missing analysis inputs: {sorted(missing)}")
-
-
-def uncovered_inputs() -> list[str]:
-    """No own library/source may disappear from every target when exclusions change."""
-    inputs = project_inputs()
-    covered = {source for env in ENVIRONMENTS for source in target_inputs(env, inputs)}
-    return sorted(str(Path(source).relative_to(PROJECT_DIR)) for source in inputs if source not in covered)
-
-
-ENVIRONMENT_HEADING = re.compile(r"^Checking (\S+) > clangtidy ")
-CLANG_ERROR = re.compile(r"^(\S+?):(\d+):\d+: error: (.*) \[clang-diagnostic-error\]$")
-DEFECT = re.compile(r"^(\S+?):\d+: \[(?:low|medium|high):\w+\] ")
-DIAGNOSTIC = re.compile(r": (?:error|warning|note): ")
-NOT_FOUND = re.compile(r"'([^']+)' file not found")
-STALE = re.compile(r"^TIDY_STALE (\S+) (\S+)$", re.MULTILINE)
-TOOL_COMMAND = re.compile(r"^(\S*clang-tidy) ", re.MULTILINE)
-LLVM_VERSION = re.compile(r"LLVM version (\S+)")
+    return None if relative.parts[0] == ".pio" else relative.as_posix()
 
 
 def find_pio() -> str:
@@ -173,178 +99,288 @@ def find_pio() -> str:
     sys.exit("pio executable not found (PATH and ~/.platformio/penv/bin/pio checked)")
 
 
-def run_check(pio: str, environments: Sequence[str]) -> tuple[int, str]:
-    """Run the clang-tidy environments verbosely; return the exit code and the output."""
-    command = [str(Path(pio).parent / "python"), str(PROJECT_DIR / "scripts" / "pio_tidy.py"),
-               "check", "--verbose"]
-    for environment in environments:
-        command += ["-e", environment]
-    log_path = PROJECT_DIR / ".pio" / "analysis" / "driver.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w", encoding="utf-8") as log:
-        with subprocess.Popen(command, cwd=PROJECT_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              text=True, env={**os.environ, "VIRTUAL_ENV": ""}) as process:
-            assert process.stdout is not None
-            for line in process.stdout:
-                log.write(line)
-                if line.startswith("analysis:"):
-                    print(line, end="", flush=True)
-            status = process.wait()
-    return status, log_path.read_text(encoding="utf-8")
+def load_database(path: Path) -> list[Entry]:
+    """The entries of a compilation database, each command split into its arguments."""
+    entries: list[Entry] = []
+    for item in json.loads(path.read_text(encoding="utf-8")):
+        arguments = item.get("arguments") or shlex.split(item["command"])
+        file = str((Path(item["directory"]) / item["file"]).resolve())
+        entries.append(Entry(file, item["directory"], tuple(arguments)))
+    return entries
 
 
-def clang_tidy_binary(output: str) -> str | None:
-    """The clang-tidy executable `pio check --verbose` echoed running, if it ran one at all."""
-    match = TOOL_COMMAND.search(output)
-    return match.group(1) if match is not None else None
+def compile_database(pio: str, environment: str) -> list[Entry]:
+    """The environment's compilation database, written fresh by PlatformIO."""
+    result = subprocess.run([pio, "run", "-e", environment, "-t", "compiledb"], cwd=PROJECT_DIR,
+                            capture_output=True, text=True, check=False,
+                            env={**os.environ, "VIRTUAL_ENV": ""})
+    path = PROJECT_DIR / ".pio" / "build" / environment / "compile_commands.json"
+    if result.returncode != 0 or not path.exists():
+        raise RuntimeError(f"{environment}: `pio run -t compiledb` failed:\n{result.stdout}{result.stderr}")
+    return load_database(path)
 
 
-def parse_version(version_output: str) -> str | None:
-    """The LLVM version `clang-tidy --version` reports."""
-    match = LLVM_VERSION.search(version_output)
-    return match.group(1) if match is not None else None
+def own_entries(entries: Iterable[Entry]) -> list[Entry]:
+    """The entries that compile one of the project's own files."""
+    return [entry for entry in entries if project_file(entry.file) is not None]
 
 
-def clang_tidy_version(binary: str) -> str | None:
-    """Ask the clang-tidy that ran for its version."""
-    result = subprocess.run([binary, "--version"], capture_output=True, text=True, check=False)
-    return parse_version(result.stdout + result.stderr)
+def compile_flags(entry: Entry) -> list[str]:
+    """The arguments that shape how a file parses: defines, include paths, standard, MCU."""
+    flags: list[str] = []
+    arguments = iter(entry.arguments[1:])
+    for argument in arguments:
+        if argument in ("-include", "-isystem", "-iquote", "-I", "-D", "-U"):
+            flags += [argument, next(arguments, "")]
+        elif argument.startswith(("-D", "-U", "-I", "-isystem", "-iquote", "-include", "-std=", "-mmcu=")):
+            flags.append(argument)
+    return flags
 
 
-def diagnostics_per_environment(output: str,
-                                 environments: Sequence[str] = ENVIRONMENTS) -> dict[str, list[str]]:
-    """Split the verbose output into the diagnostic lines each environment produced."""
-    per_environment: dict[str, list[str]] = {name: [] for name in environments}
-    current: str | None = None
-    for line in output.splitlines():
-        heading = ENVIRONMENT_HEADING.match(line)
-        if heading is not None:
-            current = heading.group(1)
-            continue
-        if current in per_environment and DIAGNOSTIC.search(line):
-            per_environment[current].append(line)
-    return per_environment
+def gnu_dialect(flag: str) -> str:
+    """-std=c++NN as -std=gnu++NN: GCC accepts its extensions in either, clang in the GNU one only."""
+    return re.sub(r"^-std=c(\+\+)?", lambda match: "-std=gnu" + (match.group(1) or ""), flag)
 
 
-def report(per_environment: dict[str, list[str]]) -> None:
-    """Summarize diagnostics; silence is valid when completion is independently verified."""
-    for environment, lines in per_environment.items():
-        unresolved = sorted({match.group(1) for line in lines
-                             for match in [NOT_FOUND.search(line)] if match is not None})
-        print(f"analysis: {environment} - {len(lines)} diagnostic(s)"
-              + (f", headers it could not find: {', '.join(unresolved)}" if unresolved else ""))
+def clang_target(compiler: str) -> str | None:
+    """The target triple for clang, from the toolchain's compiler name; None for the host."""
+    name = Path(compiler).name
+    return next((triple for prefix, triple in TARGETS if name.startswith(prefix)), None)
 
 
-def incomplete_environments(output: str, environments: Sequence[str]) -> list[str]:
-    """Require exactly one successful completion with nonempty input for each environment."""
-    records = re.findall(r"^TIDY_COMPLETE (\S+) (-?\d+) (\d+)$", output, re.MULTILINE)
-    diagnostics = diagnostics_per_environment(output, environments)
-    return [env for env in environments
-            if len([record for record in records if record[0] == env]) != 1
-            or not any(name == env and int(count) > 0
-                       and (int(status) == 0 or (int(status) == 1
-                            and any(CLANG_ERROR.match(line) for line in diagnostics[env])))
-                       for name, status, count in records)]
+@cache
+def toolchain(compiler: str, language: str, machine: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The compiler's own include directories, in its search order, and its predefined macros."""
+    result = subprocess.run([compiler, *machine, "-x", language, "-E", "-v", "-dM", os.devnull],
+                            capture_output=True, text=True, check=True)
+    search = re.search(r"#include <\.\.\.> search starts here:\n(.*?)End of search list", result.stderr, re.S)
+    directories = tuple(str(Path(line.strip()).resolve()) for line in search.group(1).splitlines()) if search else ()
+    macros = tuple(f"-D{match.group(1)}" + (f"={match.group(2)}" if match.group(2) else "")
+                   for match in re.finditer(r"^#define (\S+) ?(.*)$", result.stdout, re.MULTILINE))
+    return directories, macros
 
 
-def project_file(path: str) -> str | None:
-    """The path relative to the project, if it is one of the project's own files."""
-    try:
-        relative = (PROJECT_DIR / path).resolve().relative_to(PROJECT_DIR.resolve())
-    except ValueError:
-        return None
-    return None if relative.parts[0] == ".pio" else relative.as_posix()
+def tidy_command(binary: str, entry: Entry, header: bool = False) -> tuple[str, ...]:
+    """The clang-tidy command that analyses the entry's file with its compile flags."""
+    flags = compile_flags(entry)
+    cplusplus = header or Path(entry.file).suffix != ".c"
+    machine = tuple(flag for flag in flags if flag.startswith(("-std=", "-mmcu=")))
+    directories, macros = toolchain(entry.arguments[0], "c++" if cplusplus else "c", machine)
+    target = clang_target(entry.arguments[0])
+    options = ["--quiet", f"--config-file={PROJECT_DIR / '.clang-tidy'}"]
+    if header:
+        options.append("--extra-arg-before=-xc++-header")
+    return (binary, *options, entry.file, "--",
+            *([f"--target={target}"] if target else []),
+            *TIDY_FLAGS, "-nostdinc", *(["-nostdinc++"] if cplusplus else []),
+            *(f"-isystem{directory}" for directory in directories), *macros, *TIDY_UNDEFINES,
+            *(gnu_dialect(flag) for flag in flags))
 
 
-def check_errors(per_environment: dict[str, list[str]]) -> list[str]:
-    """The clang errors in project files."""
-    errors: list[str] = []
-    for environment, lines in per_environment.items():
-        for line in lines:
-            match = CLANG_ERROR.match(line)
-            path = None if match is None else project_file(match.group(1))
-            if match is not None and path is not None:
-                errors.append(f"{environment}: {path}:{match.group(2)}: {match.group(3)}")
-    return errors
+def library_files() -> list[str]:
+    """Every C and C++ file of the project's libraries."""
+    return sorted(path.relative_to(PROJECT_DIR).as_posix() for path in (PROJECT_DIR / "lib").rglob("*")
+                  if path.suffix in SOURCES + HEADERS)
 
 
-def project_defects(output: str) -> tuple[list[str], int]:
-    """The defect lines `pio check` printed for project files, and how many it printed for others."""
-    own: list[str] = []
+def uncovered(built: Iterable[str], files: Sequence[str] | None = None) -> list[str]:
+    """The library files no build reaches: neither compiled, nor named in an #include of one that is."""
+    files = library_files() if files is None else files
+    by_name: dict[str, list[str]] = {}
+    for file in files:
+        by_name.setdefault(Path(file).name, []).append(file)
+    reached = set(built)
+    pending = list(reached)
+    while pending:
+        text = (PROJECT_DIR / pending.pop()).read_text(encoding="utf-8", errors="replace")
+        for name in INCLUDE.findall(text):
+            for file in by_name.get(Path(name).name, []):
+                if file not in reached:
+                    reached.add(file)
+                    pending.append(file)
+    return [file for file in files if file not in reached]
+
+
+def tidy_findings(results: Iterable[Result]) -> tuple[list[str], list[str], int]:
+    """Project defects and clang errors in project files, and how many diagnostics fell outside."""
+    defects: set[str] = set()
+    errors: set[str] = set()
     outside = 0
-    for line in output.splitlines():
-        match = DEFECT.match(line)
-        if match is None:
+    for result in results:
+        for line in result.log.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = TIDY_DIAGNOSTIC.match(line)
+            if match is None:
+                continue
+            path = project_file(match.group(1))
+            if path is None:
+                outside += 1
+            elif match.group(5) == "clang-diagnostic-error":
+                errors.add(f"{path}:{match.group(2)}: {match.group(4)}")
+            else:
+                defects.add(f"{path}:{match.group(2)}: [{match.group(3)}] {match.group(4)} [{match.group(5)}]")
+    return sorted(defects), sorted(errors), outside
+
+
+def run_tidy(environment: str, entries: Sequence[Entry], binary: str, jobs: int) -> int:
+    """clang-tidy over the environment's own sources, then over every project header they include."""
+    directory = PROJECT_DIR / ".pio" / "analysis" / environment
+    units = [Unit(entry.file, tidy_command(binary, entry)) for entry in entries]
+    print(f"analysis: {environment}: {len(units)} sources, {jobs} worker(s)", flush=True)
+
+    def report(result: Result) -> None:
+        print(f"analysis: {environment} {project_file(result.source)} {result.duration:.1f}s "
+              f"exit={result.status}", flush=True)
+
+    results = run_units(units, directory, jobs, report)
+    including: dict[str, Entry] = {}
+    by_source = {entry.file: entry for entry in entries}
+    for result in sorted(results, key=lambda item: item.source):
+        for dependency in sorted(result.dependencies):
+            if Path(dependency).suffix in HEADERS and project_file(dependency) is not None:
+                including.setdefault(dependency, by_source[result.source])
+    headers = [Unit(header, tidy_command(binary, Entry(header, entry.directory, entry.arguments), header=True))
+               for header, entry in sorted(including.items())]
+    print(f"analysis: {environment}: {len(headers)} headers", flush=True)
+    results += run_units(headers, directory, jobs, report, first=len(units))
+
+    defects, errors, outside = tidy_findings(results)
+    if outside:
+        print(f"analysis: {environment}: {outside} diagnostic(s) in library and framework code left out")
+    if failed(results) or not units:
+        broken = [f"{project_file(r.source)} exit={r.status} ({r.log})" for r in results if r.status not in (0, 1)]
+        print(f"analysis: {environment}: clang-tidy did not complete: {', '.join(broken) or 'no sources'}")
+        return 1
+    if errors:
+        print(f"\nanalysis: {environment}: clang could not parse project code, so clang-tidy skipped what "
+              "depends on it:")
+        for error in errors:
+            print(f"  {error}")
+    if defects:
+        print(f"\nanalysis: {environment}: {len(defects)} defect(s) in project code:")
+        for defect in defects:
+            print(f"  {defect}")
+    return 1 if errors or defects else 0
+
+
+def cppcheck_binary() -> Path:
+    """The pinned cppcheck PlatformIO installed for platform_packages."""
+    core = Path(os.environ.get("PLATFORMIO_CORE_DIR") or Path.home() / ".platformio")
+    return core / "packages" / "tool-cppcheck" / "cppcheck"
+
+
+def pinned_cppcheck(ini: Path = INI) -> str | None:
+    """The tool-cppcheck version platformio.ini pins."""
+    match = re.search(r"tool-cppcheck@(\S+)", ini.read_text(encoding="utf-8"))
+    return match.group(1) if match else None
+
+
+def installed_version(binary: Path) -> str | None:
+    """The version of the package a tool binary belongs to."""
+    try:
+        return json.loads((binary.parent / "package.json").read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError):
+        return None
+
+
+def cppcheck_arguments(entry: Entry, extra_includes: Sequence[str] = ()) -> list[str]:
+    """The entry's command with only the project's own include directories kept."""
+    kept: list[str] = [entry.arguments[0]]
+    for flag in compile_flags(entry):
+        if flag.startswith("-I"):
+            directory = flag[2:]
+            if project_file(str(Path(entry.directory) / directory)) is None:
+                continue
+        if flag.startswith(("-isystem", "-include")):
             continue
-        if project_file(match.group(1)) is None:
-            outside += 1
-        else:
-            own.append(line)
-    return own, outside
+        kept.append(flag)
+    return [*kept, *(f"-I{directory}" for directory in extra_includes), "-c", entry.file]
+
+
+def test_entries(base: Entry) -> list[Entry]:
+    """The test suites and their shims, compiled the way the test environment compiles its main."""
+    libraries = sorted(str(path) for path in (PROJECT_DIR / "lib").glob("*/src") if path.is_dir())
+    tests = sorted(path for path in (PROJECT_DIR / "test").rglob("*") if path.suffix in SOURCES)
+    shims = str(PROJECT_DIR / "test" / "_shims" / "src")
+    return [Entry(str(path), base.directory,
+                  tuple(cppcheck_arguments(base, [str(path.parent), shims, *libraries])[:-2]))
+            for path in tests]
+
+
+def run_cppcheck(environment: str, entries: Sequence[Entry], jobs: int) -> int:
+    """cppcheck over the environment's own sources, from a database of them alone."""
+    binary = cppcheck_binary()
+    pinned = pinned_cppcheck()
+    installed = installed_version(binary)
+    if installed is None or installed != pinned:
+        print(f"analysis: {environment}: cppcheck {installed} at {binary} is not the pinned {pinned}")
+        return 1
+    database = [Entry(entry.file, entry.directory, tuple(cppcheck_arguments(entry))) for entry in entries]
+    if environment == TEST_ENVIRONMENT and entries:
+        database += [Entry(entry.file, entry.directory, (*entry.arguments, "-c", entry.file))
+                     for entry in test_entries(entries[0])]
+    directory = PROJECT_DIR / ".pio" / "analysis" / environment
+    directory.mkdir(parents=True, exist_ok=True)
+    project = directory / "cppcheck.json"
+    project.write_text(json.dumps([{"directory": entry.directory, "file": entry.file,
+                                    "arguments": list(entry.arguments)} for entry in database], indent=1),
+                       encoding="utf-8")
+    print(f"analysis: {environment}: cppcheck {installed}, {len(database)} sources", flush=True)
+    result = subprocess.run([str(binary), f"--project={project}", *CPPCHECK_FLAGS, f"-j{jobs}",
+                             "--template={file}:{line}:{column}: [{severity}:{id}] {message}"],
+                            cwd=PROJECT_DIR, capture_output=True, text=True, check=False)
+    checked = {str(Path(match.group(1)).resolve()) for line in result.stdout.splitlines()
+               for match in [CPPCHECK_CHECKING.match(line)] if match is not None}
+    missing = [project_file(entry.file) or entry.file for entry in database
+               if str(Path(entry.file).resolve()) not in checked]
+    defects = sorted({f"{path}:{match.group(2)}: [{match.group(3)}:{match.group(4)}] {match.group(5)}"
+                      for line in result.stderr.splitlines()
+                      for match in [CPPCHECK_DIAGNOSTIC.match(line)] if match is not None
+                      for path in [project_file(match.group(1))]
+                      if path is not None and match.group(3) in CPPCHECK_REPORTED})
+    (directory / "cppcheck.log").write_text(result.stdout + result.stderr, encoding="utf-8")
+    if result.returncode != 0 or missing or not database:
+        print(f"analysis: {environment}: cppcheck did not complete (exit {result.returncode}); "
+              f"not checked: {', '.join(missing) or 'none'}\n{result.stderr[-2000:]}")
+        return 1
+    if defects:
+        print(f"\nanalysis: {environment}: {len(defects)} defect(s) in project code:")
+        for defect in defects:
+            print(f"  {defect}")
+        return 1
+    return 0
 
 
 def main(argv: Sequence[str] = ()) -> int:
-    parser = argparse.ArgumentParser(description="clang-tidy over the check_* environments.")
-    parser.add_argument("--env", nargs="+", choices=ENVIRONMENTS, default=list(ENVIRONMENTS),
-                        metavar="ENV", help=f"environments to analyse (default: {', '.join(ENVIRONMENTS)})")
-    environments: list[str] = parser.parse_args(list(argv)).env
+    environments_all = default_envs(INI)
+    parser = argparse.ArgumentParser(description="cppcheck or clang-tidy over each environment's own build.")
+    parser.add_argument("--tool", choices=("cppcheck", "clang-tidy"), required=True)
+    parser.add_argument("--env", nargs="+", choices=environments_all, default=environments_all,
+                        metavar="ENV", help=f"environments to analyse (default: {', '.join(environments_all)})")
+    args = parser.parse_args(list(argv))
+    environments: list[str] = args.env
 
-    uncovered = uncovered_inputs()
-    if uncovered:
-        print(f"analysis: files excluded from every target: {uncovered}")
-        return 1
     pio = find_pio()
-    status, output = run_check(pio, environments)
-
-    per_environment = diagnostics_per_environment(output, environments)
-    report(per_environment)
-    incomplete = incomplete_environments(output, environments)
-
-    if incomplete:
-        print(f"analysis: missing or failed clang-tidy completion: {', '.join(incomplete)}")
-        print(output)
+    databases = {environment: own_entries(compile_database(pio, environment)) for environment in environments_all}
+    missed = uncovered({path for entries in databases.values() for entry in entries
+                        for path in [project_file(entry.file)] if path is not None})
+    if missed:
+        print("analysis: library files no default environment builds, so no analyser sees them:")
+        for file in missed:
+            print(f"  {file}")
         return 1
 
-    binary = clang_tidy_binary(output)
-    if binary is None:
-        print("\nanalysis: the clang-tidy command is missing from `pio check --verbose`'s output, "
-              "so its version cannot be checked.")
-        return 1
-    version = clang_tidy_version(binary)
-    print(f"analysis: clang-tidy {version} ({binary})")
-    if version != CLANG_TIDY_VERSION:
-        print(f"\nanalysis: this is not the clang-tidy {CLANG_TIDY_VERSION} the project was set up "
-              f"with. A platform bump brought it: go through what the new version reports, then "
-              f"update CLANG_TIDY_VERSION in {Path(__file__).name}.")
-        return 1
-
-    defects, outside = project_defects(output)
-    if outside:
-        print(f"analysis: {outside} defect(s) in library and framework code left out")
-    if status != 0 or defects:
-        # From the first environment heading on: what precedes it is the command line pio echoes
-        # under --verbose, which is thousands of characters of -D and -I.
-        start = output.find("Checking ")
-        print(output[start:] if start >= 0 else output)
-    if defects:
-        print(f"\nanalysis: {len(defects)} defect(s) in project code:")
-        for defect in defects:
-            print(f"  {defect}")
-
-    stale = [f"{environment}: {pattern}" for environment, pattern in STALE.findall(output)]
-    if stale:
-        print(f"\nanalysis: PLATFORM_EXCLUSIONS entries whose files clang parses now, to take out: "
-              f"{', '.join(stale)}")
-        return 1
-    errors = check_errors(per_environment)
-    if errors:
-        print("\nanalysis: clang could not parse project code, so clang-tidy skipped what depends on it:")
-        for error in errors:
-            print(f"  {error}")
-        print("Fix the include paths or flags of the check_* environment, or, for a file written for "
-              f"another target, add it to PLATFORM_EXCLUSIONS in {Path(__file__).name} with the reason.")
-        return 1
-    return 1 if defects else status
+    jobs = analysis_jobs()
+    status = 0
+    for environment in environments:
+        if args.tool == "cppcheck":
+            status |= run_cppcheck(environment, databases[environment], jobs)
+        else:
+            binary = shutil.which("clang-tidy", path=str(Path(sys.executable).parent)) or ""
+            if not binary:
+                print(f"analysis: no clang-tidy beside {sys.executable}; install requirements-dev.txt")
+                return 1
+            status |= run_tidy(environment, databases[environment], binary, jobs)
+    return status
 
 
 if __name__ == "__main__":

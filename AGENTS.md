@@ -16,14 +16,14 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
 
 - Build all envs: `… pio run` · one env: `… pio run -e <env>`
 - Native tests: `… pio test -e native_test` (under a minute)
-- Static analysis: `… pio check` (cppcheck) and
-  `python scripts/analysis_check.py` (clang-tidy; checks live in `.clang-tidy`). Split because
-  they need opposite `check_skip_packages` settings. The guard runs each input as its own
-  clang-tidy process under PlatformIO's compiler configuration, and fails one that crashed, timed
-  out or parsed nothing, and a clang error in project code - all of which a bare `pio check`
-  reports as a pass. A file written for another target that cannot parse in an environment goes
-  in the guard's `PLATFORM_EXCLUSIONS`, with the reason; an entry whose files parse again fails
-  as stale. Per-file logs live in `.pio/analysis/`.
+- Static analysis: `python scripts/analysis_check.py --tool cppcheck|clang-tidy [--env ENV...]`
+  (clang-tidy's checks live in `.clang-tidy`). Not `pio check`: the guard reads each
+  environment's compilation database and analyses exactly the project files that environment
+  compiles, so nothing has to list which file belongs to which target, and a library file no
+  default environment builds fails it. clang-tidy is the `.venv`'s, pinned in
+  `requirements-dev.txt`; cppcheck is the one `platform_packages` pins. It fails a clang-tidy
+  unit that crashed, timed out or parsed nothing, and a clang error in project code. Per-file
+  logs live in `.pio/analysis/`.
 - **Release gate** (build + test + check + tidy + format + secrets + lint + workflows + typecheck +
   pytest, fail-fast):
   `python scripts/release_check.py` (`--strict` fails on a dirty tree, `--sync` refreshes .venv,
@@ -35,8 +35,8 @@ VIRTUAL_ENV="" ~/.platformio/penv/bin/pio <args>
   changes were, and say which guard ran.
 - Individual guards: `scripts/deps_check.py` (the .venv - or the interpreter it runs under when
   there is none - matches the pins; `--sync` installs them),
-  `scripts/analysis_check.py` (clang-tidy over the check_* environments; `test/` is cppcheck's
-  alone, there being no clang headers for the native platform to borrow),
+  `scripts/analysis_check.py` (cppcheck or clang-tidy over each environment's own build; `test/`
+  is cppcheck's alone, in the test environment),
   `scripts/format_check.py` (clang-format + final newline + the executable bit git recorded,
   which is not the one on disk: `core.fileMode` is off here),
   `scripts/secret_check.py` (no key, address, UUID or private forge host in a tracked file; the
@@ -114,8 +114,7 @@ The build must stay **warning-clean under `-Wall -Wextra -Werror`** — keep it 
   for Actions); everything else waits on the dashboard. The urboot image is excluded from
   automerge - the bootloader `.hex` files are committed, so a base-image change wants a rebuild
   and a diff (`URBOOT_OUT_DIR=/tmp/x scripts/build_urboot.sh`). So is the
-  ESP32 platform: a release brings a new Arduino core and ESP-IDF, and possibly another clang-tidy
-  (`scripts/analysis_check.py` fails until `CLANG_TIDY_VERSION` follows), so it wants the gate and
+  ESP32 platform: a release brings a new Arduino core, ESP-IDF and toolchain, so it wants the gate and
   a bench test - a serial upload to an ESP8266 among them, the ESP8266 builds flashing with that
   platform's esptool. Dependabot is deliberately not used: it only runs on GitHub, and GitHub here is a
   push mirror, so its PRs would land where they cannot be merged. The other PlatformIO pins in
