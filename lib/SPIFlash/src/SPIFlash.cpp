@@ -1,5 +1,6 @@
 #include "SPIFlash.h"
 #include <string.h>                                                 /// memset() for the failure paths.
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 
 SPIFlash::SPIFlash(uint8_t slaveSelectPin, uint16_t jedecID) :
   slaveSelectPin(slaveSelectPin),
@@ -50,9 +51,11 @@ bool SPIFlash::initialize() {
 
 uint16_t SPIFlash::readDeviceId() {
   if(!command(CMD_READ_ID)) { return 0U; }
-  const uint16_t jedecid = (static_cast<uint16_t>(SPI.transfer(0U)) << 8U) | SPI.transfer(0U);
+  // Two statements: the operands of one expression would be read in an unspecified order.
+  const uint8_t manufacturer = SPI.transfer(0U);
+  const uint8_t memoryType = SPI.transfer(0U);
   unselect();
-  return jedecid;
+  return be16(manufacturer, memoryType);
 }
 
 uint32_t SPIFlash::capacity() {

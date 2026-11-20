@@ -1,6 +1,8 @@
 // The real SPIFlash driver against a flash model on the shim SPI bus. Most suites replace this
 // driver with test/_shims/src/SPIFlash.h, so the library is lib_ignored for native_test and the
-// source is pulled in here by path: this is the only suite that drives the real one.
+// source is pulled in here by path: this is the only suite that drives the real one. Its own
+// includes stay unseen by the library finder, so the libraries it uses are named here as well.
+#include "byteOrder.hpp"
 #include "../../lib/SPIFlash/src/SPIFlash.cpp"   // NOLINT(bugprone-suspicious-include)
 #include "SPI.h"
 #include "Arduino.h"
