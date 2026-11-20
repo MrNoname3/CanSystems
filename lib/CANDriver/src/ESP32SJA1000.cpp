@@ -53,8 +53,11 @@ uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
 
   loopbackEnabled = false;
 
+  // ESP-IDF's register masks are BIT(n), which shifts by a parenthesised, signed bit number.
+  // NOLINTBEGIN(bugprone-signed-bitwise)
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
+  // NOLINTEND(bugprone-signed-bitwise)
 
   // RX pin
   gpio_set_direction(rxPin, GPIO_MODE_INPUT);
@@ -155,8 +158,11 @@ void ESP32SJA1000::end() {
     intrHandle = nullptr;
   }
 
+  // The masks are ESP-IDF's BIT(n), as in begin().
+  // NOLINTBEGIN(bugprone-signed-bitwise)
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
+  // NOLINTEND(bugprone-signed-bitwise)
 }
 
 bool ESP32SJA1000::txReady() {

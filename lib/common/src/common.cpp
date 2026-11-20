@@ -102,6 +102,8 @@ void Build::printBuildInfo() {
   Logger::get()->print(F("Dirty: "));
   Logger::get()->println(getGitDirty());
   Logger::get()->print(F("Fuses: "));
+  // avr-libc's fuse read builds its command from _BV(n), a signed shift.
+  // NOLINTBEGIN(bugprone-signed-bitwise)
   Logger::get()->print(boot_lock_fuse_bits_get(GET_LOW_FUSE_BITS), HEX);
   Logger::get()->print(Str::getSpacerStr());
   Logger::get()->print(boot_lock_fuse_bits_get(GET_HIGH_FUSE_BITS), HEX);
@@ -109,6 +111,7 @@ void Build::printBuildInfo() {
   Logger::get()->print(boot_lock_fuse_bits_get(GET_EXTENDED_FUSE_BITS), HEX);
   Logger::get()->print(Str::getSpacerStr());
   Logger::get()->println(boot_lock_fuse_bits_get(GET_LOCK_BITS), HEX);
+  // NOLINTEND(bugprone-signed-bitwise)
   Logger::get()->print(F("Reset: "));
   Logger::get()->println(ResetHandler::getResetReason(), HEX);
 #elif defined(ESP8266) || defined(ESP32)
