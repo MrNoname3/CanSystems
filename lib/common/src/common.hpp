@@ -119,9 +119,9 @@ public:
   /// would have to say so and slow the prescaler back down.
   static void config() {
     analogReference(DEFAULT);
-    bitSet(ADCSRA, ADPS2);
-    bitSet(ADCSRA, ADPS1);
-    bitClear(ADCSRA, ADPS0);
+    ADCSRA |= static_cast<uint8_t>(1U << ADPS2);
+    ADCSRA |= static_cast<uint8_t>(1U << ADPS1);
+    ADCSRA &= static_cast<uint8_t>(~(1U << ADPS0));
   }
 #endif
 
