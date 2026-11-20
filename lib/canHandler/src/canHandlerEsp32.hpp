@@ -88,7 +88,7 @@ private:
   /// allocates the interrupt without `ESP_INTR_FLAG_IRAM`, and the controller accessors this
   /// reads the frame through live in flash themselves.
   /// @param payloadBytes Payload length of the frame the controller has just parsed, as
-  /// CANController::onReceive() hands it over. A frame with none is dropped here; see the
+  /// the driver's onReceive() callback receives it. A frame with none is dropped here; see the
   /// definition for why.
   static void rxInterrupt(int payloadBytes);
 

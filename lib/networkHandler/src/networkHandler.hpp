@@ -57,7 +57,7 @@ public:
     UNKNOWN = 0U,                                 // No interface specified.
     WIFI,                                         // Wi-Fi interface.
     ENC28J60,                                     // ENC28J60 Ethernet interface.
-    LAN8720                                       // LAN8720 Ethernet interface.
+    LAN8720,                                      // LAN8720 Ethernet interface.
   };
 
   /// @brief Constructs a NetworkHandler instance.
@@ -137,7 +137,7 @@ private:
     MAC_ADDRESS_INVALID      = 1 << 6U,           // Invalid MAC address.
     WIFI_CONNECT_TIMEOUT     = 1 << 7U,           // Wi-Fi connect timed out waiting for DHCP.
     ENC28J60_CONNECT_TIMEOUT = 1 << 8U,           // ENC28J60 connect timed out waiting for DHCP.
-    LAN8720_CONNECT_TIMEOUT  = 1 << 9U            // LAN8720 connect timed out waiting for DHCP.
+    LAN8720_CONNECT_TIMEOUT  = 1 << 9U,           // LAN8720 connect timed out waiting for DHCP.
     // clang-format on
   };
 
@@ -146,8 +146,8 @@ private:
 #elif defined ESP8266
   std::optional<ENC28J60lwIP> ethernetEnc28j60;                     // Optional instance for ENC28J60 on ESP8266.
 #endif
-  Interface networkInterface;                                       // Current network interface.
-  wl_status_t interfaceStatus;                                      // Current network interface status.
-  uint8_t mac[macAddressSize];                                      // Byte array to store the MAC address.
+  Interface networkInterface = Interface::UNKNOWN;                  // Current network interface.
+  wl_status_t interfaceStatus = WL_DISCONNECTED;                    // Current network interface status.
+  uint8_t mac[macAddressSize] = { 0U };                             // Byte array to store the MAC address.
   char hostnameBuffer[hostnameLen]{};                               // Unique hostname: env (no prefix) + "_" + last 3 MAC bytes.
 };

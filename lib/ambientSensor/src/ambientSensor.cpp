@@ -5,16 +5,7 @@ AmbientSensor::AmbientSensor(CanHandlerBase& canHandler, uint8_t lightPin, uint3
   si7021(Time::msToUs(10U)),
   canHandler(canHandler),
   lightPin(lightPin),
-  measurePeriod(measurePeriod),
-  lightValue(0U),
-  temperature(0),
-  humidity(0U),
-  lastSentTemperature(INT16_MIN),
-  lastSentHumidity(UINT16_MAX),
-  lastSentLight(UINT16_MAX),
-  eventTimer(0U),
-  sendThrottleTimer(0U),
-  event(Event::IDLE) {}
+  measurePeriod(measurePeriod) {}
 
 bool AmbientSensor::init() {
   const bool si7021BeginResult = si7021.init();
@@ -53,15 +44,16 @@ bool AmbientSensor::run() {
       event = (changed || Time::hasElapsed(actualTime, sendThrottleTimer, kSendMaxPeriod)) ? Event::SEND_VALUES : Event::IDLE;
     } break;
     case Event::SEND_VALUES: {
+      const uint16_t temperatureBits = static_cast<uint16_t>(temperature);  // two's complement on the wire
       const uint8_t payload[8] = {
-        static_cast<uint8_t>(temperature & 0xFF),
-        static_cast<uint8_t>((temperature >> 8U) & 0xFF),
-        static_cast<uint8_t>(humidity & 0xFF),
-        static_cast<uint8_t>((humidity >> 8U) & 0xFF),
-        static_cast<uint8_t>(lightValue & 0xFF),
-        static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
+        static_cast<uint8_t>(temperatureBits),
+        static_cast<uint8_t>(temperatureBits >> 8U),
+        static_cast<uint8_t>(humidity),
+        static_cast<uint8_t>(humidity >> 8U),
+        static_cast<uint8_t>(lightValue),
+        static_cast<uint8_t>(lightValue >> 8U),
         0U,
-        0U
+        0U,
       };
       (void)canHandler.send(AlertCmd::READ_HUM_TEMP_LDR, payload);
       lastSentTemperature = temperature;

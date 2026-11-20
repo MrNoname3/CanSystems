@@ -46,7 +46,7 @@ private:
     IDLE = 0U,                                // Waiting for the next read cycle.
     WAKEUP,                                   // Waiting for the sensor wake-up time.
     SETUP,                                    // Setting up the next multiplexer channel.
-    READING                                   // Filtering and reading analog data.
+    READING,                                  // Filtering and reading analog data.
   };
 
   /// @brief Applies a complementary filter to the analog moisture value.

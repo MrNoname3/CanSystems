@@ -8,6 +8,7 @@
 #include "pushButtonHandler.hpp"  /// Pushbutton events library.
 #include "taskHandler.hpp"        /// Class for task scheduling.
 #include "common.hpp"             /// Common definitions and functions.
+#include "byteOrder.hpp"          /// Two bytes to a 16-bit value.
 #include "performance.hpp"        /// Performance measurement class.
 #include "dfPlayer.hpp"           /// MP3 player driver library.
 #include "ambientSensor.hpp"      /// Sensor handelr library.
@@ -100,7 +101,7 @@ void canMessageArrived(uint16_t command, const uint8_t (&data)[8]) {
       (void)canHandler.send(command);
     } break;
     case static_cast<uint16_t>(AlertCmd::PLAY_MP3): {
-      const uint16_t songNum = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8U) | data[0]);
+      const uint16_t songNum = le16(data[0], data[1]);
       mp3Player.play(songNum, data[2], data[3], data[4], data[5]);
       (void)canHandler.send(command);
     } break;
@@ -113,7 +114,12 @@ void mp3PlayFailed(uint16_t track) {
   const uint8_t payload[8] = {
     static_cast<uint8_t>(track & 0xFF),
     static_cast<uint8_t>((track >> 8U) & 0xFF),
-    0U, 0U, 0U, 0U, 0U, 0U
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
   };
   (void)canHandler.send(AlertCmd::MP3_PLAY_ERROR, payload);
 }
@@ -121,14 +127,10 @@ void mp3PlayFailed(uint16_t track) {
 void btnEventHandling(PushButtonHandler::BtnEvent btnEvent) {
   Logger::get()->print(F("Btn: "));
   Logger::get()->println(static_cast<uint8_t>(btnEvent));
-  switch(btnEvent) {
-    case PushButtonHandler::BtnEvent::LONG_PRESS: {
-      static bool rgbLedState = false;
-      rgbLedState = !rgbLedState;
-      rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
-    } break;
-    default: {
-    } break;
+  if(btnEvent == PushButtonHandler::BtnEvent::LONG_PRESS) {
+    static bool rgbLedState = false;
+    rgbLedState = !rgbLedState;
+    rgbLedState ? rgbLed.setColor(50U, 50U, 50U, true) : rgbLed.clear();
   }
 }
 
@@ -140,7 +142,10 @@ void maxRoundTimeCallback(uint32_t maxRoundTime) {
     static_cast<uint8_t>((maxRoundTime >> 8U) & 0xFFU),
     static_cast<uint8_t>((maxRoundTime >> 16U) & 0xFFU),
     static_cast<uint8_t>((maxRoundTime >> 24U) & 0xFFU),
-    0U, 0U, 0U, 0U
+    0U,
+    0U,
+    0U,
+    0U,
   };
   (void)canHandler.send(CanCmd::ROUND_TIME_MAX, roundTimeBytes);
 }

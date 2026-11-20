@@ -32,7 +32,7 @@ private:
     FILE_LOCATION_INVALID = 1 << 1U,              // Invalid file location (must start with '/').
     FILE_OPEN_FAILED      = 1 << 2U,              // Unable to open the file.
     FILE_EMPTY            = 1 << 3U,              // File is empty.
-    ALREADY_IN_PROGRESS   = 1 << 4U               // Another OTA transfer is still running.
+    ALREADY_IN_PROGRESS   = 1 << 4U,              // Another OTA transfer is still running.
     // clang-format on
   };
 
@@ -92,21 +92,21 @@ private:
     START,                  // Starting the OTA process.
     STORE,                  // Storing file data to the CAN device.
     VALID,                  // OTA process completed successfully.
-    INVALID                 // OTA process encountered an error.
+    INVALID,                // OTA process encountered an error.
   };
 
   CanMqttGateway& canMqttGateway;                       // Reference to the CanMqttGateway for communication.
   File receivedFile;                                    // File object for the firmware being transferred.
-  uint32_t frameNumber;                                 // Current frame number being processed.
-  uint16_t storageNumber;                               // Storage location number for the firmware.
-  uint32_t fileSize;                                    // Size of the firmware file.
-  TransferState transferState;                          // Current state of the OTA process.
+  uint32_t frameNumber = 0U;                            // Current frame number being processed.
+  uint16_t storageNumber = 0U;                          // Storage location number for the firmware.
+  uint32_t fileSize = 0U;                               // Size of the firmware file.
+  TransferState transferState = TransferState::IDLE;    // Current state of the OTA process.
   Crc16 crc16;                                          // CRC16 calculator for validating file integrity.
-  uint32_t otaTimeoutTimer;                             // Timer for OTA process timeout.
-  const char* fileNamePtr;                              // Pointer to the firmware file name (must outlive the OTA process).
-  uint16_t imageCrc;                                    // CRC16 of the image being sent.
-  bool imageCrcKnown;                                   // Whether imageCrc holds it yet, or the START pass still has to compute it.
-  OtaImageInfo* sharedImage;                            // Where to leave the checksum for the next target of this upload; may be null.
+  uint32_t otaTimeoutTimer = 0U;                        // Timer for OTA process timeout.
+  const char* fileNamePtr = nullptr;                    // Pointer to the firmware file name (must outlive the OTA process).
+  uint16_t imageCrc = 0U;                               // CRC16 of the image being sent.
+  bool imageCrcKnown = false;                           // Whether imageCrc holds it yet, or the START pass still has to compute it.
+  OtaImageInfo* sharedImage = nullptr;                  // Where to leave the checksum for the next target of this upload; may be null.
 };
 
 /// @brief Combines CAN and MQTT functionalities for managing device communications.
@@ -205,13 +205,13 @@ private:
   /// @param canFrame The received CAN frame to be processed.
   void canFrameArrivedCallback(const CanHandler::CanFrame& canFrame) override;
 
-  CanOta canOta;                  // CanOta instance responsible for handling OTA updates.
-  uint32_t clientPingTimer;       // Timer for tracking the interval of client pings.
-  uint32_t clientOfflineTimer;    // Timer for tracking the time since the last client ping to detect offline status.
-  bool clientOnline;              // Flag indicating the current online status of the client. True if online, false if offline.
-  bool clientEverSeen;            // False until a frame arrives from the client; clientOfflineTimer carries no meaning before that.
-  const char* fwFileNamePtr;      // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
-  OtaImageInfo batchImage;        // Image facts for the transfer this gateway is running, shared back when computed.
+  CanOta canOta;                    // CanOta instance responsible for handling OTA updates.
+  uint32_t clientPingTimer = 0U;    // Timer for tracking the interval of client pings.
+  uint32_t clientOfflineTimer = 0U; // Timer for tracking the time since the last client ping to detect offline status.
+  bool clientOnline = true;         // Flag indicating the current online status of the client. True if online, false if offline.
+  bool clientEverSeen = false;      // False until a frame arrives from the client; clientOfflineTimer carries no meaning before that.
+  const char* fwFileNamePtr;        // PROGMEM pointer to the configured firmware file name (nullptr if no auto OTA).
+  OtaImageInfo batchImage;          // Image facts for the transfer this gateway is running, shared back when computed.
 
 protected:
   /// @brief Builds CAN topic and device metadata buffers from senderTopic, clientName, and subtopic.

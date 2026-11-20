@@ -159,7 +159,7 @@ private:
     RUN,                                    // Irrigation is currently active.
     STOP,                                   // Irrigation is stopped.
     ERROR,                                  // The system runs into an error.
-    CALIBRATION                             // System is in calibration mode.
+    CALIBRATION,                            // System is in calibration mode.
   };
 
   /// @brief Represents error states in the pump control system.
@@ -172,7 +172,7 @@ private:
     PUMP_OVERRUN  = 1 << 3U,                // Pump takes current, when it should not.
     PUMP_OC       = 1 << 4U,                // Pump overcurrent error.
     PUMP_UC       = 1 << 5U,                // Pump undercurrent error.
-    QUEUE_FULL    = 1 << 6U                 // Irrigation queue is full.
+    QUEUE_FULL    = 1 << 6U,                // Irrigation queue is full.
     // clang-format on
   };
 
@@ -237,15 +237,15 @@ private:
   const uint8_t pwmPin;                                                     // PWM control pin.
   const uint8_t intPin;                                                     // Flow sensor interrupt pin.
   const uint8_t currentSensePin;                                            // Current sense sensor pin.
-  uint16_t prevFlowCounter;                                                 // Previous flow counter value.
+  uint16_t prevFlowCounter = 0U;                                            // Previous flow counter value.
   CircularBuffer<IrrigationQueueElement, channelCount> irrigationQueue;     // Queue for pending irrigation tasks.
-  IrrigationState irrigationState;                                          // Current state of the irrigation control.
-  uint16_t analogValue;                                                     // Filtered analog value from sensor.
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
-  uint32_t errorCheckTimer;                                                 // Timer variable for error checking.
+  IrrigationState irrigationState = IrrigationState::CALIBRATION;           // Current state of the irrigation control.
+  uint16_t analogValue = 0U;                                                // Filtered analog value from sensor.
+  uint32_t eventTimer = 0U;                                                 // Class wide variable for universal timings.
+  uint32_t errorCheckTimer = 0U;                                            // Timer variable for error checking.
   ErrorState<PumpControlError, PumpControlErrorType> pumpControlErrState;   // Error code handler object.
   void (*reportError)(uint8_t errCode);                                     // Reports an error state via a callback function if set.
-  bool (*limitSwitches[channelCount])();                                    // Array of limit switches for safety stop.
-  int16_t calibrationValue;                                                 // Calibration value for current sense sensor.
-  SafetyIrrigationElement safetyIrrigation[channelCount];                   // Safety irrigation elements per channel.
+  bool (*limitSwitches[channelCount])() = { nullptr };                      // Array of limit switches for safety stop.
+  int16_t calibrationValue = 0U;                                            // Calibration value for current sense sensor.
+  SafetyIrrigationElement safetyIrrigation[channelCount] = {};              // Safety irrigation elements per channel.
 };

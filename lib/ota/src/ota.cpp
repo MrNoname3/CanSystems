@@ -1,14 +1,7 @@
 #include "ota.hpp"
 
 OTA::OTA(SPIFlash& flash) :
-  flash(flash),
-  firstFwBytes{ 0 },
-  fwSize(0),
-  fwCrc(0),
-  flashPointer(0),
-  flashBlockBeginAddress(0),
-  stallTimer(0),
-  otaState(OtaState::IDLE) {}
+  flash(flash) {}
 
 bool OTA::start(uint16_t flashBlockNumber, uint32_t fwSize, uint16_t fwCrc) {
   if(fwSize == 0U) { return false; }                               // No firmware to write, return early.

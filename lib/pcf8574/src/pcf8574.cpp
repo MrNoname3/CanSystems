@@ -3,9 +3,7 @@
 PCF8574::PCF8574(uint32_t timeoutUs, uint8_t address, TwoWire& wire) :
   timeoutUs(timeoutUs),
   address(address),
-  wire(wire),
-  registerValue(0xFFU),
-  deviceExists(false) {}
+  wire(wire) {}
 
 bool PCF8574::init() {
   wire.begin();
@@ -47,7 +45,7 @@ bool PCF8574::digitalWrite(uint8_t pin, uint8_t pinState) {
   if(pinState > 0U) {
     registerValue |= mask;                                // Set pin high.
   } else {
-    registerValue &= ~mask;                               // Set pin low.
+    registerValue &= static_cast<uint8_t>(~mask);         // Set pin low.
   }
   return write(registerValue);
 }

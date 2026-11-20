@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>                                                 /// Standard fixed-width integer types.
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 
 /// @brief Wire format for the OTA frames exchanged over CAN between the gateway (the sender,
 /// canMqttGateway) and the CAN device (the receiver, canHandlerAtmega328P).
@@ -33,30 +34,26 @@ namespace OtaCanFrame {
 
   /// @brief Serializes an OTA_START frame into the 8 CAN data bytes.
   inline void packStart(const StartFrame& fields, uint8_t (&canData)[8]) {
-    canData[0] = static_cast<uint8_t>(fields.storageNumber & 0xFFU);
-    canData[1] = static_cast<uint8_t>((fields.storageNumber >> 8U) & 0xFFU);
-    canData[2] = static_cast<uint8_t>(fields.fwSize & 0xFFU);
-    canData[3] = static_cast<uint8_t>((fields.fwSize >> 8U) & 0xFFU);
-    canData[4] = static_cast<uint8_t>((fields.fwSize >> 16U) & 0xFFU);
-    canData[5] = static_cast<uint8_t>((fields.fwSize >> 24U) & 0xFFU);
-    canData[6] = static_cast<uint8_t>(fields.fwCrc & 0xFFU);
-    canData[7] = static_cast<uint8_t>((fields.fwCrc >> 8U) & 0xFFU);
+    canData[0] = static_cast<uint8_t>(fields.storageNumber);
+    canData[1] = static_cast<uint8_t>(fields.storageNumber >> 8U);
+    canData[2] = static_cast<uint8_t>(fields.fwSize);
+    canData[3] = static_cast<uint8_t>(fields.fwSize >> 8U);
+    canData[4] = static_cast<uint8_t>(fields.fwSize >> 16U);
+    canData[5] = static_cast<uint8_t>(fields.fwSize >> 24U);
+    canData[6] = static_cast<uint8_t>(fields.fwCrc);
+    canData[7] = static_cast<uint8_t>(fields.fwCrc >> 8U);
   }
 
   /// @brief Parses the 8 CAN data bytes of an OTA_START frame back into its fields.
   [[nodiscard]] inline StartFrame unpackStart(const uint8_t (&canData)[8]) {
     StartFrame fields;
-    fields.storageNumber = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[0]) |
-        (static_cast<uint16_t>(canData[1]) << 8U));
+    fields.storageNumber = le16(canData[0], canData[1]);
     fields.fwSize =
         static_cast<uint32_t>(canData[2]) |
         (static_cast<uint32_t>(canData[3]) << 8U) |
         (static_cast<uint32_t>(canData[4]) << 16U) |
         (static_cast<uint32_t>(canData[5]) << 24U);
-    fields.fwCrc = static_cast<uint16_t>(
-        static_cast<uint16_t>(canData[6]) |
-        (static_cast<uint16_t>(canData[7]) << 8U));
+    fields.fwCrc = le16(canData[6], canData[7]);
     return fields;
   }
 

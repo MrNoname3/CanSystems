@@ -26,7 +26,7 @@ public:
     T_1S = WDTO_1S,                                                 // Timeout interval: 1 second.
     T_2S = WDTO_2S,                                                 // Timeout interval: 2 seconds.
     T_4S = WDTO_4S,                                                 // Timeout interval: 4 seconds.
-    T_8S = WDTO_8S                                                  // Timeout interval: 8 seconds.
+    T_8S = WDTO_8S,                                                 // Timeout interval: 8 seconds.
   };
 
   /// @brief Constructs a `WdtHandler` object and enables the watchdog timer with the specified timeout.

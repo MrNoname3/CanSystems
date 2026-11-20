@@ -1,4 +1,5 @@
 #include "crc16.hpp"
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 
 Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
   crc_(initValue),
@@ -6,10 +7,10 @@ Crc16::Crc16(uint16_t initValue, uint16_t polynomial) :
   polynomial_(polynomial) {}
 
 void Crc16::next(uint8_t value) {
-  crc_ ^= static_cast<uint16_t>(value) << 8U;
+  crc_ ^= be16(value, 0U);
   for(uint8_t i = 0U; i < 8U; i++) {
     if((crc_ & 0x8000U) != 0U) {
-      crc_ = (crc_ << 1U) ^ polynomial_;
+      crc_ = static_cast<uint16_t>(crc_ << 1U) ^ polynomial_;
     } else {
       crc_ <<= 1U;
     }

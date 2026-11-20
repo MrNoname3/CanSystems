@@ -123,7 +123,7 @@ public:
   /// @brief Enum representing response statuses.
   enum class Response : uint8_t {
     NACK = 0U,                                // Negative acknowledgment.
-    ACK                                       // Acknowledgment.
+    ACK,                                      // Acknowledgment.
   };
 
   /// @brief Initializes the CAN handler.

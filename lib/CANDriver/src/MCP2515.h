@@ -29,6 +29,7 @@ public:
   [[nodiscard]] uint8_t parsePacket();
 
   /// @brief Set the receive interrupt callback.
+  /// @param callback Called with the unread payload length in bytes of the frame just parsed.
   /// @note Attaches a handler only when setPins() was given a real interrupt pin; with
   /// `noIntPin` the callback is stored but nothing fires it. The handler runs in interrupt
   /// context and reaches the controller over SPI.

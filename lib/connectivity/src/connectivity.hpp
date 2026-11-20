@@ -264,14 +264,14 @@ private:
   PubSubClient mqttClient;                                          // MQTT client instance.
   RecursiveMutex mqttMutex;                                         // Serializes all PubSubClient access across tasks (no-op off-ESP32).
   MqttCredentials mqttCredentials;                                  // MQTT connection credentials.
-  bool networkState;                                                // Indicates the network connection state.
-  PubSubClient::State mqttState;                                    // MQTT connection state.
-  bool onlineState;                                                 // Indicates whether the device is online.
-  uint32_t deviceResetTimer;                                        // Timer for detecting prolonged offline states.
+  bool networkState = true;                                         // Indicates the network connection state.
+  PubSubClient::State mqttState = PubSubClient::State::CONNECTED;   // MQTT connection state.
+  bool onlineState = true;                                          // Indicates whether the device is online.
+  uint32_t deviceResetTimer = 0U;                                   // Timer for detecting prolonged offline states.
   void (*debugLed)(bool state);                                     // Function pointer for controlling the debug LED.
   void (*resetWdt)();                                               // Function pointer for resetting the watchdog timer.
-  uint32_t reconnectTimer;                                          // Timer for managing MQTT reconnections.
-  uint32_t onlineSinceTimer;                                        // When the current connection came up, for the settle check.
+  uint32_t reconnectTimer = 0U;                                     // Timer for managing MQTT reconnections.
+  uint32_t onlineSinceTimer = 0U;                                   // When the current connection came up, for the settle check.
   ReconnectBackoff backoff;                                         // Wait before the next reconnect attempt; climbs on failure.
   DisconnectDiag disconnectDiag;                                    // Outage cause, duration and reconnect count for the [DIAG] message.
 #ifdef ESP8266
@@ -292,7 +292,7 @@ public:
   /// @brief Enumeration for MQTT response types.
   enum class Response : uint8_t {
     NACK = 0U,        // Negative acknowledgment.
-    ACK = 1U          // Positive acknowledgment.
+    ACK = 1U,         // Positive acknowledgment.
   };
 
   /// @brief Initializes the MQTT base instance.

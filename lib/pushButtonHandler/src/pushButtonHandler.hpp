@@ -20,7 +20,7 @@ public:
     THREE_PRESS,              // Triple press detected.
     FOUR_PRESS,               // Quadruple press detected.
     FIVE_PRESS,               // Quintuple press detected.
-    LAST_ELEMENT              // Sentinel value for event enumeration.
+    LAST_ELEMENT,             // Sentinel value for event enumeration.
   };
 
   /// @brief Constructs a `PushButtonHandler` object.
@@ -60,5 +60,5 @@ private:
   const CanHandlerBase& canHandler;                     // Reference to the CAN handler object.
   bool (*readButtonValue)();                            // Function pointer for reading the button state.
   PushButton button;                                    // Instance of the `PushButton` class to handle button press events.
-  void (*btnCallback)(BtnEvent btnEvent);               // Function pointer for the button event callback (if set).
+  void (*btnCallback)(BtnEvent btnEvent) = nullptr;     // Function pointer for the button event callback (if set).
 };

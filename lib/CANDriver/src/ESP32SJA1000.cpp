@@ -49,12 +49,15 @@ namespace {
 } // namespace
 
 uint8_t ESP32SJA1000::begin(uint32_t baudRate) {
-  if(CANController::begin(baudRate) != 1) { return 0U; }
+  resetPacketState();
 
   loopbackEnabled = false;
 
+  // ESP-IDF's register masks are BIT(n), which shifts by a parenthesised, signed bit number.
+  // NOLINTBEGIN(bugprone-signed-bitwise)
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
+  // NOLINTEND(bugprone-signed-bitwise)
 
   // RX pin
   gpio_set_direction(rxPin, GPIO_MODE_INPUT);
@@ -155,10 +158,11 @@ void ESP32SJA1000::end() {
     intrHandle = nullptr;
   }
 
+  // The masks are ESP-IDF's BIT(n), as in begin().
+  // NOLINTBEGIN(bugprone-signed-bitwise)
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_CAN_RST);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_CAN_CLK_EN);
-
-  CANController::end();
+  // NOLINTEND(bugprone-signed-bitwise)
 }
 
 bool ESP32SJA1000::txReady() {
@@ -178,7 +182,7 @@ bool ESP32SJA1000::txReady() {
 }
 
 uint8_t ESP32SJA1000::endPacket() {
-  if(CANController::endPacket() == 0U) { return 0U; }
+  if(!closePacket()) { return 0U; }
 
   uint8_t dataReg;
 
@@ -263,7 +267,7 @@ uint8_t ESP32SJA1000::parsePacket() {
 }
 
 void ESP32SJA1000::onReceive(void (*callback)(int)) {
-  CANController::onReceive(callback);
+  setReceiveCallback(callback);
 
   if(intrHandle != nullptr) {
     esp_intr_free(intrHandle);
@@ -286,8 +290,8 @@ uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
   writeRegister(regAcrN(2U), 0x00U);
   writeRegister(regAcrN(3U), 0x00U);
 
-  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 3));
-  writeRegister(regAmrN(1U), static_cast<uint8_t>((amr << 5) | 0x1FU));
+  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 3U));
+  writeRegister(regAmrN(1U), static_cast<uint8_t>((static_cast<uint32_t>(amr) << 5U) | 0x1FU));
   writeRegister(regAmrN(2U), 0xFFU);
   writeRegister(regAmrN(3U), 0xFFU);
 

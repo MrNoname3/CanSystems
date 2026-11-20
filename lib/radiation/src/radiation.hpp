@@ -18,7 +18,7 @@ public:
   enum class TubeType : uint8_t {
     Unknown = 0U,
     J305 = 1U,
-    M4011 = 2U
+    M4011 = 2U,
   };
 
 private:

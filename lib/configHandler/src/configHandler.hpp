@@ -23,7 +23,7 @@ public:
   enum class JsonLoadResult : uint8_t {
     Ok,
     FileOpenFailed,
-    ParseFailed
+    ParseFailed,
   };
 
   /// @brief Initializes the file system and retrieves usage statistics.
@@ -137,7 +137,7 @@ private:
     MISSING_SSID_KEY      = 1U << 2U,             // SSID key is missing in the JSON.
     MISSING_PWD_KEY       = 1U << 3U,             // Password key is missing in the JSON.
     SSID_LENGTH_ERR       = 1U << 4U,             // SSID length is invalid or contains an embedded NUL.
-    PWD_LENGTH_ERR        = 1U << 5U              // Password length or embedded NUL is invalid.
+    PWD_LENGTH_ERR        = 1U << 5U,             // Password length or embedded NUL is invalid.
     // clang-format on
   };
 
@@ -147,7 +147,7 @@ private:
     NONE                  = 0U,                   // No error.
     FILE_OPEN_FAILED      = 1U << 0U,             // Unable to open the certificate file.
     CERT_FILE_EMPTY       = 1U << 1U,             // Server certificate file is empty.
-    CERT_STORING_FAILED   = 1U << 2U              // Unable to store the certificate.
+    CERT_STORING_FAILED   = 1U << 2U,             // Unable to store the certificate.
     // clang-format on
   };
 
@@ -164,7 +164,7 @@ private:
     MQTT_USER_LENGTH_ERR  = 1U << 6U,             // MQTT user name length or embedded NUL is invalid.
     MQTT_PASS_LENGTH_ERR  = 1U << 7U,             // MQTT password length or embedded NUL is invalid.
     MQTT_URL_LENGTH_ERR   = 1U << 8U,             // MQTT server URL length or embedded NUL is invalid.
-    MQTT_PORT_NUM_ERR     = 1U << 9U              // MQTT server port number is invalid.
+    MQTT_PORT_NUM_ERR     = 1U << 9U,             // MQTT server port number is invalid.
     // clang-format on
   };
 };

@@ -32,15 +32,8 @@ PumpControl::PumpControl(PCF8574& pcf8574, RgbLedWrapper& rgbLed, uint8_t pwmPin
   pwmPin(pwmPin),
   intPin(intPin),
   currentSensePin(currentSensePin),
-  prevFlowCounter(0U),
-  irrigationState(IrrigationState::CALIBRATION),
-  analogValue(0U),
-  eventTimer(0U),
-  errorCheckTimer(0U),
-  reportError(reportError),
-  limitSwitches{ nullptr },
-  calibrationValue(0U),
-  safetyIrrigation{} {
+
+  reportError(reportError) {
   pinMode(pwmPin, OUTPUT);
   pinMode(intPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(intPin), irqHandler, FALLING);

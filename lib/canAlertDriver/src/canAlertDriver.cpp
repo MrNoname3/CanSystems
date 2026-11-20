@@ -1,4 +1,5 @@
 #include "canAlertDriver.hpp"
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 
 CanAlertDriver::CanAlertDriver(CanHandler& canHandler, uint16_t clientCanId, Connectivity& connectivity, const char* subTopic, float tempOffset) :
   CanMqttGateway::CanMqttGateway(canHandler, clientCanId, connectivity, subTopic, FileName::getCanAlertFwLocation()),
@@ -17,7 +18,7 @@ bool CanAlertDriver::publishDiscovery() {
     getCanSwVersion(),
     getCanAvailTopic(),
     MqttBase::getSubtopic(),
-    canHwVersionStr
+    canHwVersionStr,
   };
 
   const HA::EntityConfig tempConfig = HA::EntityConfig::sensor(
@@ -73,8 +74,8 @@ void CanAlertDriver::sendAlertCommand(JsonVariant payloadJson) {
   if(soundUsable) {
     const uint16_t sound = soundJsonVar.as<uint16_t>();
     const uint8_t volume = volumeJsonVar.as<uint8_t>();
-    canData[0] = static_cast<uint8_t>(sound & 0xFF);
-    canData[1] = static_cast<uint8_t>((sound >> 8U) & 0xFF);
+    canData[0] = static_cast<uint8_t>(sound);
+    canData[1] = static_cast<uint8_t>(sound >> 8U);
     canData[2] = volume;
     colorsOffset = 3U;
   }
@@ -110,10 +111,10 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
   switch(canFrame.cmd) {
     case static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR): {
       // Signed on the wire: the node sends int16_t hundredths of a degree (see ambientSensor.cpp).
-      const int16_t rawTemperature = static_cast<int16_t>(static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U));
+      const int16_t rawTemperature = static_cast<int16_t>(le16(canFrame.data[0], canFrame.data[1]));
       const float temperature = static_cast<float>(rawTemperature) / 100.0F + tempOffset;
-      const uint16_t humidity = static_cast<uint16_t>(canFrame.data[2]) | (static_cast<uint16_t>(canFrame.data[3]) << 8U);
-      const uint16_t light = static_cast<uint16_t>(canFrame.data[4]) | (static_cast<uint16_t>(canFrame.data[5]) << 8U);
+      const uint16_t humidity = le16(canFrame.data[2], canFrame.data[3]);
+      const uint16_t light = le16(canFrame.data[4], canFrame.data[5]);
       char dataOut[dataOutBufSize] = { '\0' };
       const int32_t dataOutSize = snprintf_P(dataOut, sizeof(dataOut), humTempLdrFrame, temperature, humidity, light);
       const bool dataOutValid = (dataOutSize >= 0 && dataOutSize < static_cast<int32_t>(sizeof(dataOut)));
@@ -125,7 +126,7 @@ void CanAlertDriver::processCanFrameArrived(const CanHandler::CanFrame& canFrame
                               MqttBase::getSubtopic());
     } break;
     case static_cast<uint16_t>(AlertCmd::MP3_PLAY_ERROR): {
-      const uint16_t track = static_cast<uint16_t>(canFrame.data[0]) | (static_cast<uint16_t>(canFrame.data[1]) << 8U);
+      const uint16_t track = le16(canFrame.data[0], canFrame.data[1]);
       Logger::get()->printf_P(PSTR("[CAN] \"%s\": MP3 module would not start track %u\r\n"),
                               MqttBase::getSubtopic(), track);
     } break;

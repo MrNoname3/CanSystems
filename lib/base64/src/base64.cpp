@@ -95,9 +95,7 @@ uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
       i = 0U;
     }
   }
-  if(i > 0U) {
-    if(!processPartialBlock(A4, i, output, decodedLength_)) { return 0U; }
-  }
+  if((i > 0U) && !processPartialBlock(A4, i, output, decodedLength_)) { return 0U; }
   if(decodedLength_ >= outputLength) {
     return 0U; // Prevent overflow
   }
@@ -106,16 +104,16 @@ uint32_t Base64::decodeBase64(const uint8_t input[], uint8_t output[], uint32_t 
 }
 
 void Base64::fromA3ToA4(uint8_t* A4, const uint8_t* A3) {
-  A4[0] = (A3[0] & 0xfc) >> 2;
-  A4[1] = ((A3[0] & 0x03) << 4) + ((A3[1] & 0xf0) >> 4);
-  A4[2] = ((A3[1] & 0x0f) << 2) + ((A3[2] & 0xc0) >> 6);
-  A4[3] = (A3[2] & 0x3f);
+  A4[0] = A3[0] >> 2U;
+  A4[1] = ((A3[0] & 0x03U) << 4U) + (A3[1] >> 4U);
+  A4[2] = ((A3[1] & 0x0FU) << 2U) + (A3[2] >> 6U);
+  A4[3] = A3[2] & 0x3FU;
 }
 
 void Base64::fromA4ToA3(uint8_t* A3, const uint8_t* A4) {
-  A3[0] = (A4[0] << 2) + ((A4[1] & 0x30) >> 4);
-  A3[1] = ((A4[1] & 0xf) << 4) + ((A4[2] & 0x3c) >> 2);
-  A3[2] = ((A4[2] & 0x3) << 6) + A4[3];
+  A3[0] = (A4[0] << 2U) + ((A4[1] & 0x30U) >> 4U);
+  A3[1] = ((A4[1] & 0x0FU) << 4U) + ((A4[2] & 0x3CU) >> 2U);
+  A3[2] = ((A4[2] & 0x03U) << 6U) + A4[3];
 }
 
 uint8_t Base64::lookupTable(char c) {

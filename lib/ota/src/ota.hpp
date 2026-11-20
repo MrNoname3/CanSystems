@@ -44,7 +44,7 @@ public:
     STORE,              // Storing firmware chunks.
     CHECK,              // Validating firmware CRC.
     VALID,              // Firmware is valid.
-    INVALID             // Firmware is invalid.
+    INVALID,            // Firmware is invalid.
   };
 
   /// @brief Constructs the OTA handler with the specified SPI Flash reference.
@@ -91,14 +91,14 @@ private:
   void finishCheck();
 
   SPIFlash& flash;                                                  // Reference to the SPI Flash handler.
-  uint8_t firstFwBytes[2];                                          // Stores the first two bytes of the firmware.
-  uint32_t fwSize;                                                  // Size of the firmware in bytes.
-  uint16_t fwCrc;                                                   // CRC16 checksum of the firmware.
-  uint32_t flashPointer;                                            // Current write/read address in Flash.
+  uint8_t firstFwBytes[2] = { 0 };                                  // Stores the first two bytes of the firmware.
+  uint32_t fwSize = 0;                                              // Size of the firmware in bytes.
+  uint16_t fwCrc = 0;                                               // CRC16 checksum of the firmware.
+  uint32_t flashPointer = 0;                                        // Current write/read address in Flash.
   Crc16 crc16;                                                      // CRC16 calculator for validation.
   // Calculate the begin address of the FLASH. (FLASH is used in 32KB chunks by this class.)
   // The 0. chunk must contain the OTA FW for this device and the other chunks can contain anything else.
-  uint32_t flashBlockBeginAddress;                                  // Start address of the Flash block for firmware.
-  uint32_t stallTimer;                                              // Last sign of progress, for the stall timeout.
-  OtaState otaState;                                                // Current state of the OTA process.
+  uint32_t flashBlockBeginAddress = 0;                              // Start address of the Flash block for firmware.
+  uint32_t stallTimer = 0;                                          // Last sign of progress, for the stall timeout.
+  OtaState otaState = OtaState::IDLE;                               // Current state of the OTA process.
 };

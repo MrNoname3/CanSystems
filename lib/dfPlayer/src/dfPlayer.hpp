@@ -98,7 +98,7 @@ private:
     // pass does not read the previous track's end as this one's. Written, not bit-set: a one
     // clears the flag it names, so a read-modify-write would write back - and clear - every other
     // flag it happened to read as well.
-    EIFR = static_cast<uint8_t>(1U << interrupt);
+    EIFR = static_cast<uint8_t>(1U << static_cast<uint8_t>(interrupt));
     attachInterrupt(static_cast<uint8_t>(interrupt), irqHandler, RISING);
   }
 
@@ -158,11 +158,11 @@ private:
   const uint8_t txPin;                                                      // TX pin for software serial.
   const uint8_t enPin;                                                      // Power control pin.
   const uint8_t intPin;                                                     // Interrupt pin (LOW when playing).
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
-  PlayingStates playingState;                                               // Current state of the playback state machine.
+  uint32_t eventTimer = 0U;                                                 // Class wide variable for universal timings.
+  PlayingStates playingState = PlayingStates::IDLE;                         // Current state of the playback state machine.
   PlayQueueItem currentItem;                                                // The item being played, kept across retries.
-  void (*playFailedCallback)(uint16_t track);                               // Reports an abandoned track.
-  uint8_t playRetries;                                                      // Play commands re-sent for currentItem.
-  uint8_t moduleRestarts;                                                   // Power-cycles spent on currentItem.
+  void (*playFailedCallback)(uint16_t track) = nullptr;                     // Reports an abandoned track.
+  uint8_t playRetries = 0U;                                                 // Play commands re-sent for currentItem.
+  uint8_t moduleRestarts = 0U;                                              // Power-cycles spent on currentItem.
   CircularBuffer<PlayQueueItem, 5U> playingQueue;                           // Playback queue for tracks.
 };

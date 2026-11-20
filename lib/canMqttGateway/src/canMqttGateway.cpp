@@ -1,19 +1,11 @@
 #include "canMqttGateway.hpp"
+#include "byteOrder.hpp"                                            /// Two bytes to a 16-bit value.
 #include "bootProgress.hpp"                                        /// BootStage::Unknown for sub-devices.
 #include <inttypes.h>                                               /// PRIx32: uint32_t is not unsigned int on every core.
 #include <ctype.h>
 
 CanOta::CanOta(CanMqttGateway& canMqttGateway) :
-  canMqttGateway(canMqttGateway),
-  frameNumber(0U),
-  storageNumber(0U),
-  fileSize(0U),
-  transferState(TransferState::IDLE),
-  otaTimeoutTimer(0U),
-  fileNamePtr(nullptr),
-  imageCrc(0U),
-  imageCrcKnown(false),
-  sharedImage(nullptr) {}
+  canMqttGateway(canMqttGateway) {}
 
 CanOta::~CanOta() {
   if(receivedFile) {
@@ -184,10 +176,7 @@ CanMqttGateway::CanMqttGateway(CanHandler& canHandler, uint16_t clientCanId, Con
   CanBase(canHandler, clientCanId),
   MqttBase(connectivity, subTopic),
   canOta(*this),
-  clientPingTimer(0U),
-  clientOfflineTimer(0U),
-  clientOnline(true),
-  clientEverSeen(false),
+
   fwFileNamePtr(fwFileName),
   batchImage() {
   if(fwFileNamePtr != nullptr) {
@@ -339,9 +328,7 @@ void CanMqttGateway::canFrameArrivedCallback(const CanHandler::CanFrame& canFram
       clientOnline = true;
     } break;
     case static_cast<uint16_t>(CanCmd::FW_VERSION): {
-      const uint16_t fwVersion =
-          static_cast<uint16_t>(canFrame.data[0]) |
-          (static_cast<uint16_t>(canFrame.data[1]) << 8U);
+      const uint16_t fwVersion = le16(canFrame.data[0], canFrame.data[1]);
       const uint32_t gitHash =
           static_cast<uint32_t>(canFrame.data[2]) |
           (static_cast<uint32_t>(canFrame.data[3]) << 8U) |

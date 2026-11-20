@@ -48,7 +48,7 @@ private:
     FW_UPGRADE_END_FAILED     = 1UL << 23U,             // Firmware upgrade finalization failed.
     RECEIVED_DATA_OVERRUN     = 1UL << 24U,             // More data received than the declared file size.
     TEMP_FILE_READING_ERROR   = 1UL << 25U,             // The temporary file returned fewer bytes than it holds.
-    FILE_IN_USE               = 1UL << 26U              // Something is still reading the file this transfer would replace.
+    FILE_IN_USE               = 1UL << 26U,             // Something is still reading the file this transfer would replace.
     // clang-format on
   };
 
@@ -58,7 +58,7 @@ public:
     IDLE = 0U,                // No transfer is in progress.
     STORING,                  // Currently receiving and storing file pieces.
     CHECK,                    // Validating the received file (e.g., via MD5).
-    CLEANUP                   // Cleaning up resources after the transfer or in case of an error.
+    CLEANUP,                  // Cleaning up resources after the transfer or in case of an error.
   };
 
   /// @brief Constructor.
@@ -113,15 +113,15 @@ private:
 
   void (*checkOkCallback)(bool isValid);                            // Callback function invoked on transfer completion.
   bool (*fileInUseCallback)(const char* fileName);                  // Predicate asked in begin(), or nullptr.
-  uint32_t fileSizeLocal;                                           // Expected size of the file being transferred (in bytes).
-  char fileMd5Local[fileMd5Size];                                   // Expected MD5 checksum of the file as a hex string.
-  uint32_t nextFilePieceNumberLocal;                                // The next expected file piece number.
-  uint32_t remainingFileSizeLocal;                                  // Remaining number of bytes to be received.
-  char fileNameLocal[fileNameSize];                                 // Buffer storing the name of the file.
-  bool isFwTransfer;                                                // Flag indicating whether the current transfer is a firmware upgrade.
-  TransferState transferState;                                      // Current state of the file transfer process.
+  uint32_t fileSizeLocal = 0U;                                      // Expected size of the file being transferred (in bytes).
+  char fileMd5Local[fileMd5Size] = { '\0' };                        // Expected MD5 checksum of the file as a hex string.
+  uint32_t nextFilePieceNumberLocal = invalidFilePieceNumber;       // The next expected file piece number.
+  uint32_t remainingFileSizeLocal = 0U;                             // Remaining number of bytes to be received.
+  char fileNameLocal[fileNameSize] = { '\0' };                      // Buffer storing the name of the file.
+  bool isFwTransfer = false;                                        // Flag indicating whether the current transfer is a firmware upgrade.
+  TransferState transferState = TransferState::IDLE;                // Current state of the file transfer process.
   ErrorState<DataTransferError, DataTransferErrorType> dataTransferErrState;  // Error state manager.
-  uint32_t transferTimeoutTimer;                                    // Timer to track transfer timeout.
+  uint32_t transferTimeoutTimer = 0U;                               // Timer to track transfer timeout.
   File receivedFile;                                                // File object for the temporary storage of the transferred file.
   MD5Builder md5;                                                   // MD5 calculator used for non-firmware file integrity verification.
 };

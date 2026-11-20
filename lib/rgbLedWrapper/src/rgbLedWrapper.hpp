@@ -41,7 +41,7 @@ public:
 
 private:
   NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> ledStrip;      // NeoPixelBus object to manage the LED strip.
-  uint8_t redColor;                                           // Saved red component value (0-255).
-  uint8_t greenColor;                                         // Saved green component value (0-255).
-  uint8_t blueColor;                                          // Saved blue component value (0-255).
+  uint8_t redColor = 0U;                                      // Saved red component value (0-255).
+  uint8_t greenColor = 0U;                                    // Saved green component value (0-255).
+  uint8_t blueColor = 0U;                                     // Saved blue component value (0-255).
 };

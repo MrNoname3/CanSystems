@@ -75,15 +75,15 @@ private:
   DebugLedHandler& debugLed;                                                // Reference to debug LED handler object.
   static constexpr uint32_t announceTime = Time::secToMs(5U);                // Gap between two announcements while waiting for an address.
 
-  SPIFlash flash;                                                           // SPI flash module driver object.
-  uint8_t uid[CanIdAssign::uidLength] = { 0U };                             // The flash unique id this node is known by until it has an address.
-  uint32_t announceTimer = 0U;                                              // Timer for the announcements.
-  bool addressed = true;                                                    // False while the node runs on an address it gave itself.
-  OTA ota;                                                                  // OTA update handler.
-  void (*canCallback)(uint16_t command, const uint8_t (&data)[8]);          // Callback function pointer.
-  uint32_t eventTimer;                                                      // Class wide variable for universal timings.
-  const uint8_t canIntPin;                                                  // MCP2515 INT line; low while the controller holds a frame.
-  OTA::OtaState lastOtaState;                                               // Store last known OTA state.
+  SPIFlash flash;                                                            // SPI flash module driver object.
+  uint8_t uid[CanIdAssign::uidLength] = { 0U };                              // The flash unique id this node is known by until it has an address.
+  uint32_t announceTimer = 0U;                                               // Timer for the announcements.
+  bool addressed = true;                                                     // False while the node runs on an address it gave itself.
+  OTA ota;                                                                   // OTA update handler.
+  void (*canCallback)(uint16_t command, const uint8_t (&data)[8]) = nullptr; // Callback function pointer.
+  uint32_t eventTimer = 0U;                                                  // Class wide variable for universal timings.
+  const uint8_t canIntPin;                                                   // MCP2515 INT line; low while the controller holds a frame.
+  OTA::OtaState lastOtaState = OTA::OtaState::IDLE;                          // Store last known OTA state.
 };
 using CanHandler = CanHandlerAtmega328P;                                    // Alias `CanHandler` to `CanHandlerAtmega328P`.
 #endif // ARDUINO_ARCH_AVR

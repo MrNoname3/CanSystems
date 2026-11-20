@@ -15,7 +15,7 @@ namespace OtaCanResponse {
     NONE,        // No response this pass (transfer still in progress or idle).
     ACK_START,   // Storage accepted the start -> ACK the OTA_START.
     ACK_END,     // Firmware validated -> ACK the OTA_END.
-    NACK_END     // Firmware invalid -> NACK the OTA_END.
+    NACK_END,    // Firmware invalid -> NACK the OTA_END.
   };
 
   /// @brief What the device should do after one OTA storage step.
