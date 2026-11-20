@@ -53,9 +53,10 @@ TARGETS = (("avr-", "avr"), ("xtensa-lx106-elf-", "xtensa"),
 
 # -ferror-limit=0: the framework headers clang cannot parse would otherwise use up its 20 errors
 # before the project code in a file is reached. GCC's predefined macros are passed as -D, and clang
-# has its own, hence the two macro warnings off.
+# has its own, hence the two macro warnings off. GCC 15's <cmath> declares its float overloads
+# constexpr around builtins clang cannot evaluate, which clang reports in every unit.
 TIDY_FLAGS = ("-ferror-limit=0", "-Wno-macro-redefined", "-Wno-builtin-macro-redefined",
-              "-Wno-unknown-attributes", "-Wno-register", "-Wno-format-security")
+              "-Wno-unknown-attributes", "-Wno-register", "-Wno-format-security", "-Wno-invalid-constexpr")
 # After GCC's macros: its __FLT32_DIG__ and __FLT64_DIG__ have libstdc++ declare limits for
 # _Float32 and _Float64, which clang has no C++ support for.
 TIDY_UNDEFINES = ("-U__FLT32_DIG__", "-U__FLT64_DIG__")
