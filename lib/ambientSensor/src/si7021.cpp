@@ -63,7 +63,7 @@ bool SI7021::setPrecision(Precision precision) {
   uint8_t reg = 0U;
   const uint8_t command = static_cast<uint8_t>(SI7021Commands::USER1_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(&reg, sizeof(reg))) { return false; }
-  reg = (reg & 0x7E) | (static_cast<uint8_t>(precision) & 0x81);
+  reg = static_cast<uint8_t>((reg & 0x7EU) | (static_cast<uint8_t>(precision) & 0x81U));
   const uint8_t userWrite[2] = { static_cast<uint8_t>(SI7021Commands::USER1_WRITE), reg };
   return writeReg(userWrite, sizeof(userWrite));
 }
@@ -73,7 +73,7 @@ bool SI7021::setHeater(bool on) {
   uint8_t reg = 0U;
   const uint8_t command = static_cast<uint8_t>(SI7021Commands::USER1_READ);
   if(!writeReg(&command, sizeof(command)) || !readReg(&reg, sizeof(reg))) { return false; }
-  reg = (reg & ~0x04) | (on ? 0x04 : 0x00);
+  reg = static_cast<uint8_t>((reg & ~0x04U) | (on ? 0x04U : 0x00U));
   const uint8_t userWrite[2] = { static_cast<uint8_t>(SI7021Commands::USER1_WRITE), reg };
   return writeReg(userWrite, sizeof(userWrite));
 }

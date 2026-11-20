@@ -44,10 +44,10 @@ namespace CanIdAssign {
 
   /// @brief Serializes a request into the 8 CAN data bytes.
   inline void pack(const Request& fields, uint8_t (&canData)[8]) {
-    canData[0] = static_cast<uint8_t>(fields.expectedLocal & 0xFFU);
-    canData[1] = static_cast<uint8_t>((fields.expectedLocal >> 8U) & 0xFFU);
-    canData[2] = static_cast<uint8_t>(fields.newLocal & 0xFFU);
-    canData[3] = static_cast<uint8_t>((fields.newLocal >> 8U) & 0xFFU);
+    canData[0] = static_cast<uint8_t>(fields.expectedLocal);
+    canData[1] = static_cast<uint8_t>(fields.expectedLocal >> 8U);
+    canData[2] = static_cast<uint8_t>(fields.newLocal);
+    canData[3] = static_cast<uint8_t>(fields.newLocal >> 8U);
     canData[4] = 0U;
     canData[5] = 0U;
     canData[6] = 0U;

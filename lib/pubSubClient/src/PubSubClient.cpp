@@ -90,7 +90,7 @@ uint16_t PubSubClient::buildConnectPacket(const char* id, const char* user, cons
   length = static_cast<uint16_t>(length + sizeof(d));
 
   uint8_t v = (willTopic != nullptr)
-                  ? static_cast<uint8_t>(0x04U | (willQos << 3U) | (willRetain ? 0x20U : 0x00U))
+                  ? static_cast<uint8_t>(0x04U | (static_cast<uint32_t>(willQos) << 3U) | (willRetain ? 0x20U : 0x00U))
                   : 0x00U;
   v |= cleanSession ? 0x02U : 0x00U;
   v |= (user != nullptr) ? 0x80U : 0x00U;

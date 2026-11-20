@@ -45,7 +45,7 @@ bool PCF8574::digitalWrite(uint8_t pin, uint8_t pinState) {
   if(pinState > 0U) {
     registerValue |= mask;                                // Set pin high.
   } else {
-    registerValue &= ~mask;                               // Set pin low.
+    registerValue &= static_cast<uint8_t>(~mask);         // Set pin low.
   }
   return write(registerValue);
 }

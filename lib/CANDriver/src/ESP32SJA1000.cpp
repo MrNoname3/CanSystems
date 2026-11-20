@@ -284,8 +284,8 @@ uint8_t ESP32SJA1000::filter(uint16_t id, uint16_t mask) {
   writeRegister(regAcrN(2U), 0x00U);
   writeRegister(regAcrN(3U), 0x00U);
 
-  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 3));
-  writeRegister(regAmrN(1U), static_cast<uint8_t>((amr << 5) | 0x1FU));
+  writeRegister(regAmrN(0U), static_cast<uint8_t>(amr >> 3U));
+  writeRegister(regAmrN(1U), static_cast<uint8_t>((static_cast<uint32_t>(amr) << 5U) | 0x1FU));
   writeRegister(regAmrN(2U), 0xFFU);
   writeRegister(regAmrN(3U), 0xFFU);
 

@@ -325,7 +325,7 @@ template<bool Debug>
 bool DFPlayerMiniFast<Debug>::isPlaying() {
   const int16_t result = query(static_cast<uint8_t>(QueryCommandValues::GET_STATUS_));
   if(result != -1) {
-    return (result & 1) != 0;
+    return (static_cast<uint16_t>(result) & 1U) != 0U;
   }
   return false;
 }
@@ -448,7 +448,7 @@ void DFPlayerMiniFast<Debug>::printError() const {
 template<bool Debug>
 uint16_t DFPlayerMiniFast<Debug>::computeChecksum(const Stack& _stack) {
   // Two's complement negation of the sum of bytes: version, length, cmd, feedback, MSB param, LSB param.
-  return static_cast<uint16_t>(~(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB) + 1);
+  return static_cast<uint16_t>(-(_stack.version + _stack.length + _stack.commandValue + _stack.feedbackValue + _stack.paramMSB + _stack.paramLSB));
 }
 
 template<bool Debug>

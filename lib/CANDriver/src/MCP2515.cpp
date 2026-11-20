@@ -228,7 +228,7 @@ uint8_t MCP2515::parsePacket() {
 
   rxExtended = (sidl & flagIde) != 0U;
 
-  const uint32_t idA = static_cast<uint32_t>(((sidh << 3) & 0x07F8U) | ((sidl >> 5) & 0x07U));
+  const uint32_t idA = (static_cast<uint32_t>(sidh) << 3U) | static_cast<uint32_t>(sidl >> 5U);
   if(rxExtended) {
     const uint32_t idB =
         (static_cast<uint32_t>(sidl & 0x03U) << 16U) |

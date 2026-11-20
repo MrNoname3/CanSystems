@@ -98,7 +98,7 @@ bool DFPlayer::run() {
       // An all-zero color means a sound-only request: leave the LEDs unchanged during playback
       // instead of forcing them dark. The unconditional loadColor() in TURN_OFF stays harmless,
       // it just re-applies the already-active saved color.
-      if((currentItem.red | currentItem.green | currentItem.blue) != 0U) {
+      if((currentItem.red != 0U) || (currentItem.green != 0U) || (currentItem.blue != 0U)) {
         rgbLed.setColor(currentItem.red, currentItem.green, currentItem.blue, false);
       }
       eventTimer = actualTime;

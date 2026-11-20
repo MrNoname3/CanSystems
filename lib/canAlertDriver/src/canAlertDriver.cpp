@@ -73,8 +73,8 @@ void CanAlertDriver::sendAlertCommand(JsonVariant payloadJson) {
   if(soundUsable) {
     const uint16_t sound = soundJsonVar.as<uint16_t>();
     const uint8_t volume = volumeJsonVar.as<uint8_t>();
-    canData[0] = static_cast<uint8_t>(sound & 0xFF);
-    canData[1] = static_cast<uint8_t>((sound >> 8U) & 0xFF);
+    canData[0] = static_cast<uint8_t>(sound);
+    canData[1] = static_cast<uint8_t>(sound >> 8U);
     canData[2] = volume;
     colorsOffset = 3U;
   }

@@ -26,7 +26,7 @@ namespace {
         } else {
           return false;
         }
-        value = static_cast<uint8_t>((value << 4U) | digit);
+        value = static_cast<uint8_t>((value * 16U) + digit);
       }
       byte = value;
     }

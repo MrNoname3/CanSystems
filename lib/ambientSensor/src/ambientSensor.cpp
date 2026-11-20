@@ -44,13 +44,14 @@ bool AmbientSensor::run() {
       event = (changed || Time::hasElapsed(actualTime, sendThrottleTimer, kSendMaxPeriod)) ? Event::SEND_VALUES : Event::IDLE;
     } break;
     case Event::SEND_VALUES: {
+      const uint16_t temperatureBits = static_cast<uint16_t>(temperature);  // two's complement on the wire
       const uint8_t payload[8] = {
-        static_cast<uint8_t>(temperature & 0xFF),
-        static_cast<uint8_t>((temperature >> 8U) & 0xFF),
-        static_cast<uint8_t>(humidity & 0xFF),
-        static_cast<uint8_t>((humidity >> 8U) & 0xFF),
-        static_cast<uint8_t>(lightValue & 0xFF),
-        static_cast<uint8_t>((lightValue >> 8U) & 0xFF),
+        static_cast<uint8_t>(temperatureBits),
+        static_cast<uint8_t>(temperatureBits >> 8U),
+        static_cast<uint8_t>(humidity),
+        static_cast<uint8_t>(humidity >> 8U),
+        static_cast<uint8_t>(lightValue),
+        static_cast<uint8_t>(lightValue >> 8U),
         0U,
         0U,
       };
