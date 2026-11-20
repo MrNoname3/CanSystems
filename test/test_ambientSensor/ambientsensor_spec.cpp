@@ -307,6 +307,39 @@ bool test_a_saturated_reading_is_clamped_to_100() {
   END_IT
 }
 
+bool test_a_sub_zero_reading_goes_out_in_twos_complement() {
+  IT("raw temperature 0 reports -46.85 C, sent as int16_t two's complement");
+  preloadInit();
+  preloadMeasurement(0x00U, 0x00U, 0x72U, 0xB1U);   // raw temperature 0 -> -4685, 50%
+  setAnalogReadValue(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  s.init();
+  runCycle(s, kMeasPeriod + 1U);
+  IS_EQUAL(ch.lastCommand, static_cast<uint16_t>(AlertCmd::READ_HUM_TEMP_LDR));
+  const uint16_t bits = static_cast<uint16_t>(ch.lastData[0]) | (static_cast<uint16_t>(ch.lastData[1]) << 8U);
+  IS_EQUAL(static_cast<int16_t>(bits), -4685);
+  clearFakeMillis();
+  END_IT
+}
+
+bool test_the_top_raw_temperature_converts_without_overflow() {
+  IT("raw temperature 0xFFFF reports 128.86 C, the formula's full scale");
+  preloadInit();
+  preloadMeasurement(0xFFU, 0xFFU, 0x72U, 0xB1U);   // (17572 * 0xFFFF) >> 16 = 17571, minus 4685
+  setAnalogReadValue(0U);
+  TestCanHandler ch;
+  AmbientSensor s(ch, kLightPin, kMeasPeriod);
+  setFakeMillis(0U);
+  s.init();
+  runCycle(s, kMeasPeriod + 1U);
+  const uint16_t bits = static_cast<uint16_t>(ch.lastData[0]) | (static_cast<uint16_t>(ch.lastData[1]) << 8U);
+  IS_EQUAL(static_cast<int16_t>(bits), 12886);
+  clearFakeMillis();
+  END_IT
+}
+
 bool test_a_short_i2c_read_is_an_error_not_a_reading() {
   IT("a truncated I2C answer reports SENSOR_ERROR instead of a plausible reading");
   preloadInit();
@@ -353,6 +386,8 @@ int main() {
   test_sensor_error_sends_error_command();
   test_a_dry_reading_is_clamped_not_wrapped();
   test_a_saturated_reading_is_clamped_to_100();
+  test_a_sub_zero_reading_goes_out_in_twos_complement();
+  test_the_top_raw_temperature_converts_without_overflow();
   test_a_short_i2c_read_is_an_error_not_a_reading();
   test_run_always_returns_true();
   FINISH
