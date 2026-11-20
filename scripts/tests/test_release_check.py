@@ -7,13 +7,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ for `import release_check`
-import analysis_check
 import release_check
 from gate_groups import GROUPS
 
 PIO = "pio"
 DEPS = ["python", "deps_check.py"]
-FAIL_ON = ["--fail-on-defect", "low", "--fail-on-defect", "medium", "--fail-on-defect", "high"]
 
 
 def _steps(group: str | None) -> dict[str, list[str]]:
@@ -26,22 +24,23 @@ def test_the_whole_gate_runs_every_step_over_every_environment() -> None:
     assert list(steps) == ["deps", "format", "secrets", "lint", "workflows", "typecheck", "pytest",
                            "build", "test", "check", "tidy"]
     assert steps["build"] == [PIO, "run"]
-    assert steps["check"] == [PIO, "check", *FAIL_ON]
-    assert steps["tidy"][-1].endswith("analysis_check.py")
+    assert steps["check"][1].endswith("analysis_check.py")
+    assert steps["check"][2:] == ["--tool", "cppcheck"]
+    assert steps["tidy"][1].endswith("analysis_check.py")
+    assert steps["tidy"][2:] == ["--tool", "clang-tidy"]
 
 
 def test_a_firmware_group_builds_and_cppchecks_its_environments() -> None:
     steps = _steps("avr")
     assert list(steps) == ["deps", "build", "check"]
     assert steps["build"] == [PIO, "run", "-e", "nanoatmega328_alert", "-e", "nanoatmega328_irrigation"]
-    assert steps["check"] == [PIO, "check", "-e", "nanoatmega328_alert", "-e", "nanoatmega328_irrigation",
-                              *FAIL_ON]
+    assert steps["check"][2:] == ["--tool", "cppcheck", "--env", "nanoatmega328_alert", "nanoatmega328_irrigation"]
 
 
 def test_a_tidy_group_runs_clang_tidy_over_its_environment() -> None:
     steps = _steps("tidy-esp32")
     assert list(steps) == ["deps", "tidy"]
-    assert steps["tidy"][-2:] == ["--env", "check_esp32"]
+    assert steps["tidy"][2:] == ["--tool", "clang-tidy", "--env", "project_esp32_can"]
 
 
 def test_the_host_group_runs_only_the_fast_guards() -> None:
@@ -62,7 +61,7 @@ def test_the_groups_together_run_what_the_whole_gate_runs() -> None:
             if name == "build":
                 built += named
             elif name == "check":
-                checked += named
+                checked += argv[argv.index("--env") + 1:]
             elif name == "tidy":
                 tidied += argv[argv.index("--env") + 1:]
             elif name != "deps":
@@ -70,7 +69,7 @@ def test_the_groups_together_run_what_the_whole_gate_runs() -> None:
     envs = release_check.default_envs(release_check.PROJECT_DIR / "platformio.ini")
     assert sorted(built) == sorted(envs)
     assert sorted(checked) == sorted(envs)
-    assert sorted(tidied) == sorted(analysis_check.ENVIRONMENTS)
+    assert sorted(tidied) == sorted(envs)
     assert sorted(others) == sorted(name for name in whole if name not in ("deps", "build", "check", "tidy"))
 
 

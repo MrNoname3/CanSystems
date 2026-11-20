@@ -155,8 +155,8 @@ skipped rather than queued, and the image's checksum is computed once for the wh
 pio run                                  # build all environments
 pio run -e project_esp8266_thermo -t upload      # serial flash one target
 pio test -e native_test                  # native test suite
-pio check                                # cppcheck on all environments
-python scripts/analysis_check.py         # clang-tidy on the check_* environments
+python scripts/analysis_check.py --tool cppcheck     # cppcheck on every environment's own build
+python scripts/analysis_check.py --tool clang-tidy   # clang-tidy, the same way
 ```
 
 A fresh device is set up entirely from `ota/otaUpdate.py`: the **Initial firmware flash**
@@ -223,10 +223,8 @@ installed (`deps_check.py`), then the quick guards - clang-format + final-newlin
 (`format_check.py`), no key, address or private host in a tracked file (`secret_check.py`), ruff
 lint (`lint_check.py`), actionlint + zizmor over the CI workflows (`workflow_check.py`), pyright
 strict (`typecheck_check.py`) and pytest (`pytest_check.py`) - then the builds, the native test
-suite, and static analysis in two steps: cppcheck over every environment, then clang-tidy over the
-`check_*` ones, which are the same builds with the framework include paths clang-tidy needs to parse
-anything. cppcheck runs with `--fail-on-defect low/medium/high`, so a **single defect of any
-severity** fails the gate, unlike a bare `pio check`, which reports SUCCESS even with findings.
+suite, and static analysis in two steps, cppcheck and then clang-tidy, each over every environment's
+own build. A **single defect of any severity** in project code fails the gate.
 Every guard is **required**: a missing tool fails the gate rather than skipping, so set up the dev
 venv (above) before running it. The guards run their tools out of the environment `deps_check.py`
 checked - the project `.venv`, or the interpreter the gate runs under when there is none - and an
@@ -247,20 +245,24 @@ its output unchanged (through a pseudo-terminal, colors included) and keeps a fu
 step, and a final `RELEASE CHECK: PASS|FAIL (step: <name>)` marker line - `tail` is enough to know
 everything. Exit code is 0 only on a fully clean run.
 
-`scripts/analysis_check.py` does not trust `pio check` to tell whether clang-tidy ran: that passes
-a crashed tool and drops clang's own errors. So `scripts/pio_tidy.py` keeps PlatformIO's compiler
-configuration but replaces its clang-tidy driver. Each input runs as its own process, with a timeout
-and a log under `.pio/analysis/`, and passes only on an exit status and dependency output that show
-it parsed its input; every library header gets a pass of its own. A clang error in project code
-fails the gate, as clang-tidy skips whatever depends on it. A file written for another target is
-left out of an environment by `PLATFORM_EXCLUSIONS`, with the reason; the files left out are still
-parsed, an entry none of whose files fails to parse any more fails as stale, and so does a file left
-out of every environment. The number of tidy processes follows the CPUs and the memory the gate may
-use (`build_jobs.analysis_jobs()`).
+`scripts/analysis_check.py` runs the analysers itself, not through `pio check`. It has PlatformIO
+write each environment's compilation database (`pio run -t compiledb`, into the build directory) and
+analyses exactly the project files that environment compiles, with the flags it compiles them with:
+a file is analysed by every environment that builds it and by no other, and a library file no
+default environment builds fails the gate. clang-tidy is pinned in `requirements-dev.txt`, one
+version for every target, and reads each GCC command translated for clang - the target from the
+compiler's name, the toolchain's include directories and predefined macros asked from the compiler
+itself. Each source runs as its own process, with a timeout and a log under `.pio/analysis/`, and
+passes only on an exit status and dependency output that show it parsed its input; every project
+header those sources include gets a pass of its own. A clang error in project code fails the gate,
+as clang-tidy skips whatever depends on it. cppcheck is the one `platform_packages` pins; it gets
+the project's own include directories, and the test environment's database is extended by the test
+suites. The number of tidy processes follows the CPUs and the memory the gate may use
+(`build_jobs.analysis_jobs()`).
 
 CI runs the gate split into the groups of `scripts/gate_groups.py`, one job each, and generates its
-matrix from them; the gate fails when the groups leave a default or `check_*` environment out or
-cover one twice. A push that changes nothing but Markdown runs the host group alone, which checks
+matrix from them; the gate fails when the groups leave a default environment out of the build and
+cppcheck or of clang-tidy, or cover one twice. A push that changes nothing but Markdown runs the host group alone, which checks
 the format of the Markdown and scans it for secrets: no firmware can differ. When the push's base
 cannot be fetched and compared, everything runs. The jobs run in the image `ci/toolchain.Dockerfile`
 builds: the pinned Python tooling, and PlatformIO with every toolchain in a venv of its own. CI

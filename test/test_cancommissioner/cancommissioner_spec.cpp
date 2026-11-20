@@ -17,10 +17,11 @@ static const uint8_t kUid[8] = { 0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U
 
 /// @brief The layout EEPROMHandler<CanId, 0> stores, so the handler's init() finds ids it accepts.
 static void seedCanIds(uint16_t master, uint16_t local) {
+  // The ids are read back as bytes, by the CRC below and by the handler.
   struct __attribute__((packed)) StoredIds {
     uint16_t crc;
-    uint16_t master;
-    uint16_t local;
+    uint16_t master;  // cppcheck-suppress unusedStructMember
+    uint16_t local;   // cppcheck-suppress unusedStructMember
   };
   StoredIds stored{ 0U, master, local };
   stored.crc = Crc16::calculate(reinterpret_cast<uint8_t*>(&stored), sizeof(stored));
@@ -311,6 +312,7 @@ bool test_an_address_a_driver_already_holds_is_refused() {
   TestCan can;
   Connectivity conn;
   CanCommissioner commissioner(can, conn, "can");
+  // cppcheck-suppress unreadVariable ; it registers its address with the handler on construction
   SpecDevice taken(can.handler, 28U);
   Task& canTask = can.handler;
   Task& task = commissioner;

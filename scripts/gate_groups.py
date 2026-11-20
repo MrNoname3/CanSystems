@@ -1,7 +1,7 @@
 """The parts the release gate splits into for CI, one job each.
 
-A group names the default environments it builds and cppchecks, the check_* environments it
-clang-tidies, and whether it runs the native tests or the Python guards. Together the groups do
+A group names the default environments it builds and cppchecks, those it clang-tidies, and
+whether it runs the native tests or the Python guards. Together the groups do
 what the whole gate does: coverage_gaps() lists what they would miss or do twice, and the gate
 fails on it, so an environment added to platformio.ini cannot drop out of CI unnoticed.
 """
@@ -16,20 +16,20 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Group:
     envs: tuple[str, ...] = ()      # default environments it builds and cppchecks
-    tidy: tuple[str, ...] = ()      # check_* environments it runs clang-tidy over
+    tidy: tuple[str, ...] = ()      # default environments it runs clang-tidy over
     host: bool = False              # the Python guards
     native: bool = False            # the native test suite
 
 
 GROUPS: dict[str, Group] = {
     "host": Group(host=True),
-    "native": Group(envs=("native_test",), native=True),
+    "native": Group(envs=("native_test",), tidy=("native_test",), native=True),
     "avr": Group(envs=("nanoatmega328_alert", "nanoatmega328_irrigation")),
     "esp32": Group(envs=("project_esp32_can",)),
     "esp8266": Group(envs=("project_esp8266_rad", "project_esp8266_thermo")),
-    "tidy-avr": Group(tidy=("check_avr",)),
-    "tidy-esp32": Group(tidy=("check_esp32",)),
-    "tidy-esp8266": Group(tidy=("check_esp8266",)),
+    "tidy-avr": Group(tidy=("nanoatmega328_alert", "nanoatmega328_irrigation")),
+    "tidy-esp32": Group(tidy=("project_esp32_can",)),
+    "tidy-esp8266": Group(tidy=("project_esp8266_rad", "project_esp8266_thermo")),
 }
 
 
@@ -41,19 +41,19 @@ def default_envs(ini: Path) -> list[str]:
             if name]
 
 
-def coverage_gaps(envs: list[str], tidy: tuple[str, ...], groups: dict[str, Group] = GROUPS) -> list[str]:
-    """What the groups do not cover exactly once: every default environment built, every check_*
-    environment clang-tidied, and the host steps, each by one group alone."""
+def coverage_gaps(envs: list[str], groups: dict[str, Group] = GROUPS) -> list[str]:
+    """What the groups do not cover exactly once: every default environment built and cppchecked,
+    and clang-tidied, and the host steps, each by one group alone."""
     gaps: list[str] = []
-    for kind, wanted, covered in (
-        ("default environment", envs, [env for group in groups.values() for env in group.envs]),
-        ("check_* environment", list(tidy), [env for group in groups.values() for env in group.tidy]),
+    for kind, covered in (
+        ("default environment", [env for group in groups.values() for env in group.envs]),
+        ("clang-tidied environment", [env for group in groups.values() for env in group.tidy]),
     ):
-        gaps += [f"{kind} {env} is in no group" for env in wanted if env not in covered]
+        gaps += [f"{kind} {env} is in no group" for env in envs if env not in covered]
         gaps += [f"{kind} {env} is in {covered.count(env)} groups" for env in sorted(set(covered))
                  if covered.count(env) > 1]
         gaps += [f"{kind} {env} is in a group but not in the project" for env in sorted(set(covered))
-                 if env not in wanted]
+                 if env not in envs]
     hosts = [name for name, group in groups.items() if group.host]
     if len(hosts) != 1:
         gaps.append(f"{len(hosts)} groups run the Python guards, not one")
@@ -61,13 +61,6 @@ def coverage_gaps(envs: list[str], tidy: tuple[str, ...], groups: dict[str, Grou
     if len(natives) != 1:
         gaps.append(f"{len(natives)} groups run the native tests, not one")
     return gaps
-
-
-def check_envs(ini: Path) -> tuple[str, ...]:
-    """Every declared analysis environment, including ones not yet assigned to a group."""
-    parser = configparser.ConfigParser(interpolation=None, strict=False)
-    parser.read(ini, encoding="utf-8")
-    return tuple(section.removeprefix("env:") for section in parser.sections() if section.startswith("env:check_"))
 
 
 def ci_matrix(groups: dict[str, Group] = GROUPS) -> dict[str, list[dict[str, str | bool]]]:

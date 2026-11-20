@@ -6,6 +6,7 @@
 // A handler owns the device list its registered CanBase objects link themselves into, and that
 // list has no remove operation, so a test must not share one with the next: each fixture builds
 // its own and the frame helpers below read whichever is alive.
+#include <algorithm>
 #include <stdint.h>
 #include <string.h>
 #include "ESP32SJA1000.h"
@@ -53,11 +54,10 @@ inline void pumpCanBus() {
 /// @brief How many frames carrying `cmd` have reached the bus.
 [[nodiscard]] inline size_t countCanFrames(uint16_t cmd) {
   pumpCanBus();
-  size_t count = 0U;
-  for(const Esp32CanModel::SentFrame& sent : esp32Can.transmitted()) {
-    if(canFrameCommand(sent) == cmd) { ++count; }
-  }
-  return count;
+  const auto& sent = esp32Can.transmitted();
+  return static_cast<size_t>(std::count_if(sent.begin(), sent.end(), [cmd](const Esp32CanModel::SentFrame& frame) -> bool {
+    return canFrameCommand(frame) == cmd;
+  }));
 }
 
 /// @brief The last frame carrying `cmd`, or `nullptr` when none reached the bus.

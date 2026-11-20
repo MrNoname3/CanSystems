@@ -5,8 +5,8 @@ Runs dependency verification first, then the inexpensive Python/format/workflow 
 build and native tests, cppcheck, and clang-tidy. Every step is fail-fast; --group selects the
 same subset CI runs. Every group checks dependencies, so --sync works for any group.
 
-The analysers are separate steps because they need opposite check_skip_packages settings; the
-check_* environments in platformio.ini say why.
+cppcheck and clang-tidy are separate steps of scripts/analysis_check.py, each over the
+compilation databases of the environments it is given.
 
 Every guard is required: a missing tool fails the gate rather than skipping its step, so a
 green run means all required steps actually ran. The dependency step comes first because the guards
@@ -34,9 +34,8 @@ import sys
 import time
 from pathlib import Path
 
-import analysis_check
 from build_jobs import jobs_args, jobs_env
-from gate_groups import GROUPS, Group, check_envs, coverage_gaps, default_envs
+from gate_groups import GROUPS, Group, coverage_gaps, default_envs
 from git_utils import get_git_dirty
 from size_compare import FIRMWARE_GROUPS, read_build_sizes, save_sizes
 
@@ -109,6 +108,7 @@ def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[st
     builds = group is None or bool(group.envs)
     tidies = group is None or bool(group.tidy)
     envs = [] if group is None else [arg for env in group.envs for arg in ("-e", env)]
+    cppcheck = [] if group is None else ["--env", *group.envs]
     tidy = [] if group is None else ["--env", *group.tidy]
     steps = [
         (True, Step("deps", deps_cmd)),
@@ -120,11 +120,8 @@ def gate_steps(group: Group | None, pio: str, deps_cmd: list[str], jobs: list[st
         (host, Step("pytest", script("pytest_check.py"))),
         (builds, Step("build", [pio, "run", *envs, *jobs])),
         (native, Step("test", [pio, "test", "-e", "native_test"])),
-        (builds, Step("check", [pio, "check", *envs,
-                                "--fail-on-defect", "low",
-                                "--fail-on-defect", "medium",
-                                "--fail-on-defect", "high"])),
-        (tidies, Step("tidy", script("analysis_check.py", *tidy))),
+        (builds, Step("check", script("analysis_check.py", "--tool", "cppcheck", *cppcheck))),
+        (tidies, Step("tidy", script("analysis_check.py", "--tool", "clang-tidy", *tidy))),
     ]
     return [step for wanted, step in steps if wanted]
 
@@ -157,10 +154,7 @@ def main() -> int:
         print("RELEASE CHECK: FAIL (step: git status)")
         return 1
 
-    declared_tidy = check_envs(PROJECT_DIR / "platformio.ini")
-    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"), declared_tidy)
-    if set(declared_tidy) != set(analysis_check.ENVIRONMENTS):
-        gaps.append("analysis_check.ENVIRONMENTS differs from platformio.ini check_* environments")
+    gaps = coverage_gaps(default_envs(PROJECT_DIR / "platformio.ini"))
     if gaps:
         for gap in gaps:
             print(f"groups       FAIL   {gap}")

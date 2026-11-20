@@ -27,14 +27,13 @@ FROM tooling AS packages
 COPY . /tmp/project
 # One step, so that what it removes never lands in a layer. Configuring an environment installs what
 # it builds with, and `pio project metadata` configures every one in file order: the ESP32 ones before
-# the ESP8266 ones that name its esptool, and check_esp32, whose configuration has the pioarduino
-# platform install clang-tidy. Left out afterwards: the download and install staging, and what only
-# another ESP chip or picolibc uses.
+# the ESP8266 ones that name its esptool. Left out afterwards: the download and install staging, and
+# what only another ESP chip or picolibc uses.
 RUN python3 -m venv /opt/platformio \
  && /opt/platformio/bin/pip install --no-cache-dir -r /tmp/project/requirements-ci.txt \
  && cd /tmp/project \
  && /opt/platformio/bin/pio project metadata > /dev/null \
- && test -x /root/.platformio/packages/tool-clangtidy/clang-tidy \
+ && test -x /root/.platformio/packages/tool-cppcheck/cppcheck \
  && test -d /root/.platformio/packages/tool-esptoolpy/esptool \
  && cd /root/.platformio \
  && rm -rf .cache dist tools packages/toolchain-xtensa-esp-elf/picolibc \
