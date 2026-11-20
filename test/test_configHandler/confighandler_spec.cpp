@@ -10,7 +10,7 @@
 // configHandler reads Wi-Fi + server credentials from the same server.json, and the CA cert from
 // its own path; the LittleFS shim serves both from an in-memory map keyed by those paths.
 static const char* credPath() { return FileName::getMqttServerCredentialsLocation(); }
-static const char* certPath() { return FileName::getMqttServerCertLocation(); }
+static const char* certLocation() { return FileName::getMqttServerCertLocation(); }
 
 // Error bits (mirror of the private ConfigHandler error enums).
 namespace WifiErr {
@@ -410,7 +410,7 @@ bool test_server_cert_ok() {
   IT("getServerCert returns 0 and hands the cert stream + size to the callback");
   LittleFS.reset();
   const char* pem = "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n";
-  LittleFS.setFile(certPath(), pem);
+  LittleFS.setFile(certLocation(), pem);
   g_certSeenSize = 0U;
   IS_EQUAL(ConfigHandler::getServerCert(storeCertOk), 0U);
   IS_EQUAL(g_certSeenSize, strlen(pem));
@@ -427,7 +427,7 @@ bool test_server_cert_file_missing() {
 bool test_server_cert_empty() {
   IT("getServerCert reports CERT_FILE_EMPTY for a zero-length cert file");
   LittleFS.reset();
-  LittleFS.setFile(certPath(), "");
+  LittleFS.setFile(certLocation(), "");
   IS_EQUAL(ConfigHandler::getServerCert(storeCertOk), CertErr::EMPTY);
   END_IT
 }
@@ -435,7 +435,7 @@ bool test_server_cert_empty() {
 bool test_server_cert_storing_failed() {
   IT("getServerCert reports CERT_STORING_FAILED when the callback fails");
   LittleFS.reset();
-  LittleFS.setFile(certPath(), "cert-bytes");
+  LittleFS.setFile(certLocation(), "cert-bytes");
   IS_EQUAL(ConfigHandler::getServerCert(storeCertFail), CertErr::STORING);
   END_IT
 }

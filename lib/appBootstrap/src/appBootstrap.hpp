@@ -61,6 +61,7 @@ namespace AppBootstrap {
     Build::printBuildInfo();
     BootProgress::begin();
     Logger::get()->printf_P(PSTR("Previous run reached: %s\r\n"), BootProgress::getName(BootProgress::getPrevious()));
+    // cppcheck-suppress knownConditionTrueFalse ; only the ESP32 can fail to arm it
     if(!wdtEnabled) {
       Logger::get()->printf_P(PSTR("WDT enable failed!\r\n"));
       ResetHandler::restartMCU();
@@ -86,6 +87,7 @@ namespace AppBootstrap {
   /// @param taskHandler Task handler holding the node's task list.
   template<uint8_t taskNumber, bool fullRoundRobin>
   [[gnu::always_inline]] inline void runLoop(TaskHandler<taskNumber, fullRoundRobin>& taskHandler) {
+    // cppcheck-suppress knownConditionTrueFalse ; only the ESP32 can fail to feed it
     if(!feedWatchdog()) {
       Logger::get()->printf_P(PSTR("WDT reset failed!\r\n"));
     }

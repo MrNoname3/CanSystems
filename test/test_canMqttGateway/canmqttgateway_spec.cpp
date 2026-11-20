@@ -5,6 +5,7 @@
 #include "LittleFS.h"
 #include "BDDTest.h"
 #include "crc16.hpp"
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -72,11 +73,10 @@ static size_t countFrames(uint16_t cmd) { return countCanFrames(cmd); }
 static const CanHandler::CanFrame* lastFrame(uint16_t cmd) { return lastCanFrame(cmd); }
 
 static size_t countRetained(const char* subSubTopic, const char* payload) {
-  size_t count = 0U;
-  for(const auto& entry : MqttBase::retainedMessages) {
-    if(entry.first == subSubTopic && entry.second == payload) { ++count; }
-  }
-  return count;
+  const auto& retained = MqttBase::retainedMessages;
+  return static_cast<size_t>(std::count_if(retained.begin(), retained.end(), [subSubTopic, payload](const auto& entry) -> bool {
+    return entry.first == subSubTopic && entry.second == payload;
+  }));
 }
 
 // ---- init and topic building ----
@@ -370,9 +370,10 @@ bool test_stray_ota_ack_while_idle_is_ignored() {
   IS_TRUE(runOnce(gateway));
   setFakeMillis(5U * 60U * 1000U + 1U);               // past the 5 minute OTA timeout
   IS_TRUE(runOnce(gateway));
-  for(const auto& entry : MqttBase::subtopicMessages) {
-    IS_FALSE(entry.first == "alert1/ota");            // no status for a transfer that never ran
-  }
+  const auto& published = MqttBase::subtopicMessages;
+  IS_TRUE(std::none_of(published.begin(), published.end(), [](const auto& entry) -> bool {
+    return entry.first == "alert1/ota";                // no status for a transfer that never ran
+  }));
   END_IT
 }
 
@@ -606,6 +607,7 @@ bool test_an_address_another_device_holds_is_refused() {
   TestCan can;
   Connectivity conn;
   TestGateway gateway(can, 26U, conn, "alert1");
+  // cppcheck-suppress unreadVariable ; it registers its address with the handler on construction
   const TestGateway neighbour(can, 27U, conn, "alert2");
   Task& task = gateway;
   IS_TRUE(task.init());

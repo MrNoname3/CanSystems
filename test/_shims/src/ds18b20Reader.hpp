@@ -4,6 +4,8 @@
 // faked through static test hooks; ROM ids are synthesized deterministically from the index.
 // The ESP builds compile mqttThermometer against the real class, so any signature divergence
 // here surfaces as a native-only compile error.
+#include <algorithm>
+#include <iterator>
 #include <stdint.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -20,6 +22,7 @@ public:
 
   bool begin() {
     sensorCount = (fakeSensorCount > MaxSensors) ? MaxSensors : fakeSensorCount;
+    // cppcheck-suppress knownConditionTrueFalse ; the suites set fakeSensorCount before this runs
     return sensorCount > 0U;
   }
 
@@ -47,7 +50,7 @@ public:
   static inline int requestCount = 0;                              // Number of requestConversion() calls.
   static void resetState() {
     fakeSensorCount = 0U;
-    for(float& temp : fakeTempsC) { temp = 0.0F; }
+    std::fill(std::begin(fakeTempsC), std::end(fakeTempsC), 0.0F);
     requestCount = 0;
   }
 
