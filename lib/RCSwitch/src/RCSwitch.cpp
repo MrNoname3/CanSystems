@@ -216,7 +216,7 @@ void RCSwitch::send(uint64_t code, uint32_t length) {
     }
     // send the code
     for(int32_t i = static_cast<int32_t>(length) - 1; i >= 0; i--) {
-      if((code & (1ULL << i)) != 0ULL) {
+      if((code & (1ULL << static_cast<uint32_t>(i))) != 0ULL) {
         this->transmit(protocol.one);
       } else {
         this->transmit(protocol.zero);

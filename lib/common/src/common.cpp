@@ -96,7 +96,7 @@ void Build::printBuildInfo() {
   // print(uint32_t, HEX) drops leading zeros, and a hash that does not paste back into git is
   // worth nothing; the nibbles go out one by one instead.
   for(int8_t shift = 28; shift >= 0; shift -= 4) {
-    Logger::get()->print(static_cast<uint8_t>((getGitHash() >> shift) & 0x0FU), HEX);
+    Logger::get()->print(static_cast<uint8_t>((getGitHash() >> static_cast<uint8_t>(shift)) & 0x0FU), HEX);
   }
   Logger::get()->println();
   Logger::get()->print(F("Dirty: "));
