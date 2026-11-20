@@ -3,7 +3,7 @@
 # hash of what decides its contents (scripts/toolchain_key.py), and builds it only when the registry
 # has no such tag.
 
-# The runners' job image (gitea-act-runner): Ubuntu with git, zstd, node for pyright and the JavaScript
+# The runners' job image (gitea-act-runner): Ubuntu with git, zstd, node for the JavaScript
 # actions, and Python 3.14, the newest the pioarduino platform runs on. Its gitea-act-runner.job-image
 # label comes along, and is what the runners' cleanup finds superseded copies of this image by.
 FROM ghcr.io/mrnoname3/act-ubuntu:26.04@sha256:bdb1dce00dfa9911095b46370cdede6e859c454e81b7d45725b01e0b7a409db8 AS tooling
